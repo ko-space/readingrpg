@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>독서 RPG 로그인</title>
+    <link rel="icon" href="logoicon.png">
+    <link rel="stylesheet" href="shared/style.css">
+    <script src="https://accounts.google.com/gsi/client" async></script>
+</head>
+<body>
+    <div class="bg-container">
+        <div class="logo-container">
+            <img src="logo.png" alt="독서 RPG" class="gamelogo">
+        </div>
+
+        <div class="form-container" id="signup-fields" hidden>
+            <p class="signup-guide">처음 오셨네요! 정보를 입력하고 모험을 시작하세요.</p>
+            <div class="input-text">
+                <label for="nickname">닉네임:</label>
+                <input type="text" id="nickname" placeholder="한글 8자 / 영문 16자 이내">
+            </div>
+            <div class="input-text">
+                <label for="age">나이:</label>
+                <input type="number" id="age" placeholder="나이를 입력하세요">
+            </div>
+            <button id="btn-complete-signup" class="btn-side btn-blue" hidden>가입 완료</button>
+        </div>
+
+        <div class="start-btn-container">
+            <div id="g_id_signin"></div>
+        </div>
+
+        <div class="side-btn-container">
+            
+        </div>
+
+    </div>
+    <script src="shared/api-config.js"></script>
+    <script src="shared/script.js"></script>
+
+</body>
+</html>
