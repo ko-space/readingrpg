@@ -1,0 +1,68 @@
+<h2 class="screen-title">상점</h2>
+<div class="shop-gold-row">보유 골드 <span id="shop-my-gold">-</span>G</div>
+
+<div class="shop-scroll-outer" id="shop-scroll-outer">
+    <section class="shop-section" id="shop-section-outfit">
+        <h3 class="shop-section-label">의상</h3>
+        <div class="shop-outfit-row" id="shop-outfit-row"></div>
+    </section>
+
+    <section class="shop-section" id="shop-section-item">
+        <h3 class="shop-section-label">아이템</h3>
+        <div class="shop-item-row" id="shop-item-row"></div>
+    </section>
+
+    <section class="shop-section" id="shop-section-currency">
+        <h3 class="shop-section-label">재화</h3>
+        <div class="shop-item-row" id="shop-currency-row"></div>
+    </section>
+</div>
+
+<nav class="shop-index-nav">
+    <button class="shop-index-btn active" data-section="shop-section-outfit" type="button">의상</button>
+    <button class="shop-index-btn" data-section="shop-section-item" type="button">아이템</button>
+    <button class="shop-index-btn" data-section="shop-section-currency" type="button">재화</button>
+</nav>
+
+<!-- 아이템/의상 구매 모달 -->
+<div class="shop-confirm-overlay" id="shop-confirm-overlay" hidden>
+    <div class="shop-confirm-box">
+        <button class="shop-confirm-close-x" id="shop-confirm-close-x" type="button">✕</button>
+
+        <div class="shop-confirm-icon-frame">
+            <img id="shop-confirm-icon" src="" alt="">
+        </div>
+
+        <div class="shop-confirm-name" id="shop-confirm-name">-</div>
+        <p class="shop-confirm-effect" id="shop-confirm-effect"></p>
+        <p class="shop-confirm-condition" id="shop-confirm-condition"></p>
+
+        <div class="shop-qty-row" id="shop-qty-row">
+            <button class="shop-qty-btn" id="shop-qty-minus" type="button">−</button>
+            <span class="shop-qty-value" id="shop-qty-value">1</span>
+            <button class="shop-qty-btn" id="shop-qty-plus" type="button">+</button>
+        </div>
+
+        <p class="shop-confirm-blocked-reason" id="shop-confirm-blocked-reason" hidden></p>
+
+        <button class="shop-confirm-buy" id="shop-confirm-buy" type="button">
+            구매 · <span id="shop-confirm-total-price">-</span>G
+        </button>
+    </div>
+</div>
+
+<!-- 구매 결과: 가챠 리빌과 같은 톤 -->
+<div class="shop-result-overlay" id="shop-result-overlay" hidden>
+    <div class="shop-result-box">
+        <div class="shop-result-title">획득!</div>
+        <div class="shop-result-item-name" id="shop-result-name">-</div>
+
+        <div class="shop-result-icon-frame">
+            <img id="shop-result-icon" src="" alt="">
+        </div>
+
+        <p class="shop-result-desc" id="shop-result-desc"></p>
+
+        <button class="shop-result-confirm" id="shop-result-confirm" type="button">확인</button>
+    </div>
+</div>

@@ -1,0 +1,777 @@
+/* 인벤토리 전용 UI */
+#modal-character .inventory-modal-box {
+    width: min(92vw, 520px);
+    max-width: none;
+    height: 250px;
+    max-height: 92vh;
+    padding: 0;
+    overflow: hidden;
+    border: 2px solid rgba(116, 166, 192, 0.9);
+    border-radius: 12px;
+    background:
+        linear-gradient(145deg, rgba(245, 252, 255, 0.98), rgba(215, 239, 249, 0.98));
+    box-shadow: 0 16px 50px rgba(8, 42, 65, 0.45), 0 0 0 1px rgba(255,255,255,.8) inset;
+    transition: width .46s cubic-bezier(.2,.75,.25,1),
+                height .46s cubic-bezier(.2,.75,.25,1),
+                border-radius .32s ease,
+                transform .32s ease;
+}
+
+#modal-character .inventory-modal-box.inventory-mode-list {
+    width: min(94vw, 1080px);
+    height: min(84vh, 760px);
+}
+
+#modal-character .inventory-modal-box.inventory-mode-detail {
+    width: min(97vw, 1420px);
+    height: min(92vh, 860px);
+    border-radius: 6px;
+}
+
+#modal-character .modal-close {
+    z-index: 20;
+    color: #25475d;
+}
+
+#inventory-content,
+.inventory-view {
+    width: 100%;
+    height: 100%;
+}
+
+.inventory-view[hidden] { display: none !important; }
+
+.inventory-menu-view {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 30px;
+}
+
+.inventory-title {
+    color: #203f56;
+    font-weight: 900;
+    font-size: 24px;
+    letter-spacing: -.5px;
+    margin: 0;
+}
+
+.inventory-subtitle {
+    margin: 0 0 8px;
+    color: #587488;
+    font-size: 13px;
+}
+
+.inventory-entry-row {
+    display: flex;
+    gap: 14px;
+    width: min(100%, 380px);
+}
+
+.inventory-entry-button {
+    flex: 1;
+    min-height: 100px;
+    border: 2px solid #7fb2cc;
+    border-radius: 10px;
+    background: linear-gradient(160deg, #fafeff, #d5edf7);
+    color: #244b65;
+    font-size: 18px;
+    font-weight: 900;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow: 0 5px 12px rgba(60, 116, 145, .18);
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+
+.inventory-entry-button:hover {
+    transform: translateY(-3px);
+    border-color: #3d93be;
+    box-shadow: 0 9px 18px rgba(60, 116, 145, .28);
+}
+
+.inventory-entry-icon { font-size: 28px; }
+
+.inventory-list-view {
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, rgba(222,245,252,.98), rgba(244,251,253,.98));
+}
+
+.inventory-list-header {
+    flex: 0 0 auto;
+    min-height: 76px;
+    padding: 14px 68px 10px 70px;
+    border-bottom: 2px solid #7eb5cf;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: rgba(184, 226, 242, .78);
+}
+
+.inventory-back-button,
+.inventory-detail-back {
+    border: 0;
+    background: #315f91;
+    color: white;
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    font-size: 38px;
+    line-height: 36px;
+    cursor: pointer;
+    box-shadow: 0 5px 12px rgba(24, 71, 110, .25);
+}
+
+.inventory-list-back { position: absolute; left: 16px; top: 14px; }
+
+.inventory-tabs {
+    /* 모달 닫기 버튼(우측 상단, width:28px+right:10px)과 절대 안 겹치도록 넉넉히 여백을 둔다.
+       예전엔 여기 여백이 부족해서 "아이템" 탭이 닫기 버튼 클릭 영역에 가려질 수 있었다. */
+    margin-left: auto;
+    margin-right: 6px;
+    display: flex;
+    min-width: 300px;
+    max-width: calc(100% - 20px);
+    border: 2px solid #79a9c2;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.inventory-tab {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    border: 0;
+    padding: 11px 18px;
+    background: rgba(255,255,255,.78);
+    color: #42657a;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.inventory-tab.active {
+    background: #275777;
+    color: #fff;
+}
+
+.inventory-grid-scroll {
+    min-height: 0;
+    flex: 1;
+    overflow-y: auto;
+    padding: 22px 24px 30px;
+    scrollbar-color: #7fb2cc transparent;
+}
+
+.inventory-character-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 20px 16px;
+}
+
+.inventory-item-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* class에 display:grid/flex가 박혀있어서, hidden 속성 하나만으로는 브라우저 기본(display:none)이
+   무시된다 - 여기서 명시적으로 다시 눌러줘야 실제로 사라진다. (이 프로젝트에서 몇 번 겪었던
+   [hidden] + display 충돌 패턴과 동일) */
+.inventory-character-grid[hidden],
+.inventory-item-grid[hidden] {
+    display: none !important;
+}
+
+@keyframes inventory-card-settle {
+    from { opacity: 0; transform: translateY(-24px) scale(.97); }
+    72% { opacity: 1; transform: translateY(3px) scale(1); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.inventory-character-card {
+    min-width: 0;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+    text-align: center;
+    color: #25465b;
+    transition: transform .18s ease, filter .18s ease;
+    animation: inventory-card-settle .44s cubic-bezier(.2,.75,.25,1) both;
+}
+
+.inventory-character-card:hover {
+    transform: translateY(-5px);
+    filter: brightness(1.03);
+}
+
+.inventory-card-portrait {
+    position: relative;
+    aspect-ratio: 1 / 1.08;
+    overflow: hidden;
+    border: 3px solid #6fa3bd;
+    border-radius: 8px;
+    background: linear-gradient(145deg, #d7eff8, #95c9df);
+    box-shadow: 0 5px 10px rgba(27, 77, 105, .22), 0 0 0 2px rgba(255,255,255,.72) inset;
+}
+
+.inventory-card-portrait img {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.inventory-card-star-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    min-height: 30px;
+    padding: 5px 5px 4px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1px;
+    color: #ffd237;
+    font-size: clamp(13px, 1.5vw, 20px);
+    letter-spacing: -2px;
+    text-shadow: 0 1px 2px #734e00;
+    background: linear-gradient(to top, rgba(24, 37, 45, .86), rgba(30, 43, 51, .36), transparent);
+}
+
+.inventory-card-equipped {
+    position: absolute;
+    top: 7px;
+    left: 7px;
+    padding: 4px 7px;
+    border-radius: 12px;
+    background: #ffcf37;
+    color: #574100;
+    font-size: 10px;
+    font-weight: 900;
+}
+
+.inventory-card-name {
+    margin-top: 7px;
+    font-weight: 900;
+    font-size: 15px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.inventory-card-meta {
+    margin-top: 2px;
+    color: #698294;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.inventory-empty {
+    text-align: center;
+    color: #607f91;
+    padding: 80px 20px;
+    font-weight: 800;
+}
+
+/* ── 아이템 목록: 캐릭터처럼 그리드가 아니라, 한 줄씩(아이콘+이름+묘사+기능) 표시 ──
+   개별 캐릭터 상세창의 정보 행(.inventory-info-row)과 같은 톤으로 맞춘다. */
+.inventory-item-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    border: 1px solid #bed3dc;
+    border-radius: 8px;
+    background: #edf5f7;
+    text-align: left;
+    animation: inventory-card-settle .4s cubic-bezier(.2,.75,.25,1) both;
+}
+
+.inventory-item-row-portrait {
+    position: relative;
+    flex-shrink: 0;
+    width: 64px;
+    height: 64px;
+    overflow: hidden;
+    border: 3px solid #6fa3bd;
+    border-radius: 8px;
+    background: linear-gradient(145deg, #d7eff8, #95c9df);
+    box-shadow: 0 5px 10px rgba(27, 77, 105, .2), 0 0 0 2px rgba(255,255,255,.7) inset;
+}
+
+.inventory-item-row-portrait img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: contain;
+    padding: 6px;
+    box-sizing: border-box;
+}
+
+.inventory-item-row-quantity {
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    min-width: 22px;
+    padding: 2px 5px;
+    border-radius: 10px 0 0 0;
+    background: rgba(26, 57, 77, .9);
+    color: white;
+    font-size: 10px;
+    font-weight: 900;
+    text-align: center;
+}
+
+.inventory-item-row-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.inventory-item-row-name {
+    font-weight: 900;
+    font-size: 15px;
+    color: #1f3f54;
+}
+
+.inventory-item-row-desc {
+    margin-top: 3px;
+    color: #4f6877;
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
+.inventory-item-row-effect {
+    margin-top: 4px;
+    color: #275777;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+/* 상세 화면 */
+.inventory-detail-view {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(360px, 43%) 1fr;
+    overflow: hidden;
+    background:
+        linear-gradient(90deg, rgba(134,209,234,.30), transparent 45%),
+        linear-gradient(145deg, #d8f2fb 0%, #f7fbfc 58%, #d8edf5 100%);
+}
+
+.inventory-detail-back {
+    position: absolute;
+    top: 16px;
+    right: 18px;
+    z-index: 30;
+}
+
+.inventory-detail-left {
+    position: relative;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 44px 24px 28px;
+    overflow: hidden;
+}
+
+.inventory-detail-left.entering {
+    animation: inventory-left-enter .55s cubic-bezier(.15,.72,.22,1) both;
+}
+
+@keyframes inventory-left-enter {
+    from { opacity: 0; transform: translateX(-140px); }
+    65% { opacity: 1; }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.inventory-standing-wrap {
+    position: relative;
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+}
+
+.inventory-standing-glow {
+    position: absolute;
+    width: 76%;
+    aspect-ratio: 1;
+    bottom: 2%;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,.95), rgba(78,183,223,.28) 48%, transparent 72%);
+    filter: blur(5px);
+}
+
+.inventory-standing-image {
+    position: relative;
+    z-index: 2;
+    max-width: 96%;
+    max-height: 58vh;
+    object-fit: contain;
+    object-position: bottom center;
+    filter: drop-shadow(0 18px 20px rgba(35, 73, 91, .34));
+}
+
+.inventory-nameplate {
+    position: relative;
+    z-index: 4;
+    width: min(100%, 460px);
+    margin-top: -18px;
+    padding: 14px 20px 15px;
+    color: white;
+    background: linear-gradient(110deg, rgba(25,65,104,.96), rgba(40,97,139,.88) 78%, transparent);
+    clip-path: polygon(0 0, 96% 0, 100% 100%, 0 100%);
+    text-shadow: 0 2px 3px rgba(0,0,0,.35);
+}
+
+.inventory-rarity-text { font-size: 11px; font-weight: 900; opacity: .82; }
+.inventory-detail-name { font-size: clamp(28px, 3.2vw, 48px); font-weight: 1000; line-height: 1; }
+.inventory-detail-stars { color: #ffd442; font-size: 22px; letter-spacing: -2px; }
+.inventory-detail-count { font-size: 13px; font-weight: 900; margin-top: 4px; }
+
+.inventory-outfit-button,
+.inventory-equip-button {
+    border: 2px solid rgba(255,255,255,.9);
+    border-radius: 7px;
+    color: white;
+    font-weight: 900;
+    cursor: pointer;
+    box-shadow: 0 5px 12px rgba(31,78,107,.24);
+}
+
+.inventory-outfit-button {
+    position: absolute;
+    right: 24px;
+    bottom: 27px;
+    z-index: 7;
+    padding: 11px 18px;
+    background: #39779c;
+}
+
+.inventory-outfit-panel {
+    position: absolute;
+    z-index: 12;
+    right: 22px;
+    bottom: 78px;
+    width: min(390px, calc(100% - 44px));
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 14px;
+    border: 2px solid #7eafc5;
+    border-radius: 10px;
+    background: rgba(247,252,254,.97);
+    box-shadow: 0 12px 30px rgba(21,65,88,.32);
+}
+
+.inventory-outfit-title { color: #31566c; font-weight: 900; margin-bottom: 10px; }
+.inventory-outfit-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.inventory-outfit-choice {
+    min-width: 0;
+    border: 2px solid #a7c8d7;
+    border-radius: 7px;
+    background: #e9f5f9;
+    padding: 8px;
+    color: #31566c;
+    font-size: 11px;
+    font-weight: 900;
+    cursor: pointer;
+}
+.inventory-outfit-choice.active { border-color: #2182b1; background: #cdebf7; }
+
+.inventory-detail-right {
+    margin: 58px 34px 36px 12px;
+    min-width: 0;
+    padding: 18px 22px 22px;
+    border: 2px solid #8cb4c7;
+    border-radius: 8px;
+    background: rgba(247, 251, 252, .93);
+    box-shadow: 0 12px 28px rgba(33,77,101,.20);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+}
+
+.inventory-detail-right.entering {
+    animation: inventory-drop-bounce .68s cubic-bezier(.2,.82,.3,1) both;
+}
+
+@keyframes inventory-drop-bounce {
+    0% { opacity: 0; transform: translateY(-120px); }
+    68% { opacity: 1; transform: translateY(12px); }
+    84% { transform: translateY(-5px); }
+    94% { transform: translateY(2px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+.inventory-info-title {
+    padding: 10px 16px;
+    color: white;
+    font-size: 18px;
+    font-weight: 900;
+    text-align: center;
+    background: linear-gradient(90deg, #1f4f72, #357fa7, #1f4f72);
+    clip-path: polygon(2% 0, 98% 0, 100% 50%, 98% 100%, 2% 100%, 0 50%);
+}
+
+.inventory-basic-info {
+    flex-shrink: 0; /* 아래 항목들과 함께 이 칸도 눌려 찌그러지면 텍스트가 박스 밖으로 넘칠 수 있어 축소 금지 */
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 12px;
+}
+
+.inventory-info-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid #bed3dc;
+    border-radius: 5px;
+    color: #4f6877;
+    background: #edf5f7;
+}
+
+.inventory-info-row strong { color: #1f3f54; }
+
+/* ── 스킬/특성 버튼(한 줄에 나란히) ── */
+.inventory-skill-trait-row {
+    flex-shrink: 0;
+    display: flex;
+    gap: 10px;
+}
+
+.inventory-skill-trait-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 12px;
+    border: 1px solid #8cb4c7;
+    border-radius: 6px;
+    background: linear-gradient(160deg, #eaf6fb, #d8edf5);
+    color: #1f3f54;
+    font-weight: 900;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.inventory-skill-trait-btn:hover:not(:disabled) {
+    box-shadow: 0 0 10px rgba(78, 183, 223, .5);
+}
+
+/* 해당 성급에 스킬/특성이 없으면 비활성화 + 자물쇠 아이콘(썸네일 성급 버튼과 같은 톤) */
+.inventory-skill-trait-btn:disabled {
+    cursor: not-allowed;
+    opacity: .6;
+    background: #e4eaec;
+    color: #7c8b93;
+    border-color: #c3ced2;
+}
+
+.inventory-skill-trait-lock {
+    width: 14px;
+    height: 14px;
+}
+
+.inventory-description {
+    flex-shrink: 0;
+    color: #496878;
+    line-height: 1.55;
+    padding: 11px 14px;
+    border-left: 4px solid #5da4c4;
+    background: #eef7fa;
+}
+
+/*
+ * flex: 1 (= flex-basis: 0%)을 쓰면 이 섹션이 "축소 압박"에서 완전히 면제돼(scaled shrink factor가 0이
+ * 되기 때문) 오히려 위쪽 형제 요소(basic-info/description 등)만 계속 짜부라들고, 정작 이 섹션 안의
+ * 성급 효과 박스는 자기 min-height(92px)를 지키려다 부모 박스 경계 밖으로 새어나가 장착 버튼에 가려지는
+ * 문제가 있었다. flex-basis를 auto로 바꿔 "내용물 크기 이하로는 절대 줄어들지 않게" 하고, 대신 공간이
+ * 부족하면 바깥 .inventory-detail-right의 overflow-y:auto가 패널 전체를 스크롤하게 맡긴다.
+ */
+.inventory-star-section {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    min-height: 0;
+    flex: 1 0 auto;
+}
+.inventory-section-label { color: #31566c; font-weight: 900; }
+.inventory-star-buttons { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; }
+.inventory-star-button {
+    position: relative;
+    min-width: 0;
+    padding: 10px 3px;
+    border: 2px solid #a7bfcb;
+    border-radius: 6px;
+    background: #e8eff2;
+    color: #70838e;
+    font-weight: 900;
+    cursor: pointer;
+}
+.inventory-star-button.owned { color: #8b6700; border-color: #e4bd3b; background: #fff6c7; }
+.inventory-star-button.selected { color: white; border-color: #2e7397; background: #347fa7; box-shadow: 0 0 0 2px rgba(72,160,202,.25); }
+
+/* 존재는 하지만 아직 달성 못 한 성급: 자물쇠 표시, 흐리게 */
+.inventory-star-button.locked {
+    color: #8a94a0;
+    background: #dde4e8;
+    border-color: #b7c2ca;
+    cursor: not-allowed;
+    opacity: .78;
+}
+
+/* 이 캐릭터 등급상 애초에 존재할 수 없는 성급: 자물쇠 없이 그냥 흐리게 */
+.inventory-star-button.nonexistent {
+    color: #b7c2ca;
+    background: #eef2f4;
+    border-color: #d3dbe0;
+    border-style: dashed;
+    cursor: not-allowed;
+    opacity: .55;
+}
+
+/* 자물쇠를 별도 줄로 빼지 않고 "★N" 텍스트 위에 겹쳐서, 버튼 세로 길이가 늘어나지 않게 한다
+   (성급 버튼들이 길어지면 아래 성급별 효과 박스가 장착하기 버튼에 밀려 잘리는 문제가 있었음). */
+.inventory-star-lock {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 16px;
+    height: 16px;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .6));
+}
+.inventory-star-owned-count {
+    position: absolute;
+    top: -7px;
+    right: -5px;
+    min-width: 19px;
+    height: 19px;
+    padding: 0 4px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    color: white;
+    background: #e69c24;
+    font-size: 9px;
+}
+.inventory-star-effect {
+    flex: 1;
+    min-height: 92px;
+    /* "효과" 문구가 길어서 flex로 배분된 높이보다 내용이 커지면, 예전엔 overflow가 그대로 아래로
+       흘러넘쳐서 장착하기 버튼에 가려졌다. 박스 안에서 자체적으로 스크롤되게 해서 절대 밖으로 안 새게 한다. */
+    overflow-y: auto;
+    padding: 14px 16px;
+    border: 2px solid #a4c2cf;
+    border-radius: 7px;
+    color: #314f60;
+    background: linear-gradient(160deg, #f8fcfd, #e7f2f6);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.star-effect-title {
+    font-weight: 900;
+    color: #1f3f54;
+    margin-bottom: 2px;
+}
+
+.star-effect-row {
+    display: flex;
+    gap: 10px;
+    line-height: 1.5;
+}
+
+.star-effect-row > span:first-child {
+    flex: 0 0 auto;
+    min-width: 58px;
+    font-weight: 900;
+    color: #5c7683;
+}
+
+.star-effect-row > span:last-child,
+.star-effect-row > strong {
+    color: #314f60;
+    font-weight: 700;
+}
+
+.inventory-equip-button {
+    flex-shrink: 0;
+    margin-top: auto;
+    width: 100%;
+    padding: 14px;
+    font-size: 17px;
+    background: linear-gradient(160deg, #35a6d2, #24709a);
+}
+.inventory-equip-button:disabled { cursor: default; opacity: .55; }
+
+/* ── 스킬/특성 버튼 클릭 시 뜨는 서브 모달(인벤토리 상세 패널을 덮는 오버레이) ── */
+.inventory-subinfo-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 30, 45, .45);
+}
+.inventory-subinfo-overlay[hidden] { display: none; }
+
+.inventory-subinfo-panel {
+    position: relative;
+    width: min(88%, 480px);
+    max-height: 80%;
+    overflow-y: auto;
+    border: 2px solid rgba(116, 166, 192, .9);
+    border-radius: 10px;
+    background: linear-gradient(145deg, rgba(245, 252, 255, .98), rgba(215, 239, 249, .98));
+    box-shadow: 0 16px 50px rgba(8, 42, 65, .45);
+    padding-bottom: 20px;
+}
+
+.inventory-subinfo-panel .modal-close {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    z-index: 5;
+}
+
+.inventory-subinfo-body {
+    padding: 18px 22px;
+    color: #314f60;
+    line-height: 1.6;
+    font-weight: 700;
+}
+
+@media (max-width: 900px) {
+    .inventory-character-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .inventory-detail-view { grid-template-columns: 42% 1fr; }
+    .inventory-basic-info { grid-template-columns: 1fr; }
+    .inventory-detail-right { margin-left: 0; }
+}
+
+@media (max-width: 650px) {
+    #modal-character .inventory-modal-box.inventory-mode-list,
+    #modal-character .inventory-modal-box.inventory-mode-detail { width: 96vw; height: 91vh; }
+    .inventory-character-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .inventory-tabs { min-width: 0; flex: 1; }
+    .inventory-list-header { padding-right: 54px; }
+    .inventory-detail-view { display: flex; flex-direction: column; overflow-y: auto; }
+    .inventory-detail-left { min-height: 540px; flex: 0 0 auto; }
+    .inventory-detail-right { margin: 0 14px 20px; overflow: visible; }
+    .inventory-star-buttons { overflow-x: auto; grid-template-columns: repeat(6, 70px); }
+}

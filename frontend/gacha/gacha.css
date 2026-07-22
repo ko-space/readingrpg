@@ -1,0 +1,355 @@
+/* 가챠 화면 전용 스타일. lobby.css에 정의된 --panel-bg, --panel-border 등 공통 변수를 그대로 씀 */
+
+/* ── 가챠 모달을 다른 모달보다 크게 + 금테두리가 은은하게 타오르는 효과 ── */
+@keyframes gold-flicker {
+    0%, 100% {
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4),
+                    0 0 10px rgba(232, 184, 75, 0.5),
+                    0 0 3px rgba(255, 226, 150, 0.4);
+        border-color: #c9a86a;
+    }
+    50% {
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4),
+                    0 0 26px rgba(232, 184, 75, 0.95),
+                    0 0 10px rgba(255, 226, 150, 0.8);
+        border-color: #ffd76a;
+    }
+}
+
+#modal-gacha .modal-box {
+    max-width: 640px;
+    animation: gold-flicker 2.4s ease-in-out infinite;
+}
+
+/* ── 제목 + 확률 안내(i) 버튼 ── */
+.gacha-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.gacha-title-row .screen-title {
+    margin: 0;
+}
+
+.gacha-info-btn {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 2px solid var(--panel-border, #c9a86a);
+    background: var(--panel-bg, #f6ecd9);
+    color: var(--text-dark, #4a3c2a);
+    font-weight: 900;
+    font-size: 13px;
+    font-style: italic;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.gacha-info-btn:hover {
+    box-shadow: 0 0 10px rgba(232, 184, 75, 0.6);
+}
+
+/* ── 캐릭터별 획득 확률 모달 ── */
+.gacha-rate-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.gacha-rate-modal[hidden] {
+    display: none;
+}
+
+.gacha-rate-modal-box {
+    position: relative;
+    width: min(420px, 88vw);
+    max-height: 80vh;
+    overflow-y: auto;
+    background: #1b2230;
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+
+.gacha-rate-modal-close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    background: none;
+    border: none;
+    color: #ddd;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.gacha-rate-modal-title {
+    margin: 0 0 8px;
+    color: #ffd76a;
+    font-size: 17px;
+    text-align: center;
+}
+
+.gacha-rate-pickup-notice {
+    margin: 0 0 12px;
+    color: #ff5a5a;
+    font-weight: 900;
+    font-size: 13px;
+    text-align: center;
+}
+
+.gacha-rate-group {
+    margin-bottom: 14px;
+}
+
+.gacha-rate-group-title {
+    color: #fff;
+    font-weight: 900;
+    font-size: 14px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.gacha-rate-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 8px;
+    font-size: 12.5px;
+    color: #eee;
+}
+
+.gacha-rate-row.is-pickup {
+    color: #ffd76a;
+    font-weight: bold;
+}
+
+.gacha-rate-row + .gacha-rate-row {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ── 배너 캐러셀 ── */
+.gacha-banner-carousel {
+    display: flex;
+    gap: 12px;
+}
+
+.banner-thumb {
+    flex: 1;
+    position: relative;
+    height: 130px;
+    border-radius: 10px;
+    border: 2px solid var(--panel-border, #c9a86a);
+    background: linear-gradient(160deg, #dfe9f5, #b7c9e0);
+    overflow: hidden;
+    cursor: pointer;
+    padding: 0;
+}
+
+.banner-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.banner-thumb.active {
+    border-color: #ffd76a;
+    box-shadow: 0 0 14px rgba(255, 215, 106, 0.85);
+}
+
+/* ── 기간 / 상시오픈 표시: 박스 없이, 글자 높이만큼만 흰 배경 ── */
+.gacha-banner-detail {
+    text-align: center;
+}
+
+.gacha-pickup-rate-text {
+    display: inline;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    background: rgba(255, 255, 255, 0.85);
+    padding: 1px 6px;
+    margin-right: 6px;
+    font-size: 14px;
+    font-weight: 900;
+    color: #2d6ae0;
+}
+
+.gacha-pickup-rate-text[hidden] {
+    display: none; /* display:inline이 hidden 속성의 기본 동작을 덮어쓰는 걸 막음 */
+}
+
+.gacha-period {
+    display: inline;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    background: rgba(255, 255, 255, 0.85);
+    padding: 1px 6px;
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--text-dark, #4a3c2a);
+}
+
+/* ── 모집 버튼: 다른 상자들과 너비를 맞춤 ── */
+#gacha-pull-btn {
+    display: flex;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 12px;
+}
+
+/* ── 모집 버튼 아래 포인트 + 인물 선택 ── */
+.gacha-point-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.gacha-point-chip {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #fff;
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-weight: bold;
+    color: var(--text-dark, #4a3c2a);
+}
+
+.gacha-point-label {
+    font-size: 12px;
+    opacity: 0.75;
+}
+
+#gacha-point-value {
+    font-size: 16px;
+}
+
+.gacha-select-btn {
+    flex-shrink: 0;
+    background: var(--panel-bg, #f6ecd9);
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-weight: bold;
+    font-size: 13px;
+    color: var(--text-dark, #4a3c2a);
+    cursor: pointer;
+}
+
+.gacha-select-btn:hover {
+    box-shadow: 0 0 10px rgba(232, 184, 75, 0.6);
+}
+
+.gacha-note {
+    margin-top: 10px;
+    font-size: 11px;
+    opacity: 0.8;
+}
+
+/* ── 인물 선택 뷰 ── */
+.gacha-back-btn {
+    background: none;
+    border: none;
+    color: var(--text-dark, #4a3c2a);
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 4px 0;
+    margin-bottom: 8px;
+}
+
+.gacha-pickup-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.gacha-pickup-card {
+    background: rgba(255, 255, 255, 0.55);
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.gacha-pickup-top {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.gacha-pickup-photo-frame {
+    width: 64px;
+    height: 64px;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 2px solid var(--panel-border, #c9a86a);
+    background: #ddd;
+}
+
+.gacha-pickup-photo {
+    width: 100%;
+    height: 100%;
+}
+
+.gacha-pickup-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.gacha-pickup-name {
+    font-weight: bold;
+    font-size: 15px;
+    color: var(--text-dark, #4a3c2a);
+}
+
+.gacha-pickup-desc {
+    font-size: 12px;
+    color: #6b5b3e;
+    line-height: 1.4;
+}
+
+.gacha-pickup-recruit-btn {
+    width: 100%;
+    background: linear-gradient(160deg, #59a852, #2c5c26);
+    color: #fff;
+    border: 2px solid #ffe9a8;
+    border-radius: 8px;
+    padding: 8px;
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.gacha-pickup-recruit-btn:hover:not(:disabled) {
+    background: linear-gradient(160deg, #6fc167, #366e2f);
+}
+
+.gacha-pickup-recruit-btn:disabled {
+    background: #bbb;
+    border-color: #ddd;
+    cursor: default;
+    color: #eee;
+}

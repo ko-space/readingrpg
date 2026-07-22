@@ -1,0 +1,261 @@
+/* 업적 전용 UI - 트로피 느낌의 금빛 계열 (상점=붉은, 인벤토리=푸른 계열과 구분) */
+#modal-achievements .achievements-modal-box {
+    width: min(94vw, 720px);
+    max-width: none;
+    height: min(86vh, 640px);
+    max-height: 92vh;
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border: 2px solid rgba(201, 155, 74, .9);
+    border-radius: 14px;
+    background: linear-gradient(145deg, rgba(255, 251, 238, .98), rgba(250, 234, 196, .98));
+    box-shadow: 0 16px 50px rgba(90, 62, 10, .38), 0 0 0 1px rgba(255,255,255,.8) inset;
+}
+
+#modal-achievements .modal-close {
+    z-index: 20;
+    color: #6b4f1c;
+}
+
+#achievements-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    color: #5a4318;
+}
+
+#achievements-content .screen-title {
+    margin: 0;
+    padding: 18px 60px 2px 22px;
+    font-size: 22px;
+    font-weight: 900;
+    color: #6b4f1c;
+}
+
+.ach-summary-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 22px 12px;
+    font-weight: 800;
+    font-size: 12.5px;
+    color: #8a6a1f;
+}
+
+#ach-summary-count {
+    font-weight: 900;
+    color: #a3711f;
+}
+
+.ach-summary-hint {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+    color: #a3823a;
+}
+
+/* ── 가로 스크롤 영역: 일반 -> 히든 ── */
+.ach-scroll-outer {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+}
+
+.ach-section {
+    flex: 0 0 100%;
+    width: 100%;
+    min-width: 100%;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    padding: 4px 22px 20px;
+    overflow-y: auto;
+}
+
+.ach-section-label {
+    margin: 6px 0 4px;
+    font-size: 15px;
+    font-weight: 900;
+    color: #8a6a1f;
+}
+
+.ach-hidden-hint {
+    margin: 0 0 12px;
+    font-size: 11.5px;
+    color: #a3823a;
+    font-weight: 700;
+}
+
+.ach-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.ach-empty-inline {
+    padding: 60px 20px;
+    text-align: center;
+    color: #a3823a;
+    font-weight: 800;
+}
+
+/* ── 업적 카드 ── */
+@keyframes ach-card-settle {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.ach-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 2px solid #d8b877;
+    border-radius: 12px;
+    background: linear-gradient(160deg, #fffaf0, #f6e6c4);
+    box-shadow: 0 4px 10px rgba(120, 90, 20, .16), 0 0 0 2px rgba(255,255,255,.6) inset;
+    animation: ach-card-settle .3s cubic-bezier(.2,.75,.25,1) both;
+}
+
+.ach-card.ach-completed {
+    background: linear-gradient(160deg, #f4f0e6, #e4dcc4);
+    filter: grayscale(.55);
+    opacity: .68;
+}
+
+.ach-card-icon {
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #ffe9a8, #d8a943 55%, #a3711f 100%);
+    font-size: 20px;
+    box-shadow: 0 2px 6px rgba(120, 90, 20, .3);
+}
+
+.ach-card-icon img {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+}
+
+.ach-card.ach-completed .ach-card-icon {
+    background: radial-gradient(circle at 35% 30%, #ded6c0, #b5ab8c 60%, #837a5c 100%);
+}
+
+.ach-card-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.ach-card-name {
+    font-size: 14px;
+    font-weight: 900;
+    color: #5a4318;
+}
+
+.ach-card-desc {
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #7a5f28;
+    font-weight: 600;
+}
+
+.ach-card-reward {
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 800;
+    color: #a3711f;
+}
+
+.ach-card-earned-at {
+    margin-top: 3px;
+    font-size: 10.5px;
+    color: #9a8a5c;
+    font-weight: 600;
+}
+
+/* ── 진행도 바 ── */
+.ach-progress-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.ach-progress-track {
+    flex: 1;
+    height: 8px;
+    border-radius: 5px;
+    background: rgba(120, 90, 20, .15);
+    overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(120, 90, 20, .12) inset;
+}
+
+.ach-progress-fill {
+    height: 100%;
+    border-radius: 5px;
+    background: linear-gradient(90deg, #ffd873, #c9964e);
+    transition: width .4s ease-out;
+}
+
+.ach-card.ach-completed .ach-progress-fill {
+    background: linear-gradient(90deg, #b5ab8c, #837a5c);
+}
+
+.ach-progress-count {
+    flex-shrink: 0;
+    font-size: 10.5px;
+    font-weight: 800;
+    color: #8a6a1f;
+    white-space: nowrap;
+}
+
+/* ── 하단 인덱스 네비 ── */
+.ach-index-nav {
+    flex-shrink: 0;
+    display: flex;
+    border-top: 2px solid rgba(201, 155, 74, .5);
+    background: rgba(255, 255, 255, .4);
+}
+
+.ach-index-btn {
+    flex: 1;
+    border: 0;
+    padding: 12px;
+    background: transparent;
+    color: #8a6a1f;
+    font-weight: 800;
+    font-size: 13px;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+}
+
+.ach-index-btn.active {
+    color: #6b4f1c;
+    border-bottom-color: #c9964e;
+    background: rgba(201, 155, 74, .14);
+}
+
+@media (max-width: 650px) {
+    #modal-achievements .achievements-modal-box {
+        width: 96vw;
+        height: 88vh;
+    }
+    .ach-card {
+        flex-wrap: wrap;
+    }
+}

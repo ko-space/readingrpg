@@ -1,0 +1,829 @@
+{
+  "신화": [
+    {
+      "name": "윤대웅",
+      "job_class": "사진 작가",
+      "gender": "남",
+      "outfits": {
+        "기본": "photographer/basic",
+        "여름": "photographer/summer",
+        "겨울": "photographer/winter"
+      },
+      "description": "카메라를 수집하고 다닙니다. [nex5r + 삼양 85.4]를 특히 애용합니다.",
+      "range": "원거리",
+      "attack_type": "Teacher",
+      "defense_type": "Teacher",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": 2.8,
+        "6": 15
+      },
+      "exp_subjects": ["수학", "기타"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "해당 성급의 별도 효과가 없습니다.",
+        "4": "해당 성급의 별도 효과가 없습니다.",
+        "5": "자신의 공격력과 최대 체력 5% 증가, 적 전체의 공격력과 최대 체력 5% 감소",
+        "6": "자신의 공격력과 최대 체력 15% 증가, 적 전체의 공격력과 최대 체력 15% 감소"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "카메라 업그레이드: 전투 종료 시까지 자신의 공격력 5% 증가, 최대 6회 중첩",
+        "6": "카메라 업그레이드: 전투 종료 시까지 자신의 공격력 15% 증가, 최대 10회 중첩"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "도플갱어: 윤영준과 함께 편성 시 전투 시작과 동시에 윤영준을 제거, 윤영준의 최대 체력과 공격력을 120% 흡수",
+        "6": "도플갱어: 윤영준과 함께 편성 시 전투 시작과 동시에 윤영준을 제거, 윤영준의 최대 체력과 공격력을 150% 흡수"
+      },
+      "skill_mechanics": {
+        "effect_type": "self_stack_buff",
+        "params": {
+          "5": { "stat": "atk", "percent_per_stack": 5, "max_stacks": 6 },
+          "6": { "stat": "atk", "percent_per_stack": 15, "max_stacks": 10 }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "ally_synergy_remove_absorb",
+        "partner_name": "윤영준",
+        "params": {
+          "5": { "absorb_percent": 120 },
+          "6": { "absorb_percent": 150 }
+        }
+      },
+      "star_mechanics": {
+        "effect_type": "self_buff_enemy_debuff",
+        "params": {
+          "5": { "percent": 5 },
+          "6": { "percent": 15 }
+        }
+      }
+    },
+    {
+      "name": "윤영준",
+      "job_class": "가정 교사",
+      "gender": "남",
+      "outfits": {
+        "기본": "tutor/basic",
+        "여름": "tutor/summer",
+        "겨울": "tutor/winter"
+      },
+      "description": "TinkerCAD로 자동차도 만들고 아기도 씻깁니다.",
+      "range": "근거리",
+      "attack_type": "Parent",
+      "defense_type": "Parent",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": 2.8,
+        "6": 15
+      },
+      "exp_subjects": ["국어", "영어"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "해당 성급의 별도 효과가 없습니다.",
+        "4": "해당 성급의 별도 효과가 없습니다.",
+        "5": "공격력과 최대 체력 5% 증가, 적 전체의 공격력과 최대 체력 5% 감소",
+        "6": "공격력과 최대 체력 15% 증가, 적 전체의 공격력과 최대 체력 15% 감소"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "3D Print: 전투 시작 시 자신의 최대 체력 15%와 공격력 40%를 지닌 복제체 1명 소환 (단, 복제체는 스킬 및 특성 사용 불가)",
+        "6": "3D Print: 전투 시작 시 자신의 최대 체력 15%와 공격력 100%를 지닌 복제체 1명 소환 (단, 복제체는 스킬 및 특성 사용 불가)"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "대노: 강 희와 함께 편성 시 공격력 30% 증가",
+        "6": "대노: 강 희와 함께 사용 시 공격력 300% 증가"
+      },
+      "skill_mechanics": {
+        "effect_type": "summon_clone",
+        "params": {
+          "5": { "hp_percent": 15, "atk_percent": 40 },
+          "6": { "hp_percent": 15, "atk_percent": 100 }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "ally_synergy_atk_buff",
+        "partner_name": "강 희",
+        "params": {
+          "5": { "atk_percent": 30 },
+          "6": { "atk_percent": 300 }
+        }
+      },
+      "star_mechanics": {
+        "effect_type": "self_buff_enemy_debuff",
+        "params": {
+          "5": { "percent": 5 },
+          "6": { "percent": 15 }
+        }
+      }
+    }
+  ],
+  "전설": [
+    {
+      "name": "김남옥",
+      "job_class": "크레파스 회사 사장",
+      "gender": "여",
+      "outfits": {
+        "기본": "ceo/basic",
+        "여름": "ceo/summer",
+        "겨울": "ceo/winter"
+      },
+      "description": "크레파스를 좋아합니다. 박보검 팬클럽 회장입니다.",
+      "range": "원거리",
+      "attack_type": "Teacher",
+      "defense_type": "Parent",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": 2.7,
+        "5": 2.7,
+        "6": 14.5
+      },
+      "exp_subjects": ["수학", "탐구", "기타"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "해당 성급의 별도 효과가 없습니다.",
+        "4": "기본 공격 시 주 대상에게 공격력의 100%만큼 피해, 다른 적에게 각각 공격력의 25%만큼 피해, 공격력 5% 증가",
+        "5": "기본 공격 시 주 대상에게 공격력의 100%만큼 피해, 다른 적에게 각각 공격력의 25%만큼 피해, 공격력 5% 증가",
+        "6": "기본 공격으로 적 전체 대상 피해, 공격력 15% 상승"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "엑스칼리버: 공격 대상이 여성인 경우 1초 기절, 공격 속도 2초간 20% 증가",
+        "6": "엑스칼리버: 공격 대상이 여성인 경우 3초 기절, 공격 속도 3초간 50% 증가"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "skill_mechanics": {
+        "effect_type": "conditional_target_debuff",
+        "params": {
+          "5": { "condition": "target_gender_female", "stun_seconds": 1, "haste_percent": 20, "haste_seconds": 2 },
+          "6": { "condition": "target_gender_female", "stun_seconds": 3, "haste_percent": 50, "haste_seconds": 3 }
+        }
+      },
+      "star_mechanics": {
+        "effect_type": "self_stat_percent",
+        "params": {
+          "4": { "atk_percent": 5 },
+          "5": { "atk_percent": 5 },
+          "6": { "atk_percent": 15 }
+        }
+      }
+    },
+    {
+      "name": "이종복",
+      "job_class": "마법사",
+      "gender": "남",
+      "outfits": {
+        "기본": "mage/basic",
+        "여름": "mage/summer",
+        "겨울": "mage/winter"
+      },
+      "description": "수백 년간 교무실을 지켜온 대마법사입니다.",
+      "range": "원거리",
+      "attack_type": "Teacher",
+      "defense_type": "Parent",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": 2.6,
+        "5": 2.6,
+        "6": 14
+      },
+      "exp_subjects": ["국어"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "해당 성급의 별도 효과가 없습니다.",
+        "4": "아군 전체의 최대 체력 20% 증가",
+        "5": "아군 전체의 최대 체력 20% 증가",
+        "6": "팀원과 자신의 체력 60% 상승"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "질량 충격파: 공격 대상에게 대상 현재 체력의 20%와 자신의 공격력의 200%를 합한 만큼 피해",
+        "6": "질량 충격파: 공격 대상에게 대상 현재 체력의 50%와 자신의 공격력의 400%를 합한 만큼 피해"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "skill_mechanics": {
+        "effect_type": "damage_hp_percent_plus_atk",
+        "params": {
+          "5": { "hp_percent": 20, "atk_percent": 200 },
+          "6": { "hp_percent": 50, "atk_percent": 400 }
+        }
+      },
+      "star_mechanics": {
+        "effect_type": "ally_team_stat_percent",
+        "params": {
+          "4": { "stat": "hp", "percent": 20 },
+          "5": { "stat": "hp", "percent": 20 },
+          "6": { "stat": "hp", "percent": 60 }
+        }
+      }
+    },
+    {
+      "name": "임소정",
+      "job_class": "마법사",
+      "gender": "여",
+      "outfits": {
+        "기본": "sj/basic",
+        "여름": "sj/summer",
+        "겨울": "sj/winter"
+      },
+      "description": "수백 년간 교무실을 지켜온 대마법사입니다.",
+      "range": "원거리",
+      "attack_type": "Teacher",
+      "defense_type": "Student",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": 2.8,
+        "5": 2.8,
+        "6": 15
+      },
+      "exp_subjects": ["수학"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "해당 성급의 별도 효과가 없습니다.",
+        "4": "아군 전체의 공격력 20% 증가",
+        "5": "아군 전체의 공격력 20% 증가",
+        "6": "아군 전체의 공격력 60% 증가"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "전자기파: 공격 대상의 공격력 1.5초간 10% 감소, 공격력의 300%만큼 피해",
+        "6": "전자기파: 공격 대상의 공격력 3초간 20% 감소, 공격력의 600%만큼 피해"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "skill_mechanics": {
+        "effect_type": "debuff_atk_and_damage",
+        "params": {
+          "5": { "atk_debuff_percent": 10, "debuff_seconds": 1.5, "multiplier": 300 },
+          "6": { "atk_debuff_percent": 20, "debuff_seconds": 3.0, "multiplier": 600 }
+        }
+      },
+      "star_mechanics": {
+        "effect_type": "ally_team_stat_percent",
+        "params": {
+          "4": { "stat": "atk", "percent": 20 },
+          "5": { "stat": "atk", "percent": 20 },
+          "6": { "stat": "atk", "percent": 60 }
+        }
+      }
+    }
+  ],
+  "영웅": [
+    {
+      "name": "이영웅",
+      "job_class": "영웅",
+      "gender": "남",
+      "outfits": {
+        "기본": "hero/basic",
+        "여름": "hero/summer",
+        "겨울": "hero/winter"
+      },
+      "description": "건국대 의대에 영웅이 등장합니다. 말 그대로 영웅이었습니다.",
+      "range": "근거리",
+      "attack_type": "Parent",
+      "defense_type": "Student",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": 1.9,
+        "4": 2.5,
+        "5": 2.5,
+        "6": 13
+      },
+      "exp_subjects": ["수학"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "자신을 제외한 모든 캐릭터 공격력 25% 감소",
+        "4": "자신을 제외한 모든 캐릭터 공격력 25% 감소",
+        "5": "자신을 제외한 모든 캐릭터의 공격력 25% 감소",
+        "6": "자신을 제외한 모든 캐릭터의 공격력 50% 감소"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "청진기 진료: 아군의 체력을 대상의 최대 체력의 5%만큼 회복",
+        "6": "청진기 진료: 아군의 체력을 대상의 최대 체력의 15%만큼 회복"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "skill_mechanics": {
+        "effect_type": "heal_ally_percent_max_hp",
+        "params": {
+          "5": { "percent": 5 },
+          "6": { "percent": 15 }
+        }
+      },
+      "star_mechanics": {
+        "effect_type": "debuff_all_others_atk",
+        "params": {
+          "3": { "percent": 25 },
+          "4": { "percent": 25 },
+          "5": { "percent": 25 },
+          "6": { "percent": 50 }
+        }
+      }
+    },
+    {
+      "name": "불빠따 김어진",
+      "job_class": "타자",
+      "gender": "남",
+      "outfits": {
+        "기본": "batter/basic",
+        "여름": "batter/summer",
+        "겨울": "batter/winter"
+      },
+      "description": "쉬는 시간에 클래식 듣기를 거부하는 학생들에게 홈런을 몸소 보여줍니다.",
+      "range": "근거리",
+      "attack_type": "Teacher",
+      "defense_type": "Teacher",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": 1.9,
+        "4": 2.5,
+        "5": 2.5,
+        "6": 13
+      },
+      "exp_subjects": ["탐구"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "남성인 적에게 주는 피해 35% 증가",
+        "4": "남성인 적에게 주는 피해 35% 증가",
+        "5": "남성인 적에게 주는 피해 35% 증가",
+        "6": "남성인 적에게 주는 피해 105% 증가"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "불빠따: 자신을 제외한 모든 캐릭터에게 공격력의 150%만큼 피해",
+        "6": "불빠따: 자신을 제외한 모든 캐릭터에게 공격력의 300%만큼 피해"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "skill_mechanics": {
+        "effect_type": "aoe_all_others_damage",
+        "params": {
+          "5": { "multiplier": 150 },
+          "6": { "multiplier": 300 }
+        }
+      },
+      "star_mechanics": {
+        "effect_type": "damage_to_gender_bonus",
+        "params": {
+          "3": { "gender": "남", "bonus_percent": 35 },
+          "4": { "gender": "남", "bonus_percent": 35 },
+          "5": { "gender": "남", "bonus_percent": 35 },
+          "6": { "gender": "남", "bonus_percent": 105 }
+        }
+      }
+    }
+  ],
+  "희귀": [
+    {
+      "name": "서민석",
+      "job_class": "학생",
+      "gender": "남",
+      "outfits": {
+        "기본": "sms/basic",
+        "여름": "sms/summer",
+        "겨울": "sms/winter"
+      },
+      "description": "책 읽는 모습이 정서적 귀감이 됩니다.",
+      "range": "원거리",
+      "attack_type": "Student",
+      "defense_type": "Parent",
+      "exp_multiplier": {
+        "1": null,
+        "2": 1.8,
+        "3": 1.8,
+        "4": 2.4,
+        "5": 2.4,
+        "6": 12
+      },
+      "exp_subjects": ["영어"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "여성인 아군 전체의 공격력과 최대 체력 25% 증가",
+        "4": "여성인 아군 전체의 공격력과 최대 체력 25% 증가",
+        "5": "팀원 성별 여 캐릭터의 체력 25% 공격력 25% 상승",
+        "6": "팀원 성별 여 캐릭터의 체력 75% 공격력 75% 상승"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "고백: 남성인 적 전체에게 공격력의 150%만큼 피해, 여성인 적 전체에게 공격력의 300%만큼 피해",
+        "6": "고백: 상대 남 캐릭터에 공격력 300% 공격, 상대 여 캐릭터에 공격력 600% 공격"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "skill_mechanics": {
+        "effect_type": "aoe_gendered_damage",
+        "params": {
+          "5": { "male_multiplier": 150, "female_multiplier": 300 },
+          "6": { "male_multiplier": 300, "female_multiplier": 600 }
+        }
+      },
+      "star_mechanics": {
+        "effect_type": "ally_gender_stat_percent",
+        "params": {
+          "3": { "gender": "여", "atk_percent": 25, "hp_percent": 25 },
+          "4": { "gender": "여", "atk_percent": 25, "hp_percent": 25 },
+          "5": { "gender": "여", "atk_percent": 25, "hp_percent": 25 },
+          "6": { "gender": "여", "atk_percent": 75, "hp_percent": 75 }
+        }
+      }
+    },
+    {
+      "name": "강승유",
+      "job_class": "학생",
+      "gender": "남",
+      "outfits": {
+        "기본": "ksy/basic",
+        "여름": "ksy/summer",
+        "겨울": "ksy/winter"
+      },
+      "description": "성대모사 장인입니다. 그 누구도 될 수 있습니다.",
+      "range": "근거리",
+      "attack_type": "Student",
+      "defense_type": "Student",
+      "exp_multiplier": {
+        "1": null,
+        "2": 1.8,
+        "3": 1.8,
+        "4": 2.4,
+        "5": 2.4,
+        "6": 12
+      },
+      "exp_subjects": ["수학"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "자신의 공격력과 최대 체력 20% 증가",
+        "4": "자신의 공격력과 최대 체력 20% 증가",
+        "5": "자신의 공격력과 최대 체력 20% 증가",
+        "6": "자신의 공격력과 최대 체력 60% 증가"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "성대모사: 공격 대상이 보유한 스킬 복제, 복제한 스킬의 피해량·회복량·보호막 수치·지속시간 50% 적용, 복제 가능한 스킬이 없는 경우 공격력의 150%만큼 피해",
+        "6": "성대모사: 공격 대상이 보유한 스킬 복제, 복제한 스킬의 피해량·회복량·보호막 수치·지속시간 100% 적용, 복제 가능한 스킬이 없는 경우 공격력의 450%만큼 피해"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "skill_mechanics": {
+        "effect_type": "copy_target_skill",
+        "params": {
+          "5": { "potency_percent": 50, "fallback_multiplier": 150 },
+          "6": { "potency_percent": 100, "fallback_multiplier": 450 }
+        }
+      },
+      "star_mechanics": {
+        "effect_type": "self_stat_percent",
+        "params": {
+          "3": { "atk_percent": 20, "hp_percent": 20 },
+          "4": { "atk_percent": 20, "hp_percent": 20 },
+          "5": { "atk_percent": 20, "hp_percent": 20 },
+          "6": { "atk_percent": 60, "hp_percent": 60 }
+        }
+      }
+    },
+    {
+      "name": "송주헌",
+      "job_class": "학생",
+      "gender": "남",
+      "outfits": {
+        "기본": "sjh/basic",
+        "수영복": "sjh/swimsuit",
+        "겨울": "sjh/winter"
+      },
+      "description": "쓸모가 많습니다. 물론 인게임 내에서요.",
+      "range": "근거리",
+      "attack_type": "Student",
+      "defense_type": "Student",
+      "exp_multiplier": {
+        "1": null,
+        "2": 1.9,
+        "3": 1.9,
+        "4": 2.5,
+        "5": 2.5,
+        "6": 13
+      },
+      "exp_subjects": ["독서"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "자신 제외 아군의 최대 체력 25% 증가",
+        "4": "자신 제외 아군의 최대 체력 25% 증가",
+        "5": "아군의 최대 체력 25% 증가",
+        "6": "아군의 최대 체력 75% 증가"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "격차 벌리기: 공격 대상 2초 기절",
+        "6": "격차 벌리기: 공격 대상 4초 기절"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "skill_mechanics": {
+        "effect_type": "stun_target",
+        "params": {
+          "5": { "seconds": 2 },
+          "6": { "seconds": 4 }
+        }
+      },
+      "star_mechanics": {
+        "effect_type": "teammate_stat_percent",
+        "params": {
+          "3": { "stat": "hp", "percent": 25 },
+          "4": { "stat": "hp", "percent": 25 },
+          "5": { "stat": "hp", "percent": 25 },
+          "6": { "stat": "hp", "percent": 75 }
+        }
+      }
+    }
+  ],
+  "일반": [
+    {
+      "name": "최재혁",
+      "job_class": "마법사",
+      "gender": "남",
+      "outfits": {
+        "기본": "mage_weak/basic",
+        "여름": "mage_weak/summer",
+        "겨울": "mage_weak/winter"
+      },
+      "description": "미디어실에 상주하는 최약체 마법사입니다.",
+      "range": "근거리",
+      "attack_type": "Student",
+      "defense_type": "Student",
+      "exp_multiplier": {
+        "1": 1.1,
+        "2": 1.7,
+        "3": 1.7,
+        "4": 2.2,
+        "5": 2.2,
+        "6": 11
+      },
+      "exp_subjects": ["영어"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "후방 적 우선 공격",
+        "4": "후방 적 우선 공격",
+        "5": "후방 적 우선 공격",
+        "6": "후방 적 우선 공격"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "환상살: 자신에게 0.5초간 모든 피해를 무효화하는 보호막 부여",
+        "6": "환상살: 자신에게 1.5초간 모든 피해를 무효화하는 보호막 부여"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "skill_mechanics": {
+        "effect_type": "self_shield_duration",
+        "params": {
+          "5": { "seconds": 0.5 },
+          "6": { "seconds": 1.5 }
+        }
+      }
+    },
+    {
+      "name": "청년",
+      "job_class": "초심자",
+      "gender": "남",
+      "outfits": {
+        "기본": "beginner/basic",
+        "수영복": "beginner/swimsuit",
+        "겨울": "beginner/winter"
+      },
+      "description": "있는 그대로의 모습이 아름다운 초심자 청년입니다.",
+      "range": "근거리",
+      "attack_type": "Parent",
+      "defense_type": "Teacher",
+      "exp_multiplier": {
+        "1": 1.0,
+        "2": 1.5,
+        "3": 2.0,
+        "4": 2.5,
+        "5": 3.0,
+        "6": 1.0
+      },
+      "exp_subjects": ["독서"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "공격력 25% 증가",
+        "4": "공격력 25% 증가",
+        "5": "공격력 25% 증가",
+        "6": "해당 성급의 별도 효과가 없습니다."
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "강한 타격: 공격 대상에게 공격력의 300%만큼 피해, 대상 밀쳐내기",
+        "6": null
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "skill_mechanics": {
+        "effect_type": "bonus_damage_knockback",
+        "params": {
+          "5": { "multiplier": 300 }
+        }
+      },
+      "star_mechanics": {
+        "effect_type": "self_stat_percent",
+        "params": {
+          "3": { "atk_percent": 25 },
+          "4": { "atk_percent": 25 },
+          "5": { "atk_percent": 25 }
+        }
+      }
+    },
+    {
+      "name": "강 희",
+      "job_class": "1반 학생",
+      "gender": "여",
+      "outfits": {
+        "기본": "student/basic",
+        "여름": "student/summer",
+        "겨울": "student/winter"
+      },
+      "description": "직접 찾아가보세요.",
+      "range": "근거리",
+      "attack_type": "Student",
+      "defense_type": "Student",
+      "exp_multiplier": {
+        "1": 1.1,
+        "2": 1.7,
+        "3": 1.7,
+        "4": 2.2,
+        "5": 2.2,
+        "6": 11
+      },
+      "exp_subjects": ["국어"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "최대 체력 25% 증가",
+        "4": "최대 체력 25% 증가",
+        "5": "최대 체력 25% 증가",
+        "6": "체력 75% 상승"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "생화학 구취 브레스: 적 전체에게 각각 공격력의 200%만큼 피해",
+        "6": "생화학 구취 브레스: 적 전체에게 각각 공격력의 400%만큼 피해"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "skill_mechanics": {
+        "effect_type": "aoe_enemy_damage",
+        "params": {
+          "5": { "multiplier": 200 },
+          "6": { "multiplier": 400 }
+        }
+      },
+      "star_mechanics": {
+        "effect_type": "self_stat_percent",
+        "params": {
+          "3": { "hp_percent": 25 },
+          "4": { "hp_percent": 25 },
+          "5": { "hp_percent": 25 },
+          "6": { "hp_percent": 75 }
+        }
+      }
+    }
+  ]
+}

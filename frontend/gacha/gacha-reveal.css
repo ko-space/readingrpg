@@ -1,0 +1,458 @@
+/* 가챠 뽑기 결과 연출. 화면 전체를 덮는 최상위 오버레이 - 기존 모달(z-index:100)보다 위에 뜸 */
+
+.gacha-reveal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    overflow: hidden;
+    background: transparent; /* 처음엔 투명해야 함 - 배경이 이미 검정이면 문이 닫히는 게 안 보임 */
+    cursor: pointer;
+}
+
+.gacha-reveal-overlay.open {
+    display: block;
+}
+
+/* 연출 중엔 트랜지션 없이 즉시 최종 상태로 점프시키기 위한 스킵용 클래스 */
+.gacha-reveal-overlay.no-transition * {
+    transition: none !important;
+}
+
+/* ===== 1. 여닫이문(양옆에서 검게 닫힘) / 2. 미닫이문(다시 갈라져 열림) ===== */
+.reveal-door {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 50%;
+    background: #000;
+    z-index: 10;
+    transition: transform 0.5s ease-in-out;
+}
+
+.reveal-door-left {
+    left: 0;
+    transform: translateX(-100%);
+}
+
+.reveal-door-right {
+    right: 0;
+    transform: translateX(100%);
+}
+
+/* 문이 닫히는 단계: 화면 밖 -> 중앙으로 모임 */
+.gacha-reveal-overlay.doors-closed .reveal-door-left,
+.gacha-reveal-overlay.doors-closed .reveal-door-right {
+    transform: translateX(0);
+}
+
+/* 문이 열리는 단계: 중앙에 모여있던 문이 다시 화면 밖으로 - 열릴 땐 좀 더 느긋하게 */
+.gacha-reveal-overlay.doors-open .reveal-door {
+    transition: transform 0.8s ease-in-out;
+}
+
+.gacha-reveal-overlay.doors-open .reveal-door-left {
+    transform: translateX(-100%);
+}
+
+.gacha-reveal-overlay.doors-open .reveal-door-right {
+    transform: translateX(100%);
+}
+
+/* ===== 3. 배경(최대 크기 고정, 페이드인만) + 캐릭터(문 열리는 동안 작게->원래 크기로) ===== */
+.reveal-stage {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+}
+
+.reveal-bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    opacity: 0;
+    transition: opacity 0.5s ease-out;
+}
+
+.gacha-reveal-overlay.doors-open .reveal-bg {
+    opacity: 1;
+}
+
+/* 등급별 배경. 이미지가 있으면 이미지가 우선 보이고, 없으면 그라데이션이 대신 보임(레이어링) */
+.reveal-bg.rarity-신화 { background-image: url('../assets/gacha/bg-신화.png'), linear-gradient(160deg, #ff8a4c 0%, #ff3c6a 35%, #7a1fa2 70%, #180530 100%); }
+.reveal-bg.rarity-전설 { background-image: url('../assets/gacha/bg-전설.png'), linear-gradient(160deg, #fff2c0 0%, #ffcf5c 35%, #ff8f2c 70%, #7a3c00 100%); }
+.reveal-bg.rarity-영웅 { background-image: url('../assets/gacha/bg-영웅.png'), linear-gradient(160deg, #e2c8ff 0%, #b06af0 35%, #6a2ea8 70%, #1f0f38 100%); }
+.reveal-bg.rarity-희귀 { background-image: url('../assets/gacha/bg-희귀.png'), linear-gradient(160deg, #cfe8ff 0%, #7ab0f0 35%, #3c6ab8 70%, #0f2748 100%); }
+.reveal-bg.rarity-일반 { background-image: url('../assets/gacha/bg-일반.png'), linear-gradient(160deg, #e6f0df 0%, #a8c49a 35%, #6a8060 70%, #1f281c 100%); }
+
+/* 캐릭터+오라를 감싸는 wrap - 확대(3번)와 슬라이드(4번)는 배경이 아니라 여기에만 적용됨 */
+.reveal-character-wrap {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: scale(0.3);
+    opacity: 0;
+    transition: transform 0.8s ease-out, opacity 0.4s ease-out;
+}
+
+.gacha-reveal-overlay.doors-open .reveal-character-wrap {
+    transform: scale(1);
+    opacity: 1;
+}
+
+.reveal-character-img {
+    position: relative;
+    z-index: 2;
+    max-height: 82vh;
+    max-width: 60vw;
+    object-fit: contain;
+    /* 등급별 rim-* 애니메이션이 filter를 통째로 덮어써서, 접지 그림자는 각 keyframe 안에 같이 포함시켜둠 */
+    filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5));
+}
+
+/* ===== 캐릭터 사진 윤곽선을 따라 감싸는 림 글로우 (배경 없는 PNG 전제, drop-shadow는 알파값을 따라감) ===== */
+.reveal-character-img.rarity-일반 { animation: rim-common 2.6s ease-in-out infinite; }
+@keyframes rim-common {
+    0%, 100% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 10px rgba(190, 220, 180, 0.5)); }
+    50% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 18px rgba(190, 220, 180, 0.8)); }
+}
+
+.reveal-character-img.rarity-희귀 { animation: rim-rare 2.1s ease-in-out infinite; }
+@keyframes rim-rare {
+    0%, 100% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 12px rgba(90, 220, 120, 0.75)) drop-shadow(0 0 24px rgba(60, 200, 100, 0.35)); }
+    50% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 20px rgba(90, 220, 120, 1)) drop-shadow(0 0 36px rgba(60, 200, 100, 0.55)); }
+}
+
+.reveal-character-img.rarity-영웅 { animation: rim-hero 1.3s ease-in-out infinite; }
+@keyframes rim-hero {
+    0%, 100% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 14px rgba(255, 100, 50, 0.8)); }
+    25% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 22px rgba(255, 140, 40, 1)); }
+    50% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 10px rgba(230, 60, 20, 0.6)); }
+    75% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 26px rgba(255, 120, 30, 1)); }
+}
+
+.reveal-character-img.rarity-전설 { animation: rim-legendary 3.5s ease-in-out infinite; }
+@keyframes rim-legendary {
+    0%, 100% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 16px rgba(255, 225, 140, 0.85)) drop-shadow(0 0 32px rgba(255, 190, 80, 0.4)); }
+    50% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 26px rgba(255, 225, 140, 1)) drop-shadow(0 0 46px rgba(255, 190, 80, 0.6)); }
+}
+
+.reveal-character-img.rarity-신화 { animation: rim-mythic 1s ease-in-out infinite; }
+@keyframes rim-mythic {
+    0%, 100% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 14px rgba(255, 255, 255, 0.7)); }
+    15% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 26px rgba(255, 255, 255, 1)); }
+    30% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 12px rgba(255, 255, 255, 0.6)); }
+    45% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 30px rgba(255, 255, 255, 1)); }
+    60% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 14px rgba(255, 255, 255, 0.65)); }
+    75% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 24px rgba(255, 255, 255, 0.95)); }
+    90% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 16px rgba(255, 255, 255, 0.7)); }
+}
+
+/* 모집한 캐릭터 사진 뒤에서 은은하게 퍼지는 배경 아우라 (림 글로우와 별개로, 전체적인 분위기 조명 역할) */
+.reveal-character-glow {
+    position: absolute;
+    z-index: 1;
+    width: min(60vh, 60vw);
+    height: min(60vh, 60vw);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+/* 일반: 원래 그대로(가장 은은한 기본 펄스) */
+@keyframes aura-pulse-common {
+    0%, 100% { opacity: 0.55; transform: scale(1); }
+    50% { opacity: 0.9; transform: scale(1.08); }
+}
+.reveal-character-glow.rarity-일반 {
+    background: radial-gradient(circle, rgba(190, 220, 180, 0.55) 0%, rgba(110, 140, 100, 0) 70%);
+    animation: aura-pulse-common 2.6s ease-in-out infinite;
+}
+
+/* 희귀: 초록, 일반보다 조금 더 빛남(더 밝고 조금 더 빠름) */
+@keyframes aura-pulse-rare {
+    0%, 100% { opacity: 0.6; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.15); }
+}
+.reveal-character-glow.rarity-희귀 {
+    background: radial-gradient(circle, rgba(90, 220, 120, 0.8) 0%, rgba(40, 170, 80, 0.25) 45%, rgba(30, 120, 50, 0) 75%);
+    animation: aura-pulse-rare 2.1s ease-in-out infinite;
+}
+
+/* 영웅: 붉은색, 타오르는 느낌 - 완전한 원이 아니라 모양 자체가 일렁이는 불규칙한 화염 형태 */
+@keyframes aura-flicker-hero {
+    0%, 100% { opacity: 0.65; transform: scale(1) rotate(0deg); border-radius: 50% 50% 50% 50%; }
+    25% { opacity: 0.9; transform: scale(1.12) rotate(-3deg); border-radius: 45% 55% 60% 40%; }
+    50% { opacity: 0.7; transform: scale(0.96) rotate(2deg); border-radius: 58% 42% 38% 62%; }
+    75% { opacity: 1; transform: scale(1.18) rotate(-1deg); border-radius: 62% 38% 55% 45%; }
+}
+.reveal-character-glow.rarity-영웅 {
+    background: radial-gradient(circle, rgba(255, 100, 50, 0.9) 0%, rgba(230, 50, 20, 0.35) 45%, rgba(120, 10, 10, 0) 75%);
+    animation: aura-flicker-hero 1.3s ease-in-out infinite;
+}
+
+/* 전설: 금색, 신성한 느낌 - 은은하게 커졌다 작아지며, 뒤에서 빛줄기가 천천히 회전 + 잔잔한 반짝임 */
+@keyframes aura-holy-legendary {
+    0%, 100% { opacity: 0.8; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.18); }
+}
+@keyframes aura-rays-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.reveal-character-glow.rarity-전설 {
+    position: absolute;
+    background: radial-gradient(circle, rgba(255, 235, 170, 0.95) 0%, rgba(255, 195, 90, 0.4) 45%, rgba(200, 140, 20, 0) 75%);
+    animation: aura-holy-legendary 3.5s ease-in-out infinite;
+}
+.reveal-character-glow.rarity-전설::before {
+    content: "";
+    position: absolute;
+    inset: -25%;
+    background: repeating-conic-gradient(from 0deg, rgba(255, 230, 150, 0.4) 0deg 6deg, transparent 6deg 24deg);
+    border-radius: 50%;
+    animation: aura-rays-spin 7s linear infinite;
+}
+
+/* 신화: 흰색, 번쩍번쩍 - 가장 밝고 빠르게 강약이 반복 + 사방에서 반짝이는 파티클 */
+@keyframes aura-flash-mythic {
+    0%, 100% { opacity: 0.55; transform: scale(1); }
+    15% { opacity: 1; transform: scale(1.22); }
+    30% { opacity: 0.6; transform: scale(1.02); }
+    45% { opacity: 1; transform: scale(1.28); }
+    60% { opacity: 0.55; transform: scale(1); }
+    75% { opacity: 0.95; transform: scale(1.15); }
+    90% { opacity: 0.65; transform: scale(1.05); }
+}
+.reveal-character-glow.rarity-신화 {
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.4) 40%, rgba(255, 255, 255, 0) 70%);
+    animation: aura-flash-mythic 1s ease-in-out infinite;
+}
+
+/* 전설/신화 전용: 주변에 흩뿌려진 별빛이 반짝반짝 (같은 자리에서 밝기만 깜빡임) */
+@keyframes sparkle-twinkle {
+    0%, 100% { opacity: 0.15; }
+    50% { opacity: 1; }
+}
+.reveal-character-glow.rarity-전설::after,
+.reveal-character-glow.rarity-신화::after {
+    content: "";
+    position: absolute;
+    inset: -18%;
+    pointer-events: none;
+    background-repeat: no-repeat;
+    background-image:
+        radial-gradient(circle, #fff 1.5px, transparent 2.5px),
+        radial-gradient(circle, #fff 1px, transparent 2px),
+        radial-gradient(circle, #fff 1.2px, transparent 2.2px),
+        radial-gradient(circle, #fff 1px, transparent 2px);
+    background-size: 60px 60px, 45px 45px, 70px 70px, 50px 50px;
+    background-position: 12% 22%, 72% 14%, 28% 78%, 82% 68%;
+    animation: sparkle-twinkle 1.3s ease-in-out infinite;
+}
+.reveal-character-glow.rarity-신화::after {
+    animation-duration: 0.7s;
+}
+
+/* ===== 4. 캐릭터(+오라)가 왼쪽으로 밀림 ===== */
+.gacha-reveal-overlay.slide-left .reveal-character-wrap {
+    transform: translateX(-16vw);
+    transition: transform 0.6s cubic-bezier(0.42, 0, 0.58, 1); /* 가속+감속 */
+}
+
+/* ===== 옆 정보 패널: 참고 이미지의 흰 서류 카드 느낌 ===== */
+.reveal-side-panel {
+    position: absolute;
+    top: 50%;
+    left: 64%;
+    width: 260px;
+    max-height: 88vh;
+    overflow-y: auto;
+    z-index: 3;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(24px, -50%);
+    transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.gacha-reveal-overlay.panels-shown .reveal-side-panel {
+    opacity: 1;
+    transform: translate(0, -50%);
+    pointer-events: auto;
+}
+
+.reveal-info-row {
+    background: rgba(0, 0, 0, 0.035);
+    border-radius: 8px;
+    padding: 6px 12px;
+    flex-shrink: 0;
+}
+
+.reveal-info-label {
+    font-size: 10.5px;
+    color: #8a8a8a;
+    font-weight: bold;
+    margin-bottom: 2px;
+}
+
+.reveal-info-value {
+    font-size: 15px;
+    color: #222;
+    font-weight: 900;
+}
+
+.reveal-equip-btn {
+    flex-shrink: 0;
+    margin-top: 4px;
+    background: linear-gradient(160deg, #59a852, #2c5c26);
+    color: #fff;
+    border: 2px solid #ffe9a8;
+    border-radius: 8px;
+    padding: 10px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.reveal-equip-btn:hover {
+    background: linear-gradient(160deg, #6fc167, #366e2f);
+}
+
+.reveal-equip-btn:disabled {
+    background: #888;
+    border-color: #aaa;
+    cursor: default;
+}
+
+/* ===== 아래 이름+대사 패널: 참고 이미지의 다크 이름바 + 밝은 대사창 ===== */
+.reveal-bottom-panel {
+    position: absolute;
+    left: 8%;
+    bottom: 10%;
+    z-index: 3;
+    max-width: 480px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(24px);
+    transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+}
+
+.gacha-reveal-overlay.panels-shown .reveal-bottom-panel {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.reveal-name-block {
+    background: rgba(15, 15, 30, 0.88);
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-bottom: none;
+    border-radius: 12px 12px 0 0;
+    padding: 10px 20px;
+    color: #fff;
+}
+
+/* NEW! / PICK UP! (반짝임) / 중복(안 반짝임) 태그들 */
+@keyframes pickup-shine {
+    to { background-position: 200% center; }
+}
+
+.reveal-tags {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 2px;
+}
+
+.reveal-tag {
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 1px;
+}
+
+.reveal-tag-shine {
+    background: linear-gradient(90deg, #fff2a8, #ffd76a, #fff8d8, #ffd76a, #fff2a8);
+    background-size: 250% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: pickup-shine 1.6s linear infinite;
+}
+
+.reveal-tag-duplicate {
+    color: #bbb;
+}
+
+.reveal-name {
+    font-size: 20px;
+    font-weight: 900;
+}
+
+.reveal-desc-box {
+    background: rgba(255, 255, 255, 0.94);
+    border: 2px solid rgba(0, 0, 0, 0.08);
+    border-radius: 0 0 12px 12px;
+    padding: 14px 20px;
+}
+
+.reveal-desc {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #333;
+}
+
+.reveal-skip-btn {
+    position: absolute;
+    top: 20px;
+    right: 24px;
+    z-index: 20;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.gacha-reveal-overlay.panels-shown .reveal-skip-btn {
+    display: none;
+}
+
+@media (max-width: 720px) {
+    .reveal-character-img {
+        max-width: 85vw;
+    }
+    .gacha-reveal-overlay.slide-left .reveal-character-wrap {
+        transform: translateX(-6vw) scale(0.85);
+    }
+    .reveal-side-panel {
+        left: 8%;
+        top: auto;
+        bottom: 28%;
+        width: auto;
+        right: 8%;
+        transform: translateY(24px);
+    }
+    .gacha-reveal-overlay.panels-shown .reveal-side-panel {
+        transform: translateY(0);
+    }
+    .reveal-bottom-panel {
+        right: 8%;
+        max-width: none;
+    }
+}

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>전술경연 대회 - 독서 RPG</title>
+    <link rel="icon" href="logoicon.png">
+    <link rel="stylesheet" href="shared/lobby.css">
+    <link rel="stylesheet" href="arena/arena-battle.css">
+    <link rel="stylesheet" href="shared/achievement-toast.css">
+    <link rel="stylesheet" href="gacha/gacha-reveal.css">
+</head>
+<body>
+    <div class="battle-screen">
+        <div class="battle-layout">
+
+            <!-- 좌측: 나 -->
+            <div class="player-panel" data-side="attacker">
+                <div class="player-identity">
+                    <div class="player-avatar-frame">
+                        <img class="player-avatar" id="attacker-avatar" src="" alt="내 대표 캐릭터">
+                    </div>
+
+                    <div class="player-summary">
+                        <div class="player-name" id="attacker-name">-</div>
+                        <div class="player-meta">
+                            Lv.<span id="attacker-level">-</span>
+                            <span class="player-meta-divider">/</span>
+                            <span id="attacker-title">칭호 없음</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="roster-unit" data-roster="attacker-back">
+                    <div class="roster-unit-thumb">
+                        <img class="roster-unit-img" src="" alt="">
+                    </div>
+                    <div class="roster-unit-body">
+                        <div class="roster-unit-name">-</div>
+                        <div class="roster-hp-track">
+                            <div class="roster-hp-fill"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="roster-unit" data-roster="attacker-front">
+                    <div class="roster-unit-thumb">
+                        <img class="roster-unit-img" src="" alt="">
+                    </div>
+                    <div class="roster-unit-body">
+                        <div class="roster-unit-name">-</div>
+                        <div class="roster-hp-track">
+                            <div class="roster-hp-fill"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 전투 로그: 배경 위에 색 텍스트만 스크롤되는 형태 (박스/테두리 없음) -->
+                <div class="battle-log-panel" id="battle-log-panel"></div>
+            </div>
+
+            <!-- 중앙: 실제 전투 캐릭터 -->
+            <div class="battle-field">
+                <div class="projectile-layer" id="projectile-layer"></div>
+
+                <div class="battle-row">
+                    <!-- 소환수(summon) 자리 - 평소엔 비어있다가(hidden) 윤영준류의 "추가 소환" 스킬이 발동될 때만 나타남.
+                         기존 전방/후방을 대체하지 않는 3번째 유닛이라 대열 바깥쪽 끝에 둔다. -->
+                    <div class="battle-unit" data-unit="attacker-summon" hidden>
+                        <img class="battle-unit-img" src="" alt="">
+                        <div class="battle-unit-shadow"></div>
+                    </div>
+
+                    <div class="battle-unit" data-unit="attacker-back">
+                        <img class="battle-unit-img" src="" alt="">
+                        <div class="battle-unit-shadow"></div>
+                    </div>
+
+                    <div class="battle-unit" data-unit="attacker-front">
+                        <img class="battle-unit-img" src="" alt="">
+                        <div class="battle-unit-shadow"></div>
+                    </div>
+
+                    <div class="battle-unit" data-unit="defender-front">
+                        <img class="battle-unit-img" src="" alt="">
+                        <div class="battle-unit-shadow"></div>
+                    </div>
+
+                    <div class="battle-unit" data-unit="defender-back">
+                        <img class="battle-unit-img" src="" alt="">
+                        <div class="battle-unit-shadow"></div>
+                    </div>
+
+                    <div class="battle-unit" data-unit="defender-summon" hidden>
+                        <img class="battle-unit-img" src="" alt="">
+                        <div class="battle-unit-shadow"></div>
+                    </div>
+                </div>
+
+                <div class="battle-field-line"></div>
+            </div>
+
+            <!-- 우측: 상대 -->
+            <div class="player-panel" data-side="defender">
+                <div class="player-identity">
+                    <div class="player-avatar-frame">
+                        <img class="player-avatar" id="defender-avatar" src="" alt="상대 대표 캐릭터">
+                    </div>
+
+                    <div class="player-summary">
+                        <div class="player-name" id="defender-name">-</div>
+                        <div class="player-meta">
+                            Lv.<span id="defender-level">-</span>
+                            <span class="player-meta-divider">/</span>
+                            <span id="defender-title">칭호 없음</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="roster-unit" data-roster="defender-front">
+                    <div class="roster-unit-thumb">
+                        <img class="roster-unit-img" src="" alt="">
+                    </div>
+                    <div class="roster-unit-body">
+                        <div class="roster-unit-name">-</div>
+                        <div class="roster-hp-track">
+                            <div class="roster-hp-fill"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="roster-unit" data-roster="defender-back">
+                    <div class="roster-unit-thumb">
+                        <img class="roster-unit-img" src="" alt="">
+                    </div>
+                    <div class="roster-unit-body">
+                        <div class="roster-unit-name">-</div>
+                        <div class="roster-hp-track">
+                            <div class="roster-hp-fill"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 결과 영역 유지 -->
+        <div class="battle-result" id="battle-result" hidden>
+            <div class="battle-result-text" id="battle-result-text">-</div>
+            <button class="dungeon-enter-btn" id="battle-close-btn">닫기</button>
+        </div>
+    </div>
+
+    <!-- 대표 프로필과 로스터 프로필 모두 로비 크롭 규칙 사용 -->
+    <script src="shared/api-config.js"></script>
+    <script src="shared/avatar-crop.js"></script>
+    <script src="shared/achievement-toast.js"></script>
+    <script src="gacha/gacha-reveal.js" defer></script>
+    <script src="arena/arena-battle.js" defer></script>
+</body>
+</html>

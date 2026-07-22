@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>독서 RPG</title>
+    <link rel="icon" href="logoicon.png">
+    <link rel="stylesheet" href="shared/lobby.css">
+    <link rel="stylesheet" href="gacha/gacha.css">
+    <link rel="stylesheet" href="gacha/gacha-reveal.css">
+    <link rel="stylesheet" href="dungeon/dungeon.css">
+    <link rel="stylesheet" href="arena/arena.css">
+    <link rel="stylesheet" href="inventory/inventory.css">
+    <link rel="stylesheet" href="enhancement/enhancement.css">
+    <link rel="stylesheet" href="shop/shop.css">
+    <link rel="stylesheet" href="achievements/achievements.css">
+    <link rel="stylesheet" href="shared/achievement-toast.css">
+    <link rel="stylesheet" href="ranking/ranking.css">
+    <link rel="stylesheet" href="quests/quests.css">
+    <link rel="stylesheet" href="settings/settings.css">
+</head>
+<body>
+    <div class="game-home">
+
+        <!-- 좌측아이콘 -->
+        <nav class="side-rail">
+            <button class="rail-btn" data-modal-target="modal-character">
+                <img src="assets/icons/inventory.png" alt="" class="rail-icon" onerror="this.style.display='none'">
+                <span>인벤토리</span>
+            </button>
+            <button class="rail-btn" data-modal-target="modal-enhancement">
+                <img src="assets/icons/enhancement.png" alt="" class="rail-icon" onerror="this.style.display='none'">
+                <span>강화</span>
+            </button>
+            <button class="rail-btn" data-modal-target="modal-gacha">
+                <img src="assets/icons/gacha.png" alt="" class="rail-icon" onerror="this.style.display='none'">
+                <span>모집</span>
+            </button>
+            <button class="rail-btn" data-modal-target="modal-ranking">
+                <img src="assets/icons/ranking.png" alt="" class="rail-icon" onerror="this.style.display='none'">
+                <span>랭킹</span>
+            </button>
+            <button class="rail-btn" data-modal-target="modal-quests">
+                <img src="assets/icons/quests.png" alt="" class="rail-icon" onerror="this.style.display='none'">
+                <span>퀘스트</span>
+            </button>            
+            <button class="rail-btn" data-modal-target="modal-achievements">
+                <img src="assets/icons/achievements.png" alt="" class="rail-icon" onerror="this.style.display='none'">
+                <span>업적</span>
+            </button>
+            <button class="rail-btn" data-modal-target="modal-shop">
+                <img src="assets/icons/shop.png" alt="" class="rail-icon" onerror="this.style.display='none'">
+                <span>상점</span>
+            </button>
+            <button class="rail-btn" data-modal-target="modal-help">
+                <img src="assets/icons/help.png" alt="" class="rail-icon" onerror="this.style.display='none'">
+                <span>도움말</span>
+
+            </button>
+        </nav>
+
+        <div class="main-area">
+
+            <!--상단바 -->
+            <div class="top-bar">
+                <div class="top-bar-left">
+                    <div class="profile-cluster">
+                        <div class="avatar-box">
+                            <img id="avatar-img" src="" alt="캐릭터 프로필">
+                        </div>
+                        <div class="info-column">
+                            <div class="name-title-card">
+                                <div class="nickname-line"><span id="nickname-value">-</span></div>
+                                <div class="card-divider"></div>
+                                <div class="title-line">
+                                    <img src="assets/icons/title.png" alt="" class="icon-img" onerror="this.style.display='none'">
+                                    <span id="title-value">칭호 없음</span>
+                                </div>
+                            </div>
+                            <div class="level-exp-card">
+                                <div class="level-exp-row">
+                                    <div class="level-chip">Lv. <span id="level-value">-</span></div>
+                                    <div class="exp-bar-track">
+                                        <div class="exp-bar-fill" id="exp-bar-fill"></div>
+                                    </div>
+                                </div>
+                                <div class="exp-text-line" id="exp-text">- / -</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="top-bar-right">
+                    <div class="stat-row">
+                        <div class="stat-chip"><img src="assets/icons/clock.png" alt="" class="icon-img" onerror="this.style.display='none'"> <span id="clock-value">00:00</span></div>
+                        <div class="stat-chip" id="gold-chip">G <span id="gold-value">100</span></div>
+                        <div class="stat-chip" id="story-ticket-chip" title="스토리모드 티켓"><img src="assets/items/story_ticket.png" alt="" class="icon-img" onerror="this.style.display='none'"> <span id="story-ticket-value">0</span></div>
+                        <button class="icon-btn" data-modal-target="modal-mail" title="우편함">
+                            <img src="assets/icons/mail.png" alt="" class="icon-btn-img" onerror='this.outerHTML="✉️"'>
+                        </button>
+                        <button class="icon-btn" data-modal-target="modal-alerts" title="알림">
+                            <img src="assets/icons/bell.png" alt="" class="icon-btn-img" onerror='this.outerHTML="🔔"'>
+                        </button>
+                        <button class="icon-btn" data-modal-target="modal-settings" title="설정">
+                            <img src="assets/icons/gear.png" alt="" class="icon-btn-img" onerror='this.outerHTML="⚙️"'>
+                        </button>
+                    </div>
+                    <button class="today-reading-tab" data-modal-target="modal-daily">오늘의 독서 현황</button>
+                </div>
+            </div>
+
+            <!--월드-->
+            <div class="world-area">
+
+                <div class="character-display">
+                    <div class="ground-shadow"></div>
+                    <img id="avatar-img-large" src="" alt="캐릭터">
+                </div>
+
+                <div class="dungeon-card">
+                    <h3>
+                        <img src="assets/icons/book.png" alt="" class="icon-img-lg" onerror='this.outerHTML="📖"'>
+                        지역 입장
+                        <img src="assets/icons/book.png" alt="" class="icon-img-lg" onerror='this.outerHTML="📖"'>
+                    </h3>
+                    <div class="dungeon-thumb" id="dungeon-thumb">
+                        <button class="region-nav-arrow region-nav-left" id="region-nav-left" type="button">‹</button>
+                        <div class="dungeon-thumb-lock" id="dungeon-thumb-lock" hidden>
+                            <img src="assets/icons/lock.png" alt="" class="lock-icon-img" onerror='this.outerHTML="🔒"'>
+                        </div>
+                        <span class="dungeon-rate" id="region-rate">-</span>
+                        <button class="region-nav-arrow region-nav-right" id="region-nav-right" type="button">›</button>
+                    </div>
+                    <div class="region-name-row">
+                        <img src="assets/icons/tree.png" alt="" class="icon-img" onerror='this.outerHTML="🌲"'>
+                        <span id="region-name">-</span>
+                        <img src="assets/icons/tree.png" alt="" class="icon-img" onerror='this.outerHTML="🌲"'>
+                    </div>
+                    <button class="dungeon-enter-btn shine" id="dungeon-enter-btn" data-modal-target="modal-dungeon">입장하기</button>
+                </div>
+
+                <div class="dungeon-card">
+                    <h3>
+                        <img src="assets/icons/sword.png" alt="" class="icon-img-lg" onerror='this.outerHTML="⚔️"'>
+                        투기장
+                        <img src="assets/icons/sword.png" alt="" class="icon-img-lg" onerror='this.outerHTML="⚔️"'>
+                    </h3>
+                    <div class="dungeon-thumb" id="arena-thumb">
+                        <span class="dungeon-rate">전술대회 시즌1 OPEN!</span>
+                    </div>
+                    <div class="region-name-row">
+                        <span>체육관</span>
+                    </div>
+                    <button class="dungeon-enter-btn shine btn-red" data-modal-target="modal-arena">입장하기</button>
+                </div>
+
+                <div class="dungeon-card">
+                    <h3>
+                        <img src="assets/icons/heart.png" alt="" class="icon-img-lg" onerror='this.outerHTML="❤️"'>
+                        스토리
+                        <img src="assets/icons/heart.png" alt="" class="icon-img-lg" onerror='this.outerHTML="❤️"'>                
+                    </h3>
+                    <div class="dungeon-thumb" id="story-thumb">
+                        <span class="dungeon-rate">인연 스토리 Episode 1 OPEN!</span>
+                    </div>
+                    <div class="region-name-row">
+                        <span>학생회실</span>
+                    </div>
+                    <button class="dungeon-enter-btn shine btn-blue" data-modal-target="modal-minigame">입장하기</button>
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="version-tag">ver. 0.5.0</div>
+
+    </div>
+
+    <!-- 모달들 -->
+    <div class="modal-overlay" id="modal-daily">
+        <div class="modal-box">
+            <button class="modal-close" data-modal-close>✕</button>
+            <h2 class="screen-title">오늘의 독서 현황</h2>
+            <p class="screen-placeholder">준비중입니다.</p>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-mail">
+        <div class="modal-box">
+            <button class="modal-close" data-modal-close>✕</button>
+            <h2 class="screen-title">우편함</h2>
+            <p class="screen-placeholder">준비중입니다.</p>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-alerts">
+        <div class="modal-box">
+            <button class="modal-close" data-modal-close>✕</button>
+            <h2 class="screen-title">알림</h2>
+            <p class="screen-placeholder">준비중입니다.</p>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-settings">
+        <div class="modal-box settings-modal-box">
+            <button class="modal-close" data-modal-close>✕</button>
+            <div id="settings-content">
+                <p class="screen-placeholder">불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-shop">
+        <div class="modal-box shop-modal-box">
+            <button class="modal-close" data-modal-close>✕</button>
+            <div id="shop-content">
+                <p class="screen-placeholder">불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-gacha">
+        <div class="modal-box">
+            <button class="modal-close" data-modal-close>✕</button>
+            <div id="gacha-content">
+                <p class="screen-placeholder">불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-character">
+        <div class="modal-box inventory-modal-box" id="inventory-modal-box">
+            <button class="modal-close" data-modal-close>✕</button>
+            <div id="inventory-content">
+                <p class="screen-placeholder">불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-enhancement">
+        <div class="modal-box enhancement-modal-box">
+            <button class="modal-close" data-modal-close>✕</button>
+            <div id="enhancement-content">
+                <p class="screen-placeholder">불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-ranking">
+        <div class="modal-box ranking-modal-box">
+            <button class="modal-close" data-modal-close>✕</button>
+            <div id="ranking-content">
+                <p class="screen-placeholder">불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-quests">
+        <div class="modal-box quests-modal-box">
+            <button class="modal-close" data-modal-close>✕</button>
+            <div id="quests-content">
+                <p class="screen-placeholder">불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+
+        <div class="modal-overlay" id="modal-achievements">
+        <div class="modal-box achievements-modal-box">
+            <button class="modal-close" data-modal-close>✕</button>
+            <div id="achievements-content">
+                <p class="screen-placeholder">불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+
+        <div class="modal-overlay" id="modal-help">
+        <div class="modal-box achievements-modal-box">
+            <button class="modal-close" data-modal-close>✕</button>
+            <div id="achievements-content">
+                <p class="screen-placeholder">불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-dungeon">
+        <div class="modal-box dungeon-modal-box">
+            <button class="modal-close" data-modal-close>✕</button>
+            <h2 class="screen-title">독서 방식을 선택해주세요.</h2>
+
+            <div class="dungeon-tab-row">
+                <button class="dungeon-tab-btn active" data-dungeon-tab="reading">진(眞) 독서</button>
+                <button class="dungeon-tab-btn" data-dungeon-tab="subject">과목</button>
+                <button class="dungeon-tab-btn" data-dungeon-tab="mock">모의고사</button>
+            </div>
+
+            <div class="dungeon-tab-panel" data-dungeon-panel="reading">
+                <div class="genre-select-row">
+                    <button class="genre-btn" id="genre-btn-nonfiction">비문학</button>
+                    <button class="genre-btn" id="genre-btn-literature">문학</button>
+                </div>
+            </div>
+
+            <div class="dungeon-tab-panel" data-dungeon-panel="subject" hidden>
+                <div class="genre-select-row subject-select-row">
+                    <button class="genre-btn" data-subject-name="국어">국어</button>
+                    <button class="genre-btn" data-subject-name="수학">수학</button>
+                    <button class="genre-btn" data-subject-name="영어">영어</button>
+                    <button class="genre-btn" data-subject-name="탐구">탐구</button>
+                    <button class="genre-btn" data-subject-name="기타">기타</button>
+                </div>
+            </div>
+
+            <div class="dungeon-tab-panel" data-dungeon-panel="mock" hidden>
+                <div class="genre-select-row subject-select-row">
+                    <button class="genre-btn mock-exam-btn" data-mock-subject="국어" data-mock-minutes="80">국어<span class="mock-exam-minutes">80분</span></button>
+                    <button class="genre-btn mock-exam-btn" data-mock-subject="수학" data-mock-minutes="100">수학<span class="mock-exam-minutes">100분</span></button>
+                    <button class="genre-btn mock-exam-btn" data-mock-subject="수학(하프)" data-mock-minutes="50">수학(하프)<span class="mock-exam-minutes">50분</span></button>
+                    <button class="genre-btn mock-exam-btn" data-mock-subject="영어" data-mock-minutes="70">영어<span class="mock-exam-minutes">70분</span></button>
+                    <button class="genre-btn mock-exam-btn" data-mock-subject="영어(하프)" data-mock-minutes="40">영어(하프)<span class="mock-exam-minutes">40분</span></button>
+                    <button class="genre-btn mock-exam-btn" data-mock-subject="탐구" data-mock-minutes="30">탐구<span class="mock-exam-minutes">30분</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-arena">
+        <div class="modal-box pvp-modal-box" id="arena-modal-box">
+            <button class="modal-close" data-modal-close>✕</button>
+
+            <div id="arena-choice-view">
+                <h2 class="screen-title">투기장 입장</h2>
+                <div class="arena-choice-row">
+                    <button class="arena-choice-btn" id="arena-choice-reading" disabled>
+                        <span class="arena-choice-type">PVE</span>
+                        <span class="arena-choice-label">토벌전</span>
+                        <span class="arena-choice-soon">준비 중</span>
+                    </button>
+                    <button class="arena-choice-btn" id="arena-choice-pvp">
+                        <span class="arena-choice-type">PVP</span>
+                        <span class="arena-choice-label">전술대회</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="pvp-content" hidden>
+                <p class="screen-placeholder">불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-minigame">
+        <div class="modal-box">
+            <button class="modal-close" data-modal-close>✕</button>
+
+            <div id="story-choice-view">
+                <h2 class="screen-title">스토리</h2>
+                <div class="arena-choice-row">
+                    <button class="arena-choice-btn" id="story-choice-relationship">
+                        <span class="arena-choice-type">MAIN</span>
+                        <span class="arena-choice-label">인연 스토리</span>
+                    </button>
+                    <button class="arena-choice-btn" id="story-choice-sub" disabled>
+                        <span class="arena-choice-type">SUB</span>
+                        <span class="arena-choice-label">서브 스토리</span>
+                        <span class="arena-choice-soon">준비 중</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="shared/api-config.js"></script>
+    <script src="shared/avatar-crop.js"></script>
+    <script src="shared/standing-crop.js"></script>
+    <script src="shared/achievement-toast.js"></script>
+    <script src="shared/home.js"></script>
+    <script src="gacha/gacha.js" defer></script>
+    <script src="gacha/gacha-reveal.js" defer></script>
+    <script src="dungeon/dungeon.js" defer></script>
+    <script src="arena/arena.js" defer></script>
+    <script src="story/story.js" defer></script>
+    <script src="inventory/inventory.js" defer></script>
+    <script src="enhancement/enhancement.js" defer></script>
+    <script src="shop/shop.js" defer></script>
+    <script src="achievements/achievements.js" defer></script>
+    <script src="ranking/ranking.js" defer></script>
+    <script src="quests/quests.js" defer></script>
+    <script src="settings/settings.js" defer></script>
+</body>
+</html>
