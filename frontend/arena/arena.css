@@ -1,0 +1,531 @@
+/* 투기장(PVP) 전용 스타일. lobby.css의 --panel-bg, --panel-border 등 공통 변수를 그대로 씀 */
+
+.pvp-modal-box {
+    max-width: 380px;
+    transition: max-width 0.45s cubic-bezier(0.22, 0.9, 0.3, 1), min-height 0.45s cubic-bezier(0.22, 0.9, 0.3, 1);
+}
+
+.pvp-modal-box.arena-expanded {
+    max-width: 900px;
+}
+
+/* ── 입장 시 '독서 / 전술대회' 선택 화면 ── */
+.arena-choice-row {
+    display: flex;
+    gap: 14px;
+    margin-top: 8px;
+}
+
+.arena-choice-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    background: var(--panel-bg, #f6ecd9);
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 12px;
+    padding: 24px 12px;
+    font-weight: 900;
+    font-size: 15px;
+    color: var(--text-dark, #4a3c2a);
+    cursor: pointer;
+}
+
+.arena-choice-btn:hover:not(:disabled) {
+    box-shadow: 0 0 14px rgba(232, 184, 75, 0.7);
+    transform: translateY(-2px);
+}
+
+.arena-choice-btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.arena-choice-type {
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: #fff;
+    background: var(--panel-border, #c9a86a);
+    padding: 3px 12px;
+    border-radius: 999px;
+}
+
+.arena-choice-soon {
+    font-size: 11px;
+    font-weight: bold;
+    color: #a05a2c;
+}
+
+/* ── 메인 화면: 좌(방어편성+프로필) / 우(후보목록) 2열 ── */
+.pvp-layout {
+    display: flex;
+    gap: 18px;
+}
+
+.pvp-left-panel {
+    width: 220px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.pvp-right-panel {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* ── 방어 편성 스탠딩 (전신 일러스트, 아바타 크롭 아님) ── */
+.defense-standing-row {
+    display: flex;
+    gap: 8px;
+}
+
+.defense-standing-slot {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.5);
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 10px;
+    padding: 8px 4px;
+    min-height: 148px;
+    justify-content: center;
+}
+
+.defense-standing-slot.defense-standing-empty {
+    border-style: dashed;
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.defense-standing-slot.defense-standing-empty::before {
+    content: "+";
+    font-size: 28px;
+    font-weight: 900;
+    color: rgba(74, 60, 42, 0.35);
+}
+
+/* 스탠딩 크롭(standing-crop.js)이 이미지를 확대(transform: scale)하므로,
+   확대된 부분이 슬롯 밖(이름/별 표시 위)으로 번지지 않게 래퍼에서 잘라낸다. */
+.defense-standing-imgwrap {
+    width: 100%;
+    height: 120px;
+    overflow: hidden;
+    border-radius: 6px;
+}
+
+.defense-standing-slot.defense-standing-empty .defense-standing-imgwrap {
+    display: none; /* 빈 슬롯은 "+" 표시(::before)만 보여준다 */
+}
+
+.defense-standing-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: bottom center;
+    filter: drop-shadow(0 5px 5px rgba(0, 0, 0, 0.25));
+}
+
+.defense-standing-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.defense-standing-name {
+    font-size: 12px;
+    font-weight: 900;
+    color: var(--text-dark, #4a3c2a);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.defense-standing-star {
+    font-size: 11px;
+    font-weight: bold;
+    color: #b8860b;
+}
+
+.pvp-defense-change-btn {
+    width: 100%;
+    background: var(--panel-bg, #f6ecd9);
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 8px;
+    padding: 8px;
+    font-weight: bold;
+    font-size: 13px;
+    color: var(--text-dark, #4a3c2a);
+    cursor: pointer;
+}
+
+.pvp-defense-change-btn:hover {
+    box-shadow: 0 0 10px rgba(232, 184, 75, 0.6);
+}
+
+/* ── 내 프로필 ── */
+.pvp-my-profile {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--panel-bg, #f6ecd9);
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 10px;
+    padding: 8px 10px;
+}
+
+.pvp-my-avatar-frame {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    overflow: hidden;
+    position: relative;
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 8px;
+    background: #fff;
+}
+
+.pvp-my-avatar {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    background: #fff;
+}
+
+.pvp-my-nickname {
+    font-weight: 900;
+    font-size: 14px;
+    color: var(--text-dark, #4a3c2a);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── 순위 ── */
+.pvp-my-rank {
+    text-align: center;
+    font-weight: 900;
+    font-size: 18px;
+    color: #2d6ae0;
+    background: var(--panel-bg, #f6ecd9);
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 8px;
+    padding: 6px;
+}
+
+/* ── 상단 액션 버튼 ── */
+.pvp-action-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.pvp-action-btn {
+    flex: 1;
+    background: var(--panel-bg, #f6ecd9);
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 8px;
+    padding: 10px;
+    font-weight: bold;
+    font-size: 13px;
+    color: var(--text-dark, #4a3c2a);
+    cursor: pointer;
+}
+
+.pvp-action-btn:hover {
+    box-shadow: 0 0 10px rgba(232, 184, 75, 0.6);
+}
+
+/* ── 우측 상단: 제목 + 작은 갱신 버튼 ── */
+.pvp-right-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pvp-refresh-btn-sm {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    background: #e8f0ff;
+    border: 2px solid #7aa8ff;
+    border-radius: 50%;
+    color: #2d6ae0;
+    font-size: 15px;
+    font-weight: 900;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease;
+}
+
+.pvp-refresh-btn-sm:hover {
+    transform: rotate(45deg);
+}
+
+/* ── 후보 카드 ── */
+.pvp-opponent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 340px;
+    overflow-y: auto;
+}
+
+.pvp-opponent-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.55);
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 10px;
+    padding: 12px 14px;
+}
+
+/* ── 로비 프로필 사진 (장착 캐릭터, 아바타 크롭 적용) ── */
+.pvp-opponent-avatar-frame {
+    width: 54px;
+    height: 54px;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: 10px;
+    border: 2px solid var(--panel-border, #c9a86a);
+    background: #fff;
+}
+
+.pvp-opponent-avatar {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    background: #fff;
+}
+
+/* ── 상대 방어 편성 미리보기: 사진 + 우하단 노란 별 배지, 이름 없음 ── */
+.pvp-opponent-defense {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.opp-unit-thumb {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 2px solid var(--panel-border, #c9a86a);
+    background: #fff;
+}
+
+.opp-unit-thumb img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.opp-unit-empty {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.opp-unit-star {
+    position: absolute;
+    right: 1px;
+    bottom: 1px;
+    font-size: 10px;
+    font-weight: 900;
+    color: #ffd76a;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 3px rgba(0, 0, 0, 0.9);
+}
+
+.pvp-opponent-rank {
+    flex-shrink: 0;
+    width: 56px;
+    text-align: center;
+    font-weight: 900;
+    font-size: 15px;
+    color: #2d6ae0;
+}
+
+.pvp-opponent-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.pvp-opponent-name {
+    font-weight: bold;
+    font-size: 15px;
+    color: var(--text-dark, #4a3c2a);
+}
+
+.pvp-opponent-level {
+    font-size: 12px;
+    color: #6b5b3e;
+}
+
+.pvp-fight-btn {
+    flex-shrink: 0;
+    background: linear-gradient(160deg, #e0645a, #8f231c);
+    color: #fff;
+    border: 2px solid #ffc4ba;
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-weight: 900;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.pvp-fight-btn:hover {
+    background: linear-gradient(160deg, #ef7a6f, #a52d24);
+}
+
+/* ── 뒤로가기 / 섹션 제목 ── */
+.pvp-back-btn {
+    background: none;
+    border: none;
+    color: var(--text-dark, #4a3c2a);
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 4px 0;
+    margin-bottom: 8px;
+}
+
+.pvp-section-title {
+    font-size: 17px;
+    color: var(--text-dark, #4a3c2a);
+    margin-bottom: 6px;
+}
+
+/* ── 방어 편성 ── */
+.pvp-defense-slots {
+    display: flex;
+    gap: 14px;
+    margin: 14px 0;
+}
+
+.pvp-defense-slot {
+    flex: 1;
+}
+
+.pvp-defense-slot-label {
+    font-size: 12px;
+    font-weight: bold;
+    color: #8a7a5c;
+    margin-bottom: 4px;
+}
+
+.pvp-select {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 8px;
+    background: #fff;
+    font-size: 13px;
+    color: var(--text-dark, #4a3c2a);
+}
+
+/* ── 대전 이력 ── */
+.pvp-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 340px;
+    overflow-y: auto;
+}
+
+.pvp-history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid var(--panel-border, #c9a86a);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+}
+
+.pvp-history-opponent {
+    font-weight: bold;
+    color: var(--text-dark, #4a3c2a);
+}
+
+.pvp-history-win {
+    color: #2c7a2c;
+    font-weight: 900;
+}
+
+.pvp-history-lose {
+    color: #b0392c;
+    font-weight: 900;
+}
+
+.pvp-history-time {
+    font-size: 11px;
+    color: #8a7a5c;
+}
+
+/* ── 순위 변동 알림 오버레이 (별도 모달이 아니라 pvp 모달 내부에 겹쳐지는 레이어) ── */
+.pvp-notice-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 14px;
+}
+
+.pvp-notice-box {
+    width: 85%;
+    background: var(--panel-bg, #f6ecd9);
+    border: 3px solid var(--panel-border, #c9a86a);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.pvp-notice-title {
+    font-size: 18px;
+    color: var(--text-dark, #4a3c2a);
+    text-align: center;
+}
+
+.pvp-notice-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.pvp-notice-item {
+    font-size: 13px;
+    color: var(--text-dark, #4a3c2a);
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 6px;
+    padding: 8px 10px;
+}
+
+/* display:flex 등이 hidden 속성의 기본 숨김 동작을 덮어쓰는 걸 막음 (이전에 여러 번 겪었던 버그 패턴) */
+.pvp-notice-overlay[hidden],
+#pvp-defense-picker-view[hidden],
+#pvp-history-view[hidden] {
+    display: none;
+}

@@ -1,0 +1,197 @@
+/* 설정 전용 UI - 게임 콘텐츠 화면들과 구분되는 차분한 슬레이트 톤 */
+#modal-settings .settings-modal-box {
+    width: min(94vw, 420px);
+    max-width: none;
+    max-height: 86vh;
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border: 2px solid rgba(120, 130, 145, .8);
+    border-radius: 14px;
+    background: linear-gradient(160deg, #f4f6f8 0%, #e4e8ec 100%);
+    box-shadow: 0 16px 50px rgba(20, 25, 35, .35), 0 0 0 1px rgba(255,255,255,.7) inset;
+}
+
+#modal-settings .modal-close {
+    z-index: 20;
+    color: #4a5568;
+}
+
+#settings-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 0 18px;
+    overflow-y: auto;
+    color: #3d4552;
+}
+
+#settings-content .screen-title {
+    margin: 0;
+    padding: 18px 60px 6px 22px;
+    font-size: 20px;
+    font-weight: 900;
+    color: #33394a;
+}
+
+.settings-section {
+    padding: 14px 22px;
+    border-top: 1px solid rgba(120, 130, 145, .25);
+}
+
+.settings-section:first-of-type {
+    border-top: none;
+}
+
+.settings-section-label {
+    margin: 0 0 10px;
+    font-size: 13.5px;
+    font-weight: 900;
+    color: #4a5568;
+}
+
+.settings-hint {
+    margin: 8px 0 0;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #7a8494;
+}
+
+.settings-hint-success {
+    color: #2f8f5b;
+}
+
+.settings-hint-error {
+    color: #c0392b;
+}
+
+/* ── 닉네임 ── */
+.settings-nickname-row {
+    display: flex;
+    gap: 8px;
+}
+
+.settings-input {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid rgba(120, 130, 145, .5);
+    border-radius: 8px;
+    background: #fff;
+    color: #33394a;
+    font-size: 13.5px;
+    font-weight: 700;
+}
+
+.settings-input:focus {
+    outline: none;
+    border-color: #6b7d99;
+}
+
+.settings-action-btn {
+    flex-shrink: 0;
+    padding: 0 16px;
+    border: 1px solid rgba(80, 90, 105, .9);
+    border-radius: 8px;
+    background: linear-gradient(160deg, #5b6b82, #3a4658);
+    color: #fff;
+    font-weight: 800;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.settings-action-btn:hover {
+    filter: brightness(1.08);
+}
+
+.settings-action-btn:disabled {
+    opacity: .55;
+    cursor: default;
+}
+
+/* ── 칭호 목록 ── */
+.settings-title-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.settings-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid rgba(120, 130, 145, .35);
+    border-radius: 8px;
+    background: #fff;
+    color: #3d4552;
+    font-weight: 700;
+    font-size: 12.5px;
+    cursor: pointer;
+    text-align: left;
+}
+
+.settings-title-row:hover {
+    border-color: #6b7d99;
+}
+
+.settings-title-row.settings-title-equipped {
+    border-color: #2f8f5b;
+    background: rgba(47, 143, 91, .08);
+}
+
+.settings-title-check {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 900;
+    color: #2f8f5b;
+}
+
+/* 히든 업적 칭호는 목록에서도 동적인 금빛 그라데이션 + 뚜렷한 광채로 구분(achievement-toast.css의
+   title-hidden-shine과 같은 연출 - 빛줄기가 훑고 지나가는 게 아니라 색과 광채 자체가 출렁인다) */
+.settings-title-row.settings-title-hidden-glow .settings-title-name {
+    background: linear-gradient(90deg, #a3711f 0%, #fff3c4 50%, #a3711f 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: settings-title-glow 2.6s ease-in-out infinite alternate;
+}
+
+@keyframes settings-title-glow {
+    0% {
+        background-position: 0% center;
+        filter: drop-shadow(0 0 3px rgba(255, 216, 115, .45)) drop-shadow(0 0 8px rgba(255, 189, 64, .25));
+    }
+    100% {
+        background-position: 100% center;
+        filter: drop-shadow(0 0 8px rgba(255, 216, 115, .9)) drop-shadow(0 0 16px rgba(255, 189, 64, .6));
+    }
+}
+
+/* ── 로그아웃 ── */
+.settings-logout-btn {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid rgba(192, 57, 43, .6);
+    border-radius: 8px;
+    background: rgba(192, 57, 43, .08);
+    color: #c0392b;
+    font-weight: 800;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.settings-logout-btn:hover {
+    background: rgba(192, 57, 43, .16);
+}
+
+@media (max-width: 650px) {
+    #modal-settings .settings-modal-box {
+        width: 92vw;
+    }
+}

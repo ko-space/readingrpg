@@ -1,0 +1,1102 @@
+/*
+ * 전투 결과 재생 페이지 전용 스타일.
+ * 좌측 패널 - 중앙 전투장 - 우측 패널 구조와 전투 로직은 유지하고,
+ * lobby.css의 색상 변수와 카드 디자인에 맞춰 외형만 정리한다.
+ */
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    margin: 0;
+}
+
+.battle-screen {
+    width: 100vw;
+    height: 100vh;
+    padding: 22px 26px;
+    background-image:
+        linear-gradient(rgba(18, 25, 45, 0.18), rgba(18, 25, 45, 0.32)),
+        url('../assets/arena/battle-bg.png'),
+        linear-gradient(160deg, #2a3550 0%, #1a2038 60%, #0f1424 100%);
+    background-size: cover, cover, cover;
+    background-position: center, center, center;
+    background-repeat: no-repeat, no-repeat, no-repeat;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    box-sizing: border-box;
+}
+
+/* ===== 3열 배치 ===== */
+.battle-layout {
+    width: 100%;
+    max-width: 1520px;
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 292px minmax(420px, 1fr) 292px;
+    align-items: stretch;
+    gap: 22px;
+}
+
+/* ===== 좌우 플레이어 패널 ===== */
+.player-panel {
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    /* align-self는 부모(.battle-layout)의 stretch를 그대로 따르게 지정하지 않음 - 지정하면 다시 내용물 크기로 줄어들어 로그 스크롤이 깨짐 */
+}
+
+.player-identity,
+.roster-unit {
+    position: relative;
+    overflow: hidden;
+    background: var(--panel-bg, linear-gradient(160deg, #fdf6e8 0%, #f0dcae 100%));
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 12px;
+    box-shadow:
+        0 5px 14px rgba(0, 0, 0, 0.22),
+        var(--gold-glow, 0 0 10px rgba(232, 184, 75, 0.55));
+}
+
+.player-panel[data-side="attacker"] .player-identity,
+.player-panel[data-side="attacker"] .roster-unit {
+    box-shadow:
+        inset 5px 0 0 rgba(90, 167, 242, 0.88),
+        0 5px 14px rgba(0, 0, 0, 0.22),
+        var(--gold-glow, 0 0 10px rgba(232, 184, 75, 0.55));
+}
+
+.player-panel[data-side="defender"] .player-identity,
+.player-panel[data-side="defender"] .roster-unit {
+    box-shadow:
+        inset -5px 0 0 rgba(224, 100, 90, 0.88),
+        0 5px 14px rgba(0, 0, 0, 0.22),
+        var(--gold-glow, 0 0 10px rgba(232, 184, 75, 0.55));
+}
+
+/* ===== 플레이어 정보 카드 ===== */
+.player-identity {
+    min-height: 128px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.player-panel[data-side="defender"] .player-identity {
+    flex-direction: row-reverse;
+    text-align: right;
+}
+
+.player-avatar-frame {
+    width: 102px;
+    height: 102px;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.18);
+}
+
+.player-avatar {
+    width: 100%;
+    height: 100%;
+    display: block;
+    background: #fff;
+    object-fit: cover;
+}
+
+.player-summary {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 12px;
+}
+
+.player-panel[data-side="defender"] .player-summary {
+    align-items: flex-end;
+}
+
+.player-name {
+    max-width: 100%;
+    color: var(--text-dark, #4a3c2a);
+    font-size: 22px;
+    font-weight: 900;
+    line-height: 1.15;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.player-meta {
+    color: #6b5434;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.3;
+}
+
+.player-meta-divider {
+    margin: 0 4px;
+    color: var(--panel-border, #c9a86a);
+}
+
+/* ===== 로스터 카드 ===== */
+.roster-unit {
+    min-height: 105px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.player-panel[data-side="defender"] .roster-unit {
+    flex-direction: row-reverse;
+    text-align: right;
+}
+
+.roster-unit-thumb {
+    width: 78px;
+    height: 78px;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 9px;
+    background: #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+}
+
+.roster-unit-img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    background: #fff;
+    object-fit: cover;
+}
+
+.roster-unit-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 11px;
+}
+
+.player-panel[data-side="defender"] .roster-unit-body {
+    align-items: stretch;
+}
+
+.roster-unit-name {
+    color: var(--text-dark, #4a3c2a);
+    font-size: 16px;
+    font-weight: 900;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.roster-hp-track {
+    width: 100%;
+    height: 16px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 8px;
+    box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.16);
+}
+
+.roster-hp-fill {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to right, #4285f4, #5aa7f2, #7cc4ff);
+    box-shadow: 0 0 7px rgba(90, 167, 242, 0.75) inset;
+    transition: width 0.25s ease-out;
+}
+
+.player-panel[data-side="defender"] .roster-hp-fill {
+    background: linear-gradient(to right, #e0645a, #ef7a6f, #ffc4ba);
+    box-shadow: 0 0 7px rgba(224, 100, 90, 0.7) inset;
+}
+
+.roster-unit-dead {
+    opacity: 0.38;
+    transform: scale(0.985);
+}
+
+.roster-unit-dead .roster-hp-fill {
+    background: #7a746c;
+    box-shadow: none;
+}
+
+/* ===== 전투 로그: 박스/테두리 없이, 배경 위에 색 텍스트만 스크롤 ===== */
+.battle-log-panel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow-y: auto;
+    padding: 6px 4px;
+    scrollbar-width: thin;
+}
+
+.battle-log-panel::-webkit-scrollbar {
+    width: 5px;
+}
+
+.battle-log-panel::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 3px;
+}
+
+.battle-log-entry {
+    font-size: 12.5px;
+    font-weight: 800;
+    line-height: 1.45;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95), 0 0 6px rgba(0, 0, 0, 0.6);
+    word-break: keep-all;
+}
+
+.battle-log-entry.log-ally {
+    color: #79b8ff;
+}
+
+.battle-log-entry.log-enemy {
+    color: #ff8a80;
+}
+
+.battle-log-entry.log-system {
+    color: #ffd76a;
+}
+
+.battle-log-entry.log-trait {
+    color: #c58bff;
+}
+
+/* ===== 중앙 전투 필드 ===== */
+.battle-field {
+    position: relative;
+    min-width: 0;
+    height: 100%;
+    min-height: 430px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.projectile-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+}
+
+.projectile-dot {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    margin-left: -7px;
+    margin-top: -7px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fff6c8 0%, #ffd76a 55%, #ff9d2e 100%);
+    box-shadow: 0 0 10px 3px rgba(255, 214, 106, 0.85);
+}
+
+/* ── 윤대웅 전용: 투사체 없는 즉시 플래시 ── */
+@keyframes battle-instant-flash {
+    0% { opacity: 0; }
+    20% { opacity: 1; }
+    100% { opacity: 0; }
+}
+.dt-instant-flash-dot {
+    position: absolute;
+    width: 46px;
+    height: 46px;
+    margin-left: -23px;
+    margin-top: -23px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fff, #fff0);
+    animation: battle-instant-flash 0.25s ease-out;
+    pointer-events: none;
+}
+
+/* ── 이종복 전용: 텍스트 글자 파티클(F/=/m/a) ── */
+.dt-char-particle {
+    position: absolute;
+    margin-left: -8px;
+    margin-top: -12px;
+    font-family: monospace;
+    font-weight: 900;
+    font-size: 20px;
+    color: #7ad8ff;
+    text-shadow: 0 0 6px #7ad8ff;
+    pointer-events: none;
+}
+
+/* ── 김남옥 전용: 원통형 크레파스 다트. 회전은 JS가 진행 방향에 맞춰 넣는다(transform: rotate).
+   기본공격은 대상이 전방이면 진분홍, 후방/복제체면 푸른색 - 스킬(엑스칼리버)은 두 색이 나란히 같이 날아간다. */
+.crayon-projectile {
+    position: absolute;
+    width: 20px;
+    height: 7px;
+    margin-left: -17px;
+    margin-top: -6px;
+    border-radius: 3px;
+    clip-path: polygon(0% 50%, 18% 0%, 100% 0%, 100% 100%, 18% 100%);
+    box-shadow: 0 0 8px 2px currentColor;
+    pointer-events: none;
+}
+.crayon-projectile.crayon-pink { background: linear-gradient(90deg, #ff1f8f, #ff6fc0); color: #ff1f8f; }
+.crayon-projectile.crayon-blue { background: linear-gradient(90deg, #2266ff, #6fa8ff); color: #2266ff; }
+
+/* ── 이종복 스킬 전용: 붉은 "mg"가 유성처럼 꼬리를 끌며 날아간다. 기본공격 글자(20px)보다 크게. ── */
+.meteor-projectile {
+    position: absolute;
+    font-family: monospace;
+    font-weight: 900;
+    font-size: 34px;
+    color: #ff3b30;
+    text-shadow: 0 0 10px #ff3b30, 0 0 20px rgba(255, 59, 48, .8);
+    pointer-events: none;
+}
+.meteor-projectile::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: 100%;
+    width: 64px;
+    height: 6px;
+    transform: translateY(-50%);
+    background: linear-gradient(90deg, transparent, rgba(255, 59, 48, .85));
+    filter: blur(1px);
+}
+
+/* ── 임소정 전용: 캐스터-대상을 잠깐 잇는 전기. 기본공격은 얇고 푸른색, 스킬은 더 두껍고 노란색.
+   wrap(바깥)이 위치/회전/크기를 한 번만 정적으로 잡고, 그 안의 beam이 지글거리는 애니메이션
+   (scaleX/skewX/밝기)을 맡는다 - 회전과 지글거림이 같은 transform 속성을 두고 서로 안 덮어쓰게
+   두 요소로 분리했다. ── */
+.electric-connector-wrap {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform-origin: 0 50%;
+    pointer-events: none;
+}
+@keyframes electric-buzz {
+    0% { opacity: 0; transform: scaleX(.85) skewX(0deg); filter: brightness(1); }
+    15% { opacity: 1; transform: scaleX(1.05) skewX(-8deg); filter: brightness(1.6); }
+    35% { opacity: .85; transform: scaleX(.95) skewX(6deg); filter: brightness(1.2); }
+    55% { opacity: 1; transform: scaleX(1.1) skewX(-5deg); filter: brightness(1.7); }
+    75% { opacity: .8; transform: scaleX(1) skewX(4deg); filter: brightness(1.3); }
+    100% { opacity: 0; transform: scaleX(.9) skewX(0deg); filter: brightness(1); }
+}
+.electric-connector {
+    width: 100%;
+    height: 100%;
+    border-radius: 3px;
+    animation: electric-buzz 280ms ease-in-out both;
+}
+.electric-connector.electric-blue {
+    background: linear-gradient(90deg, transparent, #00c3ff, #a8ecff, #00c3ff, transparent);
+    box-shadow: 0 0 5px #00c3ff, 0 0 15px #4facfe, 0 0 30px #00c3ff;
+}
+.electric-connector.electric-yellow {
+    background: linear-gradient(90deg, transparent, #ffcf3d, #fff3b0, #ffcf3d, transparent);
+    box-shadow: 0 0 5px #ffcf3d, 0 0 15px #ffe066, 0 0 30px #ffcf3d;
+}
+
+/* ── 강 희 스킬 전용: 얼굴에서 뿜어져 나오는 좁은 부채꼴 초록 입냄새(가스) - 참고 디자인(임시.html)의
+   부채꼴+연기 덩어리+입자 구조를 그대로 가져오되, 부채꼴 각도는 좁히고 사거리는 맵 끝까지 늘렸다.
+   wrap이 시작점(얼굴)에서 사거리(length)만큼의 폭/회전을 잡고, --reach(=length)를 자식들에게 물려줘서
+   연기/입자가 실제 사거리에 비례해 날아가게 한다(퍼센트는 translate()에서 자기 자신 크기 기준이라
+   못 쓰므로 calc(var(--reach) * 비율)로 계산). ── */
+.gas-breath-wrap {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 64px;
+    margin-top: -32px;
+    transform-origin: 0 50%;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.gas-breath-cone {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 100%;
+    height: 100%;
+    transform-origin: 0 50%;
+    /* 참고 디자인보다 훨씬 좁은 부채꼴 - 오른쪽(사거리 끝) 세로 확산 폭을 40%로 제한 */
+    clip-path: polygon(0 48%, 100% 30%, 100% 70%, 0 52%);
+    background: radial-gradient(
+        ellipse at left center,
+        rgba(236, 255, 96, 0.9) 0%,
+        rgba(170, 219, 44, 0.62) 22%,
+        rgba(84, 151, 39, 0.36) 48%,
+        rgba(31, 70, 27, 0.08) 74%,
+        transparent 100%
+    );
+    filter: blur(6px);
+    mix-blend-mode: screen;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, transparent 6%, rgba(0, 0, 0, 0.65) 16%, rgba(0, 0, 0, 1) 26%, rgba(0, 0, 0, 0.92) 82%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0%, transparent 6%, rgba(0, 0, 0, 0.65) 16%, rgba(0, 0, 0, 1) 26%, rgba(0, 0, 0, 0.92) 82%, transparent 100%);
+    animation: gas-breath-cone-shot 900ms ease-out forwards;
+}
+.gas-breath-cone::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 38%;
+    width: 85%;
+    height: 24%;
+    clip-path: polygon(0 42%, 100% 25%, 100% 75%, 0 58%);
+    background: linear-gradient(90deg, rgba(237, 255, 120, 0.78), rgba(125, 198, 37, 0.42), transparent);
+    filter: blur(8px);
+}
+@keyframes gas-breath-cone-shot {
+    0% { opacity: 0; transform: translateY(-50%) scaleX(0.06) scaleY(0.3); }
+    18% { opacity: 0.96; }
+    55% { opacity: 0.9; }
+    100% { opacity: 0; transform: translateY(-50%) scaleX(1) scaleY(1); }
+}
+
+/* 입(시작점) 쪽부터 먼저 지워지는 wipe */
+.gas-breath-clear {
+    position: absolute;
+    left: 0;
+    top: 14%;
+    width: 0;
+    height: 72%;
+    opacity: 0;
+    background: linear-gradient(90deg, rgba(16, 22, 27, 0.98) 0%, rgba(16, 22, 27, 0.82) 45%, rgba(16, 22, 27, 0) 100%);
+    filter: blur(8px);
+    z-index: 5;
+    animation: gas-breath-clear-wipe 900ms ease-out forwards;
+}
+@keyframes gas-breath-clear-wipe {
+    0% { width: 0; opacity: 0; }
+    12% { opacity: 0.95; }
+    100% { width: 34%; opacity: 0.9; }
+}
+
+/* 연기 덩어리 5개 */
+.gas-breath-puff {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: var(--size);
+    height: calc(var(--size) * 0.72);
+    transform: translate(0, -50%) scale(0.2);
+    opacity: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, rgba(241, 255, 137, 0.98), rgba(140, 196, 53, 0.72) 42%, rgba(58, 108, 36, 0.32) 68%, transparent 74%);
+    filter: blur(3px);
+    box-shadow: 0 0 12px rgba(165, 233, 55, 0.35), inset 0 0 8px rgba(255, 255, 180, 0.2);
+    z-index: 2;
+    animation: gas-breath-puff-fly 820ms linear both;
+}
+@keyframes gas-breath-puff-fly {
+    0% { opacity: 0; transform: translate(0, -50%) scale(0.18); }
+    12% { opacity: 0.96; }
+    45% { opacity: 0.85; }
+    100% { opacity: 0; transform: translate(var(--moveX), calc(-50% + var(--moveY))) scale(var(--scale)); }
+}
+.gbp1 { --size: 30px; --moveX: calc(var(--reach) * 0.65); --moveY: -14px; --scale: 1.3; animation-delay: 0ms; }
+.gbp2 { --size: 38px; --moveX: calc(var(--reach) * 0.92); --moveY:  12px; --scale: 1.55; animation-delay: 70ms; }
+.gbp3 { --size: 32px; --moveX: calc(var(--reach) * 0.55); --moveY:  -4px; --scale: 1.35; animation-delay: 140ms; }
+.gbp4 { --size: 44px; --moveX: calc(var(--reach) * 0.98); --moveY:  18px; --scale: 1.7; animation-delay: 210ms; }
+.gbp5 { --size: 40px; --moveX: calc(var(--reach) * 0.78); --moveY: -20px; --scale: 1.6; animation-delay: 280ms; }
+
+/* 작은 입자 6개 */
+.gas-breath-particle {
+    position: absolute;
+    left: 6px;
+    top: calc(50% + var(--startY));
+    width: var(--dot);
+    height: var(--dot);
+    opacity: 0;
+    border-radius: 50%;
+    background: #dcff5b;
+    box-shadow: 0 0 6px #dfff61, 0 0 14px rgba(136, 255, 56, 0.6);
+    transform: translate(0, 0) scale(0.2);
+    z-index: 3;
+    animation: gas-breath-particle-fly 720ms linear both;
+}
+@keyframes gas-breath-particle-fly {
+    0% { opacity: 0; transform: translate(0, 0) scale(0.2); }
+    15% { opacity: 1; }
+    60% { opacity: 0.8; }
+    100% { opacity: 0; transform: translate(var(--dotX), var(--dotY)) scale(1.25); }
+}
+.gbd1 { --dot: 6px; --startY: -10px; --dotX: calc(var(--reach) * 0.5); --dotY: -18px; animation-delay: 40ms; }
+.gbd2 { --dot: 8px; --startY:  12px; --dotX: calc(var(--reach) * 0.62); --dotY:  16px; animation-delay: 110ms; }
+.gbd3 { --dot: 5px; --startY: -16px; --dotX: calc(var(--reach) * 0.44); --dotY:  -8px; animation-delay: 180ms; }
+.gbd4 { --dot: 7px; --startY:   8px; --dotX: calc(var(--reach) * 0.74); --dotY:  22px; animation-delay: 250ms; }
+.gbd5 { --dot: 5px; --startY:  -6px; --dotX: calc(var(--reach) * 0.68); --dotY: -24px; animation-delay: 320ms; }
+.gbd6 { --dot: 7px; --startY:   0px; --dotX: calc(var(--reach) * 0.86); --dotY:   6px; animation-delay: 390ms; }
+
+/* ── 서민석 기본공격 전용: 책 모양 투사체. 던져진 책이 빙글빙글 도는 느낌으로 계속 회전한다. ── */
+@keyframes book-tumble {
+    to { transform: rotate(360deg); }
+}
+.book-projectile {
+    position: absolute;
+    width: 26px;
+    height: 20px;
+    margin-left: -13px;
+    margin-top: -10px;
+    background: linear-gradient(135deg, #c8935a, #8a5a2e);
+    border: 2px solid #5c3a1a;
+    border-radius: 2px;
+    box-shadow: 0 0 6px rgba(0, 0, 0, .4);
+    animation: book-tumble 0.35s linear infinite;
+    pointer-events: none;
+}
+.book-projectile::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: rgba(0, 0, 0, .35);
+    transform: translateX(-50%);
+}
+
+/* ── 서민석 스킬 전용: 하트 모양 투사체(포물선, 적 2인 모두). 대상이 남성이면 분홍, 여성이면 붉은색. ── */
+.heart-projectile {
+    position: absolute;
+    margin-left: -13px;
+    margin-top: -13px;
+    font-size: 26px;
+    line-height: 1;
+    text-shadow: 0 0 8px currentColor;
+    pointer-events: none;
+}
+.heart-projectile.heart-pink { color: #ff6fb0; }
+.heart-projectile.heart-red { color: #e0263f; }
+
+/* ── 이영웅 스킬 전용: 치유 대상 머리 위에서 천천히 내려오는 초록 하트(가운데 십자가 + 노란 오라). ── */
+.healing-heart-wrap {
+    position: absolute;
+    margin-left: -22px;
+    margin-top: -22px;
+    width: 44px;
+    height: 44px;
+    pointer-events: none;
+    z-index: 4;
+}
+@keyframes healing-heart-aura-pulse {
+    0%, 100% { transform: scale(0.9); opacity: 0.75; }
+    50% { transform: scale(1.08); opacity: 1; }
+}
+.healing-heart-aura {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 224, 102, 0.45) 0%, rgba(255, 224, 102, 0.15) 55%, transparent 75%);
+    box-shadow: 0 0 14px 4px rgba(255, 224, 102, 0.55);
+    animation: healing-heart-aura-pulse 1s ease-in-out infinite;
+}
+.healing-heart-glyph {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    color: #4ee06a;
+    text-shadow: 0 0 10px #4ee06a, 0 0 4px #fff;
+}
+.healing-heart-cross {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 900;
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+    transform: translateY(-2px);
+}
+
+/* 치유 판정이 반영되는 순간 - 대상에게 초록 오라가 생겼다가 사라진다. */
+@keyframes heal-target-aura-flash {
+    0% { filter: drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)); }
+    30% { filter: drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)) drop-shadow(0 0 20px #4ee06a) drop-shadow(0 0 34px #4ee06a); }
+    100% { filter: drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)); }
+}
+.battle-unit-img.heal-target-aura {
+    animation: heal-target-aura-flash 0.9s ease-out;
+}
+
+/* ── 스킬 시전(캐스팅) 중 - 기본공격 3회 이후 발동까지 ── */
+@keyframes battle-casting-pulse {
+    0%, 100% { filter: drop-shadow(0 0 6px #ffe066) drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)); }
+    50% { filter: drop-shadow(0 0 18px #ffe066) drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)); }
+}
+.battle-unit-img.casting {
+    animation: battle-casting-pulse 0.6s ease-in-out infinite;
+}
+
+/* 강승유 전용(copy_target_skill/성대모사) - 시전 중 금빛 펄스 대신 무지개빛으로 물든다.
+   hue-rotate로 캐릭터 자체의 색조를 계속 돌리고, drop-shadow 색도 같이 따라 돌아서 "무지개 이펙트"를 만든다. */
+@keyframes rainbow-casting-shimmer {
+    0% { filter: hue-rotate(0deg) saturate(2.2) brightness(1.15) drop-shadow(0 0 14px #ff4d4d) drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)); }
+    16% { filter: hue-rotate(60deg) saturate(2.2) brightness(1.15) drop-shadow(0 0 14px #ffb84d) drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)); }
+    33% { filter: hue-rotate(120deg) saturate(2.2) brightness(1.15) drop-shadow(0 0 14px #ffe14d) drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)); }
+    50% { filter: hue-rotate(180deg) saturate(2.2) brightness(1.15) drop-shadow(0 0 14px #4dff88) drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)); }
+    66% { filter: hue-rotate(240deg) saturate(2.2) brightness(1.15) drop-shadow(0 0 14px #4d8bff) drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)); }
+    83% { filter: hue-rotate(300deg) saturate(2.2) brightness(1.15) drop-shadow(0 0 14px #b84dff) drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)); }
+    100% { filter: hue-rotate(360deg) saturate(2.2) brightness(1.15) drop-shadow(0 0 14px #ff4d4d) drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)); }
+}
+.battle-unit-img.casting.casting-rainbow {
+    animation: rainbow-casting-shimmer 1.1s linear infinite;
+}
+
+/* ── 스킬 발동 순간 - 카테고리별 기본 연출(캐릭터 고유 연출은 필요하면 여기서 이름별로 추가) ── */
+@keyframes battle-skill-flash {
+    0% { filter: brightness(1); }
+    30% { filter: brightness(2.4) saturate(1.6); }
+    100% { filter: brightness(1); }
+}
+/* ===================================================================
+   윤대웅 전용(self_stack_buff) - 캐릭터 실루엣을 따라가는 발광 윤곽선 오라.
+   box-shadow/radial-gradient 같은 사각형·원형 도형 대신 drop-shadow를 쓰는 이유:
+   drop-shadow는 이미지의 "투명하지 않은 픽셀 모양"을 그대로 따라 번지기 때문에,
+   배경이 투명한 캐릭터 PNG에 적용하면 인물 윤곽선을 따라 빛나는 것처럼 보인다.
+   JS(updateWinAura)가 스택이 쌓일 때마다
+     1) --aura-color 변수를 바꿔서 "색"을 바꾸고 (1~7단계: 빨강→주황→노랑→흰색→하늘색→파랑→보라)
+     2) --aura-blur 변수를 키워서 "크기(번지는 정도)"를 키운다
+   7단계(보라) 이후로 스택이 더 쌓여도 색은 그대로 두고 --aura-blur만 계속 커지게 JS에서 값을 넘긴다. */
+.battle-unit-img.win-aura {
+    filter:
+        drop-shadow(0 0 var(--aura-blur, 8px) var(--aura-color, transparent))
+        drop-shadow(0 0 calc(var(--aura-blur, 8px) * 0.55) var(--aura-color, transparent))
+        drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)); /* 기존 기본 그림자도 유지 */
+    transition: filter 0.3s ease;
+}
+
+.skill-vfx-buff .battle-unit-img { animation: battle-skill-flash 0.4s ease-out; filter: drop-shadow(0 0 16px gold); }
+.skill-vfx-debuff .battle-unit-img { animation: battle-skill-flash 0.4s ease-out; filter: drop-shadow(0 0 16px #b266ff); }
+.skill-vfx-heal .battle-unit-img { animation: battle-skill-flash 0.4s ease-out; filter: drop-shadow(0 0 16px #5ad35a); }
+.skill-vfx-shield .battle-unit-img { animation: battle-skill-flash 0.4s ease-out; filter: drop-shadow(0 0 16px #5ac8ff); }
+.skill-vfx-stun .battle-unit-img { animation: battle-skill-flash 0.4s ease-out; filter: drop-shadow(0 0 16px #ffffff); }
+.skill-vfx-aoe .battle-unit-img { animation: battle-skill-flash 0.4s ease-out; filter: drop-shadow(0 0 16px #ff6a5a); }
+.skill-vfx-summon .battle-unit-img { animation: battle-skill-flash 0.4s ease-out; filter: drop-shadow(0 0 16px #5affe0); }
+
+/* ===================================================================
+   최재혁 전용(self_shield_duration) - 캐릭터를 감싸는 푸른 원형 보호막.
+   .battle-unit의 자식(position:relative 기준)으로 붙기 때문에 캐릭터가 걸어서 이동해도
+   translateX를 그대로 물려받아 항상 캐릭터와 같이 움직인다. 실드가 지속되는 동안
+   천천히 수축·팽창을 반복해 "오라"처럼 살아있는 느낌을 준다. */
+.shield-ring-wrap {
+    position: absolute;
+    left: 50%;
+    top: 8%;
+    width: clamp(96px, 7.6vw, 132px);
+    height: clamp(96px, 7.6vw, 132px);
+    transform: translateX(-50%);
+    pointer-events: none;
+    z-index: 3;
+}
+.shield-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 3px solid #6fd3ff;
+    background: radial-gradient(circle, rgba(111, 211, 255, 0.16) 0%, rgba(111, 211, 255, 0.05) 60%, transparent 76%);
+    box-shadow: 0 0 16px 4px rgba(111, 211, 255, 0.65), inset 0 0 20px rgba(111, 211, 255, 0.5);
+    animation: shield-ring-pulse 2.2s ease-in-out infinite;
+}
+@keyframes shield-ring-pulse {
+    0%, 100% { transform: scale(0.9); opacity: 0.7; }
+    50% { transform: scale(1.08); opacity: 1; }
+}
+
+/* 윤영준의 "3D Print" 복제체 - 원본과 구분되게 전체적으로 푸른 색감이 도는 홀로그램 느낌으로 표시.
+   sepia+hue-rotate로 원래 색상을 지우고 파란 계열로 새로 물들인 뒤, saturate로 진하게 만든다.
+   기존 drop-shadow(그림자)는 지워지지 않게 filter 체인 끝에 그대로 이어 붙인다. */
+.battle-unit-img.is-clone {
+    filter: sepia(1) hue-rotate(180deg) saturate(3.2) brightness(1.05) drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4));
+}
+
+.battle-row {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: clamp(56px, 7.5vw, 120px);
+}
+
+.battle-field-line {
+    position: absolute;
+    left: 50%;
+    top: 14%;
+    bottom: 12%;
+    width: 2px;
+    background: linear-gradient(
+        to bottom,
+        transparent,
+        rgba(232, 184, 75, 0.2),
+        rgba(255, 215, 106, 0.78),
+        rgba(232, 184, 75, 0.2),
+        transparent
+    );
+    box-shadow: 0 0 10px rgba(255, 215, 106, 0.35);
+    transform: translateX(-50%);
+}
+
+.battle-unit {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: opacity 0.3s ease;
+}
+
+/* display:flex가 hidden 속성의 기본 숨김 동작을 덮어쓰는 걸 막음 - 소환수(summon) 자리는 평소 hidden 상태 */
+.battle-unit[hidden] {
+    display: none;
+}
+
+/* 소환수(summon) 자리는 flex 흐름에서 완전히 빼서(position:absolute) 앞뒤 대열 바깥에 따로 띄운다.
+   원래는 .battle-row의 평범한 flex 자식이었는데, 그러면 숨어있던 자리가 하나 나타날 때마다
+   justify-content:center가 전체 폭을 다시 계산해서 복제체를 제외한 다른 캐릭터들이 다같이 좌우로
+   밀리는 버그가 있었다 - absolute로 빼두면 summon이 나타나든 사라지든 .battle-row의 폭/중앙 정렬에
+   전혀 영향을 주지 않는다. */
+.battle-unit[data-unit$="-summon"] {
+    position: absolute;
+    bottom: 0;
+}
+.battle-unit[data-unit="attacker-summon"] {
+    left: 0;
+    transform: translateX(calc(-100% - 20px));
+}
+.battle-unit[data-unit="defender-summon"] {
+    right: 0;
+    transform: translateX(calc(100% + 20px));
+}
+
+.battle-unit-shadow {
+    width: 70%;
+    height: 16px;
+    margin-top: -8px;
+    border-radius: 50%;
+    background: radial-gradient(
+        ellipse at center,
+        rgba(0, 0, 0, 0.55) 0%,
+        rgba(0, 0, 0, 0) 75%
+    );
+}
+
+.battle-unit-img {
+    --flip-x: 1;
+    width: clamp(108px, 8.5vw, 150px);
+    height: clamp(136px, 10.5vw, 178px);
+    object-fit: contain;
+    object-position: bottom center;
+    transform: scaleX(var(--flip-x));
+    filter: drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4));
+}
+
+.battle-unit-img.flipped {
+    --flip-x: -1;
+}
+
+@keyframes walk-bob {
+    0%,
+    100% {
+        transform: scaleX(var(--flip-x)) translateY(0);
+    }
+    50% {
+        transform: scaleX(var(--flip-x)) translateY(-7px);
+    }
+}
+
+.battle-unit-img.walking {
+    animation: walk-bob 0.3s ease-in-out infinite;
+}
+
+@keyframes attack-pulse {
+    0% {
+        transform: scaleX(var(--flip-x)) scale(1);
+    }
+    40% {
+        transform: scaleX(var(--flip-x)) scale(1.2);
+    }
+    100% {
+        transform: scaleX(var(--flip-x)) scale(1);
+    }
+}
+
+.battle-unit-img.attacking {
+    animation: attack-pulse 0.3s ease-out;
+}
+
+@keyframes hit-flash-filter {
+    0% {
+        filter:
+            drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4))
+            brightness(1)
+            saturate(1);
+    }
+    30% {
+        filter:
+            drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4))
+            brightness(2.3)
+            saturate(4)
+            sepia(0.6)
+            hue-rotate(-50deg);
+    }
+    100% {
+        filter:
+            drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4))
+            brightness(1)
+            saturate(1);
+    }
+}
+
+.battle-unit-img.hit-flash {
+    animation: hit-flash-filter 0.25s ease-out;
+}
+
+/* ── 치명타 전용: 일반 피격 플래시보다 훨씬 화려하게 - 더 강한 확대(scale)와 금빛/주황 발광이 함께 터진다.
+   --flip-x는 좌우 반전 유지용이라, scale 값과 항상 같이 곱해서 써야 캐릭터가 뒤집히지 않는다. ── */
+@keyframes crit-flash-filter {
+    0% {
+        filter: drop-shadow(0 8px 8px rgba(0, 0, 0, .4)) brightness(1) saturate(1);
+        transform: scaleX(var(--flip-x)) scale(1);
+    }
+    20% {
+        filter:
+            drop-shadow(0 0 22px #ffb703)
+            drop-shadow(0 8px 8px rgba(0, 0, 0, .4))
+            brightness(3.4) saturate(6) sepia(.7) hue-rotate(-25deg);
+        transform: scaleX(var(--flip-x)) scale(1.32);
+    }
+    55% {
+        filter:
+            drop-shadow(0 0 14px #ff5a1f)
+            drop-shadow(0 8px 8px rgba(0, 0, 0, .4))
+            brightness(2.2) saturate(4);
+        transform: scaleX(var(--flip-x)) scale(1.14);
+    }
+    100% {
+        filter: drop-shadow(0 8px 8px rgba(0, 0, 0, .4)) brightness(1) saturate(1);
+        transform: scaleX(var(--flip-x)) scale(1);
+    }
+}
+.battle-unit-img.crit-flash {
+    animation: crit-flash-filter 0.4s ease-out;
+}
+
+/* 치명타 대상 머리 위로 "치명타!" 글자가 튀어오르듯 떴다가 사라진다. */
+@keyframes crit-label-pop {
+    0% { opacity: 0; transform: translate(-50%, 0) scale(.4) rotate(-10deg); }
+    18% { opacity: 1; transform: translate(-50%, -16px) scale(1.3) rotate(5deg); }
+    40% { transform: translate(-50%, -22px) scale(1) rotate(-3deg); }
+    100% { opacity: 0; transform: translate(-50%, -50px) scale(1) rotate(0deg); }
+}
+.crit-label {
+    position: absolute;
+    font-size: 24px;
+    font-weight: 900;
+    color: #fff23d;
+    text-shadow: 0 0 6px #ff5a1f, 0 0 16px #ff5a1f, 0 2px 3px rgba(0, 0, 0, .7);
+    -webkit-text-stroke: 1.5px #7a1a00;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10;
+    animation: crit-label-pop 0.7s ease-out both;
+}
+
+/* ── 상성(유형 상성) 라벨 - 치명타 라벨과 같은 UI(팝업+발광 텍스트)를 공유하되, 강한 공격("Weak")은
+   치명타보다 작고 빨간 계열, 약한 공격("Resist")은 그보다 더 작고 파란 계열이며 옆으로 기울지 않는다. ── */
+.type-label {
+    position: absolute;
+    font-weight: 900;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10;
+    -webkit-text-stroke: 1.2px rgba(0, 0, 0, 0.55);
+}
+.type-label.type-weak {
+    font-size: 19px;
+    color: #ff5a5a;
+    text-shadow: 0 0 6px #ff2e2e, 0 0 14px #ff2e2e, 0 2px 3px rgba(0, 0, 0, 0.7);
+    animation: crit-label-pop 0.7s ease-out both; /* 치명타와 같은 기울임 팝업 연출 */
+}
+@keyframes type-label-pop-flat {
+    0% { opacity: 0; transform: translate(-50%, 0) scale(0.4); }
+    18% { opacity: 1; transform: translate(-50%, -16px) scale(1.15); }
+    40% { transform: translate(-50%, -22px) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -50px) scale(1); }
+}
+.type-label.type-resist {
+    font-size: 15px;
+    color: #5ab6ff;
+    text-shadow: 0 0 6px #1f8fff, 0 0 12px #1f8fff, 0 2px 3px rgba(0, 0, 0, 0.7);
+    animation: type-label-pop-flat 0.7s ease-out both; /* 기울임 없이 위로 뜨기만 함 */
+}
+
+.battle-unit-dead {
+    opacity: 0.35;
+}
+
+/* ── 사망 연출: 위→아래로 촘촘했던 가로 실선 무늬가 점점 성겨지면서 투명해진다(스캔되듯 사라짐). ── */
+@keyframes death-dissolve {
+    0% {
+        opacity: 1;
+        -webkit-mask-image: repeating-linear-gradient(to bottom, #000 0, #000 100%, transparent 100%, transparent 100%);
+        mask-image: repeating-linear-gradient(to bottom, #000 0, #000 100%, transparent 100%, transparent 100%);
+    }
+    35% {
+        opacity: 0.85;
+        -webkit-mask-image: repeating-linear-gradient(to bottom, #000 0, #000 6px, transparent 6px, transparent 10px);
+        mask-image: repeating-linear-gradient(to bottom, #000 0, #000 6px, transparent 6px, transparent 10px);
+    }
+    70% {
+        opacity: 0.45;
+        -webkit-mask-image: repeating-linear-gradient(to bottom, #000 0, #000 2px, transparent 2px, transparent 12px);
+        mask-image: repeating-linear-gradient(to bottom, #000 0, #000 2px, transparent 2px, transparent 12px);
+    }
+    100% {
+        opacity: 0;
+        -webkit-mask-image: repeating-linear-gradient(to bottom, #000 0, #000 1px, transparent 1px, transparent 18px);
+        mask-image: repeating-linear-gradient(to bottom, #000 0, #000 1px, transparent 1px, transparent 18px);
+    }
+}
+.battle-unit-img.dying {
+    animation: death-dissolve 1.1s ease-in forwards;
+}
+
+/* 아직 캐릭터별 death.png가 준비되지 않았을 때 idle 사진으로 대체 - 흑백+어둡게 필터링해 임시 표시 */
+.battle-unit-img.death-fallback-filter {
+    filter: grayscale(1) brightness(0.55) contrast(1.1);
+}
+
+/* ===== 결과 영역 ===== */
+.battle-result {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 22px;
+    background: rgba(20, 20, 32, 0.72);
+    border: 2px solid rgba(255, 255, 255, 0.22);
+    border-radius: 12px;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+
+.battle-result-text {
+    font-size: 28px;
+    font-weight: 900;
+}
+
+.battle-win {
+    color: #ffd76a;
+    text-shadow: 0 0 16px rgba(255, 215, 106, 0.8);
+}
+
+.battle-lose {
+    color: #c7c7c7;
+    text-shadow: 0 0 9px rgba(0, 0, 0, 0.55);
+}
+
+.battle-result[hidden] {
+    display: none;
+}
+
+/* ===== 화면 크기에 따른 축소 ===== */
+@media (max-width: 1180px) {
+    .battle-screen {
+        padding: 18px;
+    }
+
+    .battle-layout {
+        grid-template-columns: 246px minmax(340px, 1fr) 246px;
+        gap: 15px;
+    }
+
+    .player-identity {
+        min-height: 108px;
+        padding: 10px;
+        gap: 10px;
+    }
+
+    .player-avatar-frame {
+        width: 82px;
+        height: 82px;
+    }
+
+    .player-name {
+        font-size: 18px;
+    }
+
+    .player-meta {
+        font-size: 13px;
+    }
+
+    .roster-unit {
+        min-height: 88px;
+        padding: 8px 10px;
+    }
+
+    .roster-unit-thumb {
+        width: 62px;
+        height: 62px;
+    }
+
+    .roster-unit-name {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 880px) {
+    .battle-screen {
+        min-width: 760px;
+        overflow-x: auto;
+    }
+
+    .battle-layout {
+        grid-template-columns: 205px minmax(300px, 1fr) 205px;
+        gap: 10px;
+    }
+
+    .player-avatar-frame {
+        width: 66px;
+        height: 66px;
+    }
+
+    .roster-unit-thumb {
+        width: 52px;
+        height: 52px;
+    }
+
+    .battle-unit-img {
+        width: 88px;
+        height: 112px;
+    }
+}

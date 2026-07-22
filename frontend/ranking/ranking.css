@@ -1,0 +1,195 @@
+/* 랭킹 전용 UI - 남색+금빛의 "명예의 전당" 톤 (다른 화면들과 구분되는 팔레트) */
+#modal-ranking .ranking-modal-box {
+    width: min(94vw, 640px);
+    max-width: none;
+    height: min(86vh, 640px);
+    max-height: 92vh;
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border: 2px solid rgba(201, 170, 90, .9);
+    border-radius: 14px;
+    background: linear-gradient(160deg, #1b2340 0%, #232c52 55%, #2a3566 100%);
+    box-shadow: 0 16px 50px rgba(10, 12, 30, .5), 0 0 0 1px rgba(255,255,255,.08) inset;
+}
+
+#modal-ranking .modal-close {
+    z-index: 20;
+    color: #e6d8a8;
+}
+
+#ranking-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    color: #e9e4d0;
+}
+
+#ranking-content .screen-title {
+    margin: 0;
+    padding: 18px 60px 4px 22px;
+    font-size: 22px;
+    font-weight: 900;
+    color: #f0dfa0;
+}
+
+/* ── 그룹 탭(독서/재화·칭호/투기장) ── */
+.rank-group-nav {
+    flex-shrink: 0;
+    display: flex;
+    gap: 8px;
+    padding: 4px 22px 10px;
+}
+
+.rank-group-btn {
+    flex: 1;
+    border: 1px solid rgba(201, 170, 90, .5);
+    border-radius: 9px;
+    padding: 9px 6px;
+    background: rgba(255, 255, 255, .05);
+    color: #cfc9ac;
+    font-weight: 800;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.rank-group-btn.active {
+    background: linear-gradient(160deg, #f0dfa0, #c9964e);
+    border-color: #ffe9a8;
+    color: #2a2010;
+}
+
+/* ── 서브 탭(각 그룹 안 2개) ── */
+.rank-sub-nav {
+    flex-shrink: 0;
+    display: flex;
+    gap: 6px;
+    padding: 0 22px 12px;
+}
+
+.rank-sub-btn {
+    border: 1px solid rgba(201, 170, 90, .35);
+    border-radius: 7px;
+    padding: 6px 12px;
+    background: transparent;
+    color: #a9a487;
+    font-weight: 700;
+    font-size: 11.5px;
+    cursor: pointer;
+}
+
+.rank-sub-btn.active {
+    border-color: #f0dfa0;
+    color: #f0dfa0;
+    background: rgba(240, 223, 160, .1);
+}
+
+/* ── 순위 목록 ── */
+.rank-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.rank-list .screen-placeholder {
+    padding: 60px 20px;
+    text-align: center;
+    color: #a9a487;
+    font-weight: 700;
+}
+
+@keyframes rank-row-settle {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.rank-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .04);
+    animation: rank-row-settle .25s ease-out both;
+}
+
+.rank-badge {
+    flex-shrink: 0;
+    width: 26px;
+    text-align: center;
+    font-weight: 900;
+    font-size: 13px;
+    color: #cfc9ac;
+}
+
+.rank-row.rank-top .rank-badge {
+    font-size: 15px;
+}
+
+.rank-row.rank-top-1 { background: linear-gradient(90deg, rgba(255, 216, 115, .22), rgba(255,255,255,.04)); border-color: rgba(255, 216, 115, .6); }
+.rank-row.rank-top-1 .rank-badge { color: #ffd873; }
+.rank-row.rank-top-2 { background: linear-gradient(90deg, rgba(210, 218, 230, .18), rgba(255,255,255,.04)); border-color: rgba(210, 218, 230, .5); }
+.rank-row.rank-top-2 .rank-badge { color: #d2dae6; }
+.rank-row.rank-top-3 { background: linear-gradient(90deg, rgba(212, 150, 100, .18), rgba(255,255,255,.04)); border-color: rgba(212, 150, 100, .5); }
+.rank-row.rank-top-3 .rank-badge { color: #d49664; }
+
+.rank-avatar-frame {
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    overflow: hidden;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, .25);
+    background: #10142a;
+}
+
+.rank-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.rank-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.rank-nickname {
+    font-size: 13.5px;
+    font-weight: 800;
+    color: #f0ecd8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rank-level {
+    margin-top: 1px;
+    font-size: 10.5px;
+    color: #a9a487;
+    font-weight: 600;
+}
+
+.rank-value {
+    flex-shrink: 0;
+    font-size: 13px;
+    font-weight: 900;
+    color: #f0dfa0;
+}
+
+@media (max-width: 650px) {
+    #modal-ranking .ranking-modal-box {
+        width: 96vw;
+        height: 88vh;
+    }
+    .rank-group-btn {
+        font-size: 12px;
+    }
+}

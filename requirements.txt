@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+python-dotenv
+pydantic
+PyJWT
+google-auth
+
+# DB 드라이버는 DATABASE_URL에 맞는 것만 골라서 주석 해제하세요.
+# SQLite는 별도 드라이버가 필요 없습니다 (파이썬 내장).
+# psycopg2-binary   # PostgreSQL 쓸 경우

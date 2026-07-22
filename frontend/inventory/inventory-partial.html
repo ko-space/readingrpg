@@ -1,0 +1,94 @@
+<div class="inventory-view inventory-menu-view" id="inventory-menu-view">
+    <h2 class="inventory-title">인벤토리</h2>
+    <p class="inventory-subtitle">확인할 보관함을 선택하세요.</p>
+    <div class="inventory-entry-row">
+        <button class="inventory-entry-button" id="inventory-open-characters" type="button">
+            <span class="inventory-entry-icon">♙</span>
+            <span>인물</span>
+        </button>
+        <button class="inventory-entry-button" id="inventory-open-items" type="button">
+            <span class="inventory-entry-icon">◇</span>
+            <span>아이템</span>
+        </button>
+    </div>
+</div>
+
+<div class="inventory-view inventory-list-view" id="inventory-list-view" hidden>
+    <header class="inventory-list-header">
+        <button class="inventory-back-button inventory-list-back" id="inventory-list-back" type="button" aria-label="뒤로가기">‹</button>
+        <h2 class="inventory-title">인벤토리</h2>
+        <div class="inventory-tabs" role="tablist">
+            <button class="inventory-tab active" id="inventory-character-tab" type="button">인물</button>
+            <button class="inventory-tab" id="inventory-item-tab" type="button">아이템</button>
+        </div>
+    </header>
+
+    <div class="inventory-grid-scroll">
+        <div class="inventory-character-grid" id="inventory-character-grid"></div>
+        <div class="inventory-item-grid" id="inventory-item-grid" hidden></div>
+        <p class="inventory-empty" id="inventory-empty" hidden></p>
+    </div>
+</div>
+
+<div class="inventory-view inventory-detail-view" id="inventory-detail-view" hidden>
+    <button class="inventory-detail-back" id="inventory-detail-back" type="button" aria-label="캐릭터 목록으로 돌아가기">‹</button>
+
+    <section class="inventory-detail-left" id="inventory-detail-left">
+        <div class="inventory-standing-wrap">
+            <div class="inventory-standing-glow"></div>
+            <img class="inventory-standing-image" id="inventory-standing-image" src="" alt="">
+        </div>
+        <div class="inventory-nameplate">
+            <div class="inventory-rarity-text" id="inventory-detail-rarity"></div>
+            <div class="inventory-detail-name" id="inventory-detail-name"></div>
+            <div class="inventory-detail-stars" id="inventory-detail-stars"></div>
+            <div class="inventory-detail-count" id="inventory-detail-count"></div>
+        </div>
+        <button class="inventory-outfit-button" id="inventory-outfit-button" type="button">의상 변경</button>
+        <div class="inventory-outfit-panel" id="inventory-outfit-panel" hidden>
+            <div class="inventory-outfit-title">보유 의상</div>
+            <div class="inventory-outfit-list" id="inventory-outfit-list"></div>
+        </div>
+    </section>
+
+    <section class="inventory-detail-right" id="inventory-detail-right">
+        <div class="inventory-basic-info">
+            <div class="inventory-info-row"><span>희귀도</span><strong id="inventory-info-rarity">-</strong></div>
+            <div class="inventory-info-row"><span>직업</span><strong id="inventory-info-job">-</strong></div>
+            <div class="inventory-info-row"><span>성별</span><strong id="inventory-info-gender">-</strong></div>
+            <div class="inventory-info-row"><span>사거리</span><strong id="inventory-info-range">-</strong></div>
+            <div class="inventory-info-row"><span>공격 타입</span><strong id="inventory-info-attack">-</strong></div>
+            <div class="inventory-info-row"><span>방어 타입</span><strong id="inventory-info-defense">-</strong></div>
+        </div>
+
+        <div class="inventory-skill-trait-row">
+            <button class="inventory-skill-trait-btn" id="inventory-skill-btn" type="button" data-kind="skill">
+                <span>스킬</span>
+                <img class="inventory-skill-trait-lock" src="assets/icons/lock.png" alt="" onerror="this.outerHTML='🔒'" hidden>
+            </button>
+            <button class="inventory-skill-trait-btn" id="inventory-trait-btn" type="button" data-kind="trait">
+                <span>특성</span>
+                <img class="inventory-skill-trait-lock" src="assets/icons/lock.png" alt="" onerror="this.outerHTML='🔒'" hidden>
+            </button>
+        </div>
+
+        <div class="inventory-description" id="inventory-description"></div>
+
+        <div class="inventory-star-section">
+            <div class="inventory-section-label">성급 정보</div>
+            <div class="inventory-star-buttons" id="inventory-star-buttons"></div>
+            <div class="inventory-star-effect" id="inventory-star-effect"></div>
+        </div>
+
+        <button class="inventory-equip-button" id="inventory-equip-button" type="button">로비에 장착하기</button>
+    </section>
+
+    <!-- 스킬/특성 버튼 클릭 시 뜨는 서브 모달 - 인벤토리와 같은 톤, 헤더는 제거한 "기본 정보" 타이틀 스타일 재사용 -->
+    <div class="inventory-subinfo-overlay" id="inventory-subinfo-overlay" hidden>
+        <div class="inventory-subinfo-panel">
+            <button class="modal-close" id="inventory-subinfo-close" type="button">✕</button>
+            <div class="inventory-info-title" id="inventory-subinfo-title">스킬</div>
+            <div class="inventory-subinfo-body" id="inventory-subinfo-body"></div>
+        </div>
+    </div>
+</div>

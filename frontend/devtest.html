@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>개발자화면</title>
+    <link rel="icon" href="logoicon.png">
+    <link rel="stylesheet" href="arena/arena-battle.css">
+    <link rel="stylesheet" href="devtest/devtest.css">
+</head>
+<body>
+    <div class="dt-root">
+
+        <div class="dt-controls">
+            <h1 class="dt-title">DEVTEST</h1>
+
+            <div class="dt-unit-config" data-slot="attacker-front">
+                <div class="dt-unit-config-title">공격전방</div>
+                <select class="dt-char-select"></select>
+                <select class="dt-star-select"></select>
+                <input type="number" class="dt-hp-input" placeholder="HP override">
+                <input type="number" class="dt-atk-input" placeholder="ATK override">
+                <input type="number" step="0.1" class="dt-interval-input" placeholder="공격주기(초) override">
+                <input type="number" class="dt-level-input" placeholder="레벨" value="1">
+                <textarea class="dt-skill-params" placeholder="스킬 파라미터"></textarea>
+            </div>
+
+            <div class="dt-unit-config" data-slot="attacker-back">
+                <div class="dt-unit-config-title">공격후방</div>
+                <select class="dt-char-select"></select>
+                <select class="dt-star-select"></select>
+                <input type="number" class="dt-hp-input" placeholder="HP override">
+                <input type="number" class="dt-atk-input" placeholder="ATK override">
+                <input type="number" step="0.1" class="dt-interval-input" placeholder="공격주기(초) override">
+                <input type="number" class="dt-level-input" placeholder="레벨" value="1">
+                <textarea class="dt-skill-params" placeholder="스킬 파라미터"></textarea>
+            </div>
+
+            <div class="dt-unit-config" data-slot="defender-front">
+                <div class="dt-unit-config-title">수비전방</div>
+                <select class="dt-char-select"></select>
+                <select class="dt-star-select"></select>
+                <input type="number" class="dt-hp-input" placeholder="HP override">
+                <input type="number" class="dt-atk-input" placeholder="ATK override">
+                <input type="number" step="0.1" class="dt-interval-input" placeholder="공격주기(초) override">
+                <input type="number" class="dt-level-input" placeholder="레벨" value="1">
+                <textarea class="dt-skill-params" placeholder="스킬 파라미터"></textarea>
+            </div>
+
+            <div class="dt-unit-config" data-slot="defender-back">
+                <div class="dt-unit-config-title">수비후방</div>
+                <select class="dt-char-select"></select>
+                <select class="dt-star-select"></select>
+                <input type="number" class="dt-hp-input" placeholder="HP override">
+                <input type="number" class="dt-atk-input" placeholder="ATK override">
+                <input type="number" step="0.1" class="dt-interval-input" placeholder="공격주기(초) override">
+                <input type="number" class="dt-level-input" placeholder="레벨" value="1">
+                <textarea class="dt-skill-params" placeholder="스킬 파라미터"></textarea>
+            </div>
+
+            <div class="dt-action-row">
+                <button type="button" id="dt-start-battle">전투 게시</button>
+                <button type="button" id="dt-reset">초기화</button>
+            </div>
+
+            <div class="dt-manual-row">
+                <div class="dt-active-unit-label">활성 유닛: <span id="dt-active-unit-name">(전장에서 캐릭터 클릭)</span></div>
+                <button type="button" id="dt-basic-attack">기본 공격</button>
+                <button type="button" id="dt-move">이동</button>
+                <button type="button" id="dt-use-skill">스킬 사용</button>
+            </div>
+
+            <div class="dt-token-input">
+                <input type="text" id="dt-token-input" placeholder="access_token (없으면 localStorage 값 사용)">
+            </div>
+
+            <div class="dt-log" id="dt-log"></div>
+        </div>
+
+        <div class="battle-field" id="dt-battle-field">
+            <div class="projectile-layer" id="projectile-layer"></div>
+
+            <div class="battle-row">
+                <!-- 소환수(summon) 자리 - 평소엔 비어있다가(hidden) 윤영준류의 "추가 소환" 스킬이 발동될 때만 나타남 -->
+                <div class="battle-unit" data-unit="attacker-summon" hidden>
+                    <img class="battle-unit-img" src="" alt="">
+                    <div class="battle-unit-shadow"></div>
+                    <div class="dt-unit-hp-track"><div class="dt-unit-hp-fill"></div></div>
+                </div>
+                <div class="battle-unit" data-unit="attacker-back">
+                    <img class="battle-unit-img" src="" alt="">
+                    <div class="battle-unit-shadow"></div>
+                    <div class="dt-unit-hp-track"><div class="dt-unit-hp-fill"></div></div>
+                </div>
+                <div class="battle-unit" data-unit="attacker-front">
+                    <img class="battle-unit-img" src="" alt="">
+                    <div class="battle-unit-shadow"></div>
+                    <div class="dt-unit-hp-track"><div class="dt-unit-hp-fill"></div></div>
+                </div>
+                <div class="battle-unit" data-unit="defender-front">
+                    <img class="battle-unit-img" src="" alt="">
+                    <div class="battle-unit-shadow"></div>
+                    <div class="dt-unit-hp-track"><div class="dt-unit-hp-fill"></div></div>
+                </div>
+                <div class="battle-unit" data-unit="defender-back">
+                    <img class="battle-unit-img" src="" alt="">
+                    <div class="battle-unit-shadow"></div>
+                    <div class="dt-unit-hp-track"><div class="dt-unit-hp-fill"></div></div>
+                </div>
+                <div class="battle-unit" data-unit="defender-summon" hidden>
+                    <img class="battle-unit-img" src="" alt="">
+                    <div class="battle-unit-shadow"></div>
+                    <div class="dt-unit-hp-track"><div class="dt-unit-hp-fill"></div></div>
+                </div>
+            </div>
+
+            <div class="battle-field-line"></div>
+        </div>
+    </div>
+
+    <script src="shared/api-config.js"></script>
+    <script src="devtest/devtest.js" defer></script>
+</body>
+</html>

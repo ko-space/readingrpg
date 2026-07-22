@@ -1,0 +1,444 @@
+/* 독서 화면(2단계) 전용 스타일. lobby.css의 --panel-bg, --panel-border 등 공통 변수를 그대로 씀 */
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.reading-screen {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: linear-gradient(160deg, #2a3550 0%, #1a2038 60%, #0f1424 100%);
+}
+
+.reading-bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    opacity: 0.9;
+}
+
+/* ── 설정 버튼 (우측 상단) ── */
+.reading-settings-btn {
+    position: absolute;
+    top: 20px;
+    right: 24px;
+    z-index: 10;
+}
+
+/* ── 반딧불이: 노란 빛이 천천히 위로 피어오름 ── */
+.firefly-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 1;
+}
+
+@keyframes firefly-rise {
+    0% {
+        transform: translate(0, 0);
+        opacity: 0;
+    }
+    10% {
+        opacity: 1;
+    }
+    50% {
+        transform: translate(12px, -50vh);
+    }
+    90% {
+        opacity: 0.8;
+    }
+    100% {
+        transform: translate(-8px, -105vh);
+        opacity: 0;
+    }
+}
+
+.firefly {
+    position: absolute;
+    bottom: 0;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #ffe98a;
+    box-shadow: 0 0 6px 2px rgba(255, 230, 130, 0.9), 0 0 14px 5px rgba(255, 210, 90, 0.5);
+    animation-name: firefly-rise;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+}
+
+/* ── 캐릭터 + 정보 패널: 화면 정중앙에서 살짝 좌측 하단으로 이동한 지점에 배치 ── */
+.reading-content {
+    position: absolute;
+    top: 58%;
+    left: 46%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 40px;
+}
+
+.reading-character-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.reading-character-img {
+    max-width: 55vw;
+    max-height: 62vh;
+    object-fit: contain;
+    filter: drop-shadow(0 16px 22px rgba(0, 0, 0, 0.45));
+}
+
+.reading-info-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    background: rgba(20, 20, 32, 0.55);
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-radius: 16px;
+    padding: 28px 32px;
+}
+
+.reading-time-label {
+    font-size: 17px;
+    font-weight: bold;
+    color: #fff;
+    opacity: 0.9;
+}
+
+.reading-mode-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffe098;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    padding: 3px 12px;
+}
+
+.reading-mode-label[hidden] {
+    display: none;
+}
+
+/* ── 스톱워치: 심플하고 은은하게, 시:분만 ── */
+.reading-stopwatch {
+    width: 170px;
+    height: 170px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fffaf0 0%, #f6ecd9 100%);
+    border: 5px solid #ffd76a;
+    box-shadow: 0 0 24px rgba(255, 215, 106, 0.55), inset 0 2px 6px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 34px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: #4a3c2a;
+    text-align: center;
+    padding: 0 10px;
+}
+
+.reading-stopwatch.stopwatch-paused {
+    box-shadow: 0 0 24px rgba(150, 150, 150, 0.5), inset 0 2px 6px rgba(0, 0, 0, 0.1);
+    border-color: #b8b8b8;
+}
+
+.reading-stopwatch-row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+/* ── 독서 시계 옆 보조 스톱워치: 기록/보상과 전혀 무관한 순수 유틸리티. 숫자는 아무 의미 없음 ── */
+.utility-stopwatch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    padding: 12px 16px;
+}
+
+.utility-stopwatch-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    opacity: 0.75;
+}
+
+.utility-stopwatch-display {
+    font-size: 22px;
+    font-weight: 900;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+}
+
+.utility-stopwatch-btn-row {
+    display: flex;
+    gap: 6px;
+}
+
+.utility-stopwatch-btn {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 8px;
+    padding: 5px 12px;
+    font-weight: 700;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.utility-stopwatch-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.utility-stopwatch-btn.running {
+    background: rgba(224, 100, 90, 0.55);
+    border-color: rgba(255, 196, 186, 0.7);
+}
+
+@media (max-width: 720px) {
+    .reading-stopwatch-row {
+        flex-direction: column;
+        gap: 12px;
+    }
+}
+
+.reading-btn-row {
+    display: flex;
+    gap: 10px;
+}
+
+.reading-pause-btn {
+    background: linear-gradient(160deg, #f0c15a, #8f6b1c);
+    color: #fff;
+    border: 2px solid #ffe4ba;
+    border-radius: 10px;
+    padding: 12px 22px;
+    font-weight: 900;
+    font-size: 15px;
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(224, 180, 90, 0.5), 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+.reading-pause-btn:hover {
+    background: linear-gradient(160deg, #f5cd75, #a3821f);
+}
+
+.reading-pause-btn[hidden] {
+    display: none;
+}
+
+.reading-end-btn {
+    background: linear-gradient(160deg, #e0645a, #8f231c);
+    color: #fff;
+    border: 2px solid #ffc4ba;
+    border-radius: 10px;
+    padding: 12px 28px;
+    font-weight: 900;
+    font-size: 15px;
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(224, 100, 90, 0.5), 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+.reading-end-btn:hover {
+    background: linear-gradient(160deg, #ef7a6f, #a52d24);
+}
+
+/* ── 모의고사 시작 전 10초 카운트다운 ── */
+.mock-countdown-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    background: rgba(5, 6, 12, 0.92);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+}
+
+.mock-countdown-overlay[hidden] {
+    display: none;
+}
+
+.mock-countdown-number {
+    font-size: 96px;
+    font-weight: 900;
+    color: #ffe098;
+    text-shadow: 0 0 30px rgba(255, 224, 152, 0.8);
+    animation: mock-countdown-pulse 1s ease-in-out infinite;
+}
+
+@keyframes mock-countdown-pulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.12); opacity: 0.75; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.mock-countdown-label {
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    opacity: 0.85;
+}
+
+@media (max-width: 720px) {
+    .reading-content {
+        top: 55%;
+        left: 50%;
+        flex-direction: column;
+        gap: 18px;
+    }
+    .reading-character-img {
+        max-width: 70vw;
+        max-height: 32vh;
+    }
+}
+
+/* ── 3단계: 독서 완료 모달 ── */
+.reading-complete-box {
+    align-items: center;
+    text-align: center;
+}
+
+.reading-complete-title {
+    font-size: 26px;
+}
+
+.complete-stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 8px;
+    padding: 10px 16px;
+}
+
+.complete-stat-label {
+    font-size: 13px;
+    color: #8a7a5c;
+    font-weight: bold;
+}
+
+.complete-stat-value {
+    font-size: 20px;
+    font-weight: 900;
+    color: var(--text-dark, #4a3c2a);
+    font-variant-numeric: tabular-nums;
+}
+
+.complete-level-block {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.complete-level-chip {
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--text-dark, #4a3c2a);
+    transition: text-shadow 0.2s ease, color 0.2s ease;
+}
+
+@keyframes level-flash {
+    0% { text-shadow: none; color: var(--text-dark, #4a3c2a); }
+    40% { text-shadow: 0 0 14px rgba(255, 215, 106, 1), 0 0 28px rgba(255, 215, 106, 0.8); color: #ffb400; }
+    100% { text-shadow: none; color: var(--text-dark, #4a3c2a); }
+}
+
+.complete-level-chip.level-flash {
+    animation: level-flash 0.5s ease-out;
+}
+
+.complete-exp-track {
+    width: 100%;
+    height: 20px;
+    background: #fff;
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.complete-exp-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(to right, #4285f4, #5aa7f2, #7cc4ff);
+    box-shadow: 0 0 8px rgba(90, 167, 242, 0.8) inset;
+}
+
+#complete-lobby-btn {
+    width: 100%;
+    margin-top: 6px;
+}
+
+/* display:flex 등이 hidden 속성의 기본 숨김 동작을 덮어쓰는 걸 막음 (이전에 여러 번 겪었던 버그 패턴) */
+.complete-stat-row[hidden],
+.complete-level-block[hidden],
+#complete-lobby-btn[hidden] {
+    display: none;
+}
+
+/* ── 1분 미만 종료 확인 모달 ── */
+.reading-confirm-box {
+    align-items: center;
+    text-align: center;
+}
+
+.reading-confirm-text {
+    font-size: 16px;
+    font-weight: bold;
+    color: var(--text-dark, #4a3c2a);
+    line-height: 1.5;
+}
+
+.reading-confirm-btn-row {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+}
+
+.reading-confirm-btn {
+    flex: 1;
+    border-radius: 10px;
+    padding: 12px;
+    font-weight: 900;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+.reading-confirm-yes {
+    background: linear-gradient(160deg, #e0645a, #8f231c);
+    color: #fff;
+    border: 2px solid #ffc4ba;
+}
+
+.reading-confirm-yes:hover {
+    background: linear-gradient(160deg, #ef7a6f, #a52d24);
+}
+
+.reading-confirm-no {
+    background: linear-gradient(160deg, #59a852, #2c5c26);
+    color: #fff;
+    border: 2px solid #ffe9a8;
+}
+
+.reading-confirm-no:hover {
+    background: linear-gradient(160deg, #6fc167, #366e2f);
+}
