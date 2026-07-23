@@ -425,7 +425,7 @@
     const meleeTargetKey = {};              // key -> 지금 다가가야 하는 적 슬롯
     const meleeArrived = {};                // key -> 그 타겟에 이미 도착했는지
     const pendingArrivalResolvers = {};     // key -> 도착을 기다리고 있는 Promise resolve 함수들
-    const approachGapExtra = {};            // key -> 접근을 얼마나 덜(뒤에서) 멈출지 - 복제체 뒤에 서는 윤영준 등
+    const walkerSuspended = {};             // key -> 이동 루프를 잠깐 멈춰둘지(넉백 트랜지션 중 tick()과 충돌 방지)
     let walkerRunning = false;
 
     // unitKey가 targetKey에게 도달하려면 지금 이 순간 기준으로 얼마나 더(어느 방향으로) 움직여야 하는지.
@@ -439,9 +439,7 @@
         const rect = el.getBoundingClientRect();
         const targetRect = targetEl.getBoundingClientRect();
         // overlap이 클수록 "더 깊이 파고들어야"(겹쳐야) 도착 판정이 나서 결과적으로 더 가까이 멈춘다.
-        // approachGapExtra는 반대로 "평소보다 더 멀리서(덜 파고들고) 멈춘다"는 뜻이라 overlap을 줄여야
-        // 한다 - 늘리면 반대로 더 깊이 다가가야 도착 판정이 나서, 물러난 캐릭터가 도로 앞으로 끌려온다.
-        const overlap = APPROACH_OVERLAP - (approachGapExtra[unitKey] || 0);
+        const overlap = APPROACH_OVERLAP;
 
         const myCenter = rect.left + rect.width / 2;
         const targetCenter = targetRect.left + targetRect.width / 2;
@@ -469,14 +467,19 @@
     // 원래 자기 타겟을 향해 walker가 계속 움직이던 중이었다면 그쪽은 그대로 이어지고, 정작 이 대상과
     // 접촉해야 했던 반대 진영 근거리 유닛들은 아래에서 명시적으로 "도착 취소" 처리해서, 실제 거리와
     // 무관하게 다시 걸어서 접근하는 과정을 반드시 거치게 한다(그동안은 waitForMeleeArrival이 공격을 막음).
-    function applyKnockback(targetKey) {
+    // suspendSelfWalker: 밀려나는 대상 자신이 근접 유닛이고 지금 다른 목표를 향해 걸어가던 중이면,
+    // walker의 tick()이 매 프레임 같은 요소의 transform을 덮어써서 넉백 트랜지션이 통째로 씹힌다 -
+    // 이 옵션을 켜면 트랜지션이 끝날 때까지 그 유닛만 walkerSuspended로 잠깐 재워서 충돌을 막고,
+    // 끝나면 자동으로 깨어나 원래 목표를 향해 평소처럼 다시 걸어간다(별도의 "복귀" 연출 불필요).
+    // 청년의 기존 적 대상 넉백은 대체로 원거리(비근접) 대상이라 이 문제가 잘 안 드러나서 기본은 꺼둔다.
+    function applyKnockback(targetKey, options = {}) {
+        const { distance = 170, durationMs = 220, suspendSelfWalker = false } = options;
         const el = document.querySelector(`[data-unit="${targetKey}"]`);
         if (!el) return;
 
         const knockDir = targetKey.startsWith("attacker") ? -1 : 1; // 자기 진영 뒤쪽으로
-        const KNOCK_DISTANCE = 170; // 후방 원거리 유닛이 맵 밖으로 밀려나지 않도록 예전(420px)보다 크게 줄임
         const startX = getCurrentTranslateX(el);
-        let endX = startX + knockDir * KNOCK_DISTANCE;
+        let endX = startX + knockDir * distance;
 
         // 어느 위치에서 맞아도 맵(battle-field) 경계 밖으로는 밀려나지 않게 클램핑한다.
         const fieldEl = document.querySelector(".battle-field");
@@ -489,11 +492,15 @@
             endX = Math.max(minX, Math.min(maxX, endX));
         }
 
-        el.style.transition = "transform 220ms ease-out";
+        if (suspendSelfWalker) walkerSuspended[targetKey] = true;
+        el.style.transition = `transform ${durationMs}ms ease-out`;
         requestAnimationFrame(() => {
             el.style.transform = `translateX(${endX}px)`;
         });
-        setTimeout(() => { el.style.transition = ""; }, 240);
+        setTimeout(() => {
+            el.style.transition = "";
+            if (suspendSelfWalker) walkerSuspended[targetKey] = false;
+        }, durationMs + 20);
 
         const casterSidePrefix = targetKey.startsWith("attacker") ? "defender" : "attacker";
         Object.keys(units).forEach((key) => {
@@ -519,6 +526,7 @@
             Object.keys(units).forEach((key) => {
                 if (!units[key].isMelee) return;
                 if (units[key].hp <= 0) return;
+                if (walkerSuspended[key]) return; // 넉백 트랜지션이 끝날 때까지 이 유닛은 건드리지 않는다
 
                 const targetKey = meleeTargetKey[key];
                 if (!targetKey) return;
@@ -1557,27 +1565,13 @@
                             cloneEl.style.transform = `translateX(${casterRect.left - cloneRect.left}px)`;
                         }
                     }
-                    // 원본(윤영준)은 복제체보다 뒤로 살짝 물러났다가(스프라이트 폭만큼, CSS 트랜지션),
-                    // 그 연출이 끝나면 다시 원래 붙어있던 근접 거리로 자연스럽게 돌아온다. 물러나는 동안엔
-                    // approachGapExtra로 이동 루프가 그 자리를 "도착"으로 인식하게 해서 트랜지션과
-                    // 충돌하지 않게 하고, 연출이 끝나는 순간 그 여유값을 지워서 원래 거리를 목표로 다시
-                    // 걸어오게 만든다 - 이렇게 해야 스킬을 몇 번을 쓰든 매번 같은 자리로 돌아오고, 계속
-                    // 뒤로 밀려나며 도망치는 것처럼 보이지 않는다.
+                    // 원본(윤영준)은 복제체를 소환한 반동으로 살짝 밀려난다 - 청년의 넉백(applyKnockback)과
+                    // 같은 방식(한 번 점프시키고 손을 뗀다)이되, 거리는 더 짧고 트랜지션은 더 느려서 부드럽다.
+                    // 밀려난 뒤 되돌아오는 별도 연출은 없다 - suspendSelfWalker 덕분에 트랜지션이 끝나자마자
+                    // walker가 깨어나 원래 근접 거리를 목표로 자연스럽게 다시 걸어온다(청년에게 맞은 근접
+                    // 유닛이 다시 다가가는 것과 동일한 흐름).
                     if (casterEl) {
-                        const retreatSign = event.side === "attacker" ? -1 : 1;
-                        const spriteWidth = casterEl.querySelector(".battle-unit-img")?.getBoundingClientRect().width || 130;
-                        const casterX = getCurrentTranslateX(casterEl);
-                        casterEl.style.transition = "transform 320ms ease-out";
-                        requestAnimationFrame(() => {
-                            casterEl.style.transform = `translateX(${casterX + retreatSign * spriteWidth}px)`;
-                        });
-                        approachGapExtra[actorKey] = spriteWidth;
-                        meleeArrived[actorKey] = true;
-                        setTimeout(() => {
-                            casterEl.style.transition = "";
-                            delete approachGapExtra[actorKey];
-                            meleeArrived[actorKey] = false;
-                        }, 340);
+                        applyKnockback(actorKey, { distance: 90, durationMs: 380, suspendSelfWalker: true });
                     }
                     attackAnimActive[cloneKey] = false;
                     getAttackFrameCount(units[cloneKey].outfit);

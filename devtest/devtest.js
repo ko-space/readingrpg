@@ -65,7 +65,7 @@
     const meleeTargetKey = {};
     const meleeArrived = {};
     const pendingArrivalResolvers = {};
-    const approachGapExtra = {}; // slot -> 접근을 얼마나 덜(뒤에서) 멈출지 - 복제체 뒤에 서는 윤영준 등(arena-battle.js와 동일)
+    const walkerSuspended = {}; // slot -> 이동 루프를 잠깐 멈춰둘지(넉백 트랜지션 중 tick()과 충돌 방지, arena-battle.js와 동일)
     let walkerRunning = false;
     let advancedSlot = {}; // slot -> bool, "이동" 버튼으로 앞으로 나간 상태인지(토글)
 
@@ -407,24 +407,12 @@
                     cloneEl.style.transform = `translateX(${casterRect.left - cloneRect.left}px)`;
                 }
             }
-            // 원본(캐스터)은 복제체보다 뒤로 살짝 물러났다가(스프라이트 폭만큼), 연출이 끝나면 원래
-            // 붙어있던 근접 거리로 다시 돌아온다(arena-battle.js와 동일) - 안 그러면 스킬을 쓸 때마다
-            // 계속 뒤로 밀려나며 도망치는 것처럼 보인다.
+            // 원본(캐스터)은 복제체를 소환한 반동으로 살짝 밀려난다 - 청년의 넉백(applyKnockback)과 같은
+            // 방식(한 번 점프시키고 손을 뗀다)이되, 거리는 더 짧고 트랜지션은 더 느려서 부드럽다(arena-battle.js와
+            // 동일). suspendSelfWalker 덕분에 트랜지션이 끝나자마자 walker가 깨어나 원래 근접 거리를 목표로
+            // 자연스럽게 다시 걸어오므로 별도의 "복귀" 연출은 필요 없다.
             if (casterEl) {
-                const retreatSign = side === "attacker" ? -1 : 1;
-                const spriteWidth = casterEl.querySelector(".battle-unit-img")?.getBoundingClientRect().width || 130;
-                const casterX = getCurrentTranslateX(casterEl);
-                casterEl.style.transition = "transform 320ms ease-out";
-                requestAnimationFrame(() => {
-                    casterEl.style.transform = `translateX(${casterX + retreatSign * spriteWidth}px)`;
-                });
-                approachGapExtra[casterSlot] = spriteWidth;
-                meleeArrived[casterSlot] = true;
-                setTimeout(() => {
-                    casterEl.style.transition = "";
-                    delete approachGapExtra[casterSlot];
-                    meleeArrived[casterSlot] = false;
-                }, 340);
+                applyKnockback(casterSlot, { distance: 90, durationMs: 380, suspendSelfWalker: true });
             }
             attackAnimActive[cloneSlot] = false;
             getAttackFrameCount(units[cloneSlot].outfit);
@@ -877,9 +865,7 @@
         const rect = el.getBoundingClientRect();
         const targetRect = targetEl.getBoundingClientRect();
         // overlap이 클수록 "더 깊이 파고들어야"(겹쳐야) 도착 판정이 나서 결과적으로 더 가까이 멈춘다.
-        // approachGapExtra는 반대로 "평소보다 더 멀리서(덜 파고들고) 멈춘다"는 뜻이라 overlap을 줄여야
-        // 한다 - 늘리면 반대로 더 깊이 다가가야 도착 판정이 나서, 물러난 캐릭터가 도로 앞으로 끌려온다.
-        const overlap = 100 - (approachGapExtra[unitKey] || 0);
+        const overlap = 100;
         const myCenter = rect.left + rect.width / 2;
         const targetCenter = targetRect.left + targetRect.width / 2;
         return myCenter <= targetCenter
@@ -901,14 +887,20 @@
     // 루프끼리 계속 경합하면 값이 튈 수 있어서 여기서는 "한 번 점프시키고 끝"으로 처리한다. 정작 이
     // 대상과 접촉해야 했던 반대 진영 근거리 유닛들은 아래에서 명시적으로 "도착 취소" 처리해서, 다시
     // 걸어서 접근하는 과정을 반드시 거치게 한다(그동안은 waitForMeleeArrival이 공격을 막음).
-    function applyKnockback(targetSlot) {
+    //
+    // suspendSelfWalker: 밀려나는 대상 자신이 근접 유닛이고 지금 다른 목표를 향해 걸어가던 중이면,
+    // 위와 같은 이유로 넉백 트랜지션 자체가 씹힌다 - 이 옵션을 켜면 트랜지션이 끝날 때까지 그 유닛만
+    // walkerSuspended로 잠깐 재워서 충돌을 막고, 끝나면 자동으로 깨어나 원래 목표를 향해 평소처럼
+    // 다시 걸어간다(별도의 "복귀" 연출 불필요). 청년의 기존 적 대상 넉백은 대체로 원거리(비근접)
+    // 대상이라 이 문제가 잘 안 드러나서 기본은 꺼둔다(arena-battle.js와 동일).
+    function applyKnockback(targetSlot, options = {}) {
+        const { distance = 170, durationMs = 220, suspendSelfWalker = false } = options;
         const el = document.querySelector(`[data-unit="${targetSlot}"]`);
         if (!el) return;
 
         const knockDir = targetSlot.startsWith("attacker") ? -1 : 1;
-        const KNOCK_DISTANCE = 170; // 후방 원거리 유닛이 맵 밖으로 밀려나지 않도록 줄임(arena-battle.js와 동일)
         const startX = getCurrentTranslateX(el);
-        let endX = startX + knockDir * KNOCK_DISTANCE;
+        let endX = startX + knockDir * distance;
 
         // 어느 위치에서 맞아도 맵(battle-field) 경계 밖으로는 밀려나지 않게 클램핑한다.
         const fieldEl = document.querySelector(".battle-field");
@@ -921,11 +913,15 @@
             endX = Math.max(minX, Math.min(maxX, endX));
         }
 
-        el.style.transition = "transform 220ms ease-out";
+        if (suspendSelfWalker) walkerSuspended[targetSlot] = true;
+        el.style.transition = `transform ${durationMs}ms ease-out`;
         requestAnimationFrame(() => {
             el.style.transform = `translateX(${endX}px)`;
         });
-        setTimeout(() => { el.style.transition = ""; }, 240);
+        setTimeout(() => {
+            el.style.transition = "";
+            if (suspendSelfWalker) walkerSuspended[targetSlot] = false;
+        }, durationMs + 20);
 
         const casterSidePrefix = targetSlot.startsWith("attacker") ? "defender" : "attacker";
         Object.keys(units).forEach((slot) => {
@@ -948,6 +944,7 @@
             if (!walkerRunning) return;
             Object.keys(units).forEach((slot) => {
                 if (!units[slot] || !units[slot].isMelee || units[slot].hp <= 0) return;
+                if (walkerSuspended[slot]) return; // 넉백 트랜지션이 끝날 때까지 이 유닛은 건드리지 않는다
                 const targetKey = meleeTargetKey[slot];
                 if (!targetKey) return;
                 const el = document.querySelector(`[data-unit="${slot}"]`);
@@ -1520,7 +1517,7 @@
     async function startBattle() {
         walkerRunning = false;
         SLOTS.forEach((slot) => clearAllStatusIcons(slot)); // 서버가 새로 보내는 이벤트로만 상태가 갱신되게, 수동으로 쌓아둔 건 초기화
-        Object.keys(approachGapExtra).forEach((slot) => delete approachGapExtra[slot]);
+        Object.keys(walkerSuspended).forEach((slot) => delete walkerSuspended[slot]);
 
         // 이전 전투에서 남아있던 복제체(summon)는 새 전투 시작 전에 완전히 지운다.
         ["attacker-summon", "defender-summon"].forEach((slot) => {
@@ -1712,20 +1709,7 @@
                     }
                 }
                 if (casterEl && actorSlot) {
-                    const retreatSign = actorSide === "attacker" ? -1 : 1;
-                    const spriteWidth = casterEl.querySelector(".battle-unit-img")?.getBoundingClientRect().width || 130;
-                    const casterX = getCurrentTranslateX(casterEl);
-                    casterEl.style.transition = "transform 320ms ease-out";
-                    requestAnimationFrame(() => {
-                        casterEl.style.transform = `translateX(${casterX + retreatSign * spriteWidth}px)`;
-                    });
-                    approachGapExtra[actorSlot] = spriteWidth;
-                    meleeArrived[actorSlot] = true;
-                    setTimeout(() => {
-                        casterEl.style.transition = "";
-                        delete approachGapExtra[actorSlot];
-                        meleeArrived[actorSlot] = false;
-                    }, 340);
+                    applyKnockback(actorSlot, { distance: 90, durationMs: 380, suspendSelfWalker: true });
                 }
                 attackAnimActive[cloneSlot] = false;
                 getAttackFrameCount(units[cloneSlot].outfit);
@@ -1881,7 +1865,7 @@
         [...SLOTS, "attacker-summon", "defender-summon"].forEach((slot) => {
             clearAllStatusIcons(slot);
             delete facingFlipped[slot];
-            delete approachGapExtra[slot];
+            delete walkerSuspended[slot];
         });
         ["attacker-summon", "defender-summon"].forEach((slot) => {
             delete units[slot];
