@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>독서 중 - 독서 RPG</title>
+    <link rel="icon" href="logoicon.png">
+    <link rel="stylesheet" href="shared/lobby.css">
+    <link rel="stylesheet" href="reading/reading.css">
+    <link rel="stylesheet" href="shared/achievement-toast.css">
+    <link rel="stylesheet" href="gacha/gacha-reveal.css">
+    <link rel="stylesheet" href="settings/settings.css">
+</head>
+<body>
+    <div class="reading-screen">
+        <div class="reading-bg" id="reading-bg"></div>
+        <div class="firefly-layer" id="firefly-layer"></div>
+
+        <button class="icon-btn reading-settings-btn" data-modal-target="modal-settings" title="설정">
+            <img src="assets/icons/gear.png" alt="" class="icon-btn-img" onerror='this.outerHTML="⚙️"'>
+        </button>
+
+        <div class="reading-content">
+            <div class="reading-character-area">
+                <img class="reading-character-img" id="reading-character-img" src="" alt="독서 중인 캐릭터">
+            </div>
+
+            <div class="reading-info-panel">
+                <div class="reading-time-label" id="reading-time-label">독서 시간</div>
+                <div class="reading-mode-label" id="reading-mode-label" hidden></div>
+
+                <div class="reading-stopwatch-row">
+                    <div class="reading-stopwatch" id="reading-stopwatch">00:00</div>
+
+                    <div class="utility-stopwatch">
+                        <div class="utility-stopwatch-label">스톱워치</div>
+                        <div class="utility-stopwatch-display" id="utility-stopwatch-display">00:00</div>
+                        <div class="utility-stopwatch-btn-row">
+                            <button class="utility-stopwatch-btn" id="utility-stopwatch-toggle" type="button">시작</button>
+                            <button class="utility-stopwatch-btn" id="utility-stopwatch-reset" type="button">초기화</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="reading-btn-row">
+                    <button class="reading-pause-btn" id="reading-pause-btn" hidden>일시정지</button>
+                    <button class="reading-end-btn" id="reading-end-btn">독서 종료</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="mock-countdown-overlay" id="mock-countdown-overlay" hidden>
+            <div class="mock-countdown-number" id="mock-countdown-number">10</div>
+            <div class="mock-countdown-label">잠시 후 모의고사가 시작됩니다</div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-settings">
+        <div class="modal-box settings-modal-box">
+            <button class="modal-close" data-modal-close>✕</button>
+            <div id="settings-content">
+                <p class="screen-placeholder">불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-confirm-leave">
+        <div class="modal-box reading-confirm-box">
+            <p class="reading-confirm-text">1분을 못 채웠네요~~~ 보상을 포기하고 돌아가겠습니까?</p>
+            <div class="reading-confirm-btn-row">
+                <button class="reading-confirm-btn reading-confirm-yes" id="confirm-leave-yes">Yes</button>
+                <button class="reading-confirm-btn reading-confirm-no" id="confirm-leave-no">No</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-complete">
+        <div class="modal-box reading-complete-box">
+            <h2 class="screen-title reading-complete-title">독서 완료!</h2>
+
+            <div class="complete-stat-row" id="stat-row-time" hidden>
+                <span class="complete-stat-label">총 독서시간</span>
+                <span class="complete-stat-value" id="stat-value-time">00:00:00</span>
+            </div>
+            <div class="complete-stat-row" id="stat-row-exp" hidden>
+                <span class="complete-stat-label">획득 EXP</span>
+                <span class="complete-stat-value" id="stat-value-exp">0</span>
+            </div>
+            <div class="complete-stat-row" id="stat-row-gold" hidden>
+                <span class="complete-stat-label">획득 GOLD</span>
+                <span class="complete-stat-value" id="stat-value-gold">0</span>
+            </div>
+
+            <div class="complete-level-block" id="complete-level-block" hidden>
+                <div class="complete-level-chip" id="complete-level-chip">Lv. -</div>
+                <div class="complete-exp-track">
+                    <div class="complete-exp-fill" id="complete-exp-fill"></div>
+                </div>
+            </div>
+
+            <button class="dungeon-enter-btn" id="complete-lobby-btn" hidden>로비로</button>
+        </div>
+    </div>
+
+    <script src="shared/api-config.js"></script>
+    <script src="shared/session-guard.js"></script>
+    <script src="shared/nav-lock.js"></script>
+    <script src="shared/achievement-toast.js"></script>
+    <script src="gacha/gacha-reveal.js" defer></script>
+    <script src="settings/settings.js" defer></script>
+    <script src="reading/reading.js" defer></script>
+</body>
+</html>

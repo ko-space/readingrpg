@@ -2,7 +2,7 @@ import json
 from database import SessionLocal
 from models import (
     Item, Region, Achievement, GachaBanner, GachaBannerPickup, Quest, UserQuestClaim,
-    UserItem, UserItemPurchase, UserDailyItemPurchase,
+    UserItem, UserItemPurchase, UserDailyItemPurchase, Notice,
 )
 
 with open("characters.json", "r", encoding="utf-8") as f:
@@ -911,6 +911,87 @@ def seed_gacha_banners():
                 character_name="송주헌",
                 point_cost=20,
             ))
+            db.commit()
+    finally:
+        db.close()
+
+
+NOTICES = [
+    {
+        "title": "독서 RPG 정식 출시!",
+        "image_file": "assets/notices/launch.png",
+        "body": (
+            "안녕하세요, 독서 RPG 개발진입니다.\n\n"
+            "오랜 준비 끝에 독서 RPG가 정식으로 출시되었습니다!\n"
+            "그동안 제작에 함께해주신 모든 분들께 진심으로 감사드립니다.\n\n"
+            "독서 RPG는 여러분의 독서와 공부 시간을 캐릭터 성장으로 이어주는 건강한 게임입니다. "
+            "매일 꾸준히 기록을 쌓아 인물을 모으고, 투기장에서 실력을 겨루고, "
+            "스토리를 통해 새로운 이야기를 만나보세요.\n\n"
+            "앞으로도 다양한 컨텐츠와 이벤트로 찾아뵙겠습니다. 많은 관심과 응원 부탁드립니다!\n\n\n"
+            "안녕하세요, 독서 RPG의 개발자 고우주입니다.\n"
+            "이번 RPG의 총괄 프로그래밍 및 투기장모드 기획/구성을 담당하였는데요. "
+            "많은 시간을 투자하였으니 완성도에는 자신이 있다고 말할 수 있습니다. "
+            "또한 투기장모드는 이번 RPG를 개발하면서 가장 많은 노력과 시간을 들였다고 해도 과언이 아닙니다. "
+            "다만 웹게임의 특정상 발견하지 못한 버그들이 존재할 수 있는데요, "
+            "가벼운 버그들은 그냥 게임의 일부로 너그럽게 받아들이고 즐겨주시면 감사하겠습니다.\n"
+            "게임 플레이에 지장을 줄 정도의 버그를 발견하셨다면 제게 제보해 주세요. "
+            "확인 후 최대한 빠르게 수정하겠습니다.\n"
+            "항상 여러분의 곁에서 응원합니다.\n\n"
+            "안녕하세요, 독서 RPG의 개발자 송주헌입니다.\n"
+            "이번 RPG 게임의 스토리모드를 기획하고 구성을 중점적으로 맡았는데요. "
+            "라이트 노벨, 코믹요소를 담아 풍부한 시나리오를 구성하려 노력했습니다. "
+            "여러 앤딩이 재미있고 감동 넘치는 앤딩이 있습니다. "
+            "모든 앤딩 도감을 획득하기는 쉽지 않을 정도로 복잡하고 또 깊게 만들었으니 재밌게 즐겨주세요.\n"
+            "화이팅!"
+        ),
+    },
+    {
+        "title": "인연 스토리 Episode 1 '우정의 시작' OPEN!",
+        "image_file": "assets/notices/relationship1.png",
+        "body": (
+            "안녕하세요, 독서RPG입니다.\n\n"
+            "인연 스토리 Episode 1이 공개되었습니다.\n"
+            "여러 인물들과의 상호작용을 통해 우정을 쌓아보세요!\n"
+            "스토리모드 티켓을 꾸준히 모아 하나의 완결된 스토리를 완성해보세요!\n"
+            "추후에 제작할 episode 2, 3는 더 복잡한 요소와 신박하고 재미있는 상황을 통해 구성할 예정입니다.\n"
+            "감사합니다."
+        ),
+    },
+    {
+        "title": "전술대회 시즌1 OPEN!",
+        "image_file": "assets/notices/competition1.png",
+        "body": (
+            "안녕하세요, 독서RPG입니다.\n\n"
+            "전술대회 시즌1이 시작되었습니!.\n"
+            "플레이어들을 공격하여 실력을 겨뤄 보세요!\n"
+            "방어 편성을 적절하게 하여 순위를 지켜 보세요!\n"
+            "추후에 공개할 토벌전은 더 복잡한 요소와 신박하고 재미있는 매커니즘으로 구성할 예정입니다.\n"
+            "감사합니다."
+        ),
+    },
+]
+
+
+def seed_notices():
+    db = SessionLocal()
+    try:
+        existing_rows = {row.title: row for row in db.query(Notice).all()}
+        changed = False
+
+        for n in NOTICES:
+            row = existing_rows.get(n["title"])
+            if row:
+                row.image_file = n.get("image_file")
+                row.body = n["body"]
+            else:
+                db.add(Notice(
+                    title=n["title"],
+                    image_file=n.get("image_file"),
+                    body=n["body"],
+                ))
+            changed = True
+
+        if changed:
             db.commit()
     finally:
         db.close()

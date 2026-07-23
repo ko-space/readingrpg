@@ -41,6 +41,7 @@ def _unit_view(unit):
         "max_hp": unit["max_hp"],
         "is_melee": unit["is_melee"],
         "outfit": catalog.get("outfits", {}).get("기본"),
+        "star": unit["star"],
     }
 
 

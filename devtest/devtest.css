@@ -1,0 +1,487 @@
+/* ============================================================
+   DEVTEST 컨트롤 패널 스타일.
+   의도적으로 "못생기게" 잡아둔 기본값입니다 - 검은 배경 + 각진 흰 테두리, 무채색,
+   위치 정렬도 대충. 실제 다듬기는 여기서부터 사용자가 CSS로 직접 하면 됩니다.
+   전장(우측, .battle-field 이하)은 arena-battle.css를 그대로 재사용하는 "화려한" 실제 게임 비주얼이라
+   이 파일에서는 건드리지 않고, devtest 전용 추가 요소(HP바/시전 이펙트/투사체 변형)만 여기 있습니다.
+   ============================================================ */
+
+html, body {
+    width: 100%;
+    height: 100%;
+    background: #000;
+}
+
+.dt-root {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+}
+
+/* ── 컨트롤 패널: 검은 배경 + 각진 흰 테두리, 정렬 신경 안 씀 ── */
+.dt-controls {
+    width: 360px;
+    flex: 0 0 360px;
+    overflow-y: auto;
+    background: #000;
+    border: 4px solid #fff;
+    padding: 10px;
+    color: #fff;
+    font-family: monospace;
+}
+
+.dt-title {
+    font-size: 18px;
+    margin: 4px 0 10px;
+}
+
+.dt-unit-config {
+    border: 2px solid #fff;
+    padding: 6px;
+    margin-bottom: 8px;
+}
+
+.dt-unit-config-title {
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.dt-unit-config select,
+.dt-unit-config input,
+.dt-unit-config textarea {
+    display: block;
+    width: 100%;
+    margin-bottom: 4px;
+    background: #000;
+    color: #fff;
+    border: 1px solid #fff;
+    font-family: monospace;
+}
+
+.dt-unit-config textarea {
+    height: 60px;
+    resize: vertical;
+}
+
+.dt-action-row,
+.dt-manual-row {
+    border: 2px solid #fff;
+    padding: 6px;
+    margin-bottom: 8px;
+}
+
+.dt-action-row button,
+.dt-manual-row button {
+    background: #000;
+    color: #fff;
+    border: 1px solid #fff;
+    padding: 6px 10px;
+    margin-right: 6px;
+    cursor: pointer;
+}
+
+.dt-token-input {
+    margin-bottom: 8px;
+}
+.dt-token-input input {
+    width: 100%;
+    background: #000;
+    color: #fff;
+    border: 1px solid #fff;
+}
+
+.dt-log {
+    border: 2px solid #fff;
+    height: 200px;
+    overflow-y: auto;
+    padding: 4px;
+    font-size: 11px;
+    white-space: pre-wrap;
+}
+
+/* ── 전장 쪽 devtest 전용 추가 요소 ── */
+.battle-field {
+    flex: 1;
+    background: linear-gradient(160deg, #2a3550 0%, #1a2038 60%, #0f1424 100%);
+}
+
+.battle-unit {
+    position: relative;
+}
+
+.battle-unit.dt-selected .battle-unit-img {
+    outline: 3px dashed #ffe066;
+}
+
+/* 상태 아이콘 한 줄(체력바 바로 위) - 비어있어도 높이를 고정해서 아이콘이 나타나거나 사라져도
+   체력바 위치가 흔들리지 않게 한다. arena-battle.css의 .roster-status-icon/.roster-status-stack과
+   같은 마크업 구조를 재사용한다(같은 CSS class). 아군은 오른쪽 끝에서 시작해 왼쪽으로, 적군은
+   왼쪽 끝에서 시작해 오른쪽으로 쌓인다(arena-battle.css와 동일한 방향 규칙). */
+.dt-status-icons {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-height: 15px;
+    margin-top: 3px;
+}
+[data-unit^="attacker"] .dt-status-icons {
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+}
+[data-unit^="defender"] .dt-status-icons {
+    justify-content: flex-start;
+}
+.dt-status-icons .roster-status-icon {
+    width: 13px;
+    height: 13px;
+}
+.dt-status-icons .roster-status-stack {
+    top: -5px;
+    right: -3px;
+    padding: 0 2px;
+    font-size: 7px;
+    border-radius: 4px;
+}
+
+.dt-unit-hp-track {
+    width: 80px;
+    height: 8px;
+    margin-top: 4px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+}
+.dt-unit-hp-fill {
+    height: 100%;
+    width: 100%;
+    background: #5ad35a;
+    transition: width 0.2s ease;
+}
+
+/* ===== 캐스팅(시전) 연출 - 3회 공격 후 발동까지 ===== */
+@keyframes dt-casting-pulse {
+    0%, 100% { filter: drop-shadow(0 0 6px #ffe066) drop-shadow(0 8px 8px rgba(0,0,0,.4)); }
+    50% { filter: drop-shadow(0 0 18px #ffe066) drop-shadow(0 8px 8px rgba(0,0,0,.4)); }
+}
+.battle-unit-img.casting {
+    animation: dt-casting-pulse 0.6s ease-in-out infinite;
+}
+
+/* ===== 원거리 기본공격: 포물선 투사체 ===== */
+.projectile-dot {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fff8, #ffb347);
+    pointer-events: none;
+}
+
+/* ===== 윤대웅 전용: 투사체 없는 즉시 플래시 ===== */
+@keyframes dt-instant-flash {
+    0% { opacity: 0; }
+    20% { opacity: 1; }
+    100% { opacity: 0; }
+}
+.dt-instant-flash-dot {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    margin-left: -20px;
+    margin-top: -20px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fff, #fff0);
+    animation: dt-instant-flash 0.25s ease-out;
+    pointer-events: none;
+}
+
+/* ===== 이종복 전용: 텍스트 글자 파티클(F/=/m/a) ===== */
+.dt-char-particle {
+    position: absolute;
+    font-family: monospace;
+    font-weight: 900;
+    font-size: 20px;
+    color: #7ad8ff;
+    text-shadow: 0 0 6px #7ad8ff;
+    pointer-events: none;
+}
+
+/* ===== 김남옥 전용: 원통형 크레파스 다트 - 기본공격은 대상 위치(전방=진분홍/후방=푸른)로 색이 갈리고,
+   스킬(엑스칼리버)은 두 색이 나란히 같이 날아간다 ===== */
+.crayon-projectile {
+    position: absolute;
+    width: 20px;
+    height: 7px;
+    margin-left: -17px;
+    margin-top: -6px;
+    border-radius: 3px;
+    clip-path: polygon(0% 50%, 18% 0%, 100% 0%, 100% 100%, 18% 100%);
+    box-shadow: 0 0 8px 2px currentColor;
+    pointer-events: none;
+}
+.crayon-projectile.crayon-pink { background: linear-gradient(90deg, #ff1f8f, #ff6fc0); color: #ff1f8f; }
+.crayon-projectile.crayon-blue { background: linear-gradient(90deg, #2266ff, #6fa8ff); color: #2266ff; }
+
+/* ===== 이종복 스킬 전용: 붉은 "mg"가 유성처럼 꼬리를 끌며 날아간다(기본공격 글자보다 크게) ===== */
+.meteor-projectile {
+    position: absolute;
+    font-family: monospace;
+    font-weight: 900;
+    font-size: 34px;
+    color: #ff3b30;
+    text-shadow: 0 0 10px #ff3b30, 0 0 20px rgba(255, 59, 48, .8);
+    pointer-events: none;
+}
+.meteor-projectile::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: 100%;
+    width: 64px;
+    height: 6px;
+    transform: translateY(-50%);
+    background: linear-gradient(90deg, transparent, rgba(255, 59, 48, .85));
+    filter: blur(1px);
+}
+
+/* ===== 임소정 전용: 캐스터-대상을 잠깐 잇는 전기 - 기본공격은 얇고 푸른색, 스킬은 두껍고 노란색.
+   wrap(바깥)이 위치/회전/크기를 한 번만 정적으로 잡고, 안쪽 beam이 지글거리는 애니메이션을 맡는다. ===== */
+.electric-connector-wrap {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform-origin: 0 50%;
+    pointer-events: none;
+}
+@keyframes electric-buzz {
+    0% { opacity: 0; transform: scaleX(.85) skewX(0deg); filter: brightness(1); }
+    15% { opacity: 1; transform: scaleX(1.05) skewX(-8deg); filter: brightness(1.6); }
+    35% { opacity: .85; transform: scaleX(.95) skewX(6deg); filter: brightness(1.2); }
+    55% { opacity: 1; transform: scaleX(1.1) skewX(-5deg); filter: brightness(1.7); }
+    75% { opacity: .8; transform: scaleX(1) skewX(4deg); filter: brightness(1.3); }
+    100% { opacity: 0; transform: scaleX(.9) skewX(0deg); filter: brightness(1); }
+}
+.electric-connector {
+    width: 100%;
+    height: 100%;
+    border-radius: 3px;
+    animation: electric-buzz 280ms ease-in-out both;
+}
+.electric-connector.electric-blue {
+    background: linear-gradient(90deg, transparent, #00c3ff, #a8ecff, #00c3ff, transparent);
+    box-shadow: 0 0 5px #00c3ff, 0 0 15px #4facfe, 0 0 30px #00c3ff;
+}
+.electric-connector.electric-yellow {
+    background: linear-gradient(90deg, transparent, #ffcf3d, #fff3b0, #ffcf3d, transparent);
+    box-shadow: 0 0 5px #ffcf3d, 0 0 15px #ffe066, 0 0 30px #ffcf3d;
+}
+
+/* 강 희 스킬 전용: 얼굴에서 뿜어져 나오는 좁은 부채꼴 초록 입냄새(가스, arena-battle.css와 동일). */
+.gas-breath-wrap {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 64px;
+    margin-top: -32px;
+    transform-origin: 0 50%;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.gas-breath-cone {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 100%;
+    height: 100%;
+    transform-origin: 0 50%;
+    clip-path: polygon(0 48%, 100% 30%, 100% 70%, 0 52%);
+    background: radial-gradient(
+        ellipse at left center,
+        rgba(236, 255, 96, 0.9) 0%,
+        rgba(170, 219, 44, 0.62) 22%,
+        rgba(84, 151, 39, 0.36) 48%,
+        rgba(31, 70, 27, 0.08) 74%,
+        transparent 100%
+    );
+    filter: blur(6px);
+    mix-blend-mode: screen;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, transparent 6%, rgba(0, 0, 0, 0.65) 16%, rgba(0, 0, 0, 1) 26%, rgba(0, 0, 0, 0.92) 82%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0%, transparent 6%, rgba(0, 0, 0, 0.65) 16%, rgba(0, 0, 0, 1) 26%, rgba(0, 0, 0, 0.92) 82%, transparent 100%);
+    animation: gas-breath-cone-shot 900ms ease-out forwards;
+}
+.gas-breath-cone::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 38%;
+    width: 85%;
+    height: 24%;
+    clip-path: polygon(0 42%, 100% 25%, 100% 75%, 0 58%);
+    background: linear-gradient(90deg, rgba(237, 255, 120, 0.78), rgba(125, 198, 37, 0.42), transparent);
+    filter: blur(8px);
+}
+@keyframes gas-breath-cone-shot {
+    0% { opacity: 0; transform: translateY(-50%) scaleX(0.06) scaleY(0.3); }
+    18% { opacity: 0.96; }
+    55% { opacity: 0.9; }
+    100% { opacity: 0; transform: translateY(-50%) scaleX(1) scaleY(1); }
+}
+
+.gas-breath-clear {
+    position: absolute;
+    left: 0;
+    top: 14%;
+    width: 0;
+    height: 72%;
+    opacity: 0;
+    background: linear-gradient(90deg, rgba(16, 22, 27, 0.98) 0%, rgba(16, 22, 27, 0.82) 45%, rgba(16, 22, 27, 0) 100%);
+    filter: blur(8px);
+    z-index: 5;
+    animation: gas-breath-clear-wipe 900ms ease-out forwards;
+}
+@keyframes gas-breath-clear-wipe {
+    0% { width: 0; opacity: 0; }
+    12% { opacity: 0.95; }
+    100% { width: 34%; opacity: 0.9; }
+}
+
+.gas-breath-puff {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: var(--size);
+    height: calc(var(--size) * 0.72);
+    transform: translate(0, -50%) scale(0.2);
+    opacity: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, rgba(241, 255, 137, 0.98), rgba(140, 196, 53, 0.72) 42%, rgba(58, 108, 36, 0.32) 68%, transparent 74%);
+    filter: blur(3px);
+    box-shadow: 0 0 12px rgba(165, 233, 55, 0.35), inset 0 0 8px rgba(255, 255, 180, 0.2);
+    z-index: 2;
+    animation: gas-breath-puff-fly 820ms linear both;
+}
+@keyframes gas-breath-puff-fly {
+    0% { opacity: 0; transform: translate(0, -50%) scale(0.18); }
+    12% { opacity: 0.96; }
+    45% { opacity: 0.85; }
+    100% { opacity: 0; transform: translate(var(--moveX), calc(-50% + var(--moveY))) scale(var(--scale)); }
+}
+.gbp1 { --size: 30px; --moveX: calc(var(--reach) * 0.65); --moveY: -14px; --scale: 1.3; animation-delay: 0ms; }
+.gbp2 { --size: 38px; --moveX: calc(var(--reach) * 0.92); --moveY:  12px; --scale: 1.55; animation-delay: 70ms; }
+.gbp3 { --size: 32px; --moveX: calc(var(--reach) * 0.55); --moveY:  -4px; --scale: 1.35; animation-delay: 140ms; }
+.gbp4 { --size: 44px; --moveX: calc(var(--reach) * 0.98); --moveY:  18px; --scale: 1.7; animation-delay: 210ms; }
+.gbp5 { --size: 40px; --moveX: calc(var(--reach) * 0.78); --moveY: -20px; --scale: 1.6; animation-delay: 280ms; }
+
+.gas-breath-particle {
+    position: absolute;
+    left: 6px;
+    top: calc(50% + var(--startY));
+    width: var(--dot);
+    height: var(--dot);
+    opacity: 0;
+    border-radius: 50%;
+    background: #dcff5b;
+    box-shadow: 0 0 6px #dfff61, 0 0 14px rgba(136, 255, 56, 0.6);
+    transform: translate(0, 0) scale(0.2);
+    z-index: 3;
+    animation: gas-breath-particle-fly 720ms linear both;
+}
+@keyframes gas-breath-particle-fly {
+    0% { opacity: 0; transform: translate(0, 0) scale(0.2); }
+    15% { opacity: 1; }
+    60% { opacity: 0.8; }
+    100% { opacity: 0; transform: translate(var(--dotX), var(--dotY)) scale(1.25); }
+}
+.gbd1 { --dot: 6px; --startY: -10px; --dotX: calc(var(--reach) * 0.5); --dotY: -18px; animation-delay: 40ms; }
+.gbd2 { --dot: 8px; --startY:  12px; --dotX: calc(var(--reach) * 0.62); --dotY:  16px; animation-delay: 110ms; }
+.gbd3 { --dot: 5px; --startY: -16px; --dotX: calc(var(--reach) * 0.44); --dotY:  -8px; animation-delay: 180ms; }
+.gbd4 { --dot: 7px; --startY:   8px; --dotX: calc(var(--reach) * 0.74); --dotY:  22px; animation-delay: 250ms; }
+.gbd5 { --dot: 5px; --startY:  -6px; --dotX: calc(var(--reach) * 0.68); --dotY: -24px; animation-delay: 320ms; }
+.gbd6 { --dot: 7px; --startY:   0px; --dotX: calc(var(--reach) * 0.86); --dotY:   6px; animation-delay: 390ms; }
+
+/* ===== 서민석 기본공격 전용: 책 모양 투사체(계속 빙글빙글 회전) ===== */
+@keyframes book-tumble {
+    to { transform: rotate(360deg); }
+}
+.book-projectile {
+    position: absolute;
+    width: 26px;
+    height: 20px;
+    margin-left: -13px;
+    margin-top: -10px;
+    background: linear-gradient(135deg, #c8935a, #8a5a2e);
+    border: 2px solid #5c3a1a;
+    border-radius: 2px;
+    box-shadow: 0 0 6px rgba(0, 0, 0, .4);
+    animation: book-tumble 0.35s linear infinite;
+    pointer-events: none;
+}
+.book-projectile::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: rgba(0, 0, 0, .35);
+    transform: translateX(-50%);
+}
+
+/* ===== 서민석 스킬 전용: 하트 모양 투사체(포물선, 적 2인 모두) - 대상이 남성이면 분홍, 여성이면 붉은색 ===== */
+.heart-projectile {
+    position: absolute;
+    margin-left: -13px;
+    margin-top: -13px;
+    font-size: 26px;
+    line-height: 1;
+    text-shadow: 0 0 8px currentColor;
+    pointer-events: none;
+}
+.heart-projectile.heart-pink { color: #ff6fb0; }
+.heart-projectile.heart-red { color: #e0263f; }
+
+/* 이영웅 스킬 전용: 치유 대상 머리 위에서 천천히 내려오는 초록 하트(arena-battle.css와 동일). */
+.healing-heart-wrap {
+    position: absolute;
+    margin-left: -22px;
+    margin-top: -22px;
+    width: 44px;
+    height: 44px;
+    pointer-events: none;
+    z-index: 4;
+}
+@keyframes healing-heart-aura-pulse {
+    0%, 100% { transform: scale(0.9); opacity: 0.75; }
+    50% { transform: scale(1.08); opacity: 1; }
+}
+.healing-heart-aura {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 224, 102, 0.45) 0%, rgba(255, 224, 102, 0.15) 55%, transparent 75%);
+    box-shadow: 0 0 14px 4px rgba(255, 224, 102, 0.55);
+    animation: healing-heart-aura-pulse 1s ease-in-out infinite;
+}
+.healing-heart-glyph {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    color: #4ee06a;
+    text-shadow: 0 0 10px #4ee06a, 0 0 4px #fff;
+}
+.healing-heart-cross {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 900;
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+    transform: translateY(-2px);
+}

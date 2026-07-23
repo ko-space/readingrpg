@@ -49,6 +49,44 @@ def _today_kst():
     # 항상 KST로 변환한 날짜를 씀.
     return datetime.now(KST).date()
 
+
+READING_GENRES = ["비문학", "문학"]
+SUBJECT_DISPLAY_ORDER = ["국어", "영어", "수학", "탐구", "기타"]
+
+
+@router.get("/daily-summary")
+def get_daily_summary(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """오늘(KST) 학습 시간 - 로비 '오늘의 독서 현황' 모달용.
+    독서(진)은 장르(비문학/문학)별로, 과목은 과목명별로 각각 나눠서 합산한다.
+    모의고사(mock_exam)는 시간만 반영 - 별도 항목 없이 해당 과목의 합계에 그대로 더해진다
+    ("수학(하프)"/"영어(하프)"는 MOCK_EXAM_BASE_SUBJECT로 원래 과목에 합산).
+    created_at은 UTC로 저장되므로 "오늘(KST)" 하루를 UTC 구간으로 변환해서 필터링한다."""
+    today_kst = _today_kst()
+    start_utc = datetime(today_kst.year, today_kst.month, today_kst.day, tzinfo=KST).astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc = start_utc + timedelta(days=1)
+    rows = db.query(ReadingLog).filter(
+        ReadingLog.user_id == user.id,
+        ReadingLog.created_at >= start_utc,
+        ReadingLog.created_at < end_utc,
+    ).all()
+
+    reading = {genre: 0 for genre in READING_GENRES}
+    subject = {name: 0 for name in SUBJECT_DISPLAY_ORDER}
+
+    for row in rows:
+        minutes = row.reading_minutes or 0
+        if row.session_type == "reading" and row.difficulty in reading:
+            reading[row.difficulty] += minutes
+        elif row.session_type == "subject" and row.difficulty in subject:
+            subject[row.difficulty] += minutes
+        elif row.session_type == "mock_exam":
+            base_subject = MOCK_EXAM_BASE_SUBJECT.get(row.difficulty, row.difficulty)
+            if base_subject in subject:
+                subject[base_subject] += minutes
+
+    return {"reading": reading, "subject": subject}
+
+
 @router.post("/")
 def add_reading_log(
     log_data: LogCreate,

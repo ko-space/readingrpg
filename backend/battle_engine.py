@@ -51,6 +51,7 @@ def get_type_multiplier(attacker_type: str, defender_type: str) -> float:
 
 MELEE_MOVE_TIME_FRONT = 2.0  # 전방 근거리 유닛이 적에게 다가가는 시간(초)
 MELEE_MOVE_TIME_BACK = 3.6   # 후방 근거리 유닛은 더 멀리서 오니까 더 오래 걸림
+KNOCKBACK_REAPPROACH_TIME = 2.0  # 넉백 후 재접근 시간 - 넉백 거리가 줄면서(맵 밖 밀림 방지) 후방까지 가는 시간(3.6)보다 짧아짐
 MELEE_ATTACK_INTERVAL = 1.2   # 근거리 공격 주기(초)
 RANGED_ATTACK_INTERVAL = 1.5  # 원거리 공격 주기(초)
 TICK = 0.05
@@ -196,19 +197,20 @@ def _teammate(team, unit):
 
 
 def _select_basic_attack_target(unit, enemy_team):
-    """기본공격 대상 선정. 복제체(미끼)가 있으면 그게 항상 최우선(공격자 고유 규칙보다 우선).
-    복제체가 없을 때만 공격자별 고유 규칙(예: 최재혁의 후방 우선)을 적용하고, 그 외엔 기본 front 우선."""
+    """기본공격 대상 선정. 전방/후방은 고정 슬롯이 아니라 "살아있는 유닛의 순서"로 매번 다시 정해진다:
+    _alive_units가 복제체(미끼) -> 전방 -> 후방 순으로 돌려주므로, 전방이 죽으면 그다음 유닛(원래 후방)이
+    자연히 새 전방(첫 타겟)이 되고, (복제체가 있어 3인일 때) 후방이 죽으면 그 앞 유닛이 새 후방이 된다 -
+    후방이 죽어도 전방은 변하지 않는다.
+
+    - 기본: 현재 전방(목록의 맨 앞, 복제체가 있으면 복제체)을 때린다.
+    - 최재혁(★3부터)만 예외: "무조건" 현재 후방(살아있는 유닛 중 맨 뒤)을 먼저 때린다 - 복제체(미끼)가
+      있어도 무시하고 후방을 노린다. 살아있는 적이 1명뿐이면 그가 곧 전방이자 유일한 대상이다."""
     units = _alive_units(enemy_team)
     if not units:
         return None
-    if units[0].get("is_clone"):
-        return units[0]
 
     if unit["name"] == "최재혁" and unit.get("star", 1) >= 3:
-        # 후방 적 우선 공격(star_effects 3성부터) - 후방이 살아있으면 후방을, 없으면 전방을 노린다.
-        if enemy_team["back"] and enemy_team["back"]["hp"] > 0:
-            return enemy_team["back"]
-        return enemy_team["front"] if enemy_team["front"] and enemy_team["front"]["hp"] > 0 else None
+        return units[-1] if len(units) >= 2 else units[0]
 
     return units[0]
 
@@ -319,6 +321,11 @@ def _apply_battle_start_traits(team, events, side):
 # 김남옥의 "기본공격 다중 타격"만은 예외 - 그 둘은 매 공격마다 판정해야 하는 로직이라 여전히
 # _select_basic_attack_target / _do_basic_attack에 캐릭터 이름으로 직접 하드코딩돼 있다.
 
+
+# 성급 효과 핸들러들은 실제 스탯 반영과 함께, 프론트 상태 아이콘 표시용으로
+# "누가 어떤 방향의 변화를 받았는지" 목록을 반환한다: ("own"|"enemy", 대상유닛, atk부호, hp부호).
+# 부호는 +1(증가)/-1(감소)/0(변화 없음)만 쓴다 - 정확한 수치는 아이콘 표시에 필요 없다.
+
 def _star_self_stat_percent(unit, own_team, enemy_team, params):
     # 자신의 공격력/체력 중 있는 것만 X% 증가 (강승유, 청년, 강 희, 김남옥의 자기 공격력 보너스 등)
     atk_percent = params.get("atk_percent", 0)
@@ -329,6 +336,7 @@ def _star_self_stat_percent(unit, own_team, enemy_team, params):
         gain = round(unit["max_hp"] * hp_percent / 100)
         unit["max_hp"] += gain
         unit["hp"] += gain
+    return [("own", unit, 1 if atk_percent else 0, 1 if hp_percent else 0)]
 
 
 def _star_self_buff_enemy_debuff(unit, own_team, enemy_team, params):
@@ -338,48 +346,60 @@ def _star_self_buff_enemy_debuff(unit, own_team, enemy_team, params):
     gain = round(unit["max_hp"] * percent / 100)
     unit["max_hp"] += gain
     unit["hp"] += gain
+    changes = [("own", unit, 1, 1)]
     for enemy in _alive_units(enemy_team):
         enemy["status"]["atk_percent_bonus"] -= percent
         loss = round(enemy["max_hp"] * percent / 100)
         enemy["max_hp"] = max(1, enemy["max_hp"] - loss)
         enemy["hp"] = min(enemy["hp"], enemy["max_hp"])
+        changes.append(("enemy", enemy, -1, -1))
+    return changes
 
 
 def _star_ally_team_stat_percent(unit, own_team, enemy_team, params):
     # 이종복(체력), 임소정(공격력): 아군 전체(자신 포함) 특정 스탯 X% 증가
     stat = params["stat"]
     percent = params["percent"]
+    changes = []
     for ally in _alive_units(own_team):
         if stat == "atk":
             ally["status"]["atk_percent_bonus"] += percent
+            changes.append(("own", ally, 1, 0))
         else:
             gain = round(ally["max_hp"] * percent / 100)
             ally["max_hp"] += gain
             ally["hp"] += gain
+            changes.append(("own", ally, 0, 1))
+    return changes
 
 
 def _star_debuff_all_others_atk(unit, own_team, enemy_team, params):
     # 이영웅: 자신을 제외한 모든 캐릭터(아군·적 모두) 공격력 X% 감소
     percent = params["percent"]
-    for u in _alive_units(own_team) + _alive_units(enemy_team):
-        if u is unit:
-            continue
-        u["status"]["atk_percent_bonus"] -= percent
+    changes = []
+    for rel, team in (("own", own_team), ("enemy", enemy_team)):
+        for u in _alive_units(team):
+            if u is unit:
+                continue
+            u["status"]["atk_percent_bonus"] -= percent
+            changes.append((rel, u, -1, 0))
+    return changes
 
 
 def _star_teammate_stat_percent(unit, own_team, enemy_team, params):
     # 송주헌: 자신 제외 팀원 1명의 특정 스탯 X% 증가
     partner = _teammate(own_team, unit)
     if not partner or partner["hp"] <= 0:
-        return
+        return []
     stat = params["stat"]
     percent = params["percent"]
     if stat == "atk":
         partner["status"]["atk_percent_bonus"] += percent
-    else:
-        gain = round(partner["max_hp"] * percent / 100)
-        partner["max_hp"] += gain
-        partner["hp"] += gain
+        return [("own", partner, 1, 0)]
+    gain = round(partner["max_hp"] * percent / 100)
+    partner["max_hp"] += gain
+    partner["hp"] += gain
+    return [("own", partner, 0, 1)]
 
 
 def _star_ally_gender_stat_percent(unit, own_team, enemy_team, params):
@@ -387,6 +407,7 @@ def _star_ally_gender_stat_percent(unit, own_team, enemy_team, params):
     gender = params["gender"]
     atk_percent = params.get("atk_percent", 0)
     hp_percent = params.get("hp_percent", 0)
+    changes = []
     for ally in _alive_units(own_team):
         if CHARACTER_GENDER.get(ally["name"]) != gender:
             continue
@@ -396,11 +417,15 @@ def _star_ally_gender_stat_percent(unit, own_team, enemy_team, params):
             gain = round(ally["max_hp"] * hp_percent / 100)
             ally["max_hp"] += gain
             ally["hp"] += gain
+        changes.append(("own", ally, 1 if atk_percent else 0, 1 if hp_percent else 0))
+    return changes
 
 
 def _star_damage_to_gender_bonus(unit, own_team, enemy_team, params):
     # 불빠따 김어진: 특정 성별 "적"에게 주는 피해 X% 증가(_apply_gendered_damage_bonus가 실제 적용)
+    # 스탯 자체가 변하는 게 아니라 조건부 피해 보정이라 상태 아이콘 대상은 아니다.
     unit["gendered_damage_bonus"] = {"gender": params["gender"], "percent": params["bonus_percent"]}
+    return []
 
 
 STAR_EFFECT_HANDLERS = {
@@ -414,17 +439,41 @@ STAR_EFFECT_HANDLERS = {
 }
 
 
-def _apply_battle_start_star_effects(attacker_team, defender_team):
+def _apply_battle_start_star_effects(attacker_team, defender_team, events=None):
     """특성(_apply_battle_start_traits)이 다 끝난 뒤(도플갱어로 제거될 캐릭터는 제외된 채) 호출해야 한다.
-    윤대웅/윤영준/이영웅처럼 상대 팀에도 영향을 주는 효과가 있어서, 한쪽 팀이 아니라 양 팀을 함께 받는다."""
-    for own_team, enemy_team in ((attacker_team, defender_team), (defender_team, attacker_team)):
+    윤대웅/윤영준/이영웅처럼 상대 팀에도 영향을 주는 효과가 있어서, 한쪽 팀이 아니라 양 팀을 함께 받는다.
+    events가 주어지면 스탯이 바뀐 대상 목록을 star_effect_resolve 이벤트로 남긴다(프론트 상태 아이콘용)."""
+    for side_name, own_team, enemy_team in (
+        ("attacker", attacker_team, defender_team),
+        ("defender", defender_team, attacker_team),
+    ):
+        enemy_side = "defender" if side_name == "attacker" else "attacker"
         for slot in ("front", "back"):
             unit = own_team[slot]
             if not unit or unit["hp"] <= 0 or not unit.get("star_effect_type"):
                 continue
             handler = STAR_EFFECT_HANDLERS.get(unit["star_effect_type"])
-            if handler:
-                handler(unit, own_team, enemy_team, unit["star_params"])
+            if not handler:
+                continue
+            changes = handler(unit, own_team, enemy_team, unit["star_params"]) or []
+            if events is None:
+                continue
+            change_dicts = [
+                {
+                    "target": target["name"],
+                    "target_side": side_name if rel == "own" else enemy_side,
+                    "atk": atk_sign,
+                    "hp": hp_sign,
+                }
+                for rel, target, atk_sign, hp_sign in changes
+                if atk_sign or hp_sign
+            ]
+            if change_dicts:
+                events.append({
+                    "time": 0, "event_type": "star_effect_resolve", "side": side_name,
+                    "actor": unit["name"], "effect_type": unit["star_effect_type"],
+                    "detail": {"changes": change_dicts},
+                })
 
 
 # ───────────────────────── 스킬(skill) - 기본공격 3회 시전마다 발동 ─────────────────────────
@@ -478,6 +527,7 @@ def _skill_conditional_target_debuff(caster, own_team, enemy_team, params, time_
         "hit": True, "target": target["name"], "stunned": condition_met,
         "stun_seconds": params["stun_seconds"] if condition_met else 0,
         "haste_percent": params["haste_percent"],
+        "haste_seconds": params["haste_seconds"],  # 프론트 상태 아이콘(공격속도 증가)의 지속시간 표시용
     }
 
 
@@ -507,10 +557,10 @@ def _skill_bonus_damage_knockback(caster, own_team, enemy_team, params, time_ela
     dealt = _apply_damage(target, damage, time_elapsed)
     target["next_attack_time"] = max(target["next_attack_time"], time_elapsed) + 1.0  # 밀쳐내기 = 다음 행동 1초 지연
 
-    # 넉백은 대상이 "후방으로 이동"한 것으로 취급한다 - own_team 소속 근거리 유닛들(캐스터 포함)은
-    # 그 대상과 다시 접촉하려면 후방까지 다가가는 데 걸리는 시간(MELEE_MOVE_TIME_BACK)만큼 다시
-    # 걸어가야 하고, 그동안은 공격할 수 없다(첫 접근 지연과 같은 방식으로 next_attack_time을 늦춤).
-    reapproach_by = time_elapsed + MELEE_MOVE_TIME_BACK
+    # 넉백은 대상이 "뒤로 밀려난" 것으로 취급한다 - own_team 소속 근거리 유닛들(캐스터 포함)은
+    # 그 대상과 다시 접촉할 때까지 걸어가야 하고, 그동안은 공격할 수 없다(첫 접근 지연과 같은 방식).
+    # 캐스터(청년)는 넉백 직후 즉시 이동을 시작하므로, 밀려난 거리(단축됨)에 맞는 짧은 시간만 걸린다.
+    reapproach_by = time_elapsed + KNOCKBACK_REAPPROACH_TIME
     for u in _alive_units(own_team):
         if u.get("is_melee"):
             u["next_attack_time"] = max(u["next_attack_time"], reapproach_by)
@@ -596,7 +646,11 @@ def _skill_debuff_atk_and_damage(caster, own_team, enemy_team, params, time_elap
     damage = atk * params["multiplier"] / 100 * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
     dealt = _apply_damage(target, damage, time_elapsed)
-    return {"hits": [{"target": target["name"], "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}]}
+    return {
+        "hits": [{"target": target["name"], "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
+        "debuff_seconds": params["debuff_seconds"],  # 프론트 상태 아이콘(공격력 감소)의 지속시간 표시용
+        "debuff_target": target["name"],
+    }
 
 
 def _skill_aoe_all_others_damage(caster, own_team, enemy_team, params, time_elapsed):
@@ -682,7 +736,7 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
 
     _apply_battle_start_traits(attacker_team, events, "attacker")
     _apply_battle_start_traits(defender_team, events, "defender")
-    _apply_battle_start_star_effects(attacker_team, defender_team)
+    _apply_battle_start_star_effects(attacker_team, defender_team, events)
 
     while _team_alive(attacker_team) and _team_alive(defender_team):
         time_elapsed = round(time_elapsed + TICK, 2)
@@ -716,7 +770,7 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
                         # 예약이 사라진다. 그 외 모든 스킬은 캐스팅 시작 이후 next_attack_time을 안 건드려서
                         # 항상 과거 값이므로, max를 써도 기존 동작과 완전히 동일하다.
                         unit["next_attack_time"] = max(unit["next_attack_time"], time_elapsed + _effective_interval(unit, time_elapsed))
-                    continue  # 시전 중엔 기본공격 안 함
+                    continue
 
                 if time_elapsed < unit["next_attack_time"]:
                     continue

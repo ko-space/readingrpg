@@ -482,7 +482,7 @@
       clearTimeout(timer);
 
       character.classList.remove("firing");
-      void character.offsetWidth; // 애니메이션 재시작용 강제 리플로우
+      void character.offsetWidth;
       character.classList.add("firing");
 
       timer = setTimeout(() => {
