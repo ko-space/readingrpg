@@ -30,7 +30,7 @@ def _daily_bounds_kst(period_key: str):
 
 def _weekly_period_key(today: date | None = None) -> str:
     d = today or datetime.now(KST).date()
-    monday = d - timedelta(days=d.weekday())  # 월요일 시작
+    monday = d - timedelta(days=d.weekday())
     return f"W{monday.isoformat()}"  # 일일 키("2026-07-20")와 절대 안 겹치도록 접두어를 붙임
 
 

@@ -14,6 +14,9 @@ from achievements import check_and_grant_achievements
 
 router = APIRouter(prefix="/characters", tags=["characters"])
 
+# achievements.py의 RARITY_START_STAR와 동일한 등급 순서(낮을수록 흔함) - 정렬 전용으로 여기 따로 둔다.
+RARITY_RANK = {"일반": 1, "희귀": 2, "영웅": 3, "전설": 4, "신화": 5}
+
 CHARACTERS_JSON = Path(__file__).resolve().parents[1] / "characters.json"
 with CHARACTERS_JSON.open("r", encoding="utf-8") as f:
     CHARACTER_POOL = json.load(f)
@@ -124,7 +127,12 @@ def _build_inventory_rows(user: User):
             **metadata,
         })
 
-    result.sort(key=lambda row: (row["catalog_index"], -row["star"]))
+    # 성급 우선(높은 성급 먼저) -> 같은 성급이면 희귀도 순(희귀할수록 먼저) -> 그래도 같으면 도감 순서.
+    result.sort(key=lambda row: (
+        -row["star"],
+        -RARITY_RANK.get(row["rarity"], 0),
+        row["catalog_index"],
+    ))
     return result
 
 
@@ -351,7 +359,6 @@ def enhance_character(
     if not locked_user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
 
-    # 강화 아이템 검증: 같은 아이템(같은 UserItem)을 중복 선택할 수 없고, 실제 보유해야 한다.
     if len(req.item_ids) != len(set(req.item_ids)):
         raise HTTPException(status_code=400, detail="같은 아이템을 중복해서 선택할 수 없습니다.")
 

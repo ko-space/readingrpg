@@ -14,6 +14,7 @@ router = APIRouter(prefix="/pvp", tags=["pvp"])
 MATCH_RANGE = 5       # 위/아래로 몇 칸까지 후보 풀에 넣을지
 CANDIDATE_COUNT = 3    # 한 번에 보여줄 후보 수
 TOP_RANK_THRESHOLD = 3 # 이 순위 이하(더 높은 순위)는 아래 순위도 후보로 보여줌
+ADMIN_USER_ID = 1      # ranking.py와 동일한 관리자 계정 - 일반 순위 사다리에 참여하지 않고 항상 0위 고정
 
 
 def _get_equipped_outfit(user: User):
@@ -25,10 +26,23 @@ def _get_equipped_outfit(user: User):
 
 
 def _ensure_rank_assigned(user: User, db: Session):
-    """아직 PVP 순위가 없는 유저(신규)는 꼴찌로 배정한다."""
+    """아직 PVP 순위가 없는 유저(신규)는 꼴찌로 배정한다.
+    관리자(ADMIN_USER_ID)는 일반 순위 사다리에 참여하지 않고 항상 0위로 고정한다 - 실제 유저들의
+    최상위(1위)보다 위에 별도로 존재해서, 승패로 순위가 밀리거나 밀어내는 일이 없어야 한다."""
+    if user.id == ADMIN_USER_ID:
+        if user.pvp_rank != 0:
+            user.pvp_rank = 0
+            db.commit()
+            db.refresh(user)
+        return
     if user.pvp_rank is not None:
         return
-    lowest = db.query(User).filter(User.pvp_rank.isnot(None)).order_by(User.pvp_rank.desc()).first()
+    lowest = (
+        db.query(User)
+        .filter(User.pvp_rank.isnot(None), User.id != ADMIN_USER_ID)
+        .order_by(User.pvp_rank.desc())
+        .first()
+    )
     user.pvp_rank = (lowest.pvp_rank + 1) if lowest else 1
     db.commit()
     db.refresh(user)
@@ -67,10 +81,12 @@ def _get_candidate_pool(user: User, db: Session):
     후보 풀을 (User, rank_changeable) 튜플 목록으로 돌려준다.
     - 나보다 순위가 높은(숫자가 작은) 사람: 최대 MATCH_RANGE칸 이내, 이기면 순위가 바뀜(True)
     - 내가 TOP_RANK_THRESHOLD등 이내면: 아래 순위도 후보에 추가(친선전, 순위 안 바뀜=False)
+    - 관리자(0위)는 일반 사다리 계산에서 완전히 빠지고, 그 대신 누구에게나 항상 친선전
+      (rank_changeable=False) 상대로만 노출된다 - 이겨도 져도 순위표가 흔들리지 않는다.
     """
     others = (
         db.query(User)
-        .filter(User.pvp_rank.isnot(None), User.id != user.id)
+        .filter(User.pvp_rank.isnot(None), User.id != user.id, User.id != ADMIN_USER_ID)
         .order_by(User.pvp_rank.asc())
         .all()
     )
@@ -84,6 +100,11 @@ def _get_candidate_pool(user: User, db: Session):
         for other in others:
             if user.pvp_rank < other.pvp_rank <= user.pvp_rank + MATCH_RANGE:
                 pool.append((other, False))
+
+    if user.id != ADMIN_USER_ID:
+        admin = db.query(User).filter(User.id == ADMIN_USER_ID).first()
+        if admin and admin.pvp_rank is not None:
+            pool.append((admin, False))
 
     return pool
 
@@ -281,12 +302,14 @@ def run_battle(
                 "max_hp": attacker_team["front"]["max_hp"],
                 "is_melee": attacker_team["front"]["is_melee"],
                 "outfit": attacker_front.outfit,
+                "star": attacker_front.star,
             },
             "back": {
                 "name": attacker_team["back"]["name"],
                 "max_hp": attacker_team["back"]["max_hp"],
                 "is_melee": attacker_team["back"]["is_melee"],
                 "outfit": attacker_back.outfit,
+                "star": attacker_back.star,
             },
         },
         "defender_team": {
@@ -295,12 +318,14 @@ def run_battle(
                 "max_hp": defender_team["front"]["max_hp"],
                 "is_melee": defender_team["front"]["is_melee"],
                 "outfit": defender_front.outfit,
+                "star": defender_front.star,
             },
             "back": {
                 "name": defender_team["back"]["name"],
                 "max_hp": defender_team["back"]["max_hp"],
                 "is_melee": defender_team["back"]["is_melee"],
                 "outfit": defender_back.outfit,
+                "star": defender_back.star,
             },
         },
     }

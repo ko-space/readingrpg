@@ -11,7 +11,7 @@ node_modules/
 
 # 스토리 원본 프로토타입들 - 내용은 이미 frontend/story/story-engine.js로 이식 완료되어
 # 실행에는 필요 없음. 공개 저장소에 올리기엔 너무 커서(8~43MB) 로컬에만 남겨둠(파일 자체는 삭제하지 않음).
-frontend/독서 RPG - 씬 1_윤대웅실루엣_사전적용수정.html
+독서 RPG - 씬 1_윤대웅실루엣_사전적용수정.html
 독서 RPG - 씬 1_도감텍스트제거_TRUECG분리.html
 독서 RPG - 씬 1_페이드연장_BAD엔딩충격연출.html
 

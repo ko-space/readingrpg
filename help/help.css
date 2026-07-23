@@ -1,0 +1,76 @@
+/* 도움말 모달 - 고정 크기 박스가 아니라 이미지 크기에 맞춰 늘었다 줄었다 함 */
+#modal-help .help-modal-box {
+    width: auto;
+    max-width: 94vw;
+    align-items: center;
+}
+
+#help-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+#help-content .screen-title {
+    align-self: flex-start;
+}
+
+.help-viewer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.help-image {
+    display: block;
+    max-width: min(80vw, 640px);
+    max-height: 74vh;
+    width: auto;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+}
+
+.help-arrow {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid var(--panel-border);
+    background: var(--panel-bg);
+    color: var(--text-dark);
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, .25), var(--gold-glow);
+}
+
+.help-arrow:hover:not(:disabled) {
+    box-shadow: 0 3px 8px rgba(0, 0, 0, .25), 0 0 16px rgba(232, 184, 75, 0.9);
+}
+
+.help-arrow:disabled {
+    opacity: .35;
+    cursor: default;
+    box-shadow: none;
+}
+
+.help-page-count {
+    color: var(--text-dark);
+    font-size: 13px;
+    font-weight: 800;
+}
+
+@media (max-width: 650px) {
+    .help-image {
+        max-width: 68vw;
+    }
+    .help-arrow {
+        width: 34px;
+        height: 34px;
+        font-size: 17px;
+    }
+}
