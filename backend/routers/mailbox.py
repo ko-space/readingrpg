@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User, Mail
 from security import get_current_user
+from achievements import check_and_grant_achievements
 
 router = APIRouter(prefix="/mail", tags=["mail"])
 
@@ -45,7 +46,13 @@ def claim_mail(mail_id: int, db: Session = Depends(get_db), user: User = Depends
     _claim_one(mail, user)
     db.commit()
     db.refresh(user)
-    return {"message": f"'{mail.title}' 보상을 받았습니다!", "gold": user.gold}
+    new_achievements, new_characters = check_and_grant_achievements(db, user)
+    return {
+        "message": f"'{mail.title}' 보상을 받았습니다!",
+        "gold": user.gold,
+        "new_achievements": new_achievements,
+        "new_characters": new_characters,
+    }
 
 
 @router.post("/claim-all")
@@ -55,10 +62,13 @@ def claim_all_mail(db: Session = Depends(get_db), user: User = Depends(get_curre
         _claim_one(mail, user)
     db.commit()
     db.refresh(user)
+    new_achievements, new_characters = check_and_grant_achievements(db, user)
     return {
         "message": f"우편 보상 {len(mails)}개를 받았습니다." if mails else "지금 받을 수 있는 보상이 없습니다.",
         "claimed_count": len(mails),
         "gold": user.gold,
+        "new_achievements": new_achievements,
+        "new_characters": new_characters,
     }
 
 

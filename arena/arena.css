@@ -1,5 +1,35 @@
 /* 투기장(PVP) 전용 스타일. lobby.css의 --panel-bg, --panel-border 등 공통 변수를 그대로 씀 */
 
+/* "전투" 버튼을 누른 순간부터(서버에 결과를 요청하는 동안 + 전투 화면으로 이동하는 순간까지) 화면
+   전체를 덮어서, 그 사이의 빈 화면/지연이 보이지 않게 한다. 전투 화면(arena-battle.html)에도 같은
+   역할의 battle-loading-overlay가 있어서, 이동이 끝나면 그쪽이 이어받아 자연스럽게 안 끊기고 이어진다. */
+.pvp-entering-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pvp-entering-overlay[hidden] {
+    display: none;
+}
+
+.pvp-entering-text {
+    color: #fff;
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: .5px;
+}
+
+.pvp-entering-dots {
+    display: inline-block;
+    width: 1.4em;
+    text-align: left;
+}
+
 .pvp-modal-box {
     max-width: 380px;
     transition: max-width 0.45s cubic-bezier(0.22, 0.9, 0.3, 1), min-height 0.45s cubic-bezier(0.22, 0.9, 0.3, 1);
@@ -471,6 +501,19 @@
 .pvp-history-lose {
     color: #b0392c;
     font-weight: 900;
+}
+
+.pvp-history-role {
+    font-weight: 800;
+    font-size: 11.5px;
+}
+
+.pvp-history-role-attack {
+    color: #c0392b;
+}
+
+.pvp-history-role-defense {
+    color: #2f6fb0;
 }
 
 .pvp-history-time {

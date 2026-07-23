@@ -22,6 +22,36 @@ html, body {
     opacity: 0.9;
 }
 
+/* 지역 입장 로딩 화면 - 페이지 진입 즉시 화면 전체를 덮는 암전 + "입장하는 중..." (arena-battle.css의
+   battle-loading-overlay와 같은 목적: 배경/캐릭터 이미지가 준비되기 전의 빈 화면을 가려서 서버/이미지
+   로딩 지연이 사용자에게 보이지 않게 한다) */
+.region-loading-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.region-loading-overlay[hidden] {
+    display: none;
+}
+
+.region-loading-text {
+    color: #fff;
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: .5px;
+}
+
+.region-loading-dots {
+    display: inline-block;
+    width: 1.4em;
+    text-align: left;
+}
+
 /* ── 설정 버튼 (우측 상단) ── */
 .reading-settings-btn {
     position: absolute;

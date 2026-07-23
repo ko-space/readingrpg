@@ -7,6 +7,7 @@ from schemas import QuestClaimRequest
 from security import get_current_user
 from leveling import apply_exp
 from quests import compute_progress, current_period_key
+from achievements import check_and_grant_achievements
 
 router = APIRouter(prefix="/quests", tags=["quests"])
 
@@ -85,6 +86,7 @@ def claim_quest(
     result = _claim_one(db, user, quest)
     db.commit()
     db.refresh(user)
+    new_achievements, new_characters = check_and_grant_achievements(db, user)
 
     return {
         "message": f"'{quest.name}' 보상을 받았습니다!",
@@ -92,6 +94,8 @@ def claim_quest(
         "gold": user.gold,
         "level": user.level,
         "total_exp": user.total_exp,
+        "new_achievements": new_achievements,
+        "new_characters": new_characters,
     }
 
 
@@ -124,6 +128,7 @@ def claim_all_quests(
 
     db.commit()
     db.refresh(user)
+    new_achievements, new_characters = check_and_grant_achievements(db, user)
 
     return {
         "message": f"퀘스트 보상 {len(claimed_results)}개를 받았습니다." if claimed_results else "지금 받을 수 있는 보상이 없습니다.",
@@ -131,4 +136,6 @@ def claim_all_quests(
         "gold": user.gold,
         "level": user.level,
         "total_exp": user.total_exp,
+        "new_achievements": new_achievements,
+        "new_characters": new_characters,
     }

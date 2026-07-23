@@ -20,6 +20,15 @@
         return token ? { "Authorization": `Bearer ${token}` } : {};
     }
 
+    // 백엔드가 내려주는 created_at은 시간대 표시가 없는 UTC(datetime.utcnow() 기준) 문자열이다.
+    // Z/오프셋이 없는 ISO 문자열을 new Date()에 그대로 넣으면 UTC가 아니라 "보는 사람의 로컬 시간"으로
+    // 잘못 해석되므로(예: 실제 UTC 10시를 KST 10시로 착각), Z를 붙여 UTC임을 명시하고, 표시할 때도
+    // 보는 사람의 시스템 시간대와 무관하게 항상 한국 시간(KST)으로 고정해서 보여준다.
+    function formatKst(isoString, options) {
+        const withZ = /[zZ]$|[+-]\d\d:\d\d$/.test(isoString) ? isoString : `${isoString}Z`;
+        return new Date(withZ).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", ...options });
+    }
+
     // ── 입장 시 'PVE(토벌전) / PVP(전술대회)' 선택 화면부터 보여줌 ──────────────────
     async function showArenaChoice() {
         if (modalBox) modalBox.classList.remove("arena-expanded");
@@ -59,7 +68,11 @@
         if (modalBox) modalBox.classList.add("arena-expanded");
         if (choiceView) choiceView.hidden = true;
         if (contentEl) contentEl.hidden = false;
+        const alreadyLoaded = loaded;
         await loadPvpPartial();
+        // 나갔다가 다시 들어올 때마다 후보 목록을 새로 뽑는다(리롤) - 첫 진입은 loadPvpPartial이
+        // 이미 초기 로딩 과정에서 한 번 불러오므로 중복 호출하지 않는다.
+        if (alreadyLoaded) await loadOpponents();
     }
 
     async function loadPvpPartial() {
@@ -118,7 +131,7 @@
             const overlay = document.getElementById("pvp-notice-overlay");
             const listEl = document.getElementById("pvp-notice-list");
             listEl.innerHTML = notices.map((n) => {
-                const when = new Date(n.created_at).toLocaleString("ko-KR");
+                const when = formatKst(n.created_at);
                 return `<div class="pvp-notice-item">'${n.attacker_nickname}'님에게 순위를 빼앗겼어요. (${when})</div>`;
             }).join("");
             overlay.hidden = false;
@@ -259,6 +272,19 @@
 
     // ── 전투 시작 ──────────────────────────────────────────
     async function startBattle(defenderId) {
+        // 서버 응답을 기다리는 동안(+ 전투 화면으로 넘어가는 순간까지) 빈 화면이 보이지 않도록
+        // 버튼을 누르자마자 바로 암전을 띄운다. 성공하면 페이지 이동으로 자연스럽게 사라지고,
+        // 실패하면 다시 감춰서 원래 화면으로 돌아온다.
+        const overlay = document.getElementById("pvp-entering-overlay");
+        const dotsEl = document.getElementById("pvp-entering-dots");
+        if (overlay) overlay.hidden = false;
+        let dotCount = 1;
+        if (dotsEl) dotsEl.textContent = ".";
+        const dotTimer = setInterval(() => {
+            dotCount = (dotCount % 3) + 1;
+            if (dotsEl) dotsEl.textContent = ".".repeat(dotCount);
+        }, 400);
+
         try {
             const res = await fetch(`${API_BASE_URL}/pvp/battle`, {
                 method: "POST",
@@ -267,12 +293,18 @@
             });
             const data = await res.json();
             if (!res.ok) {
+                clearInterval(dotTimer);
+                if (overlay) overlay.hidden = true;
                 alert(data.detail || "전투에 실패했어요.");
                 return;
             }
             sessionStorage.setItem("pvp_battle_result", JSON.stringify(data));
+            // 여기서 암전을 다시 걷지 않는다 - 곧바로 페이지 이동이 시작되므로, 이동 순간까지
+            // 그대로 덮여있다가 전투 화면 자체의 battle-loading-overlay로 자연스럽게 이어진다.
             window.location.href = "arena-battle.html";
         } catch (err) {
+            clearInterval(dotTimer);
+            if (overlay) overlay.hidden = true;
             alert("서버에 연결할 수 없어요.");
         }
     }
@@ -367,15 +399,18 @@
             const res = await fetch(`${API_BASE_URL}/pvp/history`, { headers: authHeaders() });
             const logs = await res.json();
             if (logs.length === 0) {
-                listEl.innerHTML = `<p class="screen-placeholder">아직 아무도 나에게 도전하지 않았어요.</p>`;
+                listEl.innerHTML = `<p class="screen-placeholder">아직 대전 기록이 없어요.</p>`;
                 return;
             }
             listEl.innerHTML = logs.map((log) => {
-                const when = new Date(log.created_at).toLocaleString("ko-KR");
+                const when = formatKst(log.created_at);
                 const resultClass = log.result === "승리" ? "pvp-history-win" : "pvp-history-lose";
+                const roleClass = log.role === "attack" ? "pvp-history-role-attack" : "pvp-history-role-defense";
+                const roleLabel = log.role === "attack" ? "공격" : "방어";
                 return `
                     <div class="pvp-history-item">
-                        <span class="pvp-history-opponent">${log.attacker_nickname}</span>
+                        <span class="pvp-history-role ${roleClass}">${roleLabel}</span>
+                        <span class="pvp-history-opponent">${log.opponent_nickname}</span>
                         <span class="${resultClass}">${log.result}</span>
                         <span class="pvp-history-time">${when}</span>
                     </div>
