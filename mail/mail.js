@@ -107,6 +107,9 @@
             if (!res.ok) throw new Error(data.detail || "보상을 받지 못했습니다.");
             await refreshData();
             if (typeof loadProfile === "function") await loadProfile();
+            if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
+                showAchievementToast(data.new_achievements);
+            }
         } catch (error) {
             alert(error.message);
         }
@@ -122,6 +125,9 @@
             if (!res.ok) throw new Error(data.detail || "보상을 받지 못했습니다.");
             await refreshData();
             if (typeof loadProfile === "function") await loadProfile();
+            if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
+                showAchievementToast(data.new_achievements);
+            }
         } catch (error) {
             alert(error.message);
         }

@@ -25,6 +25,17 @@
             .replaceAll("'", "&#039;");
     }
 
+    function updateQuestBadge() {
+        const badge = document.getElementById("quest-badge");
+        if (!badge) return;
+        const claimableCount = ["daily", "weekly"].reduce(
+            (sum, period) => sum + (questData[period] || []).filter((q) => q.claimable && !q.claimed).length,
+            0
+        );
+        badge.textContent = claimableCount;
+        badge.hidden = claimableCount === 0;
+    }
+
     function rewardText(quest) {
         const label = quest.reward_type === "exp" ? "EXP" : "골드";
         return `${label} ${Number(quest.reward_amount).toLocaleString()}`;
@@ -57,6 +68,7 @@
             if (!res.ok) throw new Error(`${res.status}`);
             questData = await res.json();
             renderList();
+            updateQuestBadge();
         } catch (error) {
             if (listEl) {
                 listEl.innerHTML =
@@ -111,6 +123,15 @@
     }
 
     async function claimQuest(questId) {
+        const quests = questData[currentPeriod] || [];
+        const quest = quests.find((q) => q.id === Number(questId));
+        if (!quest || quest.claimed || !quest.claimable) return;
+
+        // 낙관적 UI: 서버 응답을 기다리지 않고 즉시 수령 완료로 표시한다 - 실패하면 되돌린다.
+        quest.claimed = true;
+        renderList();
+        updateQuestBadge();
+
         try {
             const res = await fetch(`${API_BASE_URL}/quests/claim`, {
                 method: "POST",
@@ -119,14 +140,27 @@
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || "보상을 받지 못했습니다.");
-            await refreshData();
             if (typeof loadProfile === "function") await loadProfile();
+            if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
+                showAchievementToast(data.new_achievements);
+            }
         } catch (error) {
+            quest.claimed = false;
+            renderList();
+            updateQuestBadge();
             alert(error.message);
         }
     }
 
     async function claimAll() {
+        const quests = questData[currentPeriod] || [];
+        const claimableIds = quests.filter((q) => q.claimable && !q.claimed).map((q) => q.id);
+        if (claimableIds.length === 0) return;
+
+        quests.forEach((q) => { if (q.claimable) q.claimed = true; });
+        renderList();
+        updateQuestBadge();
+
         try {
             const res = await fetch(`${API_BASE_URL}/quests/claim-all?period=${currentPeriod}`, {
                 method: "POST",
@@ -134,9 +168,17 @@
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || "보상을 받지 못했습니다.");
-            await refreshData();
             if (typeof loadProfile === "function") await loadProfile();
+            if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
+                showAchievementToast(data.new_achievements);
+            }
         } catch (error) {
+            claimableIds.forEach((id) => {
+                const q = quests.find((qq) => qq.id === id);
+                if (q) q.claimed = false;
+            });
+            renderList();
+            updateQuestBadge();
             alert(error.message);
         }
     }
@@ -165,4 +207,9 @@
         await ensureLoaded();
         if (loaded) await refreshData();
     });
+
+    // 퀘스트 화면을 열기 전에도 버튼에 미수령 알림(불)을 보여줘야 하므로, 홈 진입 시점부터
+    // 미리 한 번 불러온다(mail.js와 동일한 패턴) - #quest-list가 아직 없어도 refreshData는
+    // 안전하게 데이터만 받아와 배지를 갱신한다.
+    window.addEventListener("load", refreshData);
 })();

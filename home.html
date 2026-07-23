@@ -46,7 +46,8 @@
             <button class="rail-btn" data-modal-target="modal-quests">
                 <img src="assets/icons/quests.png" alt="" class="rail-icon" onerror="this.style.display='none'">
                 <span>퀘스트</span>
-            </button>            
+                <span class="icon-badge" id="quest-badge" hidden>0</span>
+            </button>
             <button class="rail-btn" data-modal-target="modal-achievements">
                 <img src="assets/icons/achievements.png" alt="" class="rail-icon" onerror="this.style.display='none'">
                 <span>업적</span>
@@ -382,6 +383,10 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <div class="pvp-entering-overlay" id="pvp-entering-overlay" hidden>
+        <div class="pvp-entering-text">입장하는 중<span class="pvp-entering-dots" id="pvp-entering-dots"></span></div>
     </div>
 
     <script src="shared/api-config.js"></script>

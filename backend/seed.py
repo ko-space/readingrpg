@@ -724,10 +724,10 @@ QUESTS = [
         "sort_order": 7,
     },
     {
-        "name": "18시 이후 접속 1회",
+        "name": "일일 접속",
         "period": "daily",
-        "condition_type": "login_after_hour",
-        "condition_params": {"hour": 18},
+        "condition_type": "activity_count",
+        "condition_params": {"activity_type": "login"},
         "condition_target": 1,
         "reward_type": "exp",
         "reward_amount": 10,

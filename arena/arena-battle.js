@@ -426,6 +426,7 @@
     const meleeArrived = {};                // key -> 그 타겟에 이미 도착했는지
     const pendingArrivalResolvers = {};     // key -> 도착을 기다리고 있는 Promise resolve 함수들
     const walkerSuspended = {};             // key -> 이동 루프를 잠깐 멈춰둘지(넉백 트랜지션 중 tick()과 충돌 방지)
+    const standoffExtra = {};               // key -> 도착 판정용 overlap을 얼마나 줄일지(복제체는 전방처럼 적과 겹치지 않고 그 앞에서 멈춘다)
     let walkerRunning = false;
 
     // unitKey가 targetKey에게 도달하려면 지금 이 순간 기준으로 얼마나 더(어느 방향으로) 움직여야 하는지.
@@ -439,7 +440,7 @@
         const rect = el.getBoundingClientRect();
         const targetRect = targetEl.getBoundingClientRect();
         // overlap이 클수록 "더 깊이 파고들어야"(겹쳐야) 도착 판정이 나서 결과적으로 더 가까이 멈춘다.
-        const overlap = APPROACH_OVERLAP;
+        const overlap = APPROACH_OVERLAP - (standoffExtra[unitKey] || 0);
 
         const myCenter = rect.left + rect.width / 2;
         const targetCenter = targetRect.left + targetRect.width / 2;
@@ -1557,12 +1558,24 @@
                     const casterEl = document.querySelector(`[data-unit="${actorKey}"]`);
                     if (cloneEl) {
                         cloneEl.hidden = false;
-                        cloneEl.style.transform = ""; // 우선 자연 위치로 리셋한 뒤 아래에서 캐스터 자리로 옮긴다
-                        // 복제체는 윤영준이 서 있던 바로 그 자리를 차지한다.
+                        cloneEl.style.transform = ""; // 이전 복제체가 남긴 인라인 transform이 있으면 먼저 지운다
+                        // 복제체는 윤영준이 서 있던 자리를 차지하되, 근접 교전 중인 캐스터는 이미
+                        // APPROACH_OVERLAP만큼 적 쪽으로 파고들어(겹쳐) 있는 상태라(근접 클래시 연출) 그
+                        // 자리를 그대로 복사하면 복제체가 적 전방 유닛과 겹치거나 그 너머(적 쪽)까지 넘어가
+                        // 보인다 - 겹친 만큼 자기 진영 쪽으로 당겨서, "안 겹쳤다면" 있었을 경계선에 세운다.
+                        //
+                        // getCurrentTranslateX로 "현재(방금 리셋한 CSS 기본값 포함) translateX"를 읽어서
+                        // 그 위에 델타를 더해야 한다 - transform을 절대값으로 통째로 덮어쓰면서 델타를
+                        // "리셋된 위치 기준"으로만 계산하면, attacker-summon/defender-summon의 CSS 기본
+                        // transform(칸 밖으로 translateX(±(폭+20px)) 빼두는 값)이 통째로 상쇄되지 않고
+                        // 그대로 더 얹혀서, 실제로는 매번 그 폭+20px만큼 적 쪽으로 더 밀려난 자리에
+                        // 생성됐었다(복제체가 적진 쪽에 생기고 반전돼 보이던 원인).
                         if (casterEl) {
                             const cloneRect = cloneEl.getBoundingClientRect();
                             const casterRect = casterEl.getBoundingClientRect();
-                            cloneEl.style.transform = `translateX(${casterRect.left - cloneRect.left}px)`;
+                            const currentCloneX = getCurrentTranslateX(cloneEl);
+                            const pullbackSign = event.side === "attacker" ? -1 : 1;
+                            cloneEl.style.transform = `translateX(${currentCloneX + (casterRect.left - cloneRect.left) + pullbackSign * APPROACH_OVERLAP}px)`;
                         }
                     }
                     // 원본(윤영준)은 복제체를 소환한 반동으로 살짝 밀려난다 - 청년의 넉백(applyKnockback)과
@@ -1582,9 +1595,14 @@
                     document.querySelector(`[data-unit="${cloneKey}"] .battle-unit-img`)?.classList.add("is-clone");
 
                     // 근거리 복제체라면 이동 루프가 새로 생긴 자리를 즉시 인식하도록 목표를 잡아준다.
+                    // standoffExtra로 전방 유닛끼리의 클래시 겹침(overlap)을 없애서, 복제체는 적과
+                    // 겹치지 않고 그 앞에서 멈춘다 - 안 그러면 걸어서 접근하는 도중 적 전방 유닛과
+                    // 똑같은(겹치는) 위치로 수렴해버려서 적진에 파고든 것처럼 보이고, 그 위치에서
+                    // faceToward가 대상을 자기보다 왼쪽으로 오판해 스프라이트가 반전돼 보인다.
                     if (units[cloneKey].isMelee) {
                         meleeTargetKey[cloneKey] = event.side === "attacker" ? "defender-front" : "attacker-front";
                         meleeArrived[cloneKey] = false;
+                        standoffExtra[cloneKey] = APPROACH_OVERLAP;
                     }
                 }
             }

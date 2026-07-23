@@ -1,6 +1,7 @@
 import json
 import random
 from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from database import get_db
 from models import User, Character, PvpBattleLog
@@ -11,10 +12,9 @@ from achievements import check_and_grant_achievements, get_equipped_title_info
 
 router = APIRouter(prefix="/pvp", tags=["pvp"])
 
-MATCH_RANGE = 5       # 위/아래로 몇 칸까지 후보 풀에 넣을지
 CANDIDATE_COUNT = 3    # 한 번에 보여줄 후보 수
-TOP_RANK_THRESHOLD = 3 # 이 순위 이하(더 높은 순위)는 아래 순위도 후보로 보여줌
-ADMIN_USER_ID = 1      # ranking.py와 동일한 관리자 계정 - 일반 순위 사다리에 참여하지 않고 항상 0위 고정
+TOP_TIER_SIZE = 5      # 5등 이하는 이 상위 인원(0~4등) 중에서 무작위로 후보가 나온다
+ADMIN_USER_ID = 1      # ranking.py와 동일한 관리자 계정 - 항상 pvp_rank=0으로 고정되어 "0등" 자리를 차지한다
 
 
 def _get_equipped_outfit(user: User):
@@ -78,33 +78,37 @@ def _ensure_defense_assigned(user: User, db: Session):
 
 def _get_candidate_pool(user: User, db: Session):
     """
-    후보 풀을 (User, rank_changeable) 튜플 목록으로 돌려준다.
-    - 나보다 순위가 높은(숫자가 작은) 사람: 최대 MATCH_RANGE칸 이내, 이기면 순위가 바뀜(True)
-    - 내가 TOP_RANK_THRESHOLD등 이내면: 아래 순위도 후보에 추가(친선전, 순위 안 바뀜=False)
-    - 관리자(0위)는 일반 사다리 계산에서 완전히 빠지고, 그 대신 누구에게나 항상 친선전
-      (rank_changeable=False) 상대로만 노출된다 - 이겨도 져도 순위표가 흔들리지 않는다.
+    후보 풀을 (User, rank_changeable) 튜플 목록으로 돌려준다. 관리자(ADMIN_USER_ID)는 항상
+    pvp_rank=0으로 고정돼 있어(_ensure_rank_assigned) 아래 규칙에서 자연스럽게 "0등"으로 취급된다.
+
+    - 0~3등: {0,1,2,3} 중 자신을 제외한 나머지 세 자리를 그대로 보여준다(고정, 무작위 아님).
+    - 4등: {0,1,2,3} 중 3명을 무작위로 보여준다.
+    - 5등 이하: {0,1,2,3,4}(상위 5명) 중 3명을 무작위로 보여준다.
+
+    관리자와의 대결은 순위에 영향이 없다(rank_changeable=False) - 관리자는 항상 0등에 고정되므로,
+    만약 이겨서 순위가 바뀐다면 두 유저가 동시에 0등이 되어 pvp_rank의 유니크 제약을 위반하게 된다.
     """
     others = (
         db.query(User)
-        .filter(User.pvp_rank.isnot(None), User.id != user.id, User.id != ADMIN_USER_ID)
+        .filter(User.pvp_rank.isnot(None), User.id != user.id)
         .order_by(User.pvp_rank.asc())
         .all()
     )
+    by_rank = {other.pvp_rank: other for other in others}
+
+    if user.pvp_rank in (0, 1, 2, 3):
+        target_ranks = [r for r in (0, 1, 2, 3) if r != user.pvp_rank]
+    elif user.pvp_rank == 4:
+        target_ranks = random.sample([0, 1, 2, 3], min(CANDIDATE_COUNT, 4))
+    else:
+        top_ranks = list(range(TOP_TIER_SIZE))
+        target_ranks = random.sample(top_ranks, min(CANDIDATE_COUNT, len(top_ranks)))
 
     pool = []
-    for other in others:
-        if user.pvp_rank - MATCH_RANGE <= other.pvp_rank < user.pvp_rank:
-            pool.append((other, True))
-
-    if user.pvp_rank <= TOP_RANK_THRESHOLD:
-        for other in others:
-            if user.pvp_rank < other.pvp_rank <= user.pvp_rank + MATCH_RANGE:
-                pool.append((other, False))
-
-    if user.id != ADMIN_USER_ID:
-        admin = db.query(User).filter(User.id == ADMIN_USER_ID).first()
-        if admin and admin.pvp_rank is not None:
-            pool.append((admin, False))
+    for r in target_ranks:
+        other = by_rank.get(r)
+        if other is not None:
+            pool.append((other, other.id != ADMIN_USER_ID))
 
     return pool
 
@@ -130,6 +134,7 @@ def get_opponents(db: Session = Depends(get_db), user: User = Depends(get_curren
 
     pool = [item for item in _get_candidate_pool(user, db) if _has_defense_team(item[0])]
     picked = random.sample(pool, min(CANDIDATE_COUNT, len(pool)))
+    picked.sort(key=lambda item: item[0].pvp_rank)  # 순위가 높은(숫자가 작은) 순으로 위에서부터 표시
 
     return {
         "my_rank": user.pvp_rank,
@@ -356,24 +361,27 @@ def run_battle(
 
 @router.get("/history")
 def get_history(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """내가 '방어자'였던 전투 기록 - 누가 나에게 도전했는지 나중에 확인하는 용도."""
+    """내가 공격했거나 방어했던 전투 기록(최근 50개) - 두 방향을 합쳐서 최신순으로 보여준다."""
     logs = (
         db.query(PvpBattleLog)
-        .filter(PvpBattleLog.defender_id == user.id)
+        .filter(or_(PvpBattleLog.attacker_id == user.id, PvpBattleLog.defender_id == user.id))
         .order_by(PvpBattleLog.created_at.desc())
         .limit(50)
         .all()
     )
-    return [
-        {
+    result = []
+    for log in logs:
+        is_attacker = log.attacker_id == user.id
+        opponent = log.defender if is_attacker else log.attacker
+        result.append({
             "id": log.id,
-            "attacker_nickname": log.attacker.nickname,
-            "result": "패배" if log.winner_id == log.attacker_id else "승리",
+            "role": "attack" if is_attacker else "defense",
+            "opponent_nickname": opponent.nickname,
+            "result": "승리" if log.winner_id == user.id else "패배",
             "rank_changed": log.rank_changed,
             "created_at": log.created_at,
-        }
-        for log in logs
-    ]
+        })
+    return result
 
 
 @router.get("/rank-change-notice")

@@ -1149,7 +1149,14 @@ body {
 }
 
 /* ===== 결과 영역 ===== */
+/* 화면(뷰포트) 정중앙에 고정 - 전투가 끝나는 시점의 캐릭터 배치와 무관하게 항상 한가운데,
+   캐릭터들과 겹쳐서 뜬다(레이아웃 흐름 밖으로 빼야 하므로 fixed + 뷰포트 기준 중앙 정렬). */
 .battle-result {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 100;
     display: flex;
     flex-direction: column;
     align-items: center;
