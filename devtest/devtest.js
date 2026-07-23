@@ -66,7 +66,6 @@
     const meleeArrived = {};
     const pendingArrivalResolvers = {};
     const approachGapExtra = {}; // slot -> 접근을 얼마나 덜(뒤에서) 멈출지 - 복제체 뒤에 서는 윤영준 등(arena-battle.js와 동일)
-    const cloneRetreated = {}; // slot -> 복제체 소환으로 이미 한 번 물러났는지(같은 전투에서 또 물러나지 않도록, arena-battle.js와 동일)
     let walkerRunning = false;
     let advancedSlot = {}; // slot -> bool, "이동" 버튼으로 앞으로 나간 상태인지(토글)
 
@@ -408,9 +407,10 @@
                     cloneEl.style.transform = `translateX(${casterRect.left - cloneRect.left}px)`;
                 }
             }
-            // 원본(캐스터)은 복제체보다 뒤로 물러난다 - 스프라이트 폭만큼만, 부드럽게(CSS 트랜지션).
-            // 같은 전투에서 또 물러나면 "현재 위치" 기준으로 누적되어 도망치는 것처럼 보이므로 한 번만.
-            if (casterEl && !cloneRetreated[casterSlot]) {
+            // 원본(캐스터)은 복제체보다 뒤로 살짝 물러났다가(스프라이트 폭만큼), 연출이 끝나면 원래
+            // 붙어있던 근접 거리로 다시 돌아온다(arena-battle.js와 동일) - 안 그러면 스킬을 쓸 때마다
+            // 계속 뒤로 밀려나며 도망치는 것처럼 보인다.
+            if (casterEl) {
                 const retreatSign = side === "attacker" ? -1 : 1;
                 const spriteWidth = casterEl.querySelector(".battle-unit-img")?.getBoundingClientRect().width || 130;
                 const casterX = getCurrentTranslateX(casterEl);
@@ -418,10 +418,13 @@
                 requestAnimationFrame(() => {
                     casterEl.style.transform = `translateX(${casterX + retreatSign * spriteWidth}px)`;
                 });
-                setTimeout(() => { casterEl.style.transition = ""; }, 340);
                 approachGapExtra[casterSlot] = spriteWidth;
-                meleeArrived[casterSlot] = false;
-                cloneRetreated[casterSlot] = true;
+                meleeArrived[casterSlot] = true;
+                setTimeout(() => {
+                    casterEl.style.transition = "";
+                    delete approachGapExtra[casterSlot];
+                    meleeArrived[casterSlot] = false;
+                }, 340);
             }
             attackAnimActive[cloneSlot] = false;
             getAttackFrameCount(units[cloneSlot].outfit);
@@ -1518,7 +1521,6 @@
         walkerRunning = false;
         SLOTS.forEach((slot) => clearAllStatusIcons(slot)); // 서버가 새로 보내는 이벤트로만 상태가 갱신되게, 수동으로 쌓아둔 건 초기화
         Object.keys(approachGapExtra).forEach((slot) => delete approachGapExtra[slot]);
-        Object.keys(cloneRetreated).forEach((slot) => delete cloneRetreated[slot]);
 
         // 이전 전투에서 남아있던 복제체(summon)는 새 전투 시작 전에 완전히 지운다.
         ["attacker-summon", "defender-summon"].forEach((slot) => {
@@ -1709,7 +1711,7 @@
                         cloneEl.style.transform = `translateX(${casterRect.left - cloneRect.left}px)`;
                     }
                 }
-                if (casterEl && actorSlot && !cloneRetreated[actorSlot]) {
+                if (casterEl && actorSlot) {
                     const retreatSign = actorSide === "attacker" ? -1 : 1;
                     const spriteWidth = casterEl.querySelector(".battle-unit-img")?.getBoundingClientRect().width || 130;
                     const casterX = getCurrentTranslateX(casterEl);
@@ -1717,10 +1719,13 @@
                     requestAnimationFrame(() => {
                         casterEl.style.transform = `translateX(${casterX + retreatSign * spriteWidth}px)`;
                     });
-                    setTimeout(() => { casterEl.style.transition = ""; }, 340);
                     approachGapExtra[actorSlot] = spriteWidth;
-                    meleeArrived[actorSlot] = false;
-                    cloneRetreated[actorSlot] = true;
+                    meleeArrived[actorSlot] = true;
+                    setTimeout(() => {
+                        casterEl.style.transition = "";
+                        delete approachGapExtra[actorSlot];
+                        meleeArrived[actorSlot] = false;
+                    }, 340);
                 }
                 attackAnimActive[cloneSlot] = false;
                 getAttackFrameCount(units[cloneSlot].outfit);
@@ -1877,7 +1882,6 @@
             clearAllStatusIcons(slot);
             delete facingFlipped[slot];
             delete approachGapExtra[slot];
-            delete cloneRetreated[slot];
         });
         ["attacker-summon", "defender-summon"].forEach((slot) => {
             delete units[slot];

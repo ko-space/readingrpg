@@ -426,7 +426,6 @@
     const meleeArrived = {};                // key -> 그 타겟에 이미 도착했는지
     const pendingArrivalResolvers = {};     // key -> 도착을 기다리고 있는 Promise resolve 함수들
     const approachGapExtra = {};            // key -> 접근을 얼마나 덜(뒤에서) 멈출지 - 복제체 뒤에 서는 윤영준 등
-    const cloneRetreated = {};              // key -> 복제체 소환으로 이미 한 번 물러났는지(같은 전투에서 또 물러나지 않도록)
     let walkerRunning = false;
 
     // unitKey가 targetKey에게 도달하려면 지금 이 순간 기준으로 얼마나 더(어느 방향으로) 움직여야 하는지.
@@ -1558,12 +1557,13 @@
                             cloneEl.style.transform = `translateX(${casterRect.left - cloneRect.left}px)`;
                         }
                     }
-                    // 원본(윤영준)은 복제체보다 뒤로 물러난다 - 스프라이트 폭만큼만, 부드럽게(CSS 트랜지션).
-                    // 물러난 만큼 접근 간격(approachGapExtra)도 똑같이 넓혀서, 이동 루프가 다음 프레임에
-                    // "아직 안 도착했다"며 도로 앞으로 끌어오지 않고 물러난 자리에서 자연스럽게 멈춘다.
-                    // 같은 전투에서 스킬을 또 쓰더라도 딱 한 번만 물러나야 한다 - 안 그러면 "현재 위치"
-                    // 기준으로 매번 더 물러나서 누적되며 도망치는 것처럼 보이는 버그가 있었다.
-                    if (casterEl && !cloneRetreated[actorKey]) {
+                    // 원본(윤영준)은 복제체보다 뒤로 살짝 물러났다가(스프라이트 폭만큼, CSS 트랜지션),
+                    // 그 연출이 끝나면 다시 원래 붙어있던 근접 거리로 자연스럽게 돌아온다. 물러나는 동안엔
+                    // approachGapExtra로 이동 루프가 그 자리를 "도착"으로 인식하게 해서 트랜지션과
+                    // 충돌하지 않게 하고, 연출이 끝나는 순간 그 여유값을 지워서 원래 거리를 목표로 다시
+                    // 걸어오게 만든다 - 이렇게 해야 스킬을 몇 번을 쓰든 매번 같은 자리로 돌아오고, 계속
+                    // 뒤로 밀려나며 도망치는 것처럼 보이지 않는다.
+                    if (casterEl) {
                         const retreatSign = event.side === "attacker" ? -1 : 1;
                         const spriteWidth = casterEl.querySelector(".battle-unit-img")?.getBoundingClientRect().width || 130;
                         const casterX = getCurrentTranslateX(casterEl);
@@ -1571,10 +1571,13 @@
                         requestAnimationFrame(() => {
                             casterEl.style.transform = `translateX(${casterX + retreatSign * spriteWidth}px)`;
                         });
-                        setTimeout(() => { casterEl.style.transition = ""; }, 340);
                         approachGapExtra[actorKey] = spriteWidth;
-                        meleeArrived[actorKey] = false;
-                        cloneRetreated[actorKey] = true;
+                        meleeArrived[actorKey] = true;
+                        setTimeout(() => {
+                            casterEl.style.transition = "";
+                            delete approachGapExtra[actorKey];
+                            meleeArrived[actorKey] = false;
+                        }, 340);
                     }
                     attackAnimActive[cloneKey] = false;
                     getAttackFrameCount(units[cloneKey].outfit);
