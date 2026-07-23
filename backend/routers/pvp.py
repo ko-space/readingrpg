@@ -243,11 +243,34 @@ def run_battle(
     rank_did_change = False
 
     if attacker_won and rank_changeable:
-        # 나와 상대 사이에 있던 사람들을 한 칸씩 뒤로 밀고, 나는 상대의 순위를 가져간다.
-        db.query(User).filter(
-            User.pvp_rank >= defender_rank_before,
-            User.pvp_rank < attacker_rank_before,
-        ).update({User.pvp_rank: User.pvp_rank + 1}, synchronize_session=False)
+        # pvp_rank엔 unique 제약이 걸려있어서, 아래 재배치 과정에서 어느 한 순간이라도 두 유저가
+        # 같은 순위를 가리키면 즉시 UniqueViolation이 난다. 그래서 순서를 신경 써서 처리한다:
+        # 1) 나를 먼저 범위 밖 임시값(음수)으로 비켜둔다.
+        db.query(User).filter(User.id == user.id).update(
+            {User.pvp_rank: -user.id}, synchronize_session=False
+        )
+
+        # 2) 나와 상대 사이에 있던 사람들을 한 칸씩 뒤로 민다. 이걸 한 번의 벌크 UPDATE로 처리하면
+        # DB가 행을 처리하는 순서에 따라(예: 낮은 순위부터) "밀려는 자리에 아직 안 밀린 다른 사람이
+        # 있어서" 일시적으로 순위가 겹칠 수 있다(실제로 SQLite에서 재현됨). 그래서 순위가 가장 낮은
+        # 사람(=상대에게서 가장 먼, 즉 원래 공격자와 가장 가까운 사람)부터 한 명씩 미는데, 그 사람이
+        # 밀려 들어갈 자리는 바로 위 단계(또는 1번)에서 이미 비워둔 자리라 절대 안 겹친다.
+        between_user_ids = [
+            row.id
+            for row in db.query(User.id).filter(
+                User.pvp_rank >= defender_rank_before,
+                User.pvp_rank < attacker_rank_before,
+            ).order_by(User.pvp_rank.desc()).all()
+        ]
+        for uid in between_user_ids:
+            db.query(User).filter(User.id == uid).update(
+                {User.pvp_rank: User.pvp_rank + 1}, synchronize_session=False
+            )
+
+        # 3) 나는 상대가 있던(이제 비워진) 자리로 들어간다.
+        db.query(User).filter(User.id == user.id).update(
+            {User.pvp_rank: defender_rank_before}, synchronize_session=False
+        )
 
         user.pvp_rank = defender_rank_before
         rank_did_change = True
