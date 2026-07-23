@@ -1,0 +1,179 @@
+/* 우편함 전용 UI - 퀘스트 화면과 같은 남색+금빛 톤으로 통일 */
+#modal-mail .mail-modal-box {
+    width: min(94vw, 560px);
+    max-width: none;
+    height: min(80vh, 560px);
+    max-height: 92vh;
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border: 2px solid rgba(201, 170, 90, .9);
+    border-radius: 14px;
+    background: linear-gradient(160deg, #1b2340 0%, #232c52 55%, #2a3566 100%);
+    box-shadow: 0 16px 50px rgba(10, 12, 30, .5), 0 0 0 1px rgba(255,255,255,.08) inset;
+}
+
+#modal-mail .modal-close {
+    z-index: 20;
+    color: #e6d8a8;
+}
+
+#mail-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    color: #e9e4d0;
+}
+
+#mail-content .screen-title {
+    margin: 0;
+    padding: 18px 60px 10px 22px;
+    font-size: 22px;
+    font-weight: 900;
+    color: #f0dfa0;
+}
+
+.mail-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 18px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.mail-list .screen-placeholder {
+    padding: 60px 20px;
+    text-align: center;
+    color: #a9a487;
+    font-weight: 700;
+}
+
+@keyframes mail-card-settle {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.mail-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 14px;
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .04);
+    animation: mail-card-settle .22s ease-out both;
+}
+
+.mail-card.mail-claimed {
+    background: rgba(255, 255, 255, .02);
+    opacity: .55;
+}
+
+.mail-card-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.mail-card-title {
+    font-size: 13.5px;
+    font-weight: 900;
+    color: #f0ecd8;
+}
+
+.mail-card-body {
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: #cfc9ac;
+}
+
+.mail-reward-text {
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 800;
+    color: #f0dfa0;
+}
+
+.mail-claim-btn {
+    flex-shrink: 0;
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    min-width: 64px;
+    background: linear-gradient(160deg, #f0dfa0, #c9964e);
+    color: #2a2010;
+    font-weight: 900;
+    font-size: 12.5px;
+    cursor: pointer;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, .3);
+}
+
+.mail-claim-btn:disabled {
+    background: rgba(255, 255, 255, .08);
+    color: #7a765f;
+    box-shadow: none;
+    cursor: default;
+}
+
+.mail-claim-btn.is-claimed {
+    background: rgba(255, 255, 255, .06);
+    color: #8f8a72;
+}
+
+.mail-footer-row {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 10px 22px 14px;
+    border-top: 1px solid rgba(201, 170, 90, .25);
+    background: rgba(0, 0, 0, .1);
+}
+
+.mail-delete-all-btn,
+.mail-claim-all-btn {
+    flex-shrink: 0;
+    border: 0;
+    border-radius: 8px;
+    padding: 9px 16px;
+    font-weight: 900;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.mail-claim-all-btn {
+    background: linear-gradient(160deg, #f0dfa0, #c9964e);
+    color: #2a2010;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, .3);
+}
+
+.mail-claim-all-btn:disabled {
+    background: rgba(255, 255, 255, .08);
+    color: #7a765f;
+    box-shadow: none;
+    cursor: default;
+}
+
+.mail-delete-all-btn {
+    background: rgba(255, 255, 255, .06);
+    color: #cfc9ac;
+    border: 1px solid rgba(201, 170, 90, .4);
+}
+
+.mail-delete-all-btn:hover {
+    background: rgba(255, 255, 255, .1);
+}
+
+@media (max-width: 650px) {
+    #modal-mail .mail-modal-box {
+        width: 96vw;
+        height: 84vh;
+    }
+    .mail-card {
+        flex-wrap: wrap;
+    }
+}

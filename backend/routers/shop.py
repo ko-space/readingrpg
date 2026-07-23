@@ -115,7 +115,6 @@ def purchase_item(
     if not item:
         raise HTTPException(status_code=404, detail="아이템을 찾을 수 없습니다.")
 
-    # 특정 캐릭터를 보유해야 구매 가능하도록 지정되어 있으면 확인
     if item.source_character:
         owns_character = any(c.name == item.source_character for c in user.characters)
         if not owns_character:
@@ -124,7 +123,6 @@ def purchase_item(
                 detail=f"'{item.source_character}' 보유 시 구매 가능",
             )
 
-    # 특정 업적을 달성해야 구매 가능하도록 지정되어 있으면 확인
     if item.required_achievement:
         has_achievement = (
             db.query(UserAchievement)

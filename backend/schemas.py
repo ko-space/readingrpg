@@ -30,6 +30,10 @@ class GoogleLoginRequest(BaseModel):
     id_token: str
 
 
+class HeartbeatRequest(BaseModel):
+    tab_id: str  # 브라우저 탭마다 하나씩 생기는 식별자(sessionStorage 보관). 같은 계정이어도 다른 탭이면 다르다.
+
+
 class LogCreate(BaseModel):
     dungeon_name: str
     difficulty: str  # session_type="reading"이면 장르(문학/비문학), 아니면 과목명

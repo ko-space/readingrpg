@@ -29,6 +29,14 @@ class User(Base):
     equipped_achievement_id = Column(Integer, ForeignKey("achievements.id"), nullable=True)  # 지금 표시 중인 칭호.
     # 업적 이름 문자열이 아니라 id로 저장해서, 업적 이름이 나중에 바뀌거나 히든 여부를 조회할 때 항상 최신 값을 따라간다.
 
+    # 중복 로그인 차단용. 로그인마다 새로 발급되는 세션 식별자와 마지막으로 살아있음이 확인된 시각(하트비트).
+    # session_last_seen이 SESSION_TIMEOUT_SECONDS보다 오래되면 세션이 끊긴 것으로 보고 새 로그인을 허용한다.
+    active_session_id = Column(String, nullable=True)
+    session_last_seen = Column(DateTime, nullable=True)
+    # 같은 로그인(active_session_id)이라도 브라우저 탭이 여러 개면(같은 기기에서 새 창을 여는 경우) 그중 하나만
+    # "지금 쓰고 있는 탭"으로 인정한다. 다른 탭이 먼저 하트비트를 보내고 있으면 나중 탭은 차단된다.
+    active_tab_id = Column(String, nullable=True)
+
     logs = relationship("ReadingLog", back_populates="owner")
     characters = relationship("Character", back_populates="owner", foreign_keys="Character.user_id")
     items = relationship("UserItem", back_populates="owner")
@@ -291,3 +299,41 @@ class UserQuestClaim(Base):
     quest_id = Column(Integer, ForeignKey("quests.id"))
     period_key = Column(String, nullable=False)
     claimed_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Notice(Base):
+    """공지사항. seed.py로 넣는 정적 콘텐츠라 유저별 상태를 안 갖고, 누가 읽었는지만
+    UserNoticeRead로 따로 추적한다(achievements.py의 조건/보상 분리 사상과 비슷하게,
+    "무엇을 보여줄지"와 "누가 봤는지"를 분리)."""
+    __tablename__ = "notices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    image_file = Column(String, nullable=True)  # assets/notices/ 아래 상대경로
+    body = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)  # 새로 만든 공지가 위로 오도록 정렬 기준으로 쓰임
+
+
+class UserNoticeRead(Base):
+    __tablename__ = "user_notice_reads"
+    __table_args__ = (UniqueConstraint("user_id", "notice_id", name="uq_user_notice"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    notice_id = Column(Integer, ForeignKey("notices.id"))
+    read_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Mail(Base):
+    """유저 개인 우편함. 신규가입 축하금처럼 특정 유저 한 명에게 개별 발급되는 보상.
+    발급 시점에 이미 받을 유저가 정해져 있어(퀘스트처럼 "정의"와 "수령 기록"을 나눌 필요 없이)
+    테이블 하나로 충분하다."""
+    __tablename__ = "mails"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    title = Column(String, nullable=False)
+    body = Column(String, nullable=True)
+    gold_amount = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    claimed_at = Column(DateTime, nullable=True)
