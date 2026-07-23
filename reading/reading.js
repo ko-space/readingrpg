@@ -54,6 +54,14 @@
         }
     }
 
+    // 설정의 "지역에서 인물 숨기기" 스위치 - settings.js가 이 페이지에도 로드되지만 reading.js는
+    // IIFE로 감싸여 있어 그냥 함수로 두면 안 보이므로 window에 직접 노출한다(loadProfile과 같은 방식).
+    window.applyRegionCharacterVisibility = function () {
+        const imgEl = document.getElementById("reading-character-img");
+        if (!imgEl) return;
+        imgEl.hidden = localStorage.getItem("settings_hide_region_character") === "1";
+    };
+
     // ── 캐릭터: 장착 중인 의상의 '독서 자세' 일러스트 ──
     // outfit은 이제 폴더 경로(예: songjuheon/basic)라, 그 안의 reading.png를 먼저 시도하고
     // 없으면(404) idle.png(기본 서있는 자세)로 자동 대체된다.
@@ -289,6 +297,12 @@
         const pauseBtn = document.getElementById("reading-pause-btn");
         if (pauseBtn) pauseBtn.disabled = true;
 
+        // "독서 완료!" 문구는 서버 응답(EXP/골드 계산)을 기다리지 않고 즉시 뜬다 - 실제 수치가
+        // 채워지는 통계 줄들만 서버 응답이 온 뒤 showCompleteModal에서 순서대로 나타난다.
+        ["stat-row-time", "stat-row-exp", "stat-row-gold", "complete-level-block", "complete-lobby-btn"]
+            .forEach((id) => { document.getElementById(id).hidden = true; });
+        document.getElementById("modal-complete").classList.add("open");
+
         try {
             const res = await fetch(`${API_BASE_URL}/logs/`, {
                 method: "POST",
@@ -304,6 +318,7 @@
             const data = await res.json();
 
             if (!res.ok) {
+                document.getElementById("modal-complete").classList.remove("open");
                 alert(data.detail || "기록 저장에 실패했습니다.");
                 endBtn.disabled = false;
                 if (pauseBtn) pauseBtn.disabled = false;
@@ -324,6 +339,7 @@
                 }
             });
         } catch (err) {
+            document.getElementById("modal-complete").classList.remove("open");
             alert("서버에 연결할 수 없습니다.");
             endBtn.disabled = false;
             if (pauseBtn) pauseBtn.disabled = false;
@@ -332,14 +348,9 @@
     }
 
     // ── 3단계: 결과를 순서대로(시간 -> EXP -> 골드 -> 레벨업 바) 애니메이션으로 보여줌 ──
+    // 모달 자체는 handleEndReading이 서버 응답을 기다리지 않고 이미 열어뒀다 - 여기서는 그 안의
+    // 통계 줄들만 서버가 돌려준 실제 수치로 순서대로 채운다.
     function showCompleteModal(data, elapsedSeconds) {
-        const modal = document.getElementById("modal-complete");
-
-        ["stat-row-time", "stat-row-exp", "stat-row-gold", "complete-level-block", "complete-lobby-btn"]
-            .forEach((id) => { document.getElementById(id).hidden = true; });
-
-        modal.classList.add("open");
-
         return runSequence([
             () => revealStatRow("stat-row-time", "stat-value-time", elapsedSeconds, formatHMS),
             () => revealStatRow("stat-row-exp", "stat-value-exp", data.gained_exp, String),
@@ -472,9 +483,28 @@
         });
     }
 
+    // 페이지 진입 즉시(암전) "입장하는 중"을 보여주다가, 배경/캐릭터 이미지 요청이 끝나면 가린다
+    // (arena-battle.js의 showBattleEntrance와 같은 목적 - 서버/이미지 로딩 지연이 빈 화면으로 보이지 않게).
+    function showRegionEntrance() {
+        const overlay = document.getElementById("region-loading-overlay");
+        const dotsEl = document.getElementById("region-loading-dots");
+
+        let dotCount = 1;
+        if (dotsEl) dotsEl.textContent = ".";
+        const dotTimer = setInterval(() => {
+            dotCount = (dotCount % 3) + 1;
+            if (dotsEl) dotsEl.textContent = ".".repeat(dotCount);
+        }, 400);
+
+        Promise.all([loadRegionBackground(), loadCharacterIllustration()]).finally(() => {
+            clearInterval(dotTimer);
+            if (overlay) overlay.hidden = true;
+        });
+        applyRegionCharacterVisibility();
+    }
+
     function init() {
-        loadRegionBackground();
-        loadCharacterIllustration();
+        showRegionEntrance();
         spawnFireflies();
         setupModeLabel();
         setupEndButton();

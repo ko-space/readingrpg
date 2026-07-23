@@ -10,6 +10,16 @@
     let loaded = false;
     let loading = false;
 
+    // 순수 표시용 취향 설정이라 서버에 저장하지 않고 브라우저별로 localStorage에 둔다
+    // (인연 스토리의 '티켓 자동 사용' 토글과 같은 방식).
+    const HIDE_REGION_CHARACTER_KEY = "settings_hide_region_character";
+
+    function loadHideRegionCharacterToggle() {
+        const toggle = document.getElementById("settings-hide-region-character-toggle");
+        if (!toggle) return;
+        toggle.checked = localStorage.getItem(HIDE_REGION_CHARACTER_KEY) === "1";
+    }
+
     function authHeaders(json = false) {
         const token = localStorage.getItem("access_token");
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -42,6 +52,7 @@
             loaded = true;
             await loadCurrentNickname();
             await loadTitleList();
+            loadHideRegionCharacterToggle();
         } catch (error) {
             content.innerHTML =
                 `<p class="screen-placeholder">설정을 불러오지 못했습니다. (${escapeHtml(error.message)})</p>`;
@@ -173,6 +184,11 @@
             if (e.key === "Enter") saveNickname();
         });
         document.getElementById("settings-logout-btn")?.addEventListener("click", handleLogout);
+        document.getElementById("settings-hide-region-character-toggle")?.addEventListener("change", (e) => {
+            localStorage.setItem(HIDE_REGION_CHARACTER_KEY, e.target.checked ? "1" : "0");
+            // reading.js가 로드된 페이지(reading.html)에서만 존재 - 지금 화면에 바로 반영한다.
+            if (typeof applyRegionCharacterVisibility === "function") applyRegionCharacterVisibility();
+        });
     }
 
     document.querySelectorAll('[data-modal-target="modal-settings"]').forEach((btn) => {
@@ -181,6 +197,7 @@
             if (loaded) {
                 await loadCurrentNickname();
                 await loadTitleList();
+                loadHideRegionCharacterToggle();
             }
         });
     });

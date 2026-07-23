@@ -109,9 +109,14 @@
         if (banner.banner_type === "standard") return "언제든지 환영! 상시대기 하고 있는 상시 모집을 통해 당신만의 운명을 시험해 봐요!";
         if (!banner.start_date || !banner.end_date) return "기간 미정";
 
-        const fmt = (iso) => new Date(iso).toLocaleString("ko-KR", {
-            year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"
-        });
+        // 백엔드 DateTime은 시간대 표시가 없는 UTC 문자열이라, 그대로 new Date()에 넣으면 "보는 사람의
+        // 로컬 시간"으로 잘못 해석된다 - Z를 붙여 UTC임을 명시하고 항상 한국 시간(KST)으로 표시한다.
+        const fmt = (iso) => {
+            const withZ = /[zZ]$|[+-]\d\d:\d\d$/.test(iso) ? iso : `${iso}Z`;
+            return new Date(withZ).toLocaleString("ko-KR", {
+                timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"
+            });
+        };
         return `${fmt(banner.start_date)} ~ ${fmt(banner.end_date)}까지`;
     }
 

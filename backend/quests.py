@@ -98,20 +98,6 @@ def compute_progress(db: Session, user, quest, period_key: str) -> dict:
             ActivityLog.created_at >= start,
             ActivityLog.created_at < end,
         ).count()
-    elif ctype == "login_after_hour":
-        target = 1
-        hour = params.get("hour", 18)
-        rows = db.query(ActivityLog.created_at).filter(
-            ActivityLog.user_id == user.id,
-            ActivityLog.activity_type == "login",
-            ActivityLog.created_at >= start,
-            ActivityLog.created_at < end,
-        ).all()
-        matched = any(
-            created_at.replace(tzinfo=timezone.utc).astimezone(KST).hour >= hour
-            for (created_at,) in rows
-        )
-        current = 1 if matched else 0
     elif ctype == "quest_claims_in_period":
         current = db.query(UserQuestClaim).filter(
             UserQuestClaim.user_id == user.id,

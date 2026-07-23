@@ -173,6 +173,63 @@
     }
 }
 
+/* ── 표시 설정(스위치) ── */
+.settings-switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.settings-switch-label {
+    font-weight: 700;
+    font-size: 13px;
+    color: #3d4552;
+}
+
+.settings-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.settings-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.settings-switch-track {
+    position: absolute;
+    inset: 0;
+    background: rgba(120, 130, 145, .35);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background .18s ease;
+}
+
+.settings-switch-track::before {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform .18s ease;
+}
+
+.settings-switch input:checked + .settings-switch-track {
+    background: #5b6b82;
+}
+
+.settings-switch input:checked + .settings-switch-track::before {
+    transform: translateX(20px);
+}
+
 /* ── 로그아웃 ── */
 .settings-logout-btn {
     width: 100%;

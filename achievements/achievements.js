@@ -14,6 +14,13 @@
         return token ? { Authorization: `Bearer ${token}` } : {};
     }
 
+    // 백엔드가 내려주는 earned_at은 시간대 표시가 없는 UTC 문자열이라, 그대로 new Date()에 넣으면
+    // "보는 사람의 로컬 시간"으로 잘못 해석된다 - Z를 붙여 UTC임을 명시하고 항상 한국 시간(KST)으로 표시한다.
+    function formatKstDate(isoString) {
+        const withZ = /[zZ]$|[+-]\d\d:\d\d$/.test(isoString) ? isoString : `${isoString}Z`;
+        return new Date(withZ).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
+    }
+
     function escapeHtml(value) {
         return String(value ?? "")
             .replaceAll("&", "&amp;")
@@ -111,7 +118,7 @@
                         <div class="ach-progress-count">${current.toLocaleString()} / ${target.toLocaleString()}</div>
                     </div>
                     ${rewardText ? `<div class="ach-card-reward">${escapeHtml(rewardText)}</div>` : ""}
-                    ${ach.earned_at ? `<div class="ach-card-earned-at">${new Date(ach.earned_at).toLocaleDateString("ko-KR")} 달성</div>` : ""}
+                    ${ach.earned_at ? `<div class="ach-card-earned-at">${formatKstDate(ach.earned_at)} 달성</div>` : ""}
                 </div>
             `;
 
