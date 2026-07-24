@@ -14,8 +14,8 @@
     // 새 랭킹 종류가 추가돼도 이 표에 항목 하나만 더하면 되게 한다.
     const GROUPS = {
         reading: [
-            { key: "reading_lifetime", label: "누적 독서시간", format: formatMinutes },
             { key: "reading_daily", label: "오늘 독서시간", format: formatMinutes },
+            { key: "reading_lifetime", label: "누적 독서시간", format: formatMinutes },
         ],
         wealth: [
             { key: "gold", label: "보유 골드", format: (v) => `${v.toLocaleString()} G` },

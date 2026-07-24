@@ -70,6 +70,7 @@ class ReadingLog(Base):
     session_type = Column(String, default="reading")  # "reading"(독서) | "subject"(과목) | "mock_exam"(모의고사)
     reading_minutes = Column(Integer)
     is_auto_complete = Column(Boolean, default=False)  # mock_exam 전용: 타이머가 끝까지 흘러 자동 제출됐는지
+    equipped_character_name = Column(String, nullable=True)  # 세션 시작 시점에 장착 중이던 캐릭터명 스냅샷(도전과제용, 과거 기록엔 없음)
     earned_exp = Column(Integer)
     earned_gold = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -208,6 +209,37 @@ class UserAchievement(Base):
 
     owner = relationship("User", back_populates="achievements")
     achievement = relationship("Achievement")
+
+
+class Challenge(Base):
+    """"도전과제". 업적(Achievement)과 철학은 같지만(condition_type/condition_params 데이터 기반) 완전히
+    별개 시스템이다 - 업적은 칭호가 부여되지만 도전과제는 칭호 없이 보상만 주고, 자동지급이 아니라
+    퀘스트처럼 조건 충족 후 사용자가 직접 "받기"를 눌러야 지급된다."""
+    __tablename__ = "challenges"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    description = Column(String, default="")
+    condition_type = Column(String, nullable=False)
+    condition_value = Column(Integer, nullable=False)
+    condition_params = Column(JSON, nullable=True)
+
+    reward_gold = Column(Integer, default=0)
+    reward_exp = Column(Integer, default=0)
+    reward_items = Column(JSON, nullable=True)  # Achievement.reward_items와 동일 스키마
+
+
+class UserChallengeClaim(Base):
+    """"이번 도전과제를 이미 받았는지"만 영구히 저장한다(주간 퀘스트의 UserQuestClaim과 달리 기간이
+    없다 - 도전과제는 초기화되지 않으므로 한 번 받으면 그걸로 끝)."""
+    __tablename__ = "user_challenge_claims"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    challenge_id = Column(Integer, ForeignKey("challenges.id"))
+    claimed_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("user_id", "challenge_id"),)
 
 
 class GachaBanner(Base):

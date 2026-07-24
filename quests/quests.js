@@ -10,6 +10,7 @@
     let loading = false;
     let currentPeriod = "daily";
     let questData = { daily: [], weekly: [] };
+    let challengeData = [];
 
     function authHeaders() {
         const token = localStorage.getItem("access_token");
@@ -28,10 +29,12 @@
     function updateQuestBadge() {
         const badge = document.getElementById("quest-badge");
         if (!badge) return;
-        const claimableCount = ["daily", "weekly"].reduce(
+        const questClaimable = ["daily", "weekly"].reduce(
             (sum, period) => sum + (questData[period] || []).filter((q) => q.claimable && !q.claimed).length,
             0
         );
+        const challengeClaimable = challengeData.filter((c) => c.claimable && !c.claimed).length;
+        const claimableCount = questClaimable + challengeClaimable;
         badge.textContent = claimableCount;
         badge.hidden = claimableCount === 0;
     }
@@ -40,6 +43,17 @@
         if (quest.reward_type === "item") return `${quest.reward_item_name} ${Number(quest.reward_amount).toLocaleString()}개`;
         const label = quest.reward_type === "exp" ? "EXP" : "골드";
         return `${label} ${Number(quest.reward_amount).toLocaleString()}`;
+    }
+
+    function challengeRewardText(challenge) {
+        const parts = [];
+        if (challenge.reward_gold) parts.push(`골드 ${Number(challenge.reward_gold).toLocaleString()}`);
+        if (challenge.reward_exp) parts.push(`EXP ${Number(challenge.reward_exp).toLocaleString()}`);
+        (challenge.reward_items || []).forEach((item) => {
+            if (item.type === "character") parts.push(`${item.name} x${item.quantity}`);
+            else if (item.type === "item") parts.push(`${item.name} ${item.quantity}개`);
+        });
+        return parts.join(" · ") || "보상 없음";
     }
 
     async function ensureLoaded() {
@@ -65,9 +79,13 @@
         if (listEl) listEl.innerHTML = `<p class="screen-placeholder">불러오는 중...</p>`;
 
         try {
-            const res = await fetch(`${API_BASE_URL}/quests/`, { headers: authHeaders() });
-            if (!res.ok) throw new Error(`${res.status}`);
-            questData = await res.json();
+            const [questRes, challengeRes] = await Promise.all([
+                fetch(`${API_BASE_URL}/quests/`, { headers: authHeaders() }),
+                fetch(`${API_BASE_URL}/challenges/`, { headers: authHeaders() }),
+            ]);
+            if (!questRes.ok) throw new Error(`${questRes.status}`);
+            questData = await questRes.json();
+            challengeData = challengeRes.ok ? await challengeRes.json() : [];
             renderList();
             updateQuestBadge();
         } catch (error) {
@@ -84,39 +102,48 @@
         const claimAllBtn = document.getElementById("quest-claim-all-btn");
         if (!listEl) return;
 
-        const quests = questData[currentPeriod] || [];
-        const completedCount = quests.filter((q) => q.claimed).length;
-        const claimableCount = quests.filter((q) => q.claimable).length;
+        const isChallengeTab = currentPeriod === "challenge";
+        const items = isChallengeTab ? challengeData : (questData[currentPeriod] || []);
+        const completedCount = items.filter((q) => q.claimed).length;
+        const claimableCount = items.filter((q) => q.claimable).length;
 
-        if (summaryEl) summaryEl.textContent = `${completedCount} / ${quests.length}`;
-        if (claimAllBtn) claimAllBtn.disabled = claimableCount === 0;
+        if (summaryEl) summaryEl.textContent = `${completedCount} / ${items.length}`;
+        // 도전과제는 "모두 받기" 일괄 수령 기능이 없다(퀘스트와 달리 41개나 되어 한 번에 몰아 받는
+        // 흐름을 의도적으로 두지 않음) - 이 탭에서는 버튼 자체를 비활성화한다.
+        if (claimAllBtn) claimAllBtn.disabled = isChallengeTab || claimableCount === 0;
 
-        if (quests.length === 0) {
-            listEl.innerHTML = `<p class="screen-placeholder">표시할 퀘스트가 없습니다.</p>`;
+        if (items.length === 0) {
+            listEl.innerHTML = `<p class="screen-placeholder">표시할 항목이 없습니다.</p>`;
             return;
         }
 
-        listEl.innerHTML = quests.map((quest) => {
-            const percent = Math.min(100, (quest.progress_current / quest.progress_target) * 100);
-            const btnLabel = quest.claimed ? "수령 완료" : "받기";
+        listEl.innerHTML = items.map((item) => {
+            const percent = Math.min(100, (item.progress_current / item.progress_target) * 100);
+            const btnLabel = item.claimed ? "수령 완료" : "받기";
+            const idAttr = isChallengeTab ? `data-challenge-id="${item.id}"` : `data-quest-id="${item.id}"`;
+            const reward = isChallengeTab ? challengeRewardText(item) : rewardText(item);
+            const description = isChallengeTab && item.description
+                ? `<div class="quest-card-desc">${escapeHtml(item.description)}</div>`
+                : "";
 
             return `
-                <article class="quest-card${quest.claimed ? " quest-claimed" : ""}">
+                <article class="quest-card${item.claimed ? " quest-claimed" : ""}">
                     <div class="quest-card-main">
-                        <div class="quest-card-name">${escapeHtml(quest.name)}</div>
+                        <div class="quest-card-name">${escapeHtml(item.name)}</div>
+                        ${description}
                         <div class="quest-progress-line">
                             <div class="quest-progress-track">
                                 <div class="quest-progress-fill" style="width:${percent}%"></div>
                             </div>
-                            <span class="quest-progress-text">${quest.progress_current.toLocaleString()} / ${quest.progress_target.toLocaleString()}</span>
+                            <span class="quest-progress-text">${item.progress_current.toLocaleString()} / ${item.progress_target.toLocaleString()}</span>
                         </div>
-                        <div class="quest-reward-text">${escapeHtml(rewardText(quest))}</div>
+                        <div class="quest-reward-text">${escapeHtml(reward)}</div>
                     </div>
                     <button
-                        class="quest-claim-btn${quest.claimed ? " is-claimed" : ""}"
+                        class="quest-claim-btn${item.claimed ? " is-claimed" : ""}"
                         type="button"
-                        data-quest-id="${quest.id}"
-                        ${!quest.claimable || quest.claimed ? "disabled" : ""}
+                        ${idAttr}
+                        ${!item.claimable || item.claimed ? "disabled" : ""}
                     >${btnLabel}</button>
                 </article>
             `;
@@ -152,6 +179,33 @@
         } catch (error) {
             quest.claimed = false;
             quest.claimable = true;
+            renderList();
+            updateQuestBadge();
+            alert(error.message);
+        }
+    }
+
+    async function claimChallenge(challengeId) {
+        const challenge = challengeData.find((c) => c.id === Number(challengeId));
+        if (!challenge || challenge.claimed || !challenge.claimable) return;
+
+        challenge.claimed = true;
+        challenge.claimable = false;
+        renderList();
+        updateQuestBadge();
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/challenges/claim`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", ...authHeaders() },
+                body: JSON.stringify({ challenge_id: Number(challengeId) }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || "보상을 받지 못했습니다.");
+            if (typeof loadProfile === "function") await loadProfile();
+        } catch (error) {
+            challenge.claimed = false;
+            challenge.claimable = true;
             renderList();
             updateQuestBadge();
             alert(error.message);
@@ -203,7 +257,8 @@
         document.getElementById("quest-list")?.addEventListener("click", (event) => {
             const btn = event.target.closest(".quest-claim-btn");
             if (!btn || btn.disabled) return;
-            claimQuest(btn.dataset.questId);
+            if (btn.dataset.challengeId) claimChallenge(btn.dataset.challengeId);
+            else claimQuest(btn.dataset.questId);
         });
 
         document.getElementById("quest-claim-all-btn")?.addEventListener("click", claimAll);

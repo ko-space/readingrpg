@@ -8,7 +8,6 @@ const levelValue = document.getElementById('level-value');
 const expFill = document.getElementById('exp-bar-fill');
 const expText = document.getElementById('exp-text');
 const goldValue = document.getElementById('gold-value');
-const storyTicketValue = document.getElementById('story-ticket-value');
 const regionName = document.getElementById('region-name');
 const regionRate = document.getElementById('region-rate');
 const clockValue = document.getElementById('clock-value');
@@ -163,7 +162,6 @@ function renderProfile(data) {
     clockValue.textContent = `${String(dailyHours).padStart(2, '0')}:${String(dailyMins).padStart(2, '0')}`;
     levelValue.textContent = user.level;
     goldValue.textContent = user.gold.toLocaleString();
-    if (storyTicketValue) storyTicketValue.textContent = (user.story_ticket_count || 0).toLocaleString();
 
     titleValue.textContent = user.equipped_title || "칭호 없음";
     titleValue.classList.toggle("title-hidden-shine", !!user.equipped_title_is_hidden);
