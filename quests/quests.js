@@ -108,16 +108,19 @@
         const claimableCount = items.filter((q) => q.claimable).length;
 
         if (summaryEl) summaryEl.textContent = `${completedCount} / ${items.length}`;
-        // 도전과제는 "모두 받기" 일괄 수령 기능이 없다(퀘스트와 달리 41개나 되어 한 번에 몰아 받는
-        // 흐름을 의도적으로 두지 않음) - 이 탭에서는 버튼 자체를 비활성화한다.
-        if (claimAllBtn) claimAllBtn.disabled = isChallengeTab || claimableCount === 0;
+        if (claimAllBtn) claimAllBtn.disabled = claimableCount === 0;
 
         if (items.length === 0) {
             listEl.innerHTML = `<p class="screen-placeholder">표시할 항목이 없습니다.</p>`;
             return;
         }
 
-        listEl.innerHTML = items.map((item) => {
+        // 표시 순서: 완료(수령 가능) -> 진행 중 -> 이미 보상 받음. 원본 배열 순서(sort_order 등)는
+        // 건드리지 않도록 정렬은 렌더링용 복사본에서만 한다.
+        const rank = (item) => (item.claimed ? 2 : item.claimable ? 0 : 1);
+        const sortedItems = items.slice().sort((a, b) => rank(a) - rank(b));
+
+        listEl.innerHTML = sortedItems.map((item) => {
             const percent = Math.min(100, (item.progress_current / item.progress_target) * 100);
             const btnLabel = item.claimed ? "수령 완료" : "받기";
             const idAttr = isChallengeTab ? `data-challenge-id="${item.id}"` : `data-quest-id="${item.id}"`;
@@ -213,16 +216,21 @@
     }
 
     async function claimAll() {
-        const quests = questData[currentPeriod] || [];
-        const claimableIds = quests.filter((q) => q.claimable && !q.claimed).map((q) => q.id);
+        const isChallengeTab = currentPeriod === "challenge";
+        const items = isChallengeTab ? challengeData : (questData[currentPeriod] || []);
+        const claimableIds = items.filter((q) => q.claimable && !q.claimed).map((q) => q.id);
         if (claimableIds.length === 0) return;
 
-        quests.forEach((q) => { if (q.claimable) { q.claimed = true; q.claimable = false; } });
+        items.forEach((q) => { if (q.claimable) { q.claimed = true; q.claimable = false; } });
         renderList();
         updateQuestBadge();
 
+        const url = isChallengeTab
+            ? `${API_BASE_URL}/challenges/claim-all`
+            : `${API_BASE_URL}/quests/claim-all?period=${currentPeriod}`;
+
         try {
-            const res = await fetch(`${API_BASE_URL}/quests/claim-all?period=${currentPeriod}`, {
+            const res = await fetch(url, {
                 method: "POST",
                 headers: authHeaders(),
             });
@@ -234,7 +242,7 @@
             }
         } catch (error) {
             claimableIds.forEach((id) => {
-                const q = quests.find((qq) => qq.id === id);
+                const q = items.find((qq) => qq.id === id);
                 if (q) { q.claimed = false; q.claimable = true; }
             });
             renderList();
