@@ -66,7 +66,6 @@
     const meleeArrived = {};
     const pendingArrivalResolvers = {};
     const walkerSuspended = {}; // slot -> 이동 루프를 잠깐 멈춰둘지(넉백 트랜지션 중 tick()과 충돌 방지, arena-battle.js와 동일)
-    const standoffExtra = {}; // slot -> 도착 판정용 overlap을 얼마나 줄일지(복제체는 적과 겹치지 않고 그 앞에서 멈춘다, arena-battle.js와 동일)
     let walkerRunning = false;
     let advancedSlot = {}; // slot -> bool, "이동" 버튼으로 앞으로 나간 상태인지(토글)
 
@@ -398,21 +397,20 @@
 
             const cloneEl = document.querySelector(`[data-unit="${cloneSlot}"]`);
             const casterEl = document.querySelector(`[data-unit="${casterSlot}"]`);
+            // 복제체는 적 전방 유닛이 서 있는 바로 그 자리에 생성된다(캐스터 자신의 자리가 아님, arena-battle.js와 동일).
+            const enemyFrontSlot = opponentFrontSlot(casterSlot);
+            const enemyFrontEl = document.querySelector(`[data-unit="${enemyFrontSlot}"]`);
             if (cloneEl) {
                 cloneEl.hidden = false;
                 cloneEl.style.transform = ""; // 이전 복제체가 남긴 인라인 transform이 있으면 먼저 지운다
-                // 복제체는 캐스터가 서 있던 자리를 차지하되, 근접 교전 중인 캐스터는 이미 겹침(overlap)
-                // 만큼 적 쪽으로 파고들어 있는 상태라 그대로 복사하면 적과 겹쳐 보인다 - 겹친 만큼 자기
-                // 진영 쪽으로 당긴다(arena-battle.js와 동일). getCurrentTranslateX로 "리셋된 CSS 기본값
-                // 포함 현재 translateX"를 읽어서 그 위에 델타를 더해야 한다 - 절대값으로 통째로 덮어쓰면
-                // attacker-summon/defender-summon의 CSS 기본 transform(칸 밖으로 폭+20px 빼두는 값)이
-                // 상쇄되지 않고 그대로 더 얹혀서, 매번 그만큼 적 쪽으로 더 밀려난 자리에 생성됐었다.
-                if (casterEl) {
+                // getCurrentTranslateX로 "리셋된 CSS 기본값 포함 현재 translateX"를 읽어서 그 위에 델타를
+                // 더해야 한다 - 절대값으로 통째로 덮어쓰면 attacker-summon/defender-summon의 CSS 기본
+                // transform(칸 밖으로 폭+20px 빼두는 값)이 상쇄되지 않고 그대로 더 얹혀서 엉뚱한 자리에 생성된다.
+                if (enemyFrontEl) {
                     const cloneRect = cloneEl.getBoundingClientRect();
-                    const casterRect = casterEl.getBoundingClientRect();
+                    const targetRect = enemyFrontEl.getBoundingClientRect();
                     const currentCloneX = getCurrentTranslateX(cloneEl);
-                    const pullbackSign = side === "attacker" ? -1 : 1;
-                    cloneEl.style.transform = `translateX(${currentCloneX + (casterRect.left - cloneRect.left) + pullbackSign * 100}px)`;
+                    cloneEl.style.transform = `translateX(${currentCloneX + (targetRect.left - cloneRect.left)}px)`;
                 }
             }
             // 원본(캐스터)은 복제체를 소환한 반동으로 살짝 밀려난다 - 청년의 넉백(applyKnockback)과 같은
@@ -427,12 +425,13 @@
             renderUnit(cloneSlot);
             document.querySelector(`[data-unit="${cloneSlot}"] .battle-unit-img`)?.classList.add("is-clone");
 
-            // standoffExtra로 전방 유닛끼리의 클래시 겹침(overlap)을 없애서, 복제체는 적과 겹치지 않고
-            // 그 앞에서 멈춘다(arena-battle.js와 동일).
+            // 근거리 복제체는 다른 근접 유닛과 완전히 동일하게 취급한다 - meleeArrived를 false로 두면
+            // 이동 루프(tick)가 다음 프레임에 실제 겹침 여부를 직접 재서 판정하고, 도착으로 확인되는
+            // 순간에만 faceToward를 걸고 공격을 허용한다(waitForMeleeArrival이 그 전까지 공격을 막음,
+            // arena-battle.js와 동일).
             if (units[cloneSlot].isMelee) {
-                meleeTargetKey[cloneSlot] = opponentFrontSlot(cloneSlot);
+                meleeTargetKey[cloneSlot] = enemyFrontSlot;
                 meleeArrived[cloneSlot] = false;
-                standoffExtra[cloneSlot] = 100;
                 if (!walkerRunning) startMeleeWalker();
             }
 
@@ -876,7 +875,7 @@
         const rect = el.getBoundingClientRect();
         const targetRect = targetEl.getBoundingClientRect();
         // overlap이 클수록 "더 깊이 파고들어야"(겹쳐야) 도착 판정이 나서 결과적으로 더 가까이 멈춘다.
-        const overlap = 100 - (standoffExtra[unitKey] || 0);
+        const overlap = 75; // arena-battle.js의 APPROACH_OVERLAP과 동일
         const myCenter = rect.left + rect.width / 2;
         const targetCenter = targetRect.left + targetRect.width / 2;
         return myCenter <= targetCenter
@@ -1529,7 +1528,6 @@
         walkerRunning = false;
         SLOTS.forEach((slot) => clearAllStatusIcons(slot)); // 서버가 새로 보내는 이벤트로만 상태가 갱신되게, 수동으로 쌓아둔 건 초기화
         Object.keys(walkerSuspended).forEach((slot) => delete walkerSuspended[slot]);
-        Object.keys(standoffExtra).forEach((slot) => delete standoffExtra[slot]);
 
         // 이전 전투에서 남아있던 복제체(summon)는 새 전투 시작 전에 완전히 지운다.
         ["attacker-summon", "defender-summon"].forEach((slot) => {
@@ -1711,20 +1709,20 @@
 
                 const cloneEl = document.querySelector(`[data-unit="${cloneSlot}"]`);
                 const casterEl = actorSlot ? document.querySelector(`[data-unit="${actorSlot}"]`) : null;
+                // 복제체는 적 전방 유닛이 서 있는 바로 그 자리에 생성된다(캐스터 자신의 자리가 아님, arena-battle.js와 동일).
+                const enemyFrontSlot = opponentFrontSlot(cloneSlot);
+                const enemyFrontEl = document.querySelector(`[data-unit="${enemyFrontSlot}"]`);
                 if (cloneEl) {
                     cloneEl.hidden = false;
                     cloneEl.style.transform = ""; // 이전 복제체가 남긴 인라인 transform이 있으면 먼저 지운다
-                    // 근접 교전 중인 캐스터는 이미 겹침(overlap)만큼 적 쪽으로 파고들어 있으므로, 그 자리를
-                    // 그대로 복사하면 복제체가 적과 겹쳐 보인다 - 겹친 만큼 자기 진영 쪽으로 당긴다(arena-battle.js와
-                    // 동일). getCurrentTranslateX로 "리셋된 CSS 기본값 포함 현재 translateX"를 읽어서 그
-                    // 위에 델타를 더해야 한다 - 절대값으로 통째로 덮어쓰면 summon 슬롯의 CSS 기본
-                    // transform이 상쇄되지 않고 그대로 더 얹혀서 적 쪽으로 더 밀려난 자리에 생성된다.
-                    if (casterEl) {
+                    // getCurrentTranslateX로 "리셋된 CSS 기본값 포함 현재 translateX"를 읽어서 그 위에
+                    // 델타를 더해야 한다 - 절대값으로 통째로 덮어쓰면 summon 슬롯의 CSS 기본 transform이
+                    // 상쇄되지 않고 그대로 더 얹혀서 엉뚱한 자리에 생성된다.
+                    if (enemyFrontEl) {
                         const cloneRect = cloneEl.getBoundingClientRect();
-                        const casterRect = casterEl.getBoundingClientRect();
+                        const targetRect = enemyFrontEl.getBoundingClientRect();
                         const currentCloneX = getCurrentTranslateX(cloneEl);
-                        const pullbackSign = actorSide === "attacker" ? -1 : 1;
-                        cloneEl.style.transform = `translateX(${currentCloneX + (casterRect.left - cloneRect.left) + pullbackSign * 100}px)`;
+                        cloneEl.style.transform = `translateX(${currentCloneX + (targetRect.left - cloneRect.left)}px)`;
                     }
                 }
                 if (casterEl && actorSlot) {
@@ -1736,10 +1734,12 @@
                 // 복제체는 원본과 구분되게 전체적으로 푸른 색감이 돌도록(3D 프린트 홀로그램 느낌)
                 document.querySelector(`[data-unit="${cloneSlot}"] .battle-unit-img`)?.classList.add("is-clone");
 
+                // 근거리 복제체는 다른 근접 유닛과 완전히 동일하게 취급한다 - meleeArrived를 false로
+                // 두면 이동 루프(tick)가 실제 겹침 여부를 직접 재서 판정하고, 도착이 확인되는 순간에만
+                // faceToward를 걸고 공격을 허용한다.
                 if (units[cloneSlot].isMelee) {
-                    meleeTargetKey[cloneSlot] = opponentFrontSlot(cloneSlot);
+                    meleeTargetKey[cloneSlot] = enemyFrontSlot;
                     meleeArrived[cloneSlot] = false;
-                    standoffExtra[cloneSlot] = 100;
                 }
             }
             // 캐릭터 전용 스킬 발사체 연출. 김남옥(여성 대상 기절 성공)·이종복은 투사체가 대상에
@@ -1886,7 +1886,6 @@
             clearAllStatusIcons(slot);
             delete facingFlipped[slot];
             delete walkerSuspended[slot];
-            delete standoffExtra[slot];
         });
         ["attacker-summon", "defender-summon"].forEach((slot) => {
             delete units[slot];

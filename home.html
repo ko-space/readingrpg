@@ -385,8 +385,10 @@
         </div>
     </div>
 
-    <div class="pvp-entering-overlay" id="pvp-entering-overlay" hidden>
-        <div class="pvp-entering-text">입장하는 중<span class="pvp-entering-dots" id="pvp-entering-dots"></span></div>
+    <!-- 지역 입장/전술대회 입장 공통 "입장하는 중" 오버레이 - shared/home.js의 showLobbyEnteringOverlay가 관리 -->
+    <div class="lobby-entering-overlay" id="lobby-entering-overlay" hidden>
+        <div class="lobby-entering-text">입장하는 중<span class="lobby-entering-dots" id="lobby-entering-dots"></span></div>
+        <div class="lobby-entering-tip" id="lobby-entering-tip"></div>
     </div>
 
     <script src="shared/api-config.js"></script>

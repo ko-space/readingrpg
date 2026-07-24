@@ -196,7 +196,7 @@ def seed_currency_items():
         items = [
             {
                 "name": "스토리모드 티켓",
-                "price": 50,
+                "price": 25,
                 "icon_file": "assets/items/story_ticket.png",
                 "description": "인연 스토리에서 씬을 하나 볼 때마다 1장씩 사용됩니다.",
                 "daily_purchase_limit": 5,
@@ -660,8 +660,9 @@ QUESTS = [
         "condition_type": "session_minutes",
         "condition_params": {"session_type": "reading"},
         "condition_target": 30,
-        "reward_type": "exp",
-        "reward_amount": 10,
+        "reward_type": "item",
+        "reward_amount": 2,
+        "reward_item_name": "스토리모드 티켓",
         "sort_order": 1,
     },
     {
@@ -851,6 +852,7 @@ def seed_quests():
                 row.condition_target = q["condition_target"]
                 row.reward_type = q["reward_type"]
                 row.reward_amount = q["reward_amount"]
+                row.reward_item_name = q.get("reward_item_name")
                 row.sort_order = q.get("sort_order", 0)
             else:
                 db.add(Quest(
@@ -861,6 +863,7 @@ def seed_quests():
                     condition_target=q["condition_target"],
                     reward_type=q["reward_type"],
                     reward_amount=q["reward_amount"],
+                    reward_item_name=q.get("reward_item_name"),
                     sort_order=q.get("sort_order", 0),
                 ))
             changed = True
