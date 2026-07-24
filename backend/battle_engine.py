@@ -57,16 +57,15 @@ RANGED_ATTACK_INTERVAL = 1.5  # 원거리 공격 주기(초)
 TICK = 0.05
 
 SKILL_TRIGGER_ATTACK_COUNT = 3   # 기본공격 몇 회마다 스킬을 시전하는지
-SKILL_CAST_INTERVAL_MULTIPLIER = 1.1  # 시전 시간 = 기본공격 주기 * 이 값
+SKILL_CAST_INTERVAL_MULTIPLIER = 0.7  # 시전 시간 = 기본공격 주기 * 이 값
 
 
 def _new_status():
-    # 스킬/특성이 유닛에 남기는 임시·영구 상태. compute_unit_stats에서 유닛마다 새로 만들어 붙인다.
     return {
-        "atk_percent_bonus": 0,      # 영구(전투 종료까지) 공격력 증가 - 특성, 윤대웅 중첩 버프 등
+        "atk_percent_bonus": 0,      # 영구
         "atk_percent_debuff": 0,     # 임시 공격력 감소
         "temp_debuff_until": None,
-        "haste_percent": 0,          # 임시 공격 속도 증가(주기 단축)
+        "haste_percent": 0,          # 임시 공격 속도 증가
         "haste_until": None,
         "shield_until": None,        # 이 시간까지는 받는 피해가 0
         "stun_until": None,          # 이 시간까지는 아무 행동도 못 함

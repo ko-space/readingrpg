@@ -87,6 +87,10 @@ class QuestClaimRequest(BaseModel):
     quest_id: int
 
 
+class ChallengeClaimRequest(BaseModel):
+    challenge_id: int
+
+
 class StoryProgressRequest(BaseModel):
     story_id: str
     scene_key: str | None = None

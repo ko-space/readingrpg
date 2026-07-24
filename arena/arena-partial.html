@@ -1,5 +1,3 @@
-<h2 class="screen-title">전술경연 대회</h2>
-
 <div class="pvp-notice-overlay" id="pvp-notice-overlay" hidden>
     <div class="pvp-notice-box">
         <h3 class="pvp-notice-title">순위 변동 알림</h3>
@@ -8,58 +6,92 @@
     </div>
 </div>
 
+<div class="pvp-notice-overlay" id="pvp-ticket-insufficient-overlay" hidden>
+    <div class="pvp-notice-box">
+        <h3 class="pvp-notice-title">티켓이 부족해요</h3>
+        <p class="screen-placeholder">투기장모드 티켓이 없어서 전투를 시작할 수 없어요.<br>상점 재화 탭에서 티켓을 구매해주세요.</p>
+        <button class="dungeon-enter-btn" id="pvp-ticket-insufficient-ok-btn">확인</button>
+    </div>
+</div>
+
 <div id="pvp-main-view">
     <div class="pvp-layout">
 
-        <div class="pvp-left-panel">
-            <div class="defense-standing-row">
-                <div class="defense-standing-slot">
-                    <div class="defense-standing-imgwrap">
-                        <img class="defense-standing-img" id="defense-back-img" src="" alt="">
-                    </div>
-                    <div class="defense-standing-info">
-                        <span class="defense-standing-name" id="defense-back-name">미설정</span>
-                        <span class="defense-standing-star" id="defense-back-star"></span>
-                    </div>
-                </div>
-                <div class="defense-standing-slot">
-                    <div class="defense-standing-imgwrap">
-                        <img class="defense-standing-img" id="defense-front-img" src="" alt="">
-                    </div>
-                    <div class="defense-standing-info">
-                        <span class="defense-standing-name" id="defense-front-name">미설정</span>
-                        <span class="defense-standing-star" id="defense-front-star"></span>
-                    </div>
-                </div>
-            </div>
-            <button class="pvp-defense-change-btn" id="pvp-defense-change-btn">변경하기</button>
-
-            <div class="pvp-my-profile">
+        <aside class="pvp-left-panel">
+            <div class="player-banner">
                 <div class="pvp-my-avatar-frame">
                     <img class="pvp-my-avatar" id="pvp-my-avatar" src="" alt="">
                 </div>
-                <div class="pvp-my-nickname" id="pvp-my-nickname">-</div>
+                <div class="player-copy">
+                    <div class="pvp-my-nickname" id="pvp-my-nickname">-</div>
+                    <div class="player-banner-line"></div>
+                </div>
             </div>
-            <div class="pvp-my-rank"><span id="pvp-my-rank">-</span>등</div>
 
-            <button class="pvp-action-btn" id="pvp-history-btn">대전 이력</button>
-        </div>
-
-        <div class="pvp-right-panel">
-            <div class="pvp-right-header">
-                <h3 class="pvp-section-title">도전 후보</h3>
-                <button class="pvp-refresh-btn-sm" id="pvp-refresh-btn" title="리스트 갱신">↻</button>
+            <div class="rank-card">
+                <div class="rank-emblem" aria-hidden="true">★</div>
+                <div class="rank-copy">
+                    <div class="rank-label">CURRENT RANK</div>
+                    <div class="pvp-my-rank"><span id="pvp-my-rank">-</span>등</div>
+                </div>
             </div>
+
+            <section class="defense-card">
+                <div class="panel-caption">
+                    <span>방어 편성</span>
+                    <small>전방 · 후방</small>
+                </div>
+                <div class="defense-standing-row">
+                    <div class="defense-standing-slot">
+                        <div class="defense-standing-imgwrap">
+                            <img class="defense-standing-img" id="defense-back-img" src="" alt="">
+                        </div>
+                        <div class="defense-standing-info">
+                            <span class="defense-standing-name" id="defense-back-name">미설정</span>
+                            <span class="defense-standing-star" id="defense-back-star"></span>
+                        </div>
+                    </div>
+                    <div class="defense-standing-slot">
+                        <div class="defense-standing-imgwrap">
+                            <img class="defense-standing-img" id="defense-front-img" src="" alt="">
+                        </div>
+                        <div class="defense-standing-info">
+                            <span class="defense-standing-name" id="defense-front-name">미설정</span>
+                            <span class="defense-standing-star" id="defense-front-star"></span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <div class="left-action-row">
+                <button class="pvp-action-btn" id="pvp-history-btn" type="button">대전 이력</button>
+                <button class="pvp-defense-change-btn" id="pvp-defense-change-btn" type="button">방어 편성</button>
+            </div>
+        </aside>
+
+        <section class="pvp-right-panel">
+            <header class="pvp-right-header">
+                <h3 class="pvp-section-title">
+                    전술경연 대회
+                    <span class="pvp-ticket-chip" id="pvp-ticket-chip" title="투기장모드 티켓">
+                        <img src="assets/items/arena_ticket.png" class="icon-img" alt="" onerror="this.style.display='none'">
+                        <span id="pvp-ticket-value">0</span>
+                    </span>
+                </h3>
+                <button class="pvp-refresh-btn-sm" id="pvp-refresh-btn" type="button" title="리스트 갱신">
+                    <span class="refresh-icon" aria-hidden="true">↻</span> 리스트 갱신
+                </button>
+            </header>
             <div class="pvp-opponent-list" id="pvp-opponent-list">
                 <p class="screen-placeholder">불러오는 중...</p>
             </div>
-        </div>
+        </section>
 
     </div>
 </div>
 
-<div id="pvp-defense-picker-view" hidden>
-    <button class="pvp-back-btn" id="pvp-defense-back-btn">← 뒤로</button>
+<div class="sub-view" id="pvp-defense-picker-view" hidden>
+    <button class="pvp-back-btn" id="pvp-defense-back-btn" type="button">← 뒤로</button>
     <h3 class="pvp-section-title">방어 편성 변경</h3>
     <p class="screen-placeholder">전방/후방에 서로 다른 이름의 캐릭터를 선택하세요.</p>
     <div class="pvp-defense-slots">
@@ -72,11 +104,11 @@
             <select class="pvp-select" id="pvp-back-select"></select>
         </div>
     </div>
-    <button class="dungeon-enter-btn" id="pvp-defense-save-btn">저장</button>
+    <button class="dungeon-enter-btn" id="pvp-defense-save-btn" type="button">저장</button>
 </div>
 
-<div id="pvp-history-view" hidden>
-    <button class="pvp-back-btn" id="pvp-history-back-btn">← 뒤로</button>
+<div class="sub-view" id="pvp-history-view" hidden>
+    <button class="pvp-back-btn" id="pvp-history-back-btn" type="button">← 뒤로</button>
     <h3 class="pvp-section-title">대전 이력</h3>
     <div class="pvp-history-list" id="pvp-history-list"></div>
 </div>

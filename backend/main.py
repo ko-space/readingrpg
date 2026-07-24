@@ -6,8 +6,8 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import OperationalError
 from database import Base, engine
 import models
-from seed import seed_shop_items, seed_regions, seed_achievements, seed_gacha_banners, seed_enhancement_items, seed_quests, seed_currency_items, seed_notices
-from routers import users, logs, gacha, shop, regions, ranking, characters, auth, pvp, achievements, devtest, quests, story, notices, mailbox
+from seed import seed_shop_items, seed_regions, seed_achievements, seed_gacha_banners, seed_enhancement_items, seed_quests, seed_currency_items, seed_notices, seed_challenges
+from routers import users, logs, gacha, shop, regions, ranking, characters, auth, pvp, achievements, devtest, quests, story, notices, mailbox, challenges
 
 MAX_STARTUP_RETRIES = 5
 
@@ -33,6 +33,7 @@ seed_enhancement_items()
 seed_quests()
 seed_currency_items()
 seed_notices()
+seed_challenges()
 
 app = FastAPI()
 
@@ -67,6 +68,7 @@ app.include_router(quests.router)
 app.include_router(story.router)
 app.include_router(notices.router)
 app.include_router(mailbox.router)
+app.include_router(challenges.router)
 
 # backend/static/outfits/ 안의 파일들을 http://.../static/outfits/파일명 으로 그대로 서빙
 os.makedirs("static/outfits", exist_ok=True)

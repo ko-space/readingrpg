@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from database import get_db
-from models import User, Character, PvpBattleLog
+from models import User, Character, PvpBattleLog, Item, UserItem, Mail
 from schemas import PvpDefenseRequest, PvpBattleRequest
 from security import get_current_user
 from battle_engine import compute_unit_stats, build_team, simulate_battle
@@ -15,6 +15,26 @@ router = APIRouter(prefix="/pvp", tags=["pvp"])
 CANDIDATE_COUNT = 3    # 한 번에 보여줄 후보 수
 TOP_TIER_SIZE = 5      # 5등 이하는 이 상위 인원(0~4등) 중에서 무작위로 후보가 나온다
 ADMIN_USER_ID = 1      # ranking.py와 동일한 관리자 계정 - 항상 pvp_rank=0으로 고정되어 "0등" 자리를 차지한다
+
+ARENA_TICKET_ITEM_NAME = "투기장모드 티켓"  # users.py의 프로필 응답이 이 상수를 import해서 재사용
+ATTACK_WIN_GOLD = 5
+DEFENSE_WIN_GOLD = 5
+
+
+def _consume_arena_ticket(user: User, db: Session) -> None:
+    """전투 시도 1회당 투기장모드 티켓 1장을 소모한다. 부족하면 400."""
+    ticket_item = db.query(Item).filter(Item.name == ARENA_TICKET_ITEM_NAME).first()
+    user_item = (
+        db.query(UserItem)
+        .filter(UserItem.user_id == user.id, UserItem.item_id == ticket_item.id)
+        .first()
+        if ticket_item else None
+    )
+    if not user_item or user_item.quantity <= 0:
+        raise HTTPException(status_code=400, detail="투기장모드 티켓이 부족합니다.")
+    user_item.quantity -= 1
+    if user_item.quantity <= 0:
+        db.delete(user_item)
 
 
 def _get_equipped_outfit(user: User):
@@ -232,6 +252,8 @@ def run_battle(
         raise HTTPException(status_code=400, detail="지금은 이 상대와 대전할 수 없습니다. 목록을 갱신해주세요.")
     rank_changeable = pool_ids[defender.id]
 
+    _consume_arena_ticket(user, db)  # 전투 시도 1회당 티켓 1장 소모 (승패와 무관)
+
     attacker_front = db.query(Character).filter(Character.id == user.pvp_defense_front_id).first()
     attacker_back = db.query(Character).filter(Character.id == user.pvp_defense_back_id).first()
     defender_front = db.query(Character).filter(Character.id == defender.pvp_defense_front_id).first()
@@ -248,6 +270,16 @@ def run_battle(
 
     result = simulate_battle(attacker_team, defender_team)
     attacker_won = result["attacker_won"]
+
+    if attacker_won:
+        user.gold += ATTACK_WIN_GOLD
+        user.lifetime_gold += ATTACK_WIN_GOLD
+    else:
+        db.add(Mail(
+            user_id=defender.id,
+            title="전술대회 방어 보상입니다.",
+            gold_amount=DEFENSE_WIN_GOLD,
+        ))
 
     attacker_rank_before = user.pvp_rank
     defender_rank_before = defender.pvp_rank
