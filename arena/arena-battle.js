@@ -1799,6 +1799,7 @@
 
         const resultEl = document.getElementById("battle-result");
         const textEl = document.getElementById("battle-result-text");
+        const goldEl = document.getElementById("battle-result-gold");
 
         if (!resultEl || !textEl) return;
 
@@ -1809,6 +1810,15 @@
 
         if (data.rank_changed) {
             textEl.textContent += ` 내 순위: ${data.my_new_rank}등`;
+        }
+
+        if (goldEl) {
+            if (data.attacker_won && data.gold_reward) {
+                goldEl.textContent = `+${data.gold_reward}G`;
+                goldEl.hidden = false;
+            } else {
+                goldEl.hidden = true;
+            }
         }
 
         resultEl.hidden = false;

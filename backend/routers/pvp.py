@@ -342,6 +342,7 @@ def run_battle(
     return {
         "battle_log_id": log.id,
         "attacker_won": attacker_won,
+        "gold_reward": ATTACK_WIN_GOLD if attacker_won else 0,
         "duration": result["duration"],
         "events": result["events"],
         "rank_changed": rank_did_change,
