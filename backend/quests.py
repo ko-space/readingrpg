@@ -12,7 +12,7 @@ compute_progress()의 if/elif 사슬에 분기 하나를 추가한다.
 from datetime import datetime, timezone, timedelta, date, time
 from sqlalchemy.orm import Session
 
-from models import ReadingLog, PvpBattleLog, ActivityLog, UserQuestClaim
+from models import ReadingLog, PvpBattleLog, ActivityLog, UserQuestClaim, Mail
 
 KST = timezone(timedelta(hours=9))
 
@@ -128,4 +128,24 @@ def log_login_activity(db: Session, user_id: int) -> None:
     ).first()
     if not exists:
         db.add(ActivityLog(user_id=user_id, activity_type="login"))
+        db.commit()
+    _grant_patch_0724_mail_if_eligible(db, user_id)
+
+
+# 일회성 이벤트: 7/24(KST) 당일에 접속한 유저에게만 우편으로 골드 지급. 날짜가 지나면 조건이 항상
+# 거짓이 되어 자연히 죽은 코드가 되므로, 이 상수 3개와 함수, 위 호출 한 줄은 나중에 통째로 지워도 된다.
+PATCH_0724_MAIL_TITLE = "7.24 패치 보상입니다"
+PATCH_0724_MAIL_GOLD = 250
+PATCH_0724_DATE = "2026-07-24"
+
+
+def _grant_patch_0724_mail_if_eligible(db: Session, user_id: int) -> None:
+    if _daily_period_key() != PATCH_0724_DATE:
+        return
+    exists = db.query(Mail).filter(
+        Mail.user_id == user_id,
+        Mail.title == PATCH_0724_MAIL_TITLE,
+    ).first()
+    if not exists:
+        db.add(Mail(user_id=user_id, title=PATCH_0724_MAIL_TITLE, gold_amount=PATCH_0724_MAIL_GOLD))
         db.commit()
