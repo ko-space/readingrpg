@@ -16,6 +16,10 @@ from models import ReadingLog, PvpBattleLog, ActivityLog, UserQuestClaim
 
 KST = timezone(timedelta(hours=9))
 
+# 모의고사 난이도별 지정 시간(분). reading/reading.js의 MOCK_EXAM_MINUTES와 동일하게 유지해야 한다.
+# "모의고사를 봤다"로 인정하는 기준(아래 session_count의 mock_exam 분기)이 이 표를 기준으로 삼는다.
+MOCK_EXAM_MINUTES = {"국어": 80, "수학": 100, "수학(하프)": 50, "영어": 70, "영어(하프)": 40, "탐구": 30}
+
 
 def _daily_period_key(today: date | None = None) -> str:
     d = today or datetime.now(KST).date()
@@ -80,11 +84,15 @@ def compute_progress(db: Session, user, quest, period_key: str) -> dict:
         )
         if params.get("difficulty"):
             q = q.filter(ReadingLog.difficulty == params["difficulty"])
+        rows = q.all()
         if params.get("session_type") == "mock_exam":
-            # 모의고사는 "풀었다"로 인정되려면 타이머가 끝까지 흘러 자동 제출된 것이어야 한다
-            # (포기하기로 중도 종료한 기록은 세지 않음).
-            q = q.filter(ReadingLog.is_auto_complete == True)
-        current = q.count()
+            # 모의고사는 "풀었다"로 인정되려면 그 난이도의 지정 시간 이상 기록됐어야 한다 - is_auto_complete
+            # 플래그(클라이언트가 타이머 종료를 스스로 감지해서 표시)에 의존하면, 브라우저가 백그라운드
+            # 탭의 타이머를 쓰로틀링하는 동안 자동종료 감지 자체가 늦어지는 경우를 놓칠 수 있다.
+            # reading_minutes는 handleEndReading에서 항상 지정 시간 이하로 clamp되므로(넘길 수 없음),
+            # ">="가 사실상 "정확히 다 채웠는지"와 같다 - 자동/수동 종료 여부와 무관하게 안정적으로 판정된다.
+            rows = [r for r in rows if r.reading_minutes >= MOCK_EXAM_MINUTES.get(r.difficulty, float("inf"))]
+        current = len(rows)
     elif ctype == "pvp_battle_count":
         current = db.query(PvpBattleLog).filter(
             PvpBattleLog.attacker_id == user.id,

@@ -14,6 +14,24 @@
         return token ? { "Authorization": `Bearer ${token}` } : {};
     }
 
+    // ── 화면/절전 잠금 방지: 독서·모의고사 도중 컴퓨터가 잠들면 탭이 완전히 멈춰서(백그라운드 탭
+    // 쓰로틀링보다 훨씬 심함) 타이머 확인 자체가 안 된다. Wake Lock API를 지원하는 브라우저에서만
+    // 동작하고(구형 브라우저는 조용히 무시), 탭이 안 보이게 되면 브라우저가 잠금을 자동으로 풀기
+    // 때문에 다시 보일 때마다 재요청해야 한다(유튜브 등이 재생 중 화면을 안 끄는 것과 같은 API).
+    let wakeLock = null;
+    async function requestWakeLock() {
+        if (!("wakeLock" in navigator)) return;
+        try {
+            wakeLock = await navigator.wakeLock.request("screen");
+        } catch (err) {
+            console.error("화면 잠금 방지 요청 실패:", err);
+        }
+    }
+    function releaseWakeLock() {
+        wakeLock?.release();
+        wakeLock = null;
+    }
+
     // URL에서 1단계가 실어 보낸 정보를 읽는다.
     // (예: reading.html?region=초심자의+평원&session_type=mock_exam&difficulty=국어&duration=80)
     const params = new URLSearchParams(window.location.search);
@@ -246,6 +264,14 @@
         document.getElementById("reading-end-btn").hidden = false;
         tick();
         tickIntervalId = setInterval(tick, 1000);
+
+        // 모의고사는 40~100분 넘게 도는데, 브라우저는 백그라운드 탭의 setInterval을 강하게 쓰로틀링한다
+        // (심하면 분 단위로 한 번만 실행) - getElapsedMs()는 Date.now() 기반이라 계산 자체는 항상 정확하지만,
+        // 그 계산을 "확인하는" tick() 호출이 늦게 오면 시간이 다 됐는데도 한참 뒤에야 자동종료가 걸린다.
+        // 탭이 다시 보이는(포그라운드로 돌아오는) 순간 즉시 한 번 더 확인해서 이 지연을 없앤다.
+        document.addEventListener("visibilitychange", () => {
+            if (!document.hidden && sessionStarted && !handledEnd) tick();
+        });
     }
 
     // ── 종료: 실제로 기록을 저장하고, 결과를 순차 애니메이션으로 보여줌 ──
@@ -297,11 +323,20 @@
         const pauseBtn = document.getElementById("reading-pause-btn");
         if (pauseBtn) pauseBtn.disabled = true;
 
-        // "독서 완료!" 문구는 서버 응답(EXP/골드 계산)을 기다리지 않고 즉시 뜬다 - 실제 수치가
-        // 채워지는 통계 줄들만 서버 응답이 온 뒤 showCompleteModal에서 순서대로 나타난다.
+        // 모달은 서버 응답(EXP/골드 계산)을 기다리지 않고 즉시 뜨되, 아직 저장이 끝난 게 아니므로
+        // "저장 중..."(입장 중... 오버레이와 동일한 점 애니메이션)으로 먼저 보여준다 - 응답이 도착해야
+        // "독서 완료!"로 바뀌고 통계 줄들이 채워진다.
         ["stat-row-time", "stat-row-exp", "stat-row-gold", "complete-level-block", "complete-lobby-btn"]
             .forEach((id) => { document.getElementById(id).hidden = true; });
         document.getElementById("modal-complete").classList.add("open");
+
+        const savingDotsEl = document.getElementById("reading-complete-dots");
+        let savingDotCount = 1;
+        if (savingDotsEl) savingDotsEl.textContent = ".";
+        const savingDotTimer = setInterval(() => {
+            savingDotCount = (savingDotCount % 3) + 1;
+            if (savingDotsEl) savingDotsEl.textContent = ".".repeat(savingDotCount);
+        }, 400);
 
         try {
             const res = await fetch(`${API_BASE_URL}/logs/`, {
@@ -317,6 +352,8 @@
             });
             const data = await res.json();
 
+            clearInterval(savingDotTimer);
+
             if (!res.ok) {
                 document.getElementById("modal-complete").classList.remove("open");
                 alert(data.detail || "기록 저장에 실패했습니다.");
@@ -326,6 +363,8 @@
                 return;
             }
 
+            releaseWakeLock();
+            document.getElementById("reading-complete-title").textContent = "독서 완료!";
             showCompleteModal(data, elapsedSeconds).then(() => {
                 const notifyAchievements = () => {
                     if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
@@ -339,6 +378,7 @@
                 }
             });
         } catch (err) {
+            clearInterval(savingDotTimer);
             document.getElementById("modal-complete").classList.remove("open");
             alert("서버에 연결할 수 없습니다.");
             endBtn.disabled = false;
@@ -511,6 +551,11 @@
         setupPauseButton();
         setupUtilityStopwatch();
         setupModals();
+
+        requestWakeLock();
+        document.addEventListener("visibilitychange", () => {
+            if (!document.hidden) requestWakeLock();
+        });
 
         if (sessionType === "mock_exam") {
             const stopwatchEl = document.getElementById("reading-stopwatch");

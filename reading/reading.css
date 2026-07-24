@@ -348,6 +348,12 @@ html, body {
     font-size: 26px;
 }
 
+.reading-complete-dots {
+    display: inline-block;
+    width: 1.4em; /* 점 개수가 바뀌어도 글자가 좌우로 안 흔들리도록 폭 고정(입장 중... 오버레이와 동일) */
+    text-align: left;
+}
+
 .complete-stat-row {
     display: flex;
     justify-content: space-between;

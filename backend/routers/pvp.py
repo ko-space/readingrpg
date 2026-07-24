@@ -85,8 +85,13 @@ def _get_candidate_pool(user: User, db: Session):
     - 4등: {0,1,2,3} 중 3명을 무작위로 보여준다.
     - 5등 이하: {0,1,2,3,4}(상위 5명) 중 3명을 무작위로 보여준다.
 
-    관리자와의 대결은 순위에 영향이 없다(rank_changeable=False) - 관리자는 항상 0등에 고정되므로,
-    만약 이겨서 순위가 바뀐다면 두 유저가 동시에 0등이 되어 pvp_rank의 유니크 제약을 위반하게 된다.
+    나보다 순위가 높은(숫자가 작은) 상대에게 도전해 이기면 그 자리를 빼앗아 순위가 바뀐다
+    (rank_changeable=True). 반대로 나보다 순위가 낮은(숫자가 큰) 상대는 친선전(rank_changeable=False) -
+    이미 나보다 아래인 사람을 이겼다고 그 사람 자리로 "내려가는" 건 말이 안 되고, 실제로 시도하면
+    run_battle의 순위 재배치 구간 계산이 역전되어(defender_rank_before > attacker_rank_before) 두 유저가
+    동시에 같은 순위를 갖게 되는 상황이 생겨 pvp_rank의 유니크 제약을 위반하고 서버 에러가 난다.
+    관리자와의 대결도 항상 친선전이다 - 관리자는 항상 0등에 고정되므로, 만약 이겨서 순위가 바뀐다면
+    두 유저가 동시에 0등이 되어 역시 유니크 제약을 위반한다.
     """
     others = (
         db.query(User)
@@ -108,7 +113,8 @@ def _get_candidate_pool(user: User, db: Session):
     for r in target_ranks:
         other = by_rank.get(r)
         if other is not None:
-            pool.append((other, other.id != ADMIN_USER_ID))
+            rank_changeable = other.id != ADMIN_USER_ID and other.pvp_rank < user.pvp_rank
+            pool.append((other, rank_changeable))
 
     return pool
 

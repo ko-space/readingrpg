@@ -273,17 +273,9 @@
     // ── 전투 시작 ──────────────────────────────────────────
     async function startBattle(defenderId) {
         // 서버 응답을 기다리는 동안(+ 전투 화면으로 넘어가는 순간까지) 빈 화면이 보이지 않도록
-        // 버튼을 누르자마자 바로 암전을 띄운다. 성공하면 페이지 이동으로 자연스럽게 사라지고,
-        // 실패하면 다시 감춰서 원래 화면으로 돌아온다.
-        const overlay = document.getElementById("pvp-entering-overlay");
-        const dotsEl = document.getElementById("pvp-entering-dots");
-        if (overlay) overlay.hidden = false;
-        let dotCount = 1;
-        if (dotsEl) dotsEl.textContent = ".";
-        const dotTimer = setInterval(() => {
-            dotCount = (dotCount % 3) + 1;
-            if (dotsEl) dotsEl.textContent = ".".repeat(dotCount);
-        }, 400);
+        // 버튼을 누르자마자 바로 공용 입장 오버레이(shared/home.js)를 띄운다. 성공하면 페이지 이동으로
+        // 자연스럽게 사라지고, 실패하면 다시 감춰서 원래 화면으로 돌아온다.
+        if (typeof showLobbyEnteringOverlay === "function") showLobbyEnteringOverlay();
 
         try {
             const res = await fetch(`${API_BASE_URL}/pvp/battle`, {
@@ -293,18 +285,16 @@
             });
             const data = await res.json();
             if (!res.ok) {
-                clearInterval(dotTimer);
-                if (overlay) overlay.hidden = true;
+                if (typeof hideLobbyEnteringOverlay === "function") hideLobbyEnteringOverlay();
                 alert(data.detail || "전투에 실패했어요.");
                 return;
             }
             sessionStorage.setItem("pvp_battle_result", JSON.stringify(data));
-            // 여기서 암전을 다시 걷지 않는다 - 곧바로 페이지 이동이 시작되므로, 이동 순간까지
+            // 여기서 오버레이를 다시 걷지 않는다 - 곧바로 페이지 이동이 시작되므로, 이동 순간까지
             // 그대로 덮여있다가 전투 화면 자체의 battle-loading-overlay로 자연스럽게 이어진다.
             window.location.href = "arena-battle.html";
         } catch (err) {
-            clearInterval(dotTimer);
-            if (overlay) overlay.hidden = true;
+            if (typeof hideLobbyEnteringOverlay === "function") hideLobbyEnteringOverlay();
             alert("서버에 연결할 수 없어요.");
         }
     }

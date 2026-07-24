@@ -83,6 +83,9 @@
         if (!region) return;
         const params = new URLSearchParams({ region: region.name, session_type: sessionType, difficulty: label });
         if (mockMinutes) params.set("duration", mockMinutes);
+        // 페이지 이동 순간까지 공용 입장 오버레이(shared/home.js)로 덮어서, 넘어가는 동안 빈 화면이
+        // 안 보이게 한다 - reading.html에 도착하면 그쪽의 region-loading-overlay가 이어받는다.
+        if (typeof showLobbyEnteringOverlay === "function") showLobbyEnteringOverlay();
         window.location.href = `reading.html?${params.toString()}`;
     }
 

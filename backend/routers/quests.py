@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, Quest, UserQuestClaim
+from models import User, Quest, UserQuestClaim, Item, UserItem
 from schemas import QuestClaimRequest
 from security import get_current_user
 from leveling import apply_exp
@@ -27,6 +27,7 @@ def _serialize(db: Session, user: User, quest: Quest, claimed_period_keys: dict)
         "progress_target": progress["target"],
         "reward_type": quest.reward_type,
         "reward_amount": quest.reward_amount,
+        "reward_item_name": quest.reward_item_name,
         "claimed": already_claimed,
         "claimable": (not already_claimed) and progress["current"] >= progress["target"],
     }
@@ -69,8 +70,23 @@ def _claim_one(db: Session, user: User, quest: Quest) -> dict:
         user.lifetime_gold += quest.reward_amount
     elif quest.reward_type == "exp":
         apply_exp(user, quest.reward_amount)
+    elif quest.reward_type == "item":
+        item = db.query(Item).filter(Item.name == quest.reward_item_name).first()
+        if not item:
+            raise HTTPException(status_code=500, detail=f"보상 아이템 '{quest.reward_item_name}'을 찾을 수 없습니다.")
+        owned = db.query(UserItem).filter(UserItem.user_id == user.id, UserItem.item_id == item.id).first()
+        if owned:
+            owned.quantity += quest.reward_amount
+        else:
+            db.add(UserItem(user_id=user.id, item_id=item.id, quantity=quest.reward_amount))
 
-    return {"quest_id": quest.id, "name": quest.name, "reward_type": quest.reward_type, "reward_amount": quest.reward_amount}
+    return {
+        "quest_id": quest.id,
+        "name": quest.name,
+        "reward_type": quest.reward_type,
+        "reward_amount": quest.reward_amount,
+        "reward_item_name": quest.reward_item_name,
+    }
 
 
 @router.post("/claim")

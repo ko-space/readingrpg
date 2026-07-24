@@ -282,8 +282,9 @@ class Quest(Base):
     condition_type = Column(String, nullable=False)
     condition_params = Column(JSON, nullable=True)
     condition_target = Column(Integer, nullable=False, default=1)
-    reward_type = Column(String, nullable=False)  # "exp" | "gold"
-    reward_amount = Column(Integer, nullable=False, default=0)
+    reward_type = Column(String, nullable=False)  # "exp" | "gold" | "item"
+    reward_amount = Column(Integer, nullable=False, default=0)  # item이면 지급 수량
+    reward_item_name = Column(String, nullable=True)  # reward_type="item"일 때만 사용(Item.name 참조)
     sort_order = Column(Integer, default=0)
 
 
