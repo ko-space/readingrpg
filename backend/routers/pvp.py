@@ -13,7 +13,7 @@ from achievements import check_and_grant_achievements, get_equipped_title_info
 router = APIRouter(prefix="/pvp", tags=["pvp"])
 
 CANDIDATE_COUNT = 3    # 한 번에 보여줄 후보 수
-TOP_TIER_SIZE = 5      # 5등 이하는 이 상위 인원(0~4등) 중에서 무작위로 후보가 나온다
+TOP_TIER_SIZE = 5      # 5등 이하는 자기 바로 위 이 인원 수만큼의 창(예: 6등이면 1~5등)에서 무작위로 후보가 나온다
 ADMIN_USER_ID = 1      # ranking.py와 동일한 관리자 계정 - 항상 pvp_rank=0으로 고정되어 "0등" 자리를 차지한다
 
 ARENA_TICKET_ITEM_NAME = "투기장모드 티켓"  # users.py의 프로필 응답이 이 상수를 import해서 재사용
@@ -103,7 +103,8 @@ def _get_candidate_pool(user: User, db: Session):
 
     - 0~3등: {0,1,2,3} 중 자신을 제외한 나머지 세 자리를 그대로 보여준다(고정, 무작위 아님).
     - 4등: {0,1,2,3} 중 3명을 무작위로 보여준다.
-    - 5등 이하: {0,1,2,3,4}(상위 5명) 중 3명을 무작위로 보여준다.
+    - 5등 이하: 자신 바로 위 5자리(예: 5등이면 {0,1,2,3,4}, 6등이면 {1,2,3,4,5}, 7등이면
+      {2,3,4,5,6}) 중 3명을 무작위로 보여준다 - 상위 5명 고정이 아니라 내 순위를 따라 창이 움직인다.
 
     나보다 순위가 높은(숫자가 작은) 상대에게 도전해 이기면 그 자리를 빼앗아 순위가 바뀐다
     (rank_changeable=True). 반대로 나보다 순위가 낮은(숫자가 큰) 상대는 친선전(rank_changeable=False) -
@@ -126,8 +127,8 @@ def _get_candidate_pool(user: User, db: Session):
     elif user.pvp_rank == 4:
         target_ranks = random.sample([0, 1, 2, 3], min(CANDIDATE_COUNT, 4))
     else:
-        top_ranks = list(range(TOP_TIER_SIZE))
-        target_ranks = random.sample(top_ranks, min(CANDIDATE_COUNT, len(top_ranks)))
+        window_ranks = list(range(user.pvp_rank - TOP_TIER_SIZE, user.pvp_rank))
+        target_ranks = random.sample(window_ranks, min(CANDIDATE_COUNT, len(window_ranks)))
 
     pool = []
     for r in target_ranks:
