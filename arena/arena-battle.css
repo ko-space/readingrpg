@@ -1167,6 +1167,23 @@ body {
     text-shadow: 0 0 9px rgba(0, 0, 0, 0.55);
 }
 
+.battle-result-gold {
+    font-size: 20px;
+    font-weight: 900;
+    color: #ffe9a8;
+    text-shadow: 0 0 10px rgba(255, 233, 168, 0.75);
+    animation: battle-result-gold-pop 0.35s ease-out;
+}
+
+@keyframes battle-result-gold-pop {
+    from { opacity: 0; transform: translateY(6px) scale(0.85); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.battle-result-gold[hidden] {
+    display: none;
+}
+
 .battle-result[hidden] {
     display: none;
 }

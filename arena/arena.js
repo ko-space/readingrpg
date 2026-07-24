@@ -14,6 +14,7 @@
     let loading = false;
     let myInventory = []; // /characters/inventory 결과 (같은 이름+같은 성급은 하나로 묶여있음)
     let myDefense = { front: null, back: null }; // /pvp/defense 결과 (지금 저장된 방어 편성)
+    let myArenaTicketCount = 0; // /users/me의 arena_ticket_count - 전투 버튼 활성화 여부를 결정
 
     function authHeaders() {
         const token = localStorage.getItem("access_token");
@@ -98,7 +99,10 @@
         setupDefenseSave();
         setupTicketInsufficientOk();
         await checkRankChangeNotice();
-        await Promise.all([loadMyProfileAndDefense(), loadOpponents()]);
+        // 후보 카드의 전투 버튼이 티켓 보유수를 보고 활성화 여부를 정하므로, myArenaTicketCount가
+        // 먼저 채워진 뒤에 loadOpponents가 카드를 그려야 한다(Promise.all로 동시에 돌리면 순서가 꼬일 수 있음).
+        await loadMyProfileAndDefense();
+        await loadOpponents();
     }
 
     function setupTicketInsufficientOk() {
@@ -175,8 +179,9 @@
                 if (typeof applyAvatarCrop === "function") applyAvatarCrop(avatarEl, me.character_info.outfit);
             }
             document.getElementById("pvp-my-nickname").textContent = me.user_info.nickname;
+            myArenaTicketCount = me.user_info.arena_ticket_count ?? 0;
             const ticketValueEl = document.getElementById("pvp-ticket-value");
-            if (ticketValueEl) ticketValueEl.textContent = me.user_info.arena_ticket_count ?? 0;
+            if (ticketValueEl) ticketValueEl.textContent = myArenaTicketCount;
 
             renderDefenseStanding();
         } catch (err) {
@@ -264,7 +269,7 @@
                             </div>
                             <div class="formation-line"></div>
                         </div>
-                        <button class="pvp-fight-btn" type="button">전투</button>
+                        <button class="pvp-fight-btn" type="button" ${myArenaTicketCount <= 0 ? `disabled title="투기장모드 티켓이 부족합니다"` : ""}>전투</button>
                     </div>
                     <div class="opponent-meta-row">
                         <span class="pvp-opponent-level">Lv.${opp.level}</span>
