@@ -1016,7 +1016,7 @@ QUESTS = [
         "condition_params": {"session_type": "mock_exam"},
         "condition_target": 1,
         "reward_type": "gold",
-        "reward_amount": 30,
+        "reward_amount": 90,
         "sort_order": 2,
     },
     {
@@ -1066,7 +1066,7 @@ QUESTS = [
         "condition_params": {"activity_type": "story_ticket_use"},
         "condition_target": 1,
         "reward_type": "gold",
-        "reward_amount": 20,
+        "reward_amount": 60,
         "sort_order": 7,
     },
     {
@@ -1085,7 +1085,7 @@ QUESTS = [
         "condition_type": "quest_claims_in_period",
         "condition_target": 6,
         "reward_type": "gold",
-        "reward_amount": 50,
+        "reward_amount": 150,
         "sort_order": 9,
     },
     # ── 주간 퀘스트 (KST 월요일 자정에 초기화) ────────────────────────────────────
@@ -1107,7 +1107,7 @@ QUESTS = [
         "condition_params": {"session_type": "mock_exam", "difficulty": "영어"},
         "condition_target": 2,
         "reward_type": "gold",
-        "reward_amount": 50,
+        "reward_amount": 150,
         "sort_order": 2,
     },
     {
@@ -1157,7 +1157,7 @@ QUESTS = [
         "condition_params": {"activity_type": "story_ticket_use"},
         "condition_target": 10,
         "reward_type": "gold",
-        "reward_amount": 50,
+        "reward_amount": 150,
         "sort_order": 7,
     },
     {
@@ -1176,7 +1176,7 @@ QUESTS = [
         "condition_type": "quest_claims_in_period",
         "condition_target": 6,
         "reward_type": "gold",
-        "reward_amount": 100,
+        "reward_amount": 300,
         "sort_order": 9,
     },
 ]

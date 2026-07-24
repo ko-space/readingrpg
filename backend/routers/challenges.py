@@ -44,16 +44,7 @@ def list_challenges(db: Session = Depends(get_db), user: User = Depends(get_curr
     return [_serialize(db, user, c, claimed_ids) for c in challenges]
 
 
-@router.post("/claim")
-def claim_challenge(
-    req: ChallengeClaimRequest,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    challenge = db.query(Challenge).filter(Challenge.id == req.challenge_id).first()
-    if not challenge:
-        raise HTTPException(status_code=404, detail="존재하지 않는 도전과제입니다.")
-
+def _claim_one(db: Session, user: User, challenge: Challenge) -> tuple[dict, list]:
     already = db.query(UserChallengeClaim).filter(
         UserChallengeClaim.user_id == user.id,
         UserChallengeClaim.challenge_id == challenge.id,
@@ -75,22 +66,72 @@ def claim_challenge(
         apply_exp(user, challenge.reward_exp)
     new_chars = _grant_reward_items(db, user, challenge.reward_items)
 
-    db.commit()
-    db.refresh(user)
-
     new_characters = [
         {**_character_reveal_dict(char), "is_duplicate": char.name in owned_names, "is_pickup": False}
         for char in new_chars
     ]
 
     return {
-        "message": f"'{challenge.name}' 보상을 받았습니다!",
         "challenge_id": challenge.id,
         "name": challenge.name,
         "reward_gold": challenge.reward_gold,
         "reward_exp": challenge.reward_exp,
+    }, new_characters
+
+
+@router.post("/claim")
+def claim_challenge(
+    req: ChallengeClaimRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    challenge = db.query(Challenge).filter(Challenge.id == req.challenge_id).first()
+    if not challenge:
+        raise HTTPException(status_code=404, detail="존재하지 않는 도전과제입니다.")
+
+    result, new_characters = _claim_one(db, user, challenge)
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "message": f"'{challenge.name}' 보상을 받았습니다!",
+        **result,
         "gold": user.gold,
         "level": user.level,
         "total_exp": user.total_exp,
         "new_characters": new_characters,
+    }
+
+
+@router.post("/claim-all")
+def claim_all_challenges(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """지금 수령 가능한 도전과제를 전부 받는다. 조건 미달/중복 수령인 항목은 조용히 건너뛰고,
+    실제로 받은 것들만 결과에 담는다(퀘스트의 claim-all과 동일한 부분 실패 허용 패턴)."""
+    claimed_ids = {
+        row.challenge_id
+        for row in db.query(UserChallengeClaim).filter(UserChallengeClaim.user_id == user.id).all()
+    }
+
+    claimed_results = []
+    all_new_characters = []
+    for challenge in db.query(Challenge).order_by(Challenge.id.asc()).all():
+        if challenge.id in claimed_ids:
+            continue
+        progress = compute_progress(db, user, challenge)
+        if progress["current"] < progress["target"]:
+            continue
+        result, new_characters = _claim_one(db, user, challenge)
+        claimed_results.append(result)
+        all_new_characters.extend(new_characters)
+
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "message": f"도전과제 보상 {len(claimed_results)}개를 받았습니다." if claimed_results else "지금 받을 수 있는 보상이 없습니다.",
+        "claimed": claimed_results,
+        "gold": user.gold,
+        "level": user.level,
+        "total_exp": user.total_exp,
+        "new_characters": all_new_characters,
     }
