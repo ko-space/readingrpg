@@ -30,13 +30,14 @@ def _resolve_matched_subject(session_type: str, difficulty: str) -> str | None:
     return None
 
 
-def _equipped_character_exp_multiplier(user, matched_subject: str | None) -> float:
+def _get_equipped_character(user):
+    return next((c for c in user.characters if c.is_equipped == 1), None)
+
+
+def _equipped_character_exp_multiplier(equipped, matched_subject: str | None) -> float:
     """지금 장착 중인 캐릭터가 이번 학습의 과목에 지정돼 있으면 그 캐릭터의 성급별 EXP 배수를,
     아니면(장착 캐릭터가 없거나, 지정 과목이 아니거나, 그 성급에 배수가 없으면) 1.0(배수 없음)을 돌려준다."""
-    if not matched_subject:
-        return 1.0
-    equipped = next((c for c in user.characters if c.is_equipped == 1), None)
-    if not equipped:
+    if not matched_subject or not equipped:
         return 1.0
     catalog = get_character_catalog(equipped.name)
     if not catalog or matched_subject not in (catalog.get("exp_subjects") or []):
@@ -125,8 +126,9 @@ def add_reading_log(
     if reading_minutes < 0:
         raise HTTPException(status_code=400, detail="독서 시간은 0 이상이어야 합니다.")
 
+    equipped = _get_equipped_character(user)
     matched_subject = _resolve_matched_subject(log_data.session_type, log_data.difficulty)
-    character_exp_multiplier = _equipped_character_exp_multiplier(user, matched_subject)
+    character_exp_multiplier = _equipped_character_exp_multiplier(equipped, matched_subject)
 
     gained_exp = int(reading_minutes * region.exp_rate * difficulty_multiplier * character_exp_multiplier)
     gained_gold = int(reading_minutes * region.gold_rate)
@@ -149,6 +151,7 @@ def add_reading_log(
         difficulty=log_data.difficulty,
         session_type=log_data.session_type,
         reading_minutes=reading_minutes,
+        equipped_character_name=equipped.name if equipped else None,
         earned_exp=gained_exp,
         earned_gold=gained_gold,
         is_auto_complete=log_data.is_auto_complete and log_data.session_type == "mock_exam",

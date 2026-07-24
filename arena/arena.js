@@ -96,8 +96,16 @@
         setupViewNav();
         setupRefreshButton();
         setupDefenseSave();
+        setupTicketInsufficientOk();
         await checkRankChangeNotice();
         await Promise.all([loadMyProfileAndDefense(), loadOpponents()]);
+    }
+
+    function setupTicketInsufficientOk() {
+        document.getElementById("pvp-ticket-insufficient-ok-btn")?.addEventListener("click", () => {
+            const overlay = document.getElementById("pvp-ticket-insufficient-overlay");
+            if (overlay) overlay.hidden = true;
+        });
     }
 
     // ── 뷰 전환 (메인 / 방어 편성 변경 / 대전 이력) ──────────────────────
@@ -167,6 +175,8 @@
                 if (typeof applyAvatarCrop === "function") applyAvatarCrop(avatarEl, me.character_info.outfit);
             }
             document.getElementById("pvp-my-nickname").textContent = me.user_info.nickname;
+            const ticketValueEl = document.getElementById("pvp-ticket-value");
+            if (ticketValueEl) ticketValueEl.textContent = me.user_info.arena_ticket_count ?? 0;
 
             renderDefenseStanding();
         } catch (err) {
@@ -239,20 +249,28 @@
             data.opponents.forEach((opp) => {
                 const card = document.createElement("div");
                 card.className = "pvp-opponent-card";
+                const friendlyText = opp.rank_changeable ? "" : "친선전 · 순위 변동 없음";
                 card.innerHTML = `
-                    <div class="pvp-opponent-avatar-frame">
-                        <img class="pvp-opponent-avatar" src="${opp.lobby_outfit ? OUTFIT_IMAGE_BASE + opp.lobby_outfit + '/idle.png' : ''}" data-outfit="${opp.lobby_outfit || ''}" alt="">
+                    <div class="opponent-main-row">
+                        <div class="pvp-opponent-avatar-frame">
+                            <img class="pvp-opponent-avatar" src="${opp.lobby_outfit ? OUTFIT_IMAGE_BASE + opp.lobby_outfit + '/idle.png' : ''}" data-outfit="${opp.lobby_outfit || ''}" alt="">
+                        </div>
+                        <div class="pvp-opponent-rank">${opp.pvp_rank}등</div>
+                        <div class="formation-preview">
+                            <div class="formation-line"></div>
+                            <div class="pvp-opponent-defense">
+                                ${renderOpponentUnitThumb(opp.defense?.back)}
+                                ${renderOpponentUnitThumb(opp.defense?.front)}
+                            </div>
+                            <div class="formation-line"></div>
+                        </div>
+                        <button class="pvp-fight-btn" type="button">전투</button>
                     </div>
-                    <div class="pvp-opponent-rank">${opp.pvp_rank}등</div>
-                    <div class="pvp-opponent-defense">
-                        ${renderOpponentUnitThumb(opp.defense?.back)}
-                        ${renderOpponentUnitThumb(opp.defense?.front)}
+                    <div class="opponent-meta-row">
+                        <span class="pvp-opponent-level">Lv.${opp.level}</span>
+                        <span class="pvp-opponent-name">${opp.nickname}</span>
+                        ${friendlyText ? `<span class="friendly-label">${friendlyText}</span>` : ""}
                     </div>
-                    <div class="pvp-opponent-info">
-                        <div class="pvp-opponent-name">${opp.nickname}</div>
-                        <div class="pvp-opponent-level">Lv. ${opp.level}${opp.rank_changeable ? "" : " · 친선전(순위 변동 없음)"}</div>
-                    </div>
-                    <button class="pvp-fight-btn">전투</button>
                 `;
                 if (opp.lobby_outfit && typeof applyAvatarCrop === "function") {
                     applyAvatarCrop(card.querySelector(".pvp-opponent-avatar"), opp.lobby_outfit);
@@ -262,7 +280,7 @@
                         applyAvatarCrop(img, img.dataset.outfit);
                     }
                 });
-                card.querySelector(".pvp-fight-btn").addEventListener("click", () => startBattle(opp.id));
+                card.querySelector(".pvp-fight-btn").addEventListener("click", (event) => startBattle(opp.id, event.currentTarget));
                 listEl.appendChild(card);
             });
         } catch (err) {
@@ -271,7 +289,7 @@
     }
 
     // ── 전투 시작 ──────────────────────────────────────────
-    async function startBattle(defenderId) {
+    async function startBattle(defenderId, button) {
         // 서버 응답을 기다리는 동안(+ 전투 화면으로 넘어가는 순간까지) 빈 화면이 보이지 않도록
         // 버튼을 누르자마자 바로 공용 입장 오버레이(shared/home.js)를 띄운다. 성공하면 페이지 이동으로
         // 자연스럽게 사라지고, 실패하면 다시 감춰서 원래 화면으로 돌아온다.
@@ -286,6 +304,13 @@
             const data = await res.json();
             if (!res.ok) {
                 if (typeof hideLobbyEnteringOverlay === "function") hideLobbyEnteringOverlay();
+                if (typeof data.detail === "string" && data.detail.includes("티켓")) {
+                    const overlay = document.getElementById("pvp-ticket-insufficient-overlay");
+                    if (overlay) {
+                        overlay.hidden = false;
+                        return;
+                    }
+                }
                 alert(data.detail || "전투에 실패했어요.");
                 return;
             }

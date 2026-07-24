@@ -678,6 +678,15 @@ body, html {
 }
 
 /* ===== 반응형 ===== */
+/* 캐릭터 스프라이트(320px)를 포함하면 3개 카드가 한 줄에 안 들어가는 폭에서, "스토리 입장" 카드가
+   다음 줄로 밀려나기 전에 캐릭터부터 먼저 숨겨서 자리를 내준다 - 카드 3장이 한 줄에 있는 게
+   캐릭터 스프라이트보다 우선순위가 높다. */
+@media (max-width: 1300px) {
+    .character-display {
+        display: none;
+    }
+}
+
 @media (max-width: 720px) {
     .game-home {
         flex-direction: column;

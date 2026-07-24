@@ -2,7 +2,7 @@ import json
 from database import SessionLocal
 from models import (
     Item, Region, Achievement, GachaBanner, GachaBannerPickup, Quest, UserQuestClaim,
-    UserItem, UserItemPurchase, UserDailyItemPurchase, Notice,
+    UserItem, UserItemPurchase, UserDailyItemPurchase, Notice, Challenge,
 )
 
 with open("characters.json", "r", encoding="utf-8") as f:
@@ -200,6 +200,13 @@ def seed_currency_items():
                 "icon_file": "assets/items/story_ticket.png",
                 "description": "인연 스토리에서 씬을 하나 볼 때마다 1장씩 사용됩니다.",
                 "daily_purchase_limit": 5,
+            },
+            {
+                "name": "투기장모드 티켓",
+                "price": 4,
+                "icon_file": "assets/items/arena_ticket.png",
+                "description": "전술경연 대회에서 전투를 시도할 때마다 1장씩 사용됩니다.",
+                "daily_purchase_limit": 10,
             },
         ]
 
@@ -652,6 +659,343 @@ def seed_achievements():
     finally:
         db.close()
 
+
+STORY_ID_EP1 = "ep1_yoondaewoong"
+
+CHALLENGES = [
+    # ── 스토리모드 도전과제: 인연 스토리 Episode 1 CG 갤러리 순서(story-engine.js의 CG_GALLERY_ITEMS)와
+    # 1:1로 대응한다 ──────────────────────────────────────────
+    {
+        "name": "도감 Episode 1 No.1 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "bad"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "도감 Episode 1 No.2 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "normal"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "도감 Episode 1 No.3 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "juheon"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "송주헌", "quantity": 1}],
+    },
+    {
+        "name": "도감 Episode 1 No.4 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "seungyu"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "강승유", "quantity": 1}],
+    },
+    {
+        "name": "도감 Episode 1 No.5 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "yeongwoong"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "이영웅", "quantity": 1}],
+    },
+    {
+        "name": "도감 Episode 1 No.6 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "ganghee"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "강 희", "quantity": 1}],
+    },
+    {
+        "name": "도감 Episode 1 No.7 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "true_seungyu"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "송주헌", "quantity": 2}],
+    },
+    {
+        "name": "도감 Episode 1 No.8 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "true_ganghee"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "강 희", "quantity": 2}],
+    },
+    {
+        "name": "도감 Episode 1 No.9 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "true_yeongwoong"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "이영웅", "quantity": 2}],
+    },
+    {
+        "name": "도감 Episode 1 No.10 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "true_juheon"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "송주헌", "quantity": 2}],
+    },
+    {
+        "name": "도감 Episode 1 No.11 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "hidden"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "송주헌", "quantity": 3}],
+    },
+
+    # ── 도전과제(일반) ──────────────────────────────────────────
+    {
+        "name": "강화 성공 누적 10회 달성",
+        "condition_type": "activity_total",
+        "condition_value": 10,
+        "condition_params": {"activity_type": "character_enhance_success"},
+        "reward_gold": 500,
+    },
+    {
+        "name": "강화 파괴 누적 10회 달성",
+        "condition_type": "activity_total",
+        "condition_value": 10,
+        "condition_params": {"activity_type": "character_enhance_destroy"},
+        "reward_gold": 500,
+    },
+    {
+        "name": "아이템 누적 10회 구매",
+        "condition_type": "activity_total",
+        "condition_value": 10,
+        "condition_params": {"activity_type": "shop_purchase_enhancement"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "아이템 누적 10회 사용",
+        "condition_type": "activity_total",
+        "condition_value": 10,
+        "condition_params": {"activity_type": "item_use"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인연 스토리 누적 10회 플레이",
+        "condition_type": "activity_total",
+        "condition_value": 10,
+        "condition_params": {"activity_type": "story_ticket_use"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "지역 입장 30분 이상 누적 10회 플레이",
+        "condition_type": "region_session_count",
+        "condition_value": 10,
+        "condition_params": {"min_minutes": 30},
+        "reward_gold": 200,
+    },
+    {
+        "name": "전술대회 누적 10회 플레이",
+        "condition_type": "pvp_battle_total",
+        "condition_value": 10,
+        "reward_gold": 100,
+    },
+    {
+        "name": "인연 스토리 누적 50회 플레이",
+        "condition_type": "activity_total",
+        "condition_value": 50,
+        "condition_params": {"activity_type": "story_ticket_use"},
+        "reward_gold": 500,
+    },
+    {
+        "name": "지역 입장 30분 이상 누적 50회 플레이",
+        "condition_type": "region_session_count",
+        "condition_value": 50,
+        "condition_params": {"min_minutes": 30},
+        "reward_gold": 500,
+    },
+    {
+        "name": "전술대회 누적 50회 플레이",
+        "condition_type": "pvp_battle_total",
+        "condition_value": 50,
+        "reward_gold": 200,
+    },
+
+    # ── 투기장 도전과제 ──────────────────────────────────────────
+    {
+        "name": "전술대회 랭킹 1위 달성",
+        "condition_type": "pvp_rank_reached",
+        "condition_value": 1,
+        "condition_params": {"rank": 1},
+        "reward_gold": 200,
+    },
+    {
+        "name": "★5 이상 캐릭터로 전술대회 전투 참여 1회",
+        "condition_type": "pvp_battle_with_star",
+        "condition_value": 1,
+        "condition_params": {"min_star": 5},
+        "reward_gold": 200,
+    },
+    {
+        "name": "전술대회 누적 10승 달성",
+        "condition_type": "pvp_wins",
+        "condition_value": 10,
+        "reward_gold": 100,
+    },
+    {
+        "name": "전술대회 누적 20승 달성",
+        "condition_type": "pvp_wins",
+        "condition_value": 20,
+        "reward_gold": 100,
+    },
+    {
+        "name": "전술대회 누적 30승 달성",
+        "condition_type": "pvp_wins",
+        "condition_value": 30,
+        "reward_gold": 100,
+    },
+    {
+        "name": "전술대회 누적 40승 달성",
+        "condition_type": "pvp_wins",
+        "condition_value": 40,
+        "reward_gold": 100,
+    },
+    {
+        "name": "전술대회 누적 50승 달성",
+        "condition_type": "pvp_wins",
+        "condition_value": 50,
+        "reward_gold": 100,
+    },
+    {
+        "name": "전술대회 누적 60승 달성",
+        "condition_type": "pvp_wins",
+        "condition_value": 60,
+        "reward_gold": 100,
+    },
+    {
+        "name": "전술대회 누적 70승 달성",
+        "condition_type": "pvp_wins",
+        "condition_value": 70,
+        "reward_gold": 100,
+    },
+    {
+        "name": "전술대회 누적 80승 달성",
+        "condition_type": "pvp_wins",
+        "condition_value": 80,
+        "reward_gold": 100,
+    },
+
+    # ── 메인 게임 도전과제 ──────────────────────────────────────────
+    {
+        "name": "송주헌과 함께 독서로 누적 500exp 획득",
+        "condition_type": "character_reading_exp",
+        "condition_value": 500,
+        "condition_params": {"character_name": "송주헌"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "송주헌", "quantity": 3}],
+    },
+    {
+        "name": "청년과 함께 독서로 누적 500exp 획득",
+        "condition_type": "character_reading_exp",
+        "condition_value": 500,
+        "condition_params": {"character_name": "청년"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "청년", "quantity": 9}],
+    },
+    {
+        "name": "직업:학생과 함께 과목으로 누적 1000exp 획득",
+        "condition_type": "job_class_subject_exp",
+        "condition_value": 1000,
+        "condition_params": {"job_class": "학생"},
+        "reward_gold": 500,
+    },
+    {
+        "name": "직업:마법사를 사용해 과목으로 누적 1000exp 획득",
+        "condition_type": "job_class_subject_exp",
+        "condition_value": 1000,
+        "condition_params": {"job_class": "마법사"},
+        "reward_gold": 500,
+    },
+    {
+        "name": "여성 캐릭터를 사용해 과목으로 누적 1000exp 획득",
+        "condition_type": "gender_subject_exp",
+        "condition_value": 1000,
+        "condition_params": {"gender": "여"},
+        "reward_gold": 500,
+    },
+    {
+        "name": "지역 입장 2시간 연속 집중 누적 3회 달성",
+        "condition_type": "region_session_count",
+        "condition_value": 3,
+        "condition_params": {"min_minutes": 120},
+        "reward_gold": 200,
+    },
+    {
+        "name": "지역 입장 2시간 연속 집중 누적 5회 달성",
+        "condition_type": "region_session_count",
+        "condition_value": 5,
+        "condition_params": {"min_minutes": 120},
+        "reward_gold": 200,
+    },
+    {
+        "name": "지역 입장 2시간 연속 집중 누적 7회 달성",
+        "condition_type": "region_session_count",
+        "condition_value": 7,
+        "condition_params": {"min_minutes": 120},
+        "reward_gold": 200,
+    },
+    {
+        "name": "지역 입장 2시간 연속 집중 누적 9회 달성",
+        "condition_type": "region_session_count",
+        "condition_value": 9,
+        "condition_params": {"min_minutes": 120},
+        "reward_gold": 200,
+    },
+    {
+        "name": "하루 동안 국어·영어·수학·탐구(2과목) 모의고사 전부 응시 1회",
+        "condition_type": "daily_full_mock_exam_set",
+        "condition_value": 1,
+        "reward_gold": 1000,
+    },
+]
+
+
+def seed_challenges():
+    db = SessionLocal()
+    try:
+        existing_rows = {row.name: row for row in db.query(Challenge).all()}
+        changed = False
+
+        for c in CHALLENGES:
+            row = existing_rows.get(c["name"])
+            if row:
+                row.description = c.get("description", "")
+                row.condition_type = c["condition_type"]
+                row.condition_value = c["condition_value"]
+                row.condition_params = c.get("condition_params")
+                row.reward_gold = c.get("reward_gold", 0)
+                row.reward_exp = c.get("reward_exp", 0)
+                row.reward_items = c.get("reward_items")
+            else:
+                db.add(Challenge(
+                    name=c["name"],
+                    description=c.get("description", ""),
+                    condition_type=c["condition_type"],
+                    condition_value=c["condition_value"],
+                    condition_params=c.get("condition_params"),
+                    reward_gold=c.get("reward_gold", 0),
+                    reward_exp=c.get("reward_exp", 0),
+                    reward_items=c.get("reward_items"),
+                ))
+            changed = True
+
+        if changed:
+            db.commit()
+    finally:
+        db.close()
+
+
 QUESTS = [
     # ── 일일 퀘스트 (KST 자정에 초기화) ──────────────────────────────────────────
     {
@@ -690,8 +1034,9 @@ QUESTS = [
         "condition_type": "session_minutes",
         "condition_params": {"session_type": "subject"},
         "condition_target": 60,
-        "reward_type": "exp",
-        "reward_amount": 10,
+        "reward_type": "item",
+        "reward_amount": 5,
+        "reward_item_name": "투기장모드 티켓",
         "sort_order": 4,
     },
     {
@@ -750,8 +1095,9 @@ QUESTS = [
         "condition_type": "session_minutes",
         "condition_params": {"session_type": "reading"},
         "condition_target": 200,
-        "reward_type": "exp",
-        "reward_amount": 30,
+        "reward_type": "item",
+        "reward_amount": 3,
+        "reward_item_name": "스토리모드 티켓",
         "sort_order": 1,
     },
     {
@@ -789,8 +1135,9 @@ QUESTS = [
         "condition_type": "activity_count",
         "condition_params": {"activity_type": "gacha_pull"},
         "condition_target": 5,
-        "reward_type": "exp",
-        "reward_amount": 30,
+        "reward_type": "item",
+        "reward_amount": 10,
+        "reward_item_name": "투기장모드 티켓",
         "sort_order": 5,
     },
     {

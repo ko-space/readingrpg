@@ -7,6 +7,7 @@ from schemas import NicknameUpdateRequest
 from security import get_current_user
 from achievements import get_equipped_title_info
 from routers.story import STORY_TICKET_ITEM_NAME
+from routers.pvp import ARENA_TICKET_ITEM_NAME
 from quests import log_login_activity
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -38,6 +39,16 @@ def _story_ticket_count(user: User, db: Session) -> int:
     return owned.quantity if owned else 0
 
 
+def _arena_ticket_count(user: User, db: Session) -> int:
+    ticket_item = db.query(Item).filter(Item.name == ARENA_TICKET_ITEM_NAME).first()
+    if not ticket_item:
+        return 0
+    owned = db.query(UserItem).filter(
+        UserItem.user_id == user.id, UserItem.item_id == ticket_item.id
+    ).first()
+    return owned.quantity if owned else 0
+
+
 def _build_profile(user: User, db: Session):
     equipped = next((c for c in user.characters if c.is_equipped == 1), None)
     if equipped is None and user.characters:
@@ -57,6 +68,7 @@ def _build_profile(user: User, db: Session):
             "gold": user.gold,
             "gacha_points": user.gacha_points,
             "story_ticket_count": _story_ticket_count(user, db),
+            "arena_ticket_count": _arena_ticket_count(user, db),
             "daily_reading_minutes": user.daily_reading_minutes,
             "equipped_title": equipped_title,
             "equipped_title_is_hidden": equipped_title_is_hidden

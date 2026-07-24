@@ -28,7 +28,9 @@
     const PROJECTILE_TRAVEL_MS = 220;
     const MAX_ATTACK_FRAMES = 6;
     const MAX_SKILL_FRAMES = 9; // 스킬 시전 전용 사진은 캐릭터당 총 9장까지 넣기로 확정됨
+    const MAX_RETURN_FRAMES = 9; // 시전 종료 후 원래 모습으로 복귀하는 전용 사진(return_N.png), 최대 9장
     const ATTACK_FRAME_DURATION_MS = 60;
+    const RETURN_FRAME_DURATION_MS = 60; // 복귀 프레임은 서버가 시간을 안 주므로(시전 시간과 무관) 공격 프레임과 같은 고정 속도로 재생
     const EFFECT_LAUNCH_DELAY_MS = ATTACK_FRAME_DURATION_MS * 3; // 원거리 공격: 애니메이션 3프레임쯤 재생된 뒤 이펙트 발사
 
     // 원거리 5명 전용 기본공격 연출. 여기 없는(=근거리이거나 목록에 없는) 캐릭터는 기존 직선 투사체 그대로.
@@ -66,6 +68,7 @@
 
     const frameCountCache = {};
     const skillFrameCountCache = {};
+    const returnFrameCountCache = {};
     const attackAnimActive = {};
     const attackAnimTokens = {};
 
@@ -124,6 +127,27 @@
         }
 
         skillFrameCountCache[outfit] = count;
+        return count;
+    }
+
+    // 시전 종료 후 원래 모습으로 복귀하는 전용 프레임(return_N.png)이 있는지 확인 - skill_N.png와 같은 규칙.
+    async function getReturnFrameCount(outfit) {
+        if (returnFrameCountCache[outfit] !== undefined) {
+            return returnFrameCountCache[outfit];
+        }
+
+        let count = 0;
+
+        for (let i = 1; i <= MAX_RETURN_FRAMES; i += 1) {
+            const exists = await checkImageExists(
+                `${OUTFIT_IMAGE_BASE}${outfit}/return_${i}.png`
+            );
+
+            if (!exists) break;
+            count = i;
+        }
+
+        returnFrameCountCache[outfit] = count;
         return count;
     }
 
@@ -1119,6 +1143,45 @@
     }
 
     /*
+     * 시전 종료 직후 재생되는 복귀 애니메이션. 전용 프레임(return_N.png)이 있는 캐릭터만 이 프레임들을
+     * 순서대로(1→N) 한 번 재생한 뒤 battle_idle.png로 정착한다. 서버가 이 동작의 시간을 따로 주지 않으므로
+     * (시전 시간과 무관하게) 공격 프레임과 같은 고정 속도(RETURN_FRAME_DURATION_MS)로 재생한다.
+     * 전용 프레임이 없는 캐릭터는 호출부가 기존처럼 battle_idle.png로 바로 스냅한다(폴백, 이 함수는 안 씀).
+     */
+    async function playReturnFrames(key) {
+        const el = document.querySelector(`[data-unit="${key}"]`);
+        const imgEl = el?.querySelector(".battle-unit-img");
+        if (!el || !imgEl || !units[key]) return;
+
+        const outfit = units[key].outfit;
+        const myToken =
+            (attackAnimTokens[key] = (attackAnimTokens[key] || 0) + 1);
+
+        attackAnimActive[key] = true;
+
+        const frameCount = await getReturnFrameCount(outfit);
+
+        if (attackAnimTokens[key] !== myToken) return;
+
+        for (let i = 1; i <= frameCount; i += 1) {
+            if (attackAnimTokens[key] !== myToken) return;
+
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/return_${i}.png`;
+            await sleep(RETURN_FRAME_DURATION_MS);
+        }
+
+        if (attackAnimTokens[key] === myToken) {
+            imgEl.onerror = () => {
+                imgEl.onerror = null;
+                imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.png`;
+            };
+
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/battle_idle.png`;
+            attackAnimActive[key] = false;
+        }
+    }
+
+    /*
      * 타격 로그: 이제 한 줄을 덮어쓰지 않고, 행동한 쪽 색으로 새 줄을 계속 추가한다.
      */
     function showDamageMessage(event) {
@@ -1467,15 +1530,11 @@
             if (actorKey) {
                 const castImgEl = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);
                 castImgEl?.classList.remove("casting", "casting-rainbow");
-                // 시전 프레임 루프가 아직 돌고 있으면 즉시 멈추고 평상시 자세로 되돌린다(타이밍이 살짝 어긋나도 안전).
-                attackAnimTokens[actorKey] = (attackAnimTokens[actorKey] || 0) + 1;
-                attackAnimActive[actorKey] = false;
-                if (castImgEl && units[actorKey]) {
-                    castImgEl.onerror = () => {
-                        castImgEl.onerror = null;
-                        castImgEl.src = `${OUTFIT_IMAGE_BASE}${units[actorKey].outfit}/idle.png`;
-                    };
-                    castImgEl.src = `${OUTFIT_IMAGE_BASE}${units[actorKey].outfit}/battle_idle.png`;
+                // 시전 프레임 루프가 아직 돌고 있으면(또는 이전 복귀 애니메이션이 아직 돌고 있으면) 즉시 멈추고,
+                // 복귀 전용 프레임(return_N.png)이 있으면 그걸 재생하며 평상시 자세로 돌아간다 - 없는 캐릭터는
+                // playReturnFrames 내부에서 프레임 0장으로 판정되어 곧바로 battle_idle.png로 스냅한다(기존과 동일).
+                if (units[actorKey]) {
+                    playReturnFrames(actorKey);
                 }
                 // 시전자 몸이 카테고리 색으로 번쩍이던 예전 연출은 제거 - 오라는 이제 효과를 "받은"
                 // 대상에게만 나왔다가 사라진다(flashEffectAura). 자기 자신에게 거는 효과(버프/실드)는
@@ -1646,8 +1705,9 @@
                 }
                 appendLog(`${event.actor}의 스킬 발동!`, event.side);
             } else if (dispatchEffectType === "aoe_enemy_damage" && actorKey) {
-                applySkillHits(event);
-                spawnGasBreathStream(actorKey, () => {});
+                // 가스 숨결이 화면을 가로질러 실제로 닿는 순간(onArrive)에 맞춰 피해/HP/피격 이펙트를 반영한다 -
+                // 예전엔 스킬 발동 즉시 피해가 반영돼서 투사체가 아직 날아가는 중인데 이미 맞은 것처럼 보였다.
+                spawnGasBreathStream(actorKey, () => applySkillHits(event));
                 appendLog(`${event.actor}의 스킬 발동!`, event.side);
             } else if (dispatchEffectType === "heal_ally_percent_max_hp" && event.detail?.healed) {
                 const healTargetKey = findHitKey(event.detail.target);

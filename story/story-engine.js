@@ -494,7 +494,7 @@ const SCENE3B_INTRO = [
   {type:'narration', text:'강승유, 그리고 무려 \'송주헌\'이 쌍두마차로 팀을 리드하고 있다.', chars:{left:'seungyu', right:'juheon'}},
   {type:'narration', text:'항상 귀찮은 표정으로 교실 창밖만 보던 주헌이지만 의외로 풋살을 잘한다.'},
   {type:'narration', text:'오늘은 웬일인지 적극적으로 체육복 소매를 걷어붙이며 가벼운 스트레칭을 하고 있다.'},
-  {type:'narration', text:'그에 반해, 우리팀은 강희를 비롯한 어중이떠중이들밖에 없었다.'},
+  {type:'narration', text:'그에 반해, 우리팀은 강 희를 비롯한 어중이떠중이들밖에 없었다.'},
   {type:'narration', text:'휘슬이 불려 경기가 시작하기를 기다리는 중 저 편에서 목소리가 들려왔다.'},
   {type:'line', speaker:SEUNGYU, text:'오, 라인업 대박인데? 야, 주헌아. 너 오늘 공격할래? "메시"처럼 활약해봐!'},
   {type:'line', speaker:JUHEON, text:'아무래도 상관없어. 빨리 끝내고 쉬자.'},
@@ -505,7 +505,7 @@ const SCENE3B_INTRO = [
 const SCENE3B_CHOICE = {
   prompt: '어떻게 할까?',
   options: [
-    {label:'① 같은 팀 강희를 칭찬해주며 승리를 기원한다.', key:'1'},
+    {label:'① 같은 팀 강 희를 칭찬해주며 승리를 기원한다.', key:'1'},
     {label:'② "홍명보"에 빙의해 백패스 전략을 팀원들에게 알린다.', key:'2'},
     {label:'③ "내 사전에 패스란 없다." "라민 야말"에 빙의해 묵묵히 경기할 마음을 먹는다.', key:'3'},
   ]
@@ -516,7 +516,7 @@ const SCENE3B_BRANCHES = {
     juheon:0, seungyu:0, ganghee:+1,
     lines:[
       {type:'line', speaker:PLAYER, text:'희야! 힘내보자! 너 수비 완전 김민재급이던데, 우리 할 수 있어!', stopBgm:true},
-      {type:'narration', text:'그 말이 끝나자마자, 강희는 나에게 얼굴을 돌리고 성큼성큼 다가온다.', chars:{left:null, right:'ganghee'}},
+      {type:'narration', text:'그 말이 끝나자마자, 강 희는 나에게 얼굴을 돌리고 성큼성큼 다가온다.', chars:{left:null, right:'ganghee'}},
       {type:'narration', text:'그 후, 얼굴에 희번뜩한 미소를 띄우며 말을... 말을 하기 시작했다.', chars:{left:null, right:'ganghee2'}, bgm:'Kurumi BGM'},
       {type:'line', speaker:GANGHEE2, text:'어? 그래? 그러자. 우리 잘할 수 있어. 아니, 무엇보다 내가 잘 할 수 있지. 나는 잘하니까.'},
       {type:'line', speaker:GANGHEE2, text:'어제 다른 반이랑 경기한 거 봤어? 그때 내가 상대편 공 다 뺐어서 점유율 개발랐었는데.'},
@@ -563,11 +563,11 @@ const SCENE3B_BRANCHES = {
 };
 
 /* =========================================================
-   씬 4b - 학교 운동장 (부고컵 축구 대회) - 씬3b 이후, 주헌 호감도 양수 & 강희 호감도 비양수
+   씬 4b - 학교 운동장 (부고컵 축구 대회) - 씬3b 이후, 주헌 호감도 양수 & 강 희 호감도 비양수
    ========================================================= */
 const SCENE4B_INTRO = [
   {type:'narration', text:'얼마 후, 학교 최대 행사 중 하나인 부고컵 축구 대회날이 다가왔다.', showBg:'field', bgm:'FUNNY'},
-  {type:'narration', text:'우리 편은 강승유, 송주헌, 강희와 함께 최고의 팀으로 구성되었다.', chars:{left:'seungyu', right:'juheon'}},
+  {type:'narration', text:'우리 편은 강승유, 송주헌, 강 희와 함께 최고의 팀으로 구성되었다.', chars:{left:'seungyu', right:'juheon'}},
   {type:'narration', text:'결승전까지 쉽게 올라갔고, 마침내 결승날 경기 시작 전 몸을 풀고 있는 상황 앞에 마주했다.'},
   {type:'narration', text:'얼마 후, 경기의 시작을 알리는 휘슬이 울렸다.'},
   {type:'thought', text:'나는 내 포지션에서 최선을 다하겠다고 마음을 먹었다.'},
@@ -1293,7 +1293,7 @@ const SCENE_COLLECTOR_ENDING = [
     stopBgm:true
   },
   {type:'narration', text:'녹색 수술복을 입고 청진기를 목에 걸은 채, 수많은 차트와 모니터 사이를 바쁘게 오가는 녀석.', showBg:'true_ganghee_cg', bgm:'Kurumi BGM'},
-  {type:'narration', text:'이제 막 흉부외과에 입성한 신입 의사 강희였다.'},
+  {type:'narration', text:'이제 막 흉부외과에 입성한 신입 의사 강 희였다.'},
   {type:'line', speaker:GANGHEE_ADULT, text:'왔어? 하아…… 흉부외과는 진짜 사람이 할 짓이 못 되네. 사흘째 제대로 잠도 못 잤다니까?'},
   {type:'line', speaker:GANGHEE_ADULT, text:'그래도 뭐…… 어쩌겠어. 옛날에 열심히 공부해둔 터로 이젠 진짜 사람 목숨을 건져내고 있는데! 후후, 나 멋있지?'},
   {type:'narration', text:'지쳐 피곤함이 가득한 눈빛 속에서도, 환자의 생명을 짊어진 책임감과 특유의 다정한 자신감이 엿보였다.'},
@@ -1345,13 +1345,13 @@ const SCENE_COLLECTOR_ENDING = [
 const SCENE_GANGHEE_ENDING = [
   {type:'narration', text:'그 수많은 소동과 복잡했던 일들이 지난 뒤, 내 삶은 다시 무던하고 평범한 학교 생활로 돌아왔다.', showBg:'classroom', chars:{left:null, right:null}},
   {type:'narration', text:'지루한 수업을 듣고, 종이 울리면 쉬는 시간을 즐기며, 시험 기간이 오면 한숨을 쉬는 지극히 보통의 매일매일.'},
-  {type:'narration', text:'하지만 이전과 드라마틱하게 달라진 점이 단 하나 있다면…… 지금 내 곁에는 ‘강희’라는 조금 특별한 애가 자리 잡았다는 사실이다.'},
-  {type:'thought', text:'사실 강희에게는 조금 실례되는 생각일지도 모르지만, 처음 녀석을 알게 되었을 때는 사차원에다 속을 알 수 없는 약간 이상한 애라고만 생각했었다.'},
-  {type:'thought', text:'하지만 함께 시간을 보내고 교류가 늘어갈수록, 강희에 대해 내가 알지 못했던 여러 모습을 새로이 알 수 있었다.'},
+  {type:'narration', text:'하지만 이전과 드라마틱하게 달라진 점이 단 하나 있다면…… 지금 내 곁에는 ‘강 희’라는 조금 특별한 애가 자리 잡았다는 사실이다.'},
+  {type:'thought', text:'사실 강 희에게는 조금 실례되는 생각일지도 모르지만, 처음 녀석을 알게 되었을 때는 사차원에다 속을 알 수 없는 약간 이상한 애라고만 생각했었다.'},
+  {type:'thought', text:'하지만 함께 시간을 보내고 교류가 늘어갈수록, 강 희에 대해 내가 알지 못했던 여러 모습을 새로이 알 수 있었다.'},
   {type:'thought', text:'엉뚱해 보이는 겉모습 뒤에 숨겨진 의외의 섬세함이나, 남들은 쉽게 지나칠 작은 부분까지 다정하게 챙겨줄 줄 아는 따뜻함 같은 것들.'},
   {type:'thought', text:'그렇게 서로의 일상에 스며들다 보니, 어느새 우리는 서로가 서로에게 자연스럽게 기댈 수 있고 마음을 터놓을 수 있는 든든한 의지의 존재가 되어 있었다.', showBg:'ganghee_end_photo', chars:{left:null, right:null}, bgm:'Ganghee Portrait'},
   {type:'line', speaker:GANGHEE, text:'어이, 거기 고3! 골머리 썩고 있지 말고 이리로 가져와 봐. 내가 네 생활기록부 한 번 컨펌해 줄까? 흠, 남들 같으면 거들떠도 안 보겠지만…… 넌 나랑 친하니까 특별히 엄청 열심히, 꼼꼼하게 봐줄게! ㅋㅋㅋ', chars:{left:null, right:null}},
-  {type:'narration', text:'자신만만한 표정으로 손가락을 튕기며 생기부 서류를 내놓으라는 듯 손을 내미는 강희.'},
+  {type:'narration', text:'자신만만한 표정으로 손가락을 튕기며 생기부 서류를 내놓으라는 듯 손을 내미는 강 희.'},
   {type:'narration', text:'평소엔 장난기 가득한 얼굴을 하다가도, 나를 도와줄 때만큼은 누구보다 진지해지는 녀석의 엉뚱하면서도 미미한 다정함에 나도 모르게 푸근한 웃음이 터져 나온다.'},
   {type:'line', speaker:PLAYER, text:'오, 진짜? 고맙다 희야! 크, 네 덕분에 나 나중에 원하는 대학 잘 붙으면 내가 진짜 맛있는 거 풀코스로 쏠게. 진짜 고맙다 ㅋㅋㅋ!'},
   {type:'line', speaker:GANGHEE, text:'오호~ 말로만 그러기 없기다? 나 비싼 거 먹을 거니까 딱 기억해 둬라!', chars:{left:null, right:null}},
@@ -1673,7 +1673,7 @@ function updateCastLayout(){
   el.stage.classList.toggle('quad-cast', presentCount >= 4);
 }
 
-// 같은 인물의 스프라이트만 바뀌는 경우(예: 강희 -> 강희2, 표정/모습 교체)를 판별하기 위한 그룹핑.
+// 같은 인물의 스프라이트만 바뀌는 경우(예: 강 희 -> 강 희2, 표정/모습 교체)를 판별하기 위한 그룹핑.
 // CAST_SPEAKER_ALIASES(말할 때 음영 처리용)와 별개로, "다른 키지만 같은 사람"만 모아둔다.
 const CHAR_IDENTITY_ALIASES = {
   seungyu_true_stand: 'seungyu',
@@ -2937,7 +2937,7 @@ function showEnd(title){
   currentSceneKey = null;
   el.endLayer.classList.remove('gameover');
   el.endTitle.textContent = title || '이야기 끝';
-  el.endAffection.innerHTML = `송주헌 호감도: ${affJuheon}<br>강승유 호감도: ${affSeungyu}<br>이영웅 호감도: ${affYeongwoong}<br>강희 호감도: ${affGanghee}`;
+  el.endAffection.innerHTML = `송주헌 호감도: ${affJuheon}<br>강승유 호감도: ${affSeungyu}<br>이영웅 호감도: ${affYeongwoong}<br>강 희 호감도: ${affGanghee}`;
   el.endLayer.classList.add('show');
 }
 

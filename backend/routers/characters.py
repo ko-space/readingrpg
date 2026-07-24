@@ -494,6 +494,14 @@ def enhance_character(
 
     db.add(ActivityLog(user_id=locked_user.id, activity_type="character_enhance"))  # 퀘스트("캐릭터 강화 시도") 판정용
 
+    # 도전과제("강화 성공/파괴 누적", "아이템 사용 누적") 판정용.
+    if outcome == "success":
+        db.add(ActivityLog(user_id=locked_user.id, activity_type="character_enhance_success"))
+    elif outcome == "destroy":
+        db.add(ActivityLog(user_id=locked_user.id, activity_type="character_enhance_destroy"))
+    if selected_user_items:
+        db.add(ActivityLog(user_id=locked_user.id, activity_type="item_use"))
+
     # 히든 업적("ester CAD!") 판정용: 오페라 하우스 + 독서대를 "모두" 쓴 강화 성공을 캐릭터별로 기록.
     # ActivityLog에는 params 컬럼이 없어서 대상 캐릭터 이름을 activity_type 문자열에 함께 박는다.
     used_item_names = {item.name for item in item_defs}
