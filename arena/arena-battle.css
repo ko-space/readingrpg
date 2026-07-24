@@ -15,17 +15,16 @@ body {
     margin: 0;
 }
 
-/* 전투 입장 로딩 화면 - 페이지 진입 즉시 화면 전체를 덮는 암전 + "입장하는 중..." + 랜덤 팁 */
+/* 전투 입장 로딩 화면 - 페이지가 막 로드된 짧은 순간(로비의 lobby-entering-overlay에서 이어받은 뒤,
+   startPreparation이 시작되기 전까지)만 가리는 암전. 점 애니메이션/팁은 로비 쪽에서 이미 보여줬다. */
 .battle-loading-overlay {
     position: fixed;
     inset: 0;
     z-index: 9999;
     background: #000;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 14px;
 }
 
 .battle-loading-overlay[hidden] {
@@ -37,21 +36,6 @@ body {
     font-size: 22px;
     font-weight: 900;
     letter-spacing: .5px;
-}
-
-.battle-loading-dots {
-    display: inline-block;
-    width: 1.4em; /* 점 개수가 바뀌어도 글자가 좌우로 안 흔들리도록 폭 고정 */
-    text-align: left;
-}
-
-.battle-loading-tip {
-    color: #fff;
-    font-size: 14px;
-    opacity: .8;
-    max-width: 70vw;
-    text-align: center;
-    line-height: 1.5;
 }
 
 .battle-screen {

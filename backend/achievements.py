@@ -23,6 +23,7 @@ from models import (
     UserCgUnlock, ActivityLog, UserItemPurchase,
 )
 from leveling import apply_exp
+from quests import MOCK_EXAM_MINUTES
 
 KST = timezone(timedelta(hours=9))
 
@@ -177,10 +178,16 @@ def compute_progress(db: Session, user, ach: Achievement) -> dict:
         )
     elif ctype == "session_type_count":
         # 특정 종류의 세션(예: 모의고사) 시행 횟수. reading_session_count는 전체 세션이라 별개로 둔다.
-        current = db.query(ReadingLog).filter(
+        rows = db.query(ReadingLog).filter(
             ReadingLog.user_id == user.id,
             ReadingLog.session_type == params.get("session_type"),
-        ).count()
+        ).all()
+        if params.get("session_type") == "mock_exam":
+            # 모의고사는 quests.py의 session_count와 동일하게, 그 난이도의 지정 시간 이상 기록됐어야
+            # "봤다"로 인정한다(is_auto_complete 플래그 대신) - 안 그러면 들어갔다가 바로 나가기만 해도
+            # 달성돼버리고, 반대로 자동종료 감지가 브라우저 쓰로틀링으로 늦어지면 놓칠 수 있다.
+            rows = [r for r in rows if r.reading_minutes >= MOCK_EXAM_MINUTES.get(r.difficulty, float("inf"))]
+        current = len(rows)
     elif ctype == "subject_minutes":
         # 특정 과목의 누적 공부 시간(분). "과목"은 과목 공부와 모의고사를 모두 포함하고,
         # 모의고사 difficulty에는 "수학(하프)"처럼 변형 표기가 있어서 접두사 일치로 판정한다.

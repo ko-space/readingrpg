@@ -37,6 +37,7 @@
     }
 
     function rewardText(quest) {
+        if (quest.reward_type === "item") return `${quest.reward_item_name} ${Number(quest.reward_amount).toLocaleString()}개`;
         const label = quest.reward_type === "exp" ? "EXP" : "골드";
         return `${label} ${Number(quest.reward_amount).toLocaleString()}`;
     }
@@ -128,7 +129,11 @@
         if (!quest || quest.claimed || !quest.claimable) return;
 
         // 낙관적 UI: 서버 응답을 기다리지 않고 즉시 수령 완료로 표시한다 - 실패하면 되돌린다.
+        // claimed와 claimable을 둘 다 갱신해야 한다 - 배지 카운트는 "claimable && !claimed"로 세는데,
+        // claimable을 안 지우면 나중에 questData가 부분적으로만 갱신되는 경로가 생겼을 때 다시 세어질
+        // 여지가 남는다.
         quest.claimed = true;
+        quest.claimable = false;
         renderList();
         updateQuestBadge();
 
@@ -146,6 +151,7 @@
             }
         } catch (error) {
             quest.claimed = false;
+            quest.claimable = true;
             renderList();
             updateQuestBadge();
             alert(error.message);
@@ -157,7 +163,7 @@
         const claimableIds = quests.filter((q) => q.claimable && !q.claimed).map((q) => q.id);
         if (claimableIds.length === 0) return;
 
-        quests.forEach((q) => { if (q.claimable) q.claimed = true; });
+        quests.forEach((q) => { if (q.claimable) { q.claimed = true; q.claimable = false; } });
         renderList();
         updateQuestBadge();
 
@@ -175,7 +181,7 @@
         } catch (error) {
             claimableIds.forEach((id) => {
                 const q = quests.find((qq) => qq.id === id);
-                if (q) q.claimed = false;
+                if (q) { q.claimed = false; q.claimable = true; }
             });
             renderList();
             updateQuestBadge();

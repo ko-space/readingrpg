@@ -24,41 +24,7 @@
 
     const PLAYBACK_SPEED = 0.8;
     const PREP_MS = 1300;
-    const BATTLE_ENTRANCE_MS = 4000;
-    const BATTLE_ENTRANCE_DOT_MS = 450;
-    // 나중에 계속 추가할 예정 - 우선 몇 개만 채워둔 것.
-    const BATTLE_TIPS = [
-        "전방 유닛이 쓰러지면 후방 유닛이 앞으로 올라와 그 자리를 대신합니다.",
-        "근접 캐릭터는 상대 유닛과 맞닿아야 기본 공격을 시작합니다.",
-        "같은 원인으로 다시 걸린 상태 효과는 중첩되지 않고 지속시간만 갱신됩니다.",
-        "치명타가 적중할 확률은 매우 낮습니다.",
-        "스토리모드에서 인물이 등장하는 장소에 집중하세요.",
-        "강화 도움 아이템을 종류별로 사용하여 확률을 높이세요.",
-        "강희의 파쇄기 아이템을 사용하면 1장으로도 강화가 가능합니다.",
-        "방어타입과 공격타입을 고려해서 투기장 경기를 진행하세요.",
-        "원거리 캐릭터는 근거리 캐릭터에 비해 공격력이 높습니다.",
-        "근거리 캐릭터는 원거리 캐릭터에 비해 체력이 높습니다.",
-        "캐릭터의 성별에 따라 투기장에서 전략적 플레이가 가능합니다.",
-        "후방에 원거리 캐릭터를 배치하면 좋습니다.",
-        "전방에 근거리 캐릭터를 배치하면 좋습니다.",
-        "인물의 HP 위에 인물의 상태가 표시됩니다.",
-        "붉은색 상태 아이콘은 버프를 의미합니다.",
-        "푸른색 상태 아이콘은 디버프를 의미합니다.",
-        "보라색 상태 아이콘은 CC기를 의미합니다.",
-        "초록색 상태 아이콘은 회복을 의미합니다.",
-        "회색 상태 아이콘은 뭘까요?",
-        "히든 업적의 해금조건은 알 수 없지만, 진행 상황은 알 수 있습니다.",
-        "스토리모드 티켓은 하루에 5개밖에 구매하지 못합니다.",
-        "캐릭터별로 지역 입장에서의 능력이 다릅니다.",
-        "스토리모드 앤딩에는 히든 앤딩이 존재합니다.",
-        "히든 업적 달성 보상을 얻기 위해 히든 업적을 달성해보세요.",
-        "ester CAD라는 비밀 조직이 존재합니다.",
-        "캐릭터 5성 달성시 투기장 고유 스킬이 추가됩니다.",
-        "6성 캐릭터는 무지막지하게 강력합니다.",
-        "10레벨이 되는데 4500이상의 exp가 필요합니다.",
-        "5성 -> 6성 강화를 아이템 없이 시도해볼까요?",
-    ];
-    const APPROACH_OVERLAP = 100;
+    const APPROACH_OVERLAP = 75;
     const PROJECTILE_TRAVEL_MS = 220;
     const MAX_ATTACK_FRAMES = 6;
     const MAX_SKILL_FRAMES = 9; // 스킬 시전 전용 사진은 캐릭터당 총 9장까지 넣기로 확정됨
@@ -426,7 +392,6 @@
     const meleeArrived = {};                // key -> 그 타겟에 이미 도착했는지
     const pendingArrivalResolvers = {};     // key -> 도착을 기다리고 있는 Promise resolve 함수들
     const walkerSuspended = {};             // key -> 이동 루프를 잠깐 멈춰둘지(넉백 트랜지션 중 tick()과 충돌 방지)
-    const standoffExtra = {};               // key -> 도착 판정용 overlap을 얼마나 줄일지(복제체는 전방처럼 적과 겹치지 않고 그 앞에서 멈춘다)
     let walkerRunning = false;
 
     // unitKey가 targetKey에게 도달하려면 지금 이 순간 기준으로 얼마나 더(어느 방향으로) 움직여야 하는지.
@@ -440,7 +405,7 @@
         const rect = el.getBoundingClientRect();
         const targetRect = targetEl.getBoundingClientRect();
         // overlap이 클수록 "더 깊이 파고들어야"(겹쳐야) 도착 판정이 나서 결과적으로 더 가까이 멈춘다.
-        const overlap = APPROACH_OVERLAP - (standoffExtra[unitKey] || 0);
+        const overlap = APPROACH_OVERLAP;
 
         const myCenter = rect.left + rect.width / 2;
         const targetCenter = targetRect.left + targetRect.width / 2;
@@ -1556,26 +1521,22 @@
 
                     const cloneEl = document.querySelector(`[data-unit="${cloneKey}"]`);
                     const casterEl = document.querySelector(`[data-unit="${actorKey}"]`);
+                    // 복제체는 적 전방 유닛이 서 있는 바로 그 자리에 생성된다(캐스터 자신의 자리가 아님).
+                    const enemyFrontKey = event.side === "attacker" ? "defender-front" : "attacker-front";
+                    const enemyFrontEl = document.querySelector(`[data-unit="${enemyFrontKey}"]`);
                     if (cloneEl) {
                         cloneEl.hidden = false;
                         cloneEl.style.transform = ""; // 이전 복제체가 남긴 인라인 transform이 있으면 먼저 지운다
-                        // 복제체는 윤영준이 서 있던 자리를 차지하되, 근접 교전 중인 캐스터는 이미
-                        // APPROACH_OVERLAP만큼 적 쪽으로 파고들어(겹쳐) 있는 상태라(근접 클래시 연출) 그
-                        // 자리를 그대로 복사하면 복제체가 적 전방 유닛과 겹치거나 그 너머(적 쪽)까지 넘어가
-                        // 보인다 - 겹친 만큼 자기 진영 쪽으로 당겨서, "안 겹쳤다면" 있었을 경계선에 세운다.
-                        //
                         // getCurrentTranslateX로 "현재(방금 리셋한 CSS 기본값 포함) translateX"를 읽어서
                         // 그 위에 델타를 더해야 한다 - transform을 절대값으로 통째로 덮어쓰면서 델타를
                         // "리셋된 위치 기준"으로만 계산하면, attacker-summon/defender-summon의 CSS 기본
                         // transform(칸 밖으로 translateX(±(폭+20px)) 빼두는 값)이 통째로 상쇄되지 않고
-                        // 그대로 더 얹혀서, 실제로는 매번 그 폭+20px만큼 적 쪽으로 더 밀려난 자리에
-                        // 생성됐었다(복제체가 적진 쪽에 생기고 반전돼 보이던 원인).
-                        if (casterEl) {
+                        // 그대로 더 얹혀서 엉뚱한 자리에 생성된다.
+                        if (enemyFrontEl) {
                             const cloneRect = cloneEl.getBoundingClientRect();
-                            const casterRect = casterEl.getBoundingClientRect();
+                            const targetRect = enemyFrontEl.getBoundingClientRect();
                             const currentCloneX = getCurrentTranslateX(cloneEl);
-                            const pullbackSign = event.side === "attacker" ? -1 : 1;
-                            cloneEl.style.transform = `translateX(${currentCloneX + (casterRect.left - cloneRect.left) + pullbackSign * APPROACH_OVERLAP}px)`;
+                            cloneEl.style.transform = `translateX(${currentCloneX + (targetRect.left - cloneRect.left)}px)`;
                         }
                     }
                     // 원본(윤영준)은 복제체를 소환한 반동으로 살짝 밀려난다 - 청년의 넉백(applyKnockback)과
@@ -1594,15 +1555,14 @@
                     // 복제체는 원본과 구분되게 전체적으로 푸른 색감이 돌도록(3D 프린트 홀로그램 느낌)
                     document.querySelector(`[data-unit="${cloneKey}"] .battle-unit-img`)?.classList.add("is-clone");
 
-                    // 근거리 복제체라면 이동 루프가 새로 생긴 자리를 즉시 인식하도록 목표를 잡아준다.
-                    // standoffExtra로 전방 유닛끼리의 클래시 겹침(overlap)을 없애서, 복제체는 적과
-                    // 겹치지 않고 그 앞에서 멈춘다 - 안 그러면 걸어서 접근하는 도중 적 전방 유닛과
-                    // 똑같은(겹치는) 위치로 수렴해버려서 적진에 파고든 것처럼 보이고, 그 위치에서
-                    // faceToward가 대상을 자기보다 왼쪽으로 오판해 스프라이트가 반전돼 보인다.
+                    // 근거리 복제체는 다른 근접 유닛과 완전히 동일하게 취급한다 - meleeArrived를 false로
+                    // 두면 이동 루프(tick)가 다음 프레임에 실제 겹침 여부를 직접 재서 판정하고, 도착으로
+                    // 확인되는 순간에만 faceToward를 걸고 공격을 허용한다(waitForMeleeArrival이 그 전까지
+                    // 공격 자체를 막는다) - 이미 적과 같은 자리에서 스폰되므로 사실상 다음 프레임에 바로
+                    // 도착 처리되지만, "겹쳤을 때만 공격 가능"이라는 규칙 자체는 예외 없이 그대로 적용된다.
                     if (units[cloneKey].isMelee) {
-                        meleeTargetKey[cloneKey] = event.side === "attacker" ? "defender-front" : "attacker-front";
+                        meleeTargetKey[cloneKey] = enemyFrontKey;
                         meleeArrived[cloneKey] = false;
-                        standoffExtra[cloneKey] = APPROACH_OVERLAP;
                     }
                 }
             }
@@ -1856,29 +1816,10 @@
         }, PREP_MS);
     }
 
-    // 페이지 진입 즉시 화면 전체를 덮은 암전 위에 "입장하는 중..."(점 1~3개 반복)과 랜덤 팁을
-    // 4초간 보여준 뒤에야 실제 전투 준비(startPreparation)를 시작한다.
-    function showBattleEntrance(onDone) {
-        const overlay = document.getElementById("battle-loading-overlay");
-        if (!overlay) { onDone(); return; }
-
-        const dotsEl = document.getElementById("battle-loading-dots");
-        const tipEl = document.getElementById("battle-loading-tip");
-        if (tipEl) tipEl.textContent = BATTLE_TIPS[Math.floor(Math.random() * BATTLE_TIPS.length)];
-
-        let dotCount = 1;
-        if (dotsEl) dotsEl.textContent = ".";
-        const dotTimer = setInterval(() => {
-            dotCount = (dotCount % 3) + 1;
-            if (dotsEl) dotsEl.textContent = ".".repeat(dotCount);
-        }, BATTLE_ENTRANCE_DOT_MS);
-
-        setTimeout(() => {
-            clearInterval(dotTimer);
-            overlay.hidden = true;
-            onDone();
-        }, BATTLE_ENTRANCE_MS);
-    }
-
-    showBattleEntrance(startPreparation);
+    // "입장하는 중..."(점 애니메이션 + 랜덤 팁)은 로비(home.html)에서 이 페이지로 넘어오기 전에
+    // 이미 다 보여줬다(shared/home.js의 showLobbyEnteringOverlay) - 여기서는 그 암전을 그대로 이어받고
+    // 있다가, 전투 준비가 시작될 수 있는 순간 바로 걷어서 중복 연출 없이 매끄럽게 이어지게 한다.
+    const battleLoadingOverlay = document.getElementById("battle-loading-overlay");
+    if (battleLoadingOverlay) battleLoadingOverlay.hidden = true;
+    startPreparation();
 })();

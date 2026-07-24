@@ -755,3 +755,45 @@ body, html {
         flex-direction: column;
     }
 }
+
+/* 지역 입장/전술대회 입장 공통 "입장하는 중" 오버레이. 버튼을 누른 순간부터(서버 요청 중 +
+   다음 화면으로 넘어가는 순간까지) 화면 전체를 덮어서 그 사이의 빈 화면/지연이 안 보이게 한다.
+   목적지 화면(reading.html의 region-loading-overlay, arena-battle.html의 battle-loading-overlay)에도
+   같은 역할의 오버레이가 있어서, 이동이 끝나면 그쪽이 이어받아 자연스럽게 이어진다. */
+.lobby-entering-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+}
+
+.lobby-entering-overlay[hidden] {
+    display: none;
+}
+
+.lobby-entering-text {
+    color: #fff;
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: .5px;
+}
+
+.lobby-entering-dots {
+    display: inline-block;
+    width: 1.4em;
+    text-align: left;
+}
+
+.lobby-entering-tip {
+    color: #fff;
+    font-size: 14px;
+    opacity: .8;
+    max-width: 70vw;
+    text-align: center;
+    line-height: 1.5;
+}
