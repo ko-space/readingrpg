@@ -4,6 +4,7 @@ const AVATAR_CROP_OVERRIDES = {
     "photographer/basic": { xPercent: 50, yPercent: 3, scale: 4.0 },
     "sj/basic": { xPercent: 50, yPercent: 10, scale: 3.0 },
     "beginner/swimsuit": { xPercent: 50, yPercent: 0, scale: 1.5 },
+    "international/basic": { xPercent: 50, yPercent: 5, scale: 4.0 };
 };
 const DEFAULT_AVATAR_CROP = { xPercent: 50, yPercent: 0, scale: 4.0 };
 
