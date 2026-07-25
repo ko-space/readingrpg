@@ -9,13 +9,21 @@ from schemas import DevTestBattleRequest, DevTestUnitConfig
 from security import get_current_user
 from battle_engine import compute_unit_stats, build_team, simulate_battle
 from routers.characters import CATALOG_BY_NAME
+from character_visibility import is_hidden_override
 
 router = APIRouter(prefix="/devtest", tags=["devtest"])
 
+ADMIN_USER_ID = 1  # gacha.py/ranking.py/pvp.py와 동일한 관리자 계정 - is_hidden 캐릭터(예: 이의진)는
+# 공개 전까지 이 계정으로 로그인했을 때만 devtest에서 조회/전투 테스트가 가능하다.
 
-def _config_to_unit(cfg: DevTestUnitConfig, slot: str):
+
+def _config_to_unit(cfg: DevTestUnitConfig, slot: str, is_admin: bool):
     if cfg.character_name not in CATALOG_BY_NAME:
         raise HTTPException(status_code=400, detail=f"characters.json에 없는 캐릭터입니다: {cfg.character_name}")
+
+    char = CATALOG_BY_NAME[cfg.character_name]
+    if is_hidden_override(char["name"], char.get("is_hidden", False)) and not is_admin:
+        raise HTTPException(status_code=403, detail=f"{cfg.character_name}은(는) 아직 공개되지 않은 캐릭터입니다.")
 
     overrides = {}
     if cfg.hp_override is not None:
@@ -50,13 +58,14 @@ def devtest_battle(
     req: DevTestBattleRequest,
     user: User = Depends(get_current_user),
 ):
+    is_admin = user.id == ADMIN_USER_ID
     attacker_team = build_team(
-        _config_to_unit(req.attacker_front, "front"),
-        _config_to_unit(req.attacker_back, "back"),
+        _config_to_unit(req.attacker_front, "front", is_admin),
+        _config_to_unit(req.attacker_back, "back", is_admin),
     )
     defender_team = build_team(
-        _config_to_unit(req.defender_front, "front"),
-        _config_to_unit(req.defender_back, "back"),
+        _config_to_unit(req.defender_front, "front", is_admin),
+        _config_to_unit(req.defender_back, "back", is_admin),
     )
 
     result = simulate_battle(attacker_team, defender_team)
@@ -71,8 +80,11 @@ def devtest_battle(
 
 
 @router.get("/characters")
-def devtest_characters():
-    """개발자 창의 캐릭터 선택 드롭다운을 채우기 위한 목록 - 이름/희귀도/초기 성/스킬·특성 기본 파라미터까지 그대로 내려준다."""
+def devtest_characters(user: User = Depends(get_current_user)):
+    """개발자 창의 캐릭터 선택 드롭다운을 채우기 위한 목록 - 이름/희귀도/초기 성/스킬·특성 기본 파라미터까지 그대로 내려준다.
+    로그인만 요구하던 걸 여기서도 검사하도록 바꿈 - is_hidden 캐릭터(예: 이의진)는 관리자 계정으로 로그인했을 때만
+    목록에 나온다(그래야 목록에서부터 완전히 안 보임 - _config_to_unit의 403은 "이미 이름을 아는" 사람만 막는다)."""
+    is_admin = user.id == ADMIN_USER_ID
     return [
         {
             "name": c["name"],
@@ -87,4 +99,5 @@ def devtest_characters():
             "trait_mechanics": c.get("trait_mechanics"),
         }
         for c in CATALOG_BY_NAME.values()
+        if is_admin or not is_hidden_override(c["name"], c.get("is_hidden", False))
     ]

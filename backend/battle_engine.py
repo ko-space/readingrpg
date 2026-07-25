@@ -31,6 +31,12 @@ CHARACTER_RANGE = {char["name"]: char.get("range", "근거리") for char in _ALL
 ATTACK_TYPE = {char["name"]: char.get("attack_type", "Student") for char in _ALL_CHARACTERS}
 DEFENSE_TYPE = {char["name"]: char.get("defense_type", "Student") for char in _ALL_CHARACTERS}
 CHARACTER_GENDER = {char["name"]: char.get("gender") for char in _ALL_CHARACTERS}
+
+
+def _effective_gender(unit):
+    """전투 중 성별이 바뀌는 캐릭터(이의진 - 염색체 변환으로 type2/여 상태가 되면)를 반영한 성별 조회.
+    unit["gender_override"]가 있으면 그걸 우선하고, 없으면 characters.json의 고정 성별로 폴백한다."""
+    return unit.get("gender_override") or CHARACTER_GENDER.get(unit["name"])
 CHARACTER_SKILL_MECHANICS = {char["name"]: char["skill_mechanics"] for char in _ALL_CHARACTERS if char.get("skill_mechanics")}
 CHARACTER_TRAIT_MECHANICS = {char["name"]: char["trait_mechanics"] for char in _ALL_CHARACTERS if char.get("trait_mechanics")}
 CHARACTER_STAR_MECHANICS = {char["name"]: char["star_mechanics"] for char in _ALL_CHARACTERS if char.get("star_mechanics")}
@@ -249,7 +255,7 @@ def _roll_damage_atk(unit, time_elapsed):
     atk = _effective_atk(unit, time_elapsed)
     is_crit = random.random() < CRIT_CHANCE
     if is_crit:
-        atk = round(atk * CRIT_MULTIPLIER)
+        atk = round(atk * unit.get("crit_multiplier", CRIT_MULTIPLIER))
     return atk, is_crit
 
 
@@ -257,7 +263,7 @@ def _apply_gendered_damage_bonus(unit, target, damage):
     """불빠따 김어진의 성급 효과(damage_to_gender_bonus) 전용 - 특정 성별 대상에게 주는 피해를
     추가로 늘린다. 다른 캐릭터는 이 필드가 아예 없어서(None) 항상 조용히 통과한다."""
     bonus = unit.get("gendered_damage_bonus")
-    if bonus and CHARACTER_GENDER.get(target["name"]) == bonus["gender"]:
+    if bonus and _effective_gender(target) == bonus["gender"]:
         damage *= (1 + bonus["percent"] / 100)
     return damage
 
@@ -408,7 +414,7 @@ def _star_ally_gender_stat_percent(unit, own_team, enemy_team, params):
     hp_percent = params.get("hp_percent", 0)
     changes = []
     for ally in _alive_units(own_team):
-        if CHARACTER_GENDER.get(ally["name"]) != gender:
+        if _effective_gender(ally) != gender:
             continue
         if atk_percent:
             ally["status"]["atk_percent_bonus"] += atk_percent
@@ -427,6 +433,14 @@ def _star_damage_to_gender_bonus(unit, own_team, enemy_team, params):
     return []
 
 
+def _star_self_crit_multiplier(unit, own_team, enemy_team, params):
+    # 이의진: 치명타 발동 시 피해 배수를 전역 기본값(CRIT_MULTIPLIER) 대신 이 값으로 대체한다
+    # (_roll_damage_atk가 unit.get("crit_multiplier", CRIT_MULTIPLIER)로 조회). atk/hp 변화는 아니지만
+    # 프론트에 상태 아이콘(치명타 피해량 증가)을 띄우기 위해 5번째 원소(crit_sign)로 표시해서 돌려준다.
+    unit["crit_multiplier"] = params["multiplier"]
+    return [("own", unit, 0, 0, 1)]
+
+
 STAR_EFFECT_HANDLERS = {
     "self_stat_percent": _star_self_stat_percent,
     "self_buff_enemy_debuff": _star_self_buff_enemy_debuff,
@@ -435,6 +449,7 @@ STAR_EFFECT_HANDLERS = {
     "teammate_stat_percent": _star_teammate_stat_percent,
     "ally_gender_stat_percent": _star_ally_gender_stat_percent,
     "damage_to_gender_bonus": _star_damage_to_gender_bonus,
+    "self_crit_multiplier": _star_self_crit_multiplier,
 }
 
 
@@ -457,16 +472,22 @@ def _apply_battle_start_star_effects(attacker_team, defender_team, events=None):
             changes = handler(unit, own_team, enemy_team, unit["star_params"]) or []
             if events is None:
                 continue
-            change_dicts = [
-                {
+            # 튜플은 보통 (rel, target, atk_sign, hp_sign) 4개지만, 이의진(self_crit_multiplier)처럼
+            # 스탯이 아니라 다른 신호(치명타 배수 등)를 알려야 하는 핸들러는 5번째로 crit_sign을 더 얹어
+            # 돌려준다 - 나머지 핸들러는 그대로 4-튜플이라 crit_sign은 기본 0으로 취급된다.
+            change_dicts = []
+            for change in changes:
+                rel, target, atk_sign, hp_sign, *extra = change
+                crit_sign = extra[0] if extra else 0
+                if not (atk_sign or hp_sign or crit_sign):
+                    continue
+                change_dicts.append({
                     "target": target["name"],
                     "target_side": side_name if rel == "own" else enemy_side,
                     "atk": atk_sign,
                     "hp": hp_sign,
-                }
-                for rel, target, atk_sign, hp_sign in changes
-                if atk_sign or hp_sign
-            ]
+                    "crit": crit_sign,
+                })
             if change_dicts:
                 events.append({
                     "time": 0, "event_type": "star_effect_resolve", "side": side_name,
@@ -518,7 +539,7 @@ def _skill_conditional_target_debuff(caster, own_team, enemy_team, params, time_
     caster["status"]["haste_percent"] = params["haste_percent"]
     caster["status"]["haste_until"] = time_elapsed + params["haste_seconds"]
 
-    condition_met = params["condition"] != "target_gender_female" or CHARACTER_GENDER.get(target["name"]) == "여"
+    condition_met = params["condition"] != "target_gender_female" or _effective_gender(target) == "여"
     if condition_met:
         target["status"]["stun_until"] = time_elapsed + params["stun_seconds"]
 
@@ -543,6 +564,26 @@ def _skill_heal_ally_percent_max_hp(caster, own_team, enemy_team, params, time_e
 def _skill_self_shield_duration(caster, own_team, enemy_team, params, time_elapsed):
     caster["status"]["shield_until"] = time_elapsed + params["seconds"]
     return {"shield_seconds": params["seconds"]}
+
+
+def _skill_self_type_swap_heal(caster, own_team, enemy_team, params, time_elapsed):
+    # 이의진 "염색체 변환": attack_type을 Student(type1)<->Parent(type2) 사이로 토글하고 자힐.
+    # type2(Parent) 상태가 되면 이후 기본공격이 남성 적을 기절시키는 플래그(type2_stun_seconds)를 켜고,
+    # type1(Student)로 돌아오면 그 플래그를 끈다 - 실제 스턴 적용은 _do_basic_attack에서 처리.
+    new_type = "Parent" if caster["attack_type"] == "Student" else "Student"
+    caster["attack_type"] = new_type
+    heal = round(caster["max_hp"] * params["heal_percent"] / 100)
+    before = caster["hp"]
+    caster["hp"] = min(caster["max_hp"], caster["hp"] + heal)
+    caster["type2_stun_seconds"] = params["type2_stun_seconds"] if new_type == "Parent" else 0
+    # type2(Parent)가 되면 다른 캐릭터의 성별 조건부 효과(예: 김남옥의 "대상이 여성이면 기절") 판정에서도
+    # 여성으로 취급된다 - _effective_gender가 gender_override를 CHARACTER_GENDER보다 우선해서 읽는다.
+    caster["gender_override"] = "여" if new_type == "Parent" else None
+    return {
+        "new_attack_type": new_type,
+        "type2_active": new_type == "Parent",
+        "healed_amount": caster["hp"] - before,
+    }
 
 
 def _skill_bonus_damage_knockback(caster, own_team, enemy_team, params, time_elapsed):
@@ -570,7 +611,7 @@ def _skill_bonus_damage_knockback(caster, own_team, enemy_team, params, time_ela
 def _skill_aoe_gendered_damage(caster, own_team, enemy_team, params, time_elapsed):
     hits = []
     for t in _alive_units(enemy_team):
-        gender = CHARACTER_GENDER.get(t["name"], "남")
+        gender = _effective_gender(t) or "남"
         mult = params["female_multiplier"] if gender == "여" else params["male_multiplier"]
         type_mult = get_type_multiplier(caster["attack_type"], t["defense_type"])
         atk, is_crit = _roll_damage_atk(caster, time_elapsed)
@@ -676,6 +717,7 @@ SKILL_EFFECT_HANDLERS = {
     "conditional_target_debuff": _skill_conditional_target_debuff,
     "heal_ally_percent_max_hp": _skill_heal_ally_percent_max_hp,
     "self_shield_duration": _skill_self_shield_duration,
+    "self_type_swap_heal": _skill_self_type_swap_heal,
     "bonus_damage_knockback": _skill_bonus_damage_knockback,
     "aoe_gendered_damage": _skill_aoe_gendered_damage,
     "copy_target_skill": _skill_copy_target_skill,
@@ -685,6 +727,18 @@ SKILL_EFFECT_HANDLERS = {
     "debuff_atk_and_damage": _skill_debuff_atk_and_damage,
     "aoe_all_others_damage": _skill_aoe_all_others_damage,
 }
+
+
+def _apply_type2_stun_if_active(unit, target, time_elapsed):
+    """이의진 type2(Parent) 상태의 기본공격 부가효과: type2_stun_seconds가 켜져 있고(self_type_swap_heal
+    스킬로 세팅됨) 대상이 남성이면 기절시킨다. 다른 캐릭터는 이 필드가 없어 항상 조용히 통과한다.
+    반환값은 실제로 적용된 기절 시간(초) - 0이면 미적용. 프론트가 상태 아이콘 지속시간을 정확히
+    맞출 수 있도록 이벤트에 그대로 실려 나간다(_do_basic_attack)."""
+    stun_seconds = unit.get("type2_stun_seconds")
+    if stun_seconds and _effective_gender(target) == "남":
+        target["status"]["stun_until"] = time_elapsed + stun_seconds
+        return stun_seconds
+    return 0
 
 
 def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events):
@@ -702,10 +756,12 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events):
             damage = atk * mult * type_mult
             damage = _apply_gendered_damage_bonus(unit, target, damage)
             dealt = _apply_damage(target, damage, time_elapsed)
+            stun_seconds = _apply_type2_stun_if_active(unit, target, time_elapsed)
             events.append({
                 "time": time_elapsed, "event_type": "basic_attack", "side": side, "type_multiplier": type_mult,
                 "actor": unit["name"], "target": target["name"], "damage": dealt,
                 "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit,
+                "target_stunned": bool(stun_seconds), "stun_seconds": stun_seconds,
             })
     else:
         target = _select_basic_attack_target(unit, enemy_team)
@@ -716,10 +772,12 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events):
         damage = atk * type_mult
         damage = _apply_gendered_damage_bonus(unit, target, damage)
         dealt = _apply_damage(target, damage, time_elapsed)
+        stun_seconds = _apply_type2_stun_if_active(unit, target, time_elapsed)
         events.append({
             "time": time_elapsed, "event_type": "basic_attack", "side": side, "type_multiplier": type_mult,
             "actor": unit["name"], "target": target["name"], "damage": dealt,
             "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit,
+            "target_stunned": bool(stun_seconds), "stun_seconds": stun_seconds,
         })
 
 

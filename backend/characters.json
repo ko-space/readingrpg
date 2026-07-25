@@ -453,6 +453,68 @@
           "6": { "gender": "남", "bonus_percent": 105 }
         }
       }
+    },
+    {
+      "name": "이의진",
+      "job_class": "동남아 유학생",
+      "gender": "남",
+      "is_hidden": true,
+      "outfits": {
+        "기본": "international/basic"
+      },
+      "description": "연분홍색 크록스가 매력 포인트입니다. 그는 왜 눈을 뜨지 않는 걸까요?",
+      "range": "원거리",
+      "attack_type": "Student",
+      "defense_type": "Student",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": 1.9,
+        "4": 2.5,
+        "5": 2.5,
+        "6": 13
+      },
+      "exp_subjects": ["탐구"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "치명타 피해량 200%",
+        "4": "치명타 피해량 200%",
+        "5": "치명타 피해량 200%",
+        "6": "치명타 피해량 300%"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "염색체 변환: type1이면 type2로, type2면 type1로 전환. 전환 시 최대체력의 5% 회복. [type1](남) 추가효과 없음 / [type2](여) 기본공격이 남성 적에게 0.5초 기절",
+        "6": "염색체 변환: 전환 시 최대체력의 15% 회복. [type1](남) 추가효과 없음 / [type2](여) 기본공격이 남성 적에게 0.75초 기절"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "skill_mechanics": {
+        "effect_type": "self_type_swap_heal",
+        "params": {
+          "5": { "heal_percent": 5, "type2_stun_seconds": 0.5 },
+          "6": { "heal_percent": 15, "type2_stun_seconds": 0.75 }
+        }
+      },
+      "star_mechanics": {
+        "effect_type": "self_crit_multiplier",
+        "params": {
+          "3": { "multiplier": 3.0 },
+          "4": { "multiplier": 3.0 },
+          "5": { "multiplier": 3.0 },
+          "6": { "multiplier": 4.5 }
+        }
+      }
     }
   ],
   "희귀": [

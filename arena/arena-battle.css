@@ -694,6 +694,89 @@ body {
 .heart-projectile.heart-pink { color: #ff6fb0; }
 .heart-projectile.heart-red { color: #e0263f; }
 
+/* ── 이의진 기본공격 전용: 눈에서 발사되는 레이저(eye_laser_switch.html / eye_laser (1).html 참고).
+   wrap이 시작점(눈)에서 위치·회전·두께를 잡고, width만 JS가 0→실제 거리로 트랜지션해서 빔이 실제로
+   "뻗어나가는" 것처럼 만든다 - 그 트랜지션이 끝나는 시점(=빔 끝이 대상에 닿는 시점)에 맞춰 JS가
+   onArrive를 불러서 피해/기절 판정을 반영한다. type1(빨강, 참고 파일의 단순 레이저) / type2(청록,
+   변신 상태 전용 - 좀 더 지글거리는 플리커를 얹어 참고 파일의 번개 느낌을 흉내냈다). ── */
+.eye-laser-wrap {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 8px;
+    margin-top: -4px;
+    transform-origin: 0 50%;
+    pointer-events: none;
+    z-index: 4;
+    overflow: visible;
+}
+.eye-laser-glow {
+    position: absolute;
+    inset: -220% 0;
+    filter: blur(7px);
+    opacity: 0.85;
+}
+.eye-laser-core {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+}
+
+.eye-laser-type1 .eye-laser-glow {
+    background: linear-gradient(90deg, rgba(255, 40, 40, .9), rgba(255, 20, 20, .55) 55%, rgba(255, 0, 0, 0));
+}
+.eye-laser-type1 .eye-laser-core {
+    background: linear-gradient(180deg, rgba(215, 0, 0, .98) 0%, rgba(255, 60, 60, .98) 20%, #fff 50%, rgba(255, 60, 60, .98) 80%, rgba(215, 0, 0, .98) 100%);
+    box-shadow: 0 0 6px #fff, 0 0 14px rgba(255, 90, 90, .9), 0 0 26px rgba(255, 0, 0, .7);
+}
+
+@keyframes eye-laser-flicker {
+    0%, 100% { opacity: 1; filter: brightness(1); }
+    30% { opacity: .82; filter: brightness(1.3); }
+    55% { opacity: 1; filter: brightness(0.9); }
+    75% { opacity: .88; filter: brightness(1.4); }
+}
+/* type2는 두께 자체를 더 키운 다음 clip-path로 원뿔(눈 쪽은 좁고 대상 쪽으로 갈수록 넓어짐) 모양으로
+   잘라낸다 - wrap 로컬 좌표계에서 0%가 항상 시작점(눈), 100%가 항상 끝점(대상)이라(회전은 wrap 전체를
+   돌리는 것이므로) 캐릭터가 어느 방향을 보고 있어도 "눈 쪽 좁음 -> 대상 쪽 넓음"이 항상 성립한다. */
+.eye-laser-type2 {
+    height: 22px;
+    margin-top: -11px;
+}
+.eye-laser-type2 .eye-laser-glow {
+    background: linear-gradient(90deg, rgba(120, 200, 255, .9), rgba(46, 107, 255, .5) 55%, rgba(46, 107, 255, 0));
+    animation: eye-laser-flicker 140ms linear infinite;
+    clip-path: polygon(0% 42%, 0% 58%, 100% 0%, 100% 100%);
+}
+.eye-laser-type2 .eye-laser-core {
+    clip-path: polygon(0% 42%, 0% 58%, 100% 0%, 100% 100%);
+    background: linear-gradient(180deg, rgba(30, 80, 220, .98) 0%, rgba(120, 200, 255, .98) 20%, #fff 50%, rgba(120, 200, 255, .98) 80%, rgba(30, 80, 220, .98) 100%);
+    box-shadow: 0 0 6px #fff, 0 0 14px rgba(126, 249, 255, .95), 0 0 30px rgba(46, 107, 255, .75);
+    animation: eye-laser-flicker 90ms linear infinite;
+}
+
+/* 발사 지점(눈)에서 잠깐 반짝이는 발광 - eye_laser_switch.html의 origin-flare에 해당. */
+@keyframes eye-laser-flare-pop {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+    25% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1.3); }
+}
+.eye-laser-flare {
+    position: absolute;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 5;
+    animation: eye-laser-flare-pop 220ms ease-out both;
+}
+.eye-laser-flare-type1 {
+    background: radial-gradient(circle, #fff 0%, #fff 15%, rgba(255, 100, 100, .85) 35%, rgba(255, 0, 0, .35) 60%, rgba(255, 0, 0, 0) 75%);
+}
+.eye-laser-flare-type2 {
+    background: radial-gradient(circle, #fff 0%, #fff 15%, rgba(150, 220, 255, .9) 35%, rgba(46, 107, 255, .4) 60%, rgba(46, 107, 255, 0) 75%);
+}
+
 /* ── 이영웅 스킬 전용: 치유 대상 머리 위에서 천천히 내려오는 초록 하트(가운데 십자가 + 노란 오라). ── */
 .healing-heart-wrap {
     position: absolute;

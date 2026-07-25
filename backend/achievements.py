@@ -24,6 +24,7 @@ from models import (
 )
 from leveling import apply_exp
 from quests import MOCK_EXAM_MINUTES
+from character_visibility import is_hidden_override
 
 KST = timezone(timedelta(hours=9))
 
@@ -238,7 +239,12 @@ def compute_progress(db: Session, user, ach: Achievement) -> dict:
     elif ctype == "own_all_characters":
         # 현재 카탈로그(characters.json)의 모든 캐릭터 보유. 이후 캐릭터가 추가되면 목표치가 늘지만,
         # 이미 딴 유저는 UserAchievement 기록이 남아 있으므로 칭호가 회수되지 않는다.
-        all_names = set(_CHARACTER_BY_NAME.keys())
+        # is_hidden 캐릭터(예: 이의진, 아직 공개 전)는 얻을 방법이 없는 일반 유저 입장에서는 목표에서 제외한다.
+        # (character_visibility.py의 DB 오버라이드가 있으면 그 값을 우선한다.)
+        all_names = {
+            name for name, c in _CHARACTER_BY_NAME.items()
+            if not is_hidden_override(name, c.get("is_hidden", False))
+        }
         target = len(all_names)
         owned = {
             name for (name,) in

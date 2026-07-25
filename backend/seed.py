@@ -4,6 +4,7 @@ from models import (
     Item, Region, Achievement, GachaBanner, GachaBannerPickup, Quest, UserQuestClaim,
     UserItem, UserItemPurchase, UserDailyItemPurchase, Notice, Challenge,
 )
+from character_visibility import is_hidden_override
 
 with open("characters.json", "r", encoding="utf-8") as f:
     CHARACTER_POOL = json.load(f)
@@ -31,6 +32,8 @@ def seed_shop_items():
         for rarity, char_list in CHARACTER_POOL.items():
             base_price = RARITY_PRICE.get(rarity, 100)
             for char in char_list:
+                if is_hidden_override(char["name"], char.get("is_hidden", False)):
+                    continue  # 아직 공개 전인 캐릭터(예: 이의진)의 의상은 상점 Item으로 시딩하지 않는다
                 for season, outfit_file in char["outfits"].items():
                     key = (char["name"], season)
 
