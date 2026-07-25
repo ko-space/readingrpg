@@ -10,6 +10,7 @@ from database import get_db
 from models import User, Character, Item, UserItem, ActivityLog
 from schemas import EquipRequest, CharacterOutfitRequest, EnhancementRequest
 from security import get_current_user
+from character_visibility import is_hidden_override
 from achievements import check_and_grant_achievements
 
 router = APIRouter(prefix="/characters", tags=["characters"])
@@ -153,7 +154,10 @@ def get_character_inventory(
     """인벤토리용 그룹 데이터."""
     return {
         "characters": _build_inventory_rows(user),
-        "catalog_order": [entry["name"] for entry in CATALOG],
+        "catalog_order": [
+            entry["name"] for entry in CATALOG
+            if not is_hidden_override(entry["name"], entry.get("is_hidden", False))
+        ],
     }
 
 

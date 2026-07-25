@@ -7,6 +7,7 @@ from models import User, Character, GachaBanner, GachaBannerPickup, ActivityLog
 from schemas import GachaSelectRequest
 from security import get_current_user
 from achievements import check_and_grant_achievements, resolve_character_reveal_info
+from character_visibility import is_hidden_override
 
 router = APIRouter(prefix="/gacha", tags=["gacha"])
 
@@ -17,6 +18,7 @@ GACHA_COST = 100
 GACHA_POINTS_PER_PULL = 1   # 모집 1회당 적립되는 모집 포인트 (성공/중복 여부와 무관)
 DEFAULT_PICKUP_RATE_UP = 0.5  # gacha_banner_pickups.rate_up이 비어있을 때 쓰는 기본값
 RARITY_START_STAR = {"신화": 5, "전설": 4, "영웅": 3, "희귀": 2, "일반": 1}  # 모집 시 시작 성(星)
+ADMIN_USER_ID = 1  # ranking.py/pvp.py와 동일한 관리자 계정 - is_hidden 캐릭터(예: 이의진)도 테스트로 뽑을 수 있는 예외
 
 # 등급별 확률(각 등급의 몫, 합이 1). pull_character의 실제 등급 추첨과 확률 안내 모달(/gacha/rates)이
 # 이 상수 하나만 보고 계산하게 해서, 둘이 서로 다른 숫자를 보여주는 일이 없게 한다.
@@ -47,12 +49,16 @@ def _get_active_pickup_rates(db: Session, banner_id: int | None) -> dict:
     return {name: (rate if rate is not None else DEFAULT_PICKUP_RATE_UP) for name, rate in rows}
 
 
-def _pick_character_with_pickup(rarity: str, active_pickup_rates: dict):
+def _pick_character_with_pickup(rarity: str, active_pickup_rates: dict, include_hidden: bool = False):
     """
     같은 등급 안에, 확률업이 걸린 픽업 캐릭터가 있으면 각자의 rate_up 확률로 그 캐릭터를 확정 지급하고,
     (여러 명이면 순서대로 하나씩 시도) 아무도 안 걸리면 그 등급 안에서 완전 균등 랜덤으로 뽑는다.
+    include_hidden이 False면(일반 유저) is_hidden 캐릭터는 후보에서 아예 제외된다 - 아직 공개 전인
+    캐릭터(예: 이의진)가 실수로 뽑히지 않게 하기 위함. 관리자는 True로 넘겨받아 테스트로 뽑을 수 있다.
     """
     tier = CHARACTER_POOL[rarity]
+    if not include_hidden:
+        tier = [c for c in tier if not is_hidden_override(c["name"], c.get("is_hidden", False))]
     tier_pickups = [c for c in tier if c["name"] in active_pickup_rates]
 
     for pickup_char in tier_pickups:
@@ -81,7 +87,7 @@ def pull_character(
             break
 
     active_pickup_rates = _get_active_pickup_rates(db, banner_id)
-    picked_character = _pick_character_with_pickup(rarity, active_pickup_rates)
+    picked_character = _pick_character_with_pickup(rarity, active_pickup_rates, include_hidden=(user.id == ADMIN_USER_ID))
 
     user.gacha_points += GACHA_POINTS_PER_PULL
 
@@ -204,7 +210,7 @@ def get_gacha_rates(banner_id: int | None = None, db: Session = Depends(get_db))
 
     rarities = []
     for rarity in RARITY_ORDER:
-        tier = CHARACTER_POOL[rarity]
+        tier = [c for c in CHARACTER_POOL[rarity] if not is_hidden_override(c["name"], c.get("is_hidden", False))]
         tier_prob = RARITY_TIER_PROBABILITY[rarity]
         n = len(tier)
 

@@ -40,14 +40,23 @@
         "이종복": "text_particles",  // F/=/m/a 네 글자 순차 발사 - 직선
         "임소정": "electric",        // 캐스터-대상을 잠깐 잇는 푸른 전기
         "서민석": "book",            // 책 던지기 - 포물선, 계속 회전
+        "이의진": "eye_laser",       // 눈에서 발사되는 레이저 - type1(빨강)/type2(청록) 두 가지, isType2로 분기
     };
 
     // 캐릭터별 성별 - 서민석 스킬(하트 색)처럼 대상 성별에 따라 연출이 갈리는 경우에 쓴다.
+    // 이의진은 염색체 변환 스킬로 전투 중 성별이 바뀌므로, 이 표는 "기본값"일 뿐이고 실제 판정은
+    // effectiveGender(key)가 units[key].isType2를 함께 봐서 처리한다.
     const CHARACTER_GENDER = {
         "윤대웅": "남", "윤영준": "남", "김남옥": "여", "이종복": "남", "임소정": "여",
         "이영웅": "남", "불빠따 김어진": "남", "서민석": "남", "강승유": "남",
-        "송주헌": "남", "최재혁": "남", "청년": "남", "강 희": "여",
+        "송주헌": "남", "최재혁": "남", "청년": "남", "강 희": "여", "이의진": "남",
     };
+
+    // 대상의 "지금 이 순간" 성별 - 이의진이 type2(염색체 변환) 상태면 CHARACTER_GENDER의 고정값 대신 "여"로 취급한다.
+    function effectiveGender(name, key) {
+        if (key && units[key]?.isType2) return "여";
+        return CHARACTER_GENDER[name] || "남";
+    }
 
     // 스킬 발동(skill_resolve) 시 어떤 카테고리 연출을 입힐지 - 캐릭터 고유 연출은 devtest.css에서 다듬는다.
     const SKILL_VFX_CATEGORY = {
@@ -88,66 +97,71 @@
         });
     }
 
-    async function getAttackFrameCount(outfit) {
-        if (frameCountCache[outfit] !== undefined) {
-            return frameCountCache[outfit];
+    // variant("" 또는 "_type2")는 이의진처럼 상태별로 다른 프레임 세트(attack_type2_N.png 등)를 쓰는
+    // 캐릭터를 위한 것 - 캐시 키도 variant별로 따로 둬서 type1/type2 프레임 수를 혼동하지 않는다.
+    async function getAttackFrameCount(outfit, variant = "") {
+        const cacheKey = `${outfit}${variant}`;
+        if (frameCountCache[cacheKey] !== undefined) {
+            return frameCountCache[cacheKey];
         }
 
         let count = 0;
 
         for (let i = 1; i <= MAX_ATTACK_FRAMES; i += 1) {
             const exists = await checkImageExists(
-                `${OUTFIT_IMAGE_BASE}${outfit}/attack_${i}.png`
+                `${OUTFIT_IMAGE_BASE}${outfit}/attack${variant}_${i}.png`
             );
 
             if (!exists) break;
             count = i;
         }
 
-        frameCountCache[outfit] = count;
+        frameCountCache[cacheKey] = count;
         return count;
     }
 
     // 시전(캐스팅) 전용 프레임(skill_N.png)이 있는지 확인 - attack_N.png와 같은 규칙으로 캐릭터 outfit
     // 폴더 안에서 순서대로 찾는다. 없는 캐릭터는 outfit당 한 번만 404를 확인하고 캐시해서 재확인하지 않는다.
-    async function getSkillFrameCount(outfit) {
-        if (skillFrameCountCache[outfit] !== undefined) {
-            return skillFrameCountCache[outfit];
+    async function getSkillFrameCount(outfit, variant = "") {
+        const cacheKey = `${outfit}${variant}`;
+        if (skillFrameCountCache[cacheKey] !== undefined) {
+            return skillFrameCountCache[cacheKey];
         }
 
         let count = 0;
 
         for (let i = 1; i <= MAX_SKILL_FRAMES; i += 1) {
             const exists = await checkImageExists(
-                `${OUTFIT_IMAGE_BASE}${outfit}/skill_${i}.png`
+                `${OUTFIT_IMAGE_BASE}${outfit}/skill${variant}_${i}.png`
             );
 
             if (!exists) break;
             count = i;
         }
 
-        skillFrameCountCache[outfit] = count;
+        skillFrameCountCache[cacheKey] = count;
         return count;
     }
 
     // 시전 종료 후 원래 모습으로 복귀하는 전용 프레임(return_N.png)이 있는지 확인 - skill_N.png와 같은 규칙.
-    async function getReturnFrameCount(outfit) {
-        if (returnFrameCountCache[outfit] !== undefined) {
-            return returnFrameCountCache[outfit];
+    async function getReturnFrameCount(outfit, variant = "") {
+        const cacheKey = `${outfit}${variant}`;
+        if (returnFrameCountCache[cacheKey] !== undefined) {
+            return returnFrameCountCache[cacheKey];
         }
 
         let count = 0;
 
         for (let i = 1; i <= MAX_RETURN_FRAMES; i += 1) {
             const exists = await checkImageExists(
-                `${OUTFIT_IMAGE_BASE}${outfit}/return_${i}.png`
+                `${OUTFIT_IMAGE_BASE}${outfit}/return${variant}_${i}.png`
             );
 
             if (!exists) break;
             count = i;
         }
 
-        returnFrameCountCache[outfit] = count;
+        returnFrameCountCache[cacheKey] = count;
         return count;
     }
 
@@ -213,7 +227,14 @@
             outfit: rawUnit.outfit,
             star: rawUnit.star,
             style: RANGED_ATTACK_STYLE[rawUnit.name] || (rawUnit.is_melee ? "melee" : "straight"),
+            isType2: false, // 이의진 전용: 염색체 변환(self_type_swap_heal) 스킬로 전투 중 true/false 토글됨
         };
+    }
+
+    // 이의진처럼 상태(type1/type2)에 따라 다른 스프라이트 파일을 쓰는 캐릭터용 - 평소엔 빈 문자열,
+    // isType2가 true면 "_type2"를 붙여서 attack_N_type2.png가 아니라 attack_type2_N.png 규칙을 맞춘다.
+    function spriteVariantSuffix(key) {
+        return units[key]?.isType2 ? "_type2" : "";
     }
 
     // 최재혁은 ★3부터 후방 적을 우선 공격한다(battle_engine.py의 _select_basic_attack_target과 동일 규칙).
@@ -385,12 +406,15 @@
             imgEl.classList.remove("dying", "death-fallback-filter");
 
             if (!attackAnimActive[key]) {
+                const variant = spriteVariantSuffix(key);
                 imgEl.onerror = () => {
                     imgEl.onerror = null;
+                    // type2 전용 idle 사진은 없음(변신은 전투 중 상태라 로비 초상화 idle.png는 안 바뀜) -
+                    // battle_idle_type2.png가 없는 캐릭터/오타 등으로 로드 실패해도 평상시 idle로 대체된다.
                     imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.png`;
                 };
 
-                imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle.png`;
+                imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.png`;
                 imgEl.classList.toggle("flipped", isFacingFlipped(key)); // 방향은 전투 중 동적으로 바뀔 수 있음
             }
         }
@@ -632,6 +656,108 @@
     // start->end 방향의 각도(도) - 회전이 필요한 투사체(크레파스/유성)에 쓴다.
     function angleDeg(start, end) {
         return Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI;
+    }
+
+    // ===== 이의진 전용: 눈에서 발사되는 레이저 =====
+    // .battle-unit-img는 width/height가 고정된 박스이고 실제 그림은 object-fit:contain +
+    // object-position:bottom center로 그 안에 들어간다 - 세로가 긴 인물 그림이라 항상 "박스 높이에
+    // 맞춰 축소되고, 가로는 중앙 정렬"되는 쪽으로 렌더링된다(그래서 그림의 실제 가로 폭은 박스보다
+    // 좁고, 상하는 박스와 정확히 일치). 그래서 "눈 위치"처럼 그림 안의 특정 지점을 조준하려면
+    // 박스 중심이 아니라 실제로 그려지는 그림의 사각형을 다시 계산해야 한다.
+    //
+    // fx/fy는 그 그림(현재 표시된 attack 프레임 원본 픽셀 기준) 안에서 눈이 있는 비율(0~1, 왼쪽위 기준).
+    // ▶ 레이저가 엉뚱한 위치에서 나가면 여기 두 값만 고치면 된다 - fx를 늘리면 오른쪽으로,
+    //   fy를 늘리면 아래쪽으로 발사 지점이 이동한다. type1은 attack_1.png, type2는 attack_type2_1.png
+    //   기준으로 눈금을 맞췄다(공격 프레임 3번째 즈음에 발사되므로 attack_3 기준으로 다시 맞춰도 된다).
+    const EYE_LASER_ORIGIN = {
+        type1: { fx: 0.63, fy: 0.12 },
+        type2: { fx: 0.83, fy: 0.5 },
+    };
+
+    // imgEl 안에서 (fracX, fracY) 비율 위치에 해당하는 화면 좌표를 .battle-field 기준 상대좌표로 계산한다.
+    // (object-fit:contain + object-position:bottom center 규칙을 그대로 재현 - renderUnit 등에서 쓰는
+    // .battle-unit-img CSS와 반드시 같이 맞춰야 한다.) flipped(좌우 반전) 상태면 fracX도 뒤집는다.
+    function imageContentPoint(imgEl, fracX, fracY) {
+        const fieldEl = document.querySelector(".battle-field");
+        const fieldRect = fieldEl.getBoundingClientRect();
+        const boxRect = imgEl.getBoundingClientRect();
+        const naturalW = imgEl.naturalWidth || boxRect.width;
+        const naturalH = imgEl.naturalHeight || boxRect.height;
+        const boxAspect = boxRect.width / boxRect.height;
+        const imgAspect = naturalW / naturalH;
+
+        let renderW, renderH, renderLeft, renderTop;
+        if (imgAspect > boxAspect) {
+            // 이 프로젝트의 인물 그림들은 대부분 세로로 길어서 실제로는 잘 안 타는 분기지만, 혹시
+            // 가로로 더 넓은 그림이 들어오면(폭 기준으로 맞춰짐) 원칙대로 계산해둔다.
+            renderW = boxRect.width;
+            renderH = renderW / imgAspect;
+            renderLeft = boxRect.left;
+            renderTop = boxRect.bottom - renderH; // object-position: bottom
+        } else {
+            renderH = boxRect.height;
+            renderW = renderH * imgAspect;
+            renderTop = boxRect.top;
+            renderLeft = boxRect.left + (boxRect.width - renderW) / 2; // object-position: center(가로)
+        }
+
+        const flipped = imgEl.classList.contains("flipped");
+        const effFracX = flipped ? (1 - fracX) : fracX;
+
+        return {
+            x: renderLeft + effFracX * renderW - fieldRect.left,
+            y: renderTop + fracY * renderH - fieldRect.top,
+        };
+    }
+
+    // 이의진 기본공격 전용: 눈에서 대상까지 레이저 빔이 "자라나며" 뻗어나간다. 폭(width)을 0에서
+    // 실제 거리까지 트랜지션으로 늘리는 방식이라, 빔의 끝(대상 쪽)이 실제로 화면 위에서 대상 위치에
+    // 도달하는 시점과 onArrive 호출 시점이 정확히 일치한다 - 즉 "빔이 직접 닿아야" 피해/기절 판정이
+    // 반영된다(다른 투사체들의 onArrive 패턴과 동일한 원칙). variant는 "type1"(빨강) / "type2"(청록).
+    function spawnEyeLaserBeam(actorKey, targetKey, variant, onArrive) {
+        const layer = document.getElementById("projectile-layer");
+        const actorImg = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);
+        const targetImg = document.querySelector(`[data-unit="${targetKey}"] .battle-unit-img`);
+        if (!layer || !actorImg || !targetImg) { onArrive(); return; }
+
+        const origin = EYE_LASER_ORIGIN[variant] || EYE_LASER_ORIGIN.type1;
+        const start = imageContentPoint(actorImg, origin.fx, origin.fy);
+        const end = fieldRelativeCenter(targetImg);
+        const distance = Math.hypot(end.x - start.x, end.y - start.y);
+        const angle = angleDeg(start, end);
+        // 거리에 비례한 이동시간 - 기존 직선 투사체(PROJECTILE_TRAVEL_MS, 필드 절반 거리 기준 감각)와
+        // 비슷하게 맞추되 빔이라 조금 더 빠르게 뻗어나간다.
+        const durationMs = Math.max(110, distance * 0.6);
+
+        const wrap = document.createElement("div");
+        wrap.className = `eye-laser-wrap eye-laser-${variant}`;
+        wrap.style.left = `${start.x}px`;
+        wrap.style.top = `${start.y}px`;
+        wrap.style.width = "0px";
+        wrap.style.transform = `rotate(${angle}deg)`;
+        wrap.innerHTML = `
+            <div class="eye-laser-glow"></div>
+            <div class="eye-laser-core"></div>
+        `;
+        layer.appendChild(wrap);
+
+        // 발사 지점(눈)에서 잠깐 번쩍이는 발광 - eye_laser_switch.html의 origin-flare에 해당.
+        const flare = document.createElement("div");
+        flare.className = `eye-laser-flare eye-laser-flare-${variant}`;
+        flare.style.left = `${start.x}px`;
+        flare.style.top = `${start.y}px`;
+        layer.appendChild(flare);
+
+        requestAnimationFrame(() => {
+            wrap.style.transition = `width ${durationMs}ms linear`;
+            wrap.style.width = `${distance}px`;
+        });
+
+        setTimeout(() => {
+            wrap.remove();
+            flare.remove();
+            onArrive();
+        }, durationMs);
     }
 
     // 포물선 이동 공용 로직: 직선 보간 + 사인 곡선으로 위로 솟았다가 내려오는 오프셋을 매 프레임 계산한다.
@@ -967,6 +1093,7 @@
         else if (style === "crayon") spawnCrayonProjectile(actorKey, targetKey, onArrive);
         else if (style === "electric") playElectricConnector(actorKey, targetKey, "electric-blue", 5, onArrive);
         else if (style === "book") spawnBookProjectile(actorKey, targetKey, onArrive);
+        else if (style === "eye_laser") spawnEyeLaserBeam(actorKey, targetKey, units[actorKey]?.isType2 ? "type2" : "type1", onArrive);
         else spawnProjectile(actorKey, targetKey, onArrive);
     }
 
@@ -1052,12 +1179,13 @@
         if (!imgEl) return;
 
         const outfit = units[key].outfit;
+        const variant = spriteVariantSuffix(key);
         const myToken =
             (attackAnimTokens[key] = (attackAnimTokens[key] || 0) + 1);
 
         attackAnimActive[key] = true;
 
-        const frameCount = await getAttackFrameCount(outfit);
+        const frameCount = await getAttackFrameCount(outfit, variant);
 
         if (attackAnimTokens[key] !== myToken) return;
 
@@ -1076,7 +1204,7 @@
             if (attackAnimTokens[key] !== myToken) return;
 
             imgEl.src =
-                `${OUTFIT_IMAGE_BASE}${outfit}/attack_${i}.png`;
+                `${OUTFIT_IMAGE_BASE}${outfit}/attack${variant}_${i}.png`;
             await sleep(ATTACK_FRAME_DURATION_MS);
         }
 
@@ -1087,7 +1215,7 @@
             };
 
             imgEl.src =
-                `${OUTFIT_IMAGE_BASE}${outfit}/battle_idle.png`;
+                `${OUTFIT_IMAGE_BASE}${outfit}/battle_idle${variant}.png`;
             attackAnimActive[key] = false;
         }
     }
@@ -1105,14 +1233,15 @@
         if (!el || !imgEl || !units[key]) return;
 
         const outfit = units[key].outfit;
+        const variant = spriteVariantSuffix(key);
         const myToken =
             (attackAnimTokens[key] = (attackAnimTokens[key] || 0) + 1);
 
         attackAnimActive[key] = true;
 
-        const skillFrameCount = await getSkillFrameCount(outfit);
+        const skillFrameCount = await getSkillFrameCount(outfit, variant);
         const usingSkillFrames = skillFrameCount > 0;
-        const frameCount = usingSkillFrames ? skillFrameCount : await getAttackFrameCount(outfit);
+        const frameCount = usingSkillFrames ? skillFrameCount : await getAttackFrameCount(outfit, variant);
         const framePrefix = usingSkillFrames ? "skill" : "attack";
 
         if (attackAnimTokens[key] !== myToken) return;
@@ -1127,7 +1256,7 @@
         for (let i = 1; i <= frameCount; i += 1) {
             if (attackAnimTokens[key] !== myToken) return;
 
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/${framePrefix}_${i}.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/${framePrefix}${variant}_${i}.png`;
             await sleep(perFrameMs);
         }
 
@@ -1137,7 +1266,7 @@
                 imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.png`;
             };
 
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/battle_idle.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/battle_idle${variant}.png`;
             attackAnimActive[key] = false;
         }
     }
@@ -1154,19 +1283,22 @@
         if (!el || !imgEl || !units[key]) return;
 
         const outfit = units[key].outfit;
+        // 호출부(skill_resolve)가 isType2 토글을 이 함수를 부르기 "전에" 반영해두므로, 염색체 변환처럼
+        // 시전 도중 상태가 바뀌는 스킬이면 복귀 프레임은 자동으로 전환 후(새 상태) 모습으로 재생된다.
+        const variant = spriteVariantSuffix(key);
         const myToken =
             (attackAnimTokens[key] = (attackAnimTokens[key] || 0) + 1);
 
         attackAnimActive[key] = true;
 
-        const frameCount = await getReturnFrameCount(outfit);
+        const frameCount = await getReturnFrameCount(outfit, variant);
 
         if (attackAnimTokens[key] !== myToken) return;
 
         for (let i = 1; i <= frameCount; i += 1) {
             if (attackAnimTokens[key] !== myToken) return;
 
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/return_${i}.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/return${variant}_${i}.png`;
             await sleep(RETURN_FRAME_DURATION_MS);
         }
 
@@ -1176,7 +1308,7 @@
                 imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.png`;
             };
 
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/battle_idle.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/battle_idle${variant}.png`;
             attackAnimActive[key] = false;
         }
     }
@@ -1226,6 +1358,7 @@
         atk_up: "Combat_Icon_Buff_ATK.png",
         maxhp_up: "Combat_Icon_Buff_MAXHP.png",
         atk_speed_up: "Combat_Icon_Buff_AttackSpeed.png",
+        crit_up: "Combat_Icon_Buff_CriticalDamage.png",
         atk_down: "Combat_Icon_Debuff_ATK.png",
         maxhp_down: "Combat_Icon_Debuff_MAXHP.png",
         stun: "Combat_Icon_CC_Stunned.png",
@@ -1488,6 +1621,9 @@
                 if (change.atk < 0) setStatusIcon(changedKey, "atk_down", { source });
                 if (change.hp > 0) setStatusIcon(changedKey, "maxhp_up", { source });
                 if (change.hp < 0) setStatusIcon(changedKey, "maxhp_down", { source });
+                // 이의진: 치명타 피해량 증가(self_crit_multiplier) - 스탯 변화는 아니지만 같은 방식(전투
+                // 끝까지 유지)으로 아이콘을 띄운다.
+                if (change.crit > 0) setStatusIcon(changedKey, "crit_up", { source });
                 flashEffectAura(changedKey, (change.atk < 0 || change.hp < 0) ? "debuff" : "buff");
             });
         } else if (eventType === "trait_resolve") {
@@ -1527,6 +1663,13 @@
             // 기준으로 연출을 분기해서, 복제한 스킬의 실제 전용 이펙트가 원본과 동일하게 나오게 한다.
             // (복제할 스킬이 없어 단순 피해로 폴백된 경우엔 copied_effect_type이 없으므로 그대로 event.effect_type을 쓴다.)
             const dispatchEffectType = event.detail?.copied_effect_type || event.effect_type;
+
+            // 이의진 "염색체 변환": 복귀 애니메이션(아래 playReturnFrames)이 전환 "후" 모습으로 재생돼야
+            // 하므로, return 프레임을 부르기 전에 상태부터 반영해둔다 - spriteVariantSuffix가 이 값을 본다.
+            if (dispatchEffectType === "self_type_swap_heal" && actorKey && units[actorKey]) {
+                units[actorKey].isType2 = !!event.detail?.type2_active;
+            }
+
             if (actorKey) {
                 const castImgEl = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);
                 castImgEl?.classList.remove("casting", "casting-rainbow");
@@ -1675,7 +1818,7 @@
                 (event.detail?.hits || []).forEach((hit) => {
                     const targetKey = findHitKey(hit.target);
                     if (!targetKey) return;
-                    const gender = CHARACTER_GENDER[hit.target] || "남";
+                    const gender = effectiveGender(hit.target, targetKey);
                     spawnHeartProjectile(actorKey, targetKey, gender === "여" ? "heart-red" : "heart-pink", () => {});
                 });
                 appendLog(`${event.actor}의 스킬 발동!`, event.side);
@@ -1723,6 +1866,19 @@
                 } else {
                     appendLog(`${event.actor}의 스킬 발동!`, event.side);
                 }
+            } else if (dispatchEffectType === "self_type_swap_heal" && actorKey) {
+                // 이의진 "염색체 변환" - isType2는 위에서 이미 토글해뒀다(playReturnFrames가 새 스프라이트로
+                // 재생되도록). 여기서는 자힐 반영 + 상태 아이콘/오라만 얹는다(투사체 없는 자기 대상 스킬).
+                if (event.detail?.healed_amount) {
+                    units[actorKey].hp = Math.min(units[actorKey].maxHp, units[actorKey].hp + event.detail.healed_amount);
+                    renderUnit(actorKey);
+                }
+                flashEffectAura(actorKey, "heal");
+                setStatusIcon(actorKey, "heal", { source: `${actorKey}:type_swap_heal`, durationMs: MOMENT_ICON_MS });
+                appendLog(
+                    `${event.actor}의 스킬 발동! ${event.detail?.type2_active ? "염색체 변환(type2)" : "염색체 변환(type1)"} - 체력 ${event.detail?.healed_amount || 0} 회복`,
+                    event.side
+                );
             } else {
                 applySkillHits(event);
                 if (dispatchEffectType === "summon_clone" && event.detail?.summoned) {
@@ -1754,6 +1910,14 @@
                 if (targetKey) {
                     renderUnit(targetKey);
                     flashHit(targetKey, event.is_crit, event.type_multiplier);
+                    // 이의진 type2 기본공격 부가효과(_apply_type2_stun_if_active) - 남성 대상이면 기절.
+                    if (event.target_stunned) {
+                        flashEffectAura(targetKey, "cc");
+                        setStatusIcon(targetKey, "stun", {
+                            source: `${event.actor}:stun`,
+                            durationMs: (event.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
+                        });
+                    }
                 }
                 showDamageMessage(event);
             }

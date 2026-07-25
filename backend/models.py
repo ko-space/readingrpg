@@ -268,6 +268,18 @@ class GachaBannerPickup(Base):
     banner = relationship("GachaBanner", back_populates="pickups")
 
 
+class CharacterVisibility(Base):
+    """characters.json의 is_hidden은 코드 파일이라 값을 바꾸려면 배포가 필요한데, 이 테이블에 행을
+    넣어두면 서버 재시작만으로(코드 수정 없이) 공개 여부를 뒤집을 수 있다 - 예: 관리자만 써보던
+    이의진을 나중에 일반 유저에게도 풀 때, 이 행의 is_hidden을 False로 바꾸고 서버만 재시작하면 됨.
+    행이 없는 캐릭터는 characters.json의 is_hidden 값을 그대로 따른다(character_visibility.py 참고)."""
+    __tablename__ = "character_visibility"
+
+    id = Column(Integer, primary_key=True, index=True)
+    character_name = Column(String, unique=True, nullable=False)  # characters.json의 캐릭터 이름과 일치해야 함
+    is_hidden = Column(Boolean, nullable=False, default=True)
+
+
 class PvpBattleLog(Base):
     __tablename__ = "pvp_battle_logs"
 

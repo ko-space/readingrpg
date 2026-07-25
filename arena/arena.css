@@ -234,7 +234,7 @@
 
 .defense-standing-slot {
     position: relative;
-    min-height: 128px;
+    height: 160px;
     overflow: hidden;
     display: flex;
     flex-direction: column;
