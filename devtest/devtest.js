@@ -206,6 +206,15 @@
         };
         advancedSlot[slot] = false;
         clearAllStatusIcons(slot); // 캐릭터/성급이 바뀌면 이전 유닛의 상태 아이콘은 의미가 없으니 지운다
+
+        // 공격/스킬 프레임 개수를 미리 확인해둔다(arena-battle.js와 동일한 이유) - 안 해두면 이 캐릭터가
+        // "처음" 스킬을 쓸 때 그제서야 프레임 탐색(최대 9장 순차 404 확인)을 하느라 실제 시간이 걸리고,
+        // 그동안 캐스팅 타이머는 그대로 흘러서 애니메이션이 끝까지 재생되지 못하고 잘리는 버그가 있었다.
+        getAttackFrameCount(outfit);
+        getSkillFrameCount(outfit);
+        getAttackFrameCount(outfit, "_type2");
+        getSkillFrameCount(outfit, "_type2");
+
         renderUnit(slot);
     }
 
@@ -1979,6 +1988,11 @@
             const el = document.querySelector(`[data-unit="${slot}"]`);
             el.style.transform = "translateX(0)";
             el.querySelector(".battle-unit-img")?.classList.remove("is-clone"); // 이전 전투에서 생긴 복제체 색감 초기화
+            // 공격/스킬 프레임 개수 미리 확인(onUnitConfigChange와 동일한 이유) - 캐시돼 있으면 그냥 넘어간다.
+            getAttackFrameCount(units[slot].outfit);
+            getSkillFrameCount(units[slot].outfit);
+            getAttackFrameCount(units[slot].outfit, "_type2");
+            getSkillFrameCount(units[slot].outfit, "_type2");
         });
         renderAll();
         startMeleeWalker();
