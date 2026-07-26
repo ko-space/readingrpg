@@ -18,12 +18,6 @@ let PLAYER_NAME = "기본 캐릭터";
 let ticketBalance = 0;
 let cachedProgress = null;      // {scene_key, state} | null
 let currentSceneKey = null;     // 지금 플레이 중인 씬(메뉴의 "저장 및 종료"가 저장할 체크포인트)
-// 티켓 확인 모달에서 취소했을 때 "가려던 다음 씬"을 기억해둔다({sceneKey, proceedFn} | null) - 그
-// 선택은 이미 끝난 상태라 다음 씬이 이미 확정돼 있는데, 이걸 기억 안 해두면 로비에서 "이어보기"를
-// 눌렀을 때 체크포인트 씬(대사를 처음부터 다시 보여주는 것뿐인)으로 떨어지면서 방금 한 선택이 통째로
-// 무시되는 것처럼 보인다(같은 브라우저 세션 안에서만 유효 - 새로고침하면 사라지고 기존 체크포인트
-// 재생으로 자연스럽게 폴백된다).
-let pendingGate = null;
 let unlockedCgSet = new Set();  // CG_GALLERY_ITEMS의 id 모음(서버에서 받아온 값을 그대로 캐시)
 let autoUseTickets = localStorage.getItem(AUTO_USE_STORAGE_KEY) === "1";
 
@@ -2236,33 +2230,27 @@ function showChoiceGeneric(choiceData, onPick){
    - 자동사용 OFF: 확인 모달 -> 확인 시 티켓 소모 -> 성공하면 진행, 실패하면 부족 모달.
    - 자동사용 ON: 모달 없이 즉시 티켓 소모 시도 -> 실패하면 부족 모달.
    - 취소/부족 모달 확인 시 항상 스토리 메인 화면으로 돌아간다(진행 중이던 씬은 렌더링되지 않음).
-   - 게이트에 도달하자마자(티켓 소모 성공 여부와 무관하게) 지금까지 온 지점(currentSceneKey)을 먼저
-     체크포인트로 저장해둔다. 이걸 안 하면 취소/티켓부족으로 못 넘어갔을 때 저장된 진행이 하나도 없어서
-     "이어보기"가 아예 안 뜨고, 다시 시도할 때마다 입장 티켓을 새로 내고 처음부터 다시 봐야 했다.
-   - 이 첫 저장(이전 씬)과 티켓 성공 후 저장(다음 씬)은 반드시 순서대로 서버에 반영되어야 한다 - 둘 다
-     fire-and-forget으로 거의 동시에 쏘면, 네트워크 타이밍에 따라 "다음 씬" 응답이 서버에 먼저 반영된
-     뒤 "이전 씬" 응답이 뒤늦게 도착해 그 위를 덮어써버릴 수 있다. 그러면 실제로는 다음 씬까지 잘
-     진행했는데도 서버에는 한 씬 전(심하면 계속 반복되면서 결국 맨 처음 씬)이 저장되어, 나중에
-     "이어하기"를 누르면 진행이 갑자기 뒤로 돌아간 것처럼 보인다 - 그래서 첫 저장이 끝난 뒤에야
-     티켓 소모를 시도해서 두 저장이 항상 순서대로 서버에 도착하게 한다.
+   - 게이트에 도달하자마자(티켓 소모 성공 여부와 무관하게) 체크포인트를 "가려는 다음 씬(sceneKey)"으로
+     바로 저장해둔다. 선택은 이미 끝난 상태라 다음 씬이 이미 확정돼 있기 때문이다. 예전에는 여기서
+     직전 씬(currentSceneKey)을 저장했는데, 그러면 확인 취소나 티켓 부족으로 못 넘어간 뒤 - 특히
+     상점 등 다른 페이지에 들렀다 티켓을 사고 돌아오거나 새로고침을 해서 메모리 상태가 날아간 경우 -
+     로비의 "이어보기"가 서버에 저장된 직전 씬 처음부터 다시 재생되면서 이미 끝낸 선택이 무시되고
+     티켓만 다시 나가는 문제가 있었다. 다음 씬을 미리 저장해두면 언제 다시 들어오든(같은 세션이든
+     새로고침 후든) "이어보기"가 정확히 이 다음 씬으로 재개된다(아직 실제로 보여준 적은 없으므로
+     내용을 미리 새는 것은 아니고, 재개 시에도 여전히 티켓을 낸다 - 아래 이어보기 버튼 핸들러 참고).
    ========================================================= */
 function gateNextScene(sceneKey, proceedFn){
-  const savePrev = currentSceneKey ? serverSaveCheckpoint(currentSceneKey) : Promise.resolve();
-  // 이 게이트를 "가려던 다음 씬"으로 기억해둔다 - 취소해도 로비의 "이어보기"가 체크포인트 재생 대신
-  // 이 게이트를 그대로 재시도할 수 있게(아래 이어보기 버튼 핸들러 참고).
-  pendingGate = { sceneKey, proceedFn };
+  serverSaveCheckpoint(sceneKey);
 
   function afterTicketOk(){
     currentSceneKey = sceneKey;
-    serverSaveCheckpoint(sceneKey);
-    pendingGate = null;
     proceedFn();
   }
   function afterTicketFail(){
     showTicketInsufficientModal();
   }
   function tryConsume(){
-    savePrev.then(consumeTicketOnServer).then(ok=>{
+    consumeTicketOnServer().then(ok=>{
       if(ok) afterTicketOk(); else afterTicketFail();
     });
   }
@@ -2971,7 +2959,6 @@ function showGameOver(){
 
 function startGame(){
   serverClearProgress();
-  pendingGate = null; // 새로 시작하니 이전 회차에서 취소했던 게이트가 남아있다면 무효화
   currentSceneKey = 'scene1';
   choice1 = null;
   affJuheon = 0;
@@ -3110,17 +3097,10 @@ document.getElementById('episode-detail-restart-btn').addEventListener('click', 
 
 // 시작하기 버튼(진행 기록 없음): 확인 모달 없이 바로 티켓 소모를 시도한다(취소할 "이전 씬"이 아직 없으므로).
 document.getElementById('episode-detail-start-btn').addEventListener('click', async ()=>{
-  if(pendingGate){
-    // 직전에 취소했던 씬 전환 게이트가 남아있다(같은 세션 안) - 그 선택은 이미 끝나서 다음 씬이
-    // 확정돼 있으므로, 체크포인트 씬을 처음부터 재생하는 대신 그 게이트를 그대로 재시도한다.
-    // gateNextScene이 자동사용 여부에 따라 확인 모달/즉시 소모를 알아서 처리해준다.
-    lobbyWrap.classList.add('hidden');
-    gateNextScene(pendingGate.sceneKey, pendingGate.proceedFn);
-    return;
-  }
   if(cachedProgress){
-    // 이어보기: 체크포인트는 항상 "직전 선택 이후 도달한 다음 씬"을 가리킨다. 씬 전환 게이트
-    // (gateNextScene)와 똑같이, 자동사용이 꺼져 있으면 "다음 장면에서 티켓을 사용하시겠습니까?"
+    // 이어보기: 체크포인트는 항상 "직전 선택 이후 도달한(아직 못 봤을 수도 있는) 다음 씬"을 가리킨다
+    // (gateNextScene이 게이트를 여는 즉시 저장해두므로, 확인 취소나 티켓 부족으로 못 넘어갔던 경우도
+    // 포함). 씬 전환 게이트와 똑같이, 자동사용이 꺼져 있으면 "다음 장면에서 티켓을 사용하시겠습니까?"
     // 확인을 거치고 켜져 있으면 곧바로 소모한다 - 예전처럼 무료 재방문을 허용하면 그 씬의 선택을
     // 몇 번이고 공짜로 다시 시도해서 호감도 등을 유리한 쪽으로 골라잡는 악용이 가능했다.
     function tryResume(){
