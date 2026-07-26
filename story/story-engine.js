@@ -3004,8 +3004,9 @@ const lobbyScreens = {
   gallery: document.getElementById('lobby-gallery'),
 };
 
-// 이어하기는 이미 티켓을 내고 도달했던 지점을 다시 보여주는 것뿐이므로, 게이트(gateNextScene)를
-// 다시 거치는 playSceneX가 아니라 실제 렌더링만 하는 renderSceneX로 바로 연결한다(티켓 중복 소모 방지).
+// 이어하기 진입 자체는 버튼 클릭 핸들러에서 이미 티켓을 낸 뒤 호출되므로, 여기서는 씬 전환 게이트
+// (gateNextScene)를 다시 거치는 playSceneX가 아니라 실제 렌더링만 하는 renderSceneX로 바로 연결한다
+// (게이트를 한 번 더 거치면 같은 지점에 대해 티켓이 2번 나가버림).
 const SCENE_FUNCS = {
   scene1: playScene1,
   scene2: renderScene2Intro,
@@ -3090,21 +3091,21 @@ document.getElementById('episode-detail-restart-btn').addEventListener('click', 
 });
 
 // 이어보기/시작하기 버튼: 확인 모달 없이 바로 티켓 소모를 시도한다(취소할 "이전 씬"이 아직 없으므로).
+// 이어보기도 시작하기와 똑같이 티켓을 낸다 - 체크포인트는 항상 "아직 하지 않은 선택" 직전 지점이라,
+// 예전처럼 무료로 재방문을 허용하면 그 선택을 몇 번이고 공짜로 다시 시도해서 호감도 등을 유리한 쪽으로
+// 골라잡는 악용이 가능했다. 티켓을 내야 하므로 재시도할 때마다 실제 비용이 든다.
 document.getElementById('episode-detail-start-btn').addEventListener('click', async ()=>{
-  // 이어보기: 이미 티켓을 내고 도달했던 지점을 다시 보여주는 것뿐이라 티켓을 새로 쓰지 않는다.
-  if(cachedProgress){
-    lobbyWrap.classList.add('hidden');
-    resumeGame(cachedProgress);
-    return;
-  }
-
   const ok = await consumeTicketOnServer();
   if(!ok){
     showTicketInsufficientModal();
     return;
   }
   lobbyWrap.classList.add('hidden');
-  startGame();
+  if(cachedProgress){
+    resumeGame(cachedProgress);
+  } else {
+    startGame();
+  }
 });
 
 /* ---- 신규: 스토리 진행 중 메뉴 모달 ----
