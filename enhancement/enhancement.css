@@ -343,6 +343,16 @@
     background: rgba(255,255,255,.68);
 }
 
+/* 이의진의 크록스(슈퍼 성공)를 선택 중이면 4칸(슈퍼성공/성공/유지/파괴)이 한 줄에 들어간다. */
+.enhancement-rule-panel.mode-quad {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+/* 최재혁의 마법 영약을 선택 중이면 먼지 생성 확률 한 칸만 남기고 폭 전체를 채운다. */
+.enhancement-rule-panel.mode-dust {
+    grid-template-columns: 1fr;
+}
+
 .enhancement-rule-row {
     display: flex;
     flex-direction: column;
@@ -351,6 +361,12 @@
     color: #725e3e;
     font-size: 11px;
     font-weight: 800;
+}
+
+/* hidden 속성과 .enhancement-rule-row의 display:flex가 특이도가 같아서, 이 규칙이 없으면
+   hidden을 줘도 실제로는 안 숨겨진다(이 프로젝트의 다른 [hidden] 규칙들과 동일한 이유). */
+.enhancement-rule-row[hidden] {
+    display: none;
 }
 
 .enhancement-rule-row strong {
