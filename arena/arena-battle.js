@@ -671,7 +671,7 @@
     //   기준으로 눈금을 맞췄다(공격 프레임 3번째 즈음에 발사되므로 attack_3 기준으로 다시 맞춰도 된다).
     const EYE_LASER_ORIGIN = {
         type1: { fx: 0.63, fy: 0.12 },
-        type2: { fx: 0.83, fy: 0.5 },
+        type2: { fx: 0.48, fy: 0.17 },
     };
 
     // imgEl 안에서 (fracX, fracY) 비율 위치에 해당하는 화면 좌표를 .battle-field 기준 상대좌표로 계산한다.
