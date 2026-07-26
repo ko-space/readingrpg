@@ -139,15 +139,37 @@
     let sessionStarted = false;
     let handledEnd = false;
     let tickIntervalId = null;
+    let cutoffPerfMs = Infinity; // 이 performance.now() 값을 넘기면 더 이상 경과시간이 안 쌓인다(아래 참고)
 
     // segmentStartMs/accumulatedMs는 Date.now()가 아니라 performance.now()(모노토닉 시계) 기준이다 -
     // Date.now()는 기기의 날짜/시간 설정을 그대로 반영하므로, 세션 도중 사용자가 시스템 시간을 미래로
     // 돌리면 그만큼 elapsed가 그대로 부풀려져서 독서시간을 조작할 수 있었다. performance.now()는
     // 페이지가 로드된 시점 기준으로 실제 흐른 시간만 단조 증가하므로 시스템 시간 변경에 영향받지 않는다.
+    //
+    // 지역입장을 다음날 새벽까지 켜놓고 방치하는 걸 막기 위해, 세션 시작 시점에 "다음(가장 가까운
+    // 미래의) 한국시간 오전 1시"를 한 번 계산해서 performance.now() 기준 값으로 고정해둔다(cutoffPerfMs).
+    // Date.now()는 이 계산에 딱 한 번만 참고용으로 쓰이고, 이후로는 다시 보지 않으므로 세션 도중
+    // 시스템 시간을 바꿔도 이 컷오프 자체는 영향받지 않는다. 서버(logs.py)도 같은 규칙을 다시 한번
+    // 검증하므로, 여기서는 "깜빡 잊고 켜둔" 흔한 경우를 화면에서 바로 반영해주는 역할이다.
+    function computeCutoffPerfMs(nowPerfMs) {
+        const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+        const nowWallMs = Date.now();
+        const kstNowMs = nowWallMs + KST_OFFSET_MS;
+        const kstNowDate = new Date(kstNowMs);
+        let cutoffKstMs = Date.UTC(
+            kstNowDate.getUTCFullYear(), kstNowDate.getUTCMonth(), kstNowDate.getUTCDate(),
+            1, 0, 0, 0
+        );
+        if (cutoffKstMs <= kstNowMs) cutoffKstMs += 24 * 60 * 60 * 1000; // 오늘 01시를 이미 지났으면 내일 01시
+        const cutoffWallMs = cutoffKstMs - KST_OFFSET_MS;
+        return nowPerfMs + (cutoffWallMs - nowWallMs);
+    }
+
     function getElapsedMs() {
         if (!sessionStarted) return 0;
         if (isPaused) return accumulatedMs;
-        return accumulatedMs + (performance.now() - segmentStartMs);
+        const cappedNow = Math.min(performance.now(), cutoffPerfMs);
+        return accumulatedMs + Math.max(0, cappedNow - segmentStartMs);
     }
 
     function getElapsedMinutes() {
@@ -160,7 +182,8 @@
             segmentStartMs = performance.now();
             isPaused = false;
         } else {
-            accumulatedMs += performance.now() - segmentStartMs;
+            const cappedNow = Math.min(performance.now(), cutoffPerfMs);
+            accumulatedMs += Math.max(0, cappedNow - segmentStartMs);
             isPaused = true;
         }
         document.getElementById("reading-pause-btn").textContent = isPaused ? "재개" : "일시정지";
@@ -263,6 +286,7 @@
 
     function startSessionClock() {
         segmentStartMs = performance.now();
+        cutoffPerfMs = computeCutoffPerfMs(segmentStartMs);
         sessionStarted = true;
         document.getElementById("reading-pause-btn").hidden = false;
         document.getElementById("reading-end-btn").hidden = false;

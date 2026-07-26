@@ -194,11 +194,24 @@ def get_enhancement_inventory(
 
     for row in rows:
         rule = ENHANCEMENT_RULES.get(row["star"])
+        # "강승유의 마우스피스"로 이 그룹의 대표 카드(row["character_id"] - _build_inventory_rows가
+        # 고른 것과 동일한 기준)에 예약된 효과가 있으면 미리 알려준다. 실제 강화 시점의 기준 카드
+        # 선택(_choose_enhancement_cards)과 100% 같지는 않을 수 있지만(장착/PVP 편성 카드가 우선인
+        # 규칙이 대표 카드 선정과 유사해서), 화면 미리보기용으로는 충분하다.
+        pending_buff = (
+            db.query(CharacterEnhanceBuff)
+            .filter(CharacterEnhanceBuff.character_id == row["character_id"])
+            .first()
+        )
         row["enhancement"] = {
             "eligible": bool(rule and row["count"] >= min_required_copies),
             "required_copies": min_required_copies,
             "next_star": row["star"] + 1 if rule else None,
             "rule": rule,
+            "pending_buff": (
+                {"destroy_delta": pending_buff.destroy_delta, "maintain_delta": pending_buff.maintain_delta}
+                if pending_buff else None
+            ),
         }
 
     return {

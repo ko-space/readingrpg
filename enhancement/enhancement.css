@@ -377,6 +377,13 @@
 .enhancement-rule-row .maintain { color: #477ab5; }
 .enhancement-rule-row .destroy { color: #c34d45; }
 
+/* "강승유의 마우스피스" 예약 효과로 바뀐 수치(파괴/유지)라는 걸 알려주는 금색 - .maintain/.destroy보다
+   특이도가 높아야(요소+클래스 2개) 원래 색을 덮어쓴다. */
+.enhancement-rule-row strong.buffed {
+    color: #c9971a;
+    text-shadow: 0 0 6px rgba(201,151,26,.45);
+}
+
 .enhancement-rule-divider {
     grid-column: 1 / -1;
     height: 1px;

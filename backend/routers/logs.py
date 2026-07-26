@@ -54,6 +54,14 @@ def _today_kst():
     return datetime.now(KST).date()
 
 
+def _next_1am_kst_at_or_after(moment_kst: datetime) -> datetime:
+    """moment_kst(KST 기준 datetime) 이후(그 시각 포함) 가장 가까운 한국시간 오전 1시를 구한다."""
+    candidate = moment_kst.replace(hour=1, minute=0, second=0, microsecond=0)
+    if candidate < moment_kst:
+        candidate += timedelta(days=1)
+    return candidate
+
+
 READING_GENRES = ["비문학", "문학"]
 SUBJECT_DISPLAY_ORDER = ["국어", "영어", "수학", "탐구", "기타"]
 
@@ -128,6 +136,17 @@ def add_reading_log(
 
     if reading_minutes < 0:
         raise HTTPException(status_code=400, detail="독서 시간은 0 이상이어야 합니다.")
+
+    # 지역입장(세션)을 다음날 새벽까지 켜놓고 방치하는 것을 막는 컷오프 - 서버는 실제 세션 시작 시각을
+    # 모르니, "지금 - 신고된 경과분"을 시작 시각으로 역산해서 그 이후 가장 가까운 한국시간 오전 1시를
+    # 구한다. 그 컷오프를 넘겨서까지 신고된 시간이 있다면 초과분은 잘라낸다(프론트 타이머도 1시가
+    # 지나면 더 이상 누적하지 않게 되어 있는 것과 같은 규칙 - 여기서는 그걸 서버에서도 강제한다).
+    now_kst = datetime.now(KST)
+    inferred_start_kst = now_kst - timedelta(minutes=reading_minutes)
+    session_cutoff_kst = _next_1am_kst_at_or_after(inferred_start_kst)
+    if now_kst > session_cutoff_kst:
+        allowed_minutes = max(0, int((session_cutoff_kst - inferred_start_kst).total_seconds() // 60))
+        reading_minutes = min(reading_minutes, allowed_minutes)
 
     # 하루 누적 상한(18시간) 적용 - 오늘(KST) 자정이 지났으면 먼저 리셋하고, 남은 여유만큼만 인정한다.
     # 보상(exp/gold)도 이 잘라낸 reading_minutes를 기준으로 계산되므로, 기기 시간을 조작해 한 번에
