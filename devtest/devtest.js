@@ -1594,15 +1594,21 @@
         requestAnimationFrame(frame);
     }
 
+    // 임소정 전기의 발사 시작점(손/지팡이 위치 근사치) - arena-battle.js와 동일. 기본공격/스킬이 서로
+    // 다른 지점에서 나가야 해서 따로 둔다.
+    const ELECTRIC_ORIGIN_BASIC = { fx: 0.9, fy: 0.27 };
+    const ELECTRIC_ORIGIN_SKILL = { fx: 1.3, fy: 0.28 };
+
     // 임소정 전용: 캐스터-대상을 잠깐 잇는 전기(이동하는 점이 아니라, 두 위치 사이를 잇는 막대를 회전시켜 만든다).
     // 기본공격은 얇고 푸른색(electric-blue), 스킬은 더 두껍고 노란색(electric-yellow)으로 호출한다.
-    function playElectricConnector(actorSlot, targetSlot, colorClass, radiusPx, onArrive) {
+    function playElectricConnector(actorSlot, targetSlot, colorClass, radiusPx, onArrive, origin) {
         const layer = document.getElementById("projectile-layer");
         const actorImg = document.querySelector(`[data-unit="${actorSlot}"] .battle-unit-img`);
         const targetImg = document.querySelector(`[data-unit="${targetSlot}"] .battle-unit-img`);
         if (!layer || !actorImg || !targetImg) { if (onArrive) onArrive(); return; }
 
-        const start = fieldRelativeCenter(actorImg);
+        const o = origin || ELECTRIC_ORIGIN_BASIC;
+        const start = imageContentPoint(actorImg, o.fx, o.fy);
         const end = fieldRelativeCenter(targetImg);
         const distance = Math.hypot(end.x - start.x, end.y - start.y);
         const angle = angleDeg(start, end);
@@ -1741,7 +1747,7 @@
         else if (style === "instant_flash") playInstantFlash(actorSlot, targetSlot, onArrive);
         else if (style === "text_particles") playTextParticles(actorSlot, targetSlot, onArrive);
         else if (style === "crayon") spawnCrayonProjectile(actorSlot, targetSlot, onArrive);
-        else if (style === "electric") playElectricConnector(actorSlot, targetSlot, "electric-blue", 5, onArrive);
+        else if (style === "electric") playElectricConnector(actorSlot, targetSlot, "electric-blue", 5, onArrive, ELECTRIC_ORIGIN_BASIC);
         else if (style === "book") spawnBookProjectile(actorSlot, targetSlot, onArrive);
         else if (style === "eye_laser") spawnEyeLaserBeam(actorSlot, targetSlot, units[actorSlot]?.isType2 ? "type2" : "type1", onArrive);
         else spawnProjectileStraight(actorSlot, targetSlot, onArrive);
@@ -1880,7 +1886,7 @@
                         spawnHeartProjectile(actorSlot, hit.targetSlot, hit.gender === "여" ? "heart-red" : "heart-pink", () => {});
                     });
                 } else if (dispatchEffectType === "debuff_atk_and_damage" && result.targetSlot) {
-                    playElectricConnector(actorSlot, result.targetSlot, "electric-yellow", 9, null);
+                    playElectricConnector(actorSlot, result.targetSlot, "electric-yellow", 9, null, ELECTRIC_ORIGIN_SKILL);
                     flashEffectAura(result.targetSlot, "debuff");
                     setStatusIcon(result.targetSlot, "atk_down", { source: `${actorSlot}:atk_down`, durationMs: params.debuff_seconds * 1000 });
                 } else if (dispatchEffectType === "bonus_damage_knockback" && result.targetSlot) {
@@ -2217,7 +2223,7 @@
                     units[hitSlot].hp = hit.target_hp_after;
                     renderUnit(hitSlot);
                     flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
-                    playElectricConnector(actorSlot, hitSlot, "electric-yellow", 9, null);
+                    playElectricConnector(actorSlot, hitSlot, "electric-yellow", 9, null, ELECTRIC_ORIGIN_SKILL);
                     flashEffectAura(hitSlot, "debuff");
                     setStatusIcon(hitSlot, "atk_down", {
                         source: `${event.actor}:atk_down`,
