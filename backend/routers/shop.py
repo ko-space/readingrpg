@@ -201,7 +201,11 @@ def purchase_item(
             ))
 
     if item.item_type == "enhancement":
-        db.add(ActivityLog(user_id=user.id, activity_type="shop_purchase_enhancement"))  # 퀘스트("강화 아이템 구매") 판정용
+        # 퀘스트("강화 아이템 구매 N회") 판정은 ActivityLog 행 개수를 세므로(quests.py의 activity_count),
+        # 한 번에 여러 개를 구매해도 quantity만큼 각각 기록해야 "몇 개 샀는지"가 정확히 반영된다 -
+        # 예전엔 구매 호출 1번당 무조건 1행만 남겨서, 한 번에 5개를 사도 1회로만 집계됐었다.
+        for _ in range(req.quantity):
+            db.add(ActivityLog(user_id=user.id, activity_type="shop_purchase_enhancement"))
 
     db.commit()
 
