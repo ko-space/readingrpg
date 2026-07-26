@@ -473,12 +473,22 @@
         }
     }
 
+    // 확률 패널을 세 상태 중 하나로 전환한다 - "normal"(성공/유지/파괴 3칸), "quad"(슈퍼성공 포함 4칸,
+    // 크록스 사용 중), "dust"(먼지 생성 확률 1칸만, 마법 영약 사용 중). 관련 아이템을 안 쓰면 슈퍼성공/
+    // 먼지 UI 자체가 완전히 사라져야 하므로, 매번 세 상태를 전부 명시적으로 다시 맞춘다.
+    function setRulePanelMode(mode) {
+        document.getElementById("enhancement-rule-panel").classList.toggle("mode-quad", mode === "quad");
+        document.getElementById("enhancement-rule-panel").classList.toggle("mode-dust", mode === "dust");
+
+        document.getElementById("enhancement-dust-rate-row").hidden = mode !== "dust";
+        document.getElementById("enhancement-super-success-row").hidden = mode !== "quad";
+        document.getElementById("enhancement-success-row").hidden = mode === "dust";
+        document.getElementById("enhancement-maintain-row").hidden = mode === "dust";
+        document.getElementById("enhancement-destroy-row").hidden = mode === "dust";
+    }
+
     function setRuleText(rule) {
-        document.getElementById("enhancement-dust-rate-row").hidden = true;
-        document.getElementById("enhancement-super-success-row").hidden = !(rule && rule.super_success);
-        document.getElementById("enhancement-success-row").hidden = false;
-        document.getElementById("enhancement-maintain-row").hidden = false;
-        document.getElementById("enhancement-destroy-row").hidden = false;
+        setRulePanelMode(rule && rule.super_success ? "quad" : "normal");
 
         if (rule && rule.super_success) {
             document.getElementById(
@@ -507,13 +517,8 @@
 
     // "최재혁의 마법 영약" 전용 - 성공/유지/파괴/슈퍼성공 행을 다 숨기고 먼지 생성 확률 한 줄만 보여준다.
     function setDustRuleText(baseRule, dustItem) {
-        document.getElementById("enhancement-super-success-row").hidden = true;
-        document.getElementById("enhancement-success-row").hidden = true;
-        document.getElementById("enhancement-maintain-row").hidden = true;
-        document.getElementById("enhancement-destroy-row").hidden = true;
+        setRulePanelMode("dust");
 
-        const dustRow = document.getElementById("enhancement-dust-rate-row");
-        dustRow.hidden = false;
         const probability = dustItem?.effect_params?.[String(selectedCharacter?.star)] ?? 0;
         document.getElementById("enhancement-dust-rate").textContent = `${probability}%`;
 
