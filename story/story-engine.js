@@ -1365,7 +1365,7 @@ const SCENE_GANGHEE_ENDING = [
 
 // 평범한 일상 엔딩 (씬6 종료 후 다른 엔딩 조건을 충족하지 못한 경우)
 const SCENE6_NORMAL_ENDING = [
-  {type:'narration', text:'그 수많은 소동과 사건들이 지난 뒤, 내 삶은 언제 그랬냐는 듯 무던하고 평범한 학교 생활로 되돌아왔다.', showBg:'schoolgate', chars:{left:null, right:null}},
+  {type:'narration', text:'그 수많은 소동과 사건들이 지난 뒤, 내 삶은 언제 그랬냐는 듯 무던하고 평범한 학교 생활로 되돌아왔다.', showBg:'schoolgate', chars:{left:null, right:null}, stopBgm:true},
   {type:'narration', text:'특별히 가까워진 사람도, 눈에 띄게 멀어진 사람도 없이, 나는 여전히 타인과 적당한 거리를 유지한 채 고요한 내 궤도를 돌고 있다.'},
   {type:'thought', text:'돌이켜보면 삶이란, 그리고 사람과 사람 사이의 관계라는 것은 결코 뜻대로 풀리는 법이 없다.'},
   {type:'thought', text:'뜨겁게 불타오르다가도 허무하게 식어버리고, 서로를 이해하려 애쓸수록 오히려 깊은 오해의 골만 파이기도 하니까.'},
@@ -1391,7 +1391,7 @@ const SCENE6_SEUNGYU_HIGH_ENDING = [
   {type:'thought', text:'열 명의 사람이 있다면, 그중 한 명은 이유도 없이 나를 미워하거나 비난할 것이고, 또 다른 한 명은 그저 나라는 이유 하나만으로 다정하게 손을 내밀어 줄 테니까.'},
   {type:'thought', text:'그 불완전한 세상 속에서 우리가 해야 하는 진짜 역할은, 나를 무작정 미워하는 사람들에게 진을 빼는 것이 아니라…… 이유 없이 나를 좋아해 주는 단 한 사람, 혹은 내 마음의 에너지 한도 내에서 서로를 보듬을 수 있는 소중한 몇 명에게 기꺼이 의지하고 또 의지가 되어주는 일이었다.'},
   {type:'thought', text:'그리고 지금 내 세상에서, 나를 온전히 받쳐주는 그 다정하고 단단한 존재는 바로 승유다.'},
-  {type:'line', speaker:SEUNGYU, text:'야! 거기서 멍하니 뭐 해, ㅋㅋㅋ! 빨리 안 오냐? 오늘 우리 9평 끝난 기념으로 맛있는 거 먹으러 가기로 한 날이잖아!', showBg:'seungyu_ending', chars:{left:null, right:null}, bgm:'Fading Echoes'},
+  {type:'line', speaker:SEUNGYU, text:'야! 거기서 멍하니 뭐 해, ㅋㅋㅋ! 빨리 안 오냐? 오늘 우리 9평 끝난 기념으로 맛있는 거 먹으러 가기로 한 날이잖아!', showBg:'seungyu_ending', chars:{left:null, right:null}},
   {type:'narration', text:'교문 앞, 노을빛을 등지고 서서 나를 향해 해맑게 손을 흔드는 승유의 모습이 보인다.'},
   {type:'narration', text:'익숙하게 투덜거리면서도 입가에는 숨길 수 없는 미소가 가득 걸려 있는 녀석.'},
   {type:'narration', text:'그 별것 아닌 손짓 하나에 내 안에 남아있던 마지막 불안과 외로움마저 사르르 녹아내리는 기분이 들었다.'},
@@ -1461,7 +1461,7 @@ const SCENE6_YEONGWOONG_HIGH_ENDING = [
   {type:'thought', text:'세상의 모든 관계란 결코 모두를 만족시킬 수 없는 법이다.'},
   {type:'thought', text:'열 명의 사람이 있다면, 그중 한 명은 아무런 이유도 없이 나를 미워하거나 폄하할 것이고, 또 다른 한 명은 그저 나라는 사람 자체를 이유 없이 좋아하고 아껴줄 테니까.'},
   {type:'thought', text:'그 속에서 우리가 해야 하는 진짜 역할은, 나를 싫어하는 사람들에게 잘 보이려 애쓰며 에너지를 쏟아붓는 게 아니라…… 나를 있는 그대로 받아들여 주는 단 한 사람, 혹은 내가 감당할 수 있는 테두리 안에서 서로를 믿고 의지할 수 있는 소중한 인연들에게 마음을 다하는 것이었다.'},
-  {type:'thought', text:'그리고 지금 내 삶에서, 나를 가장 단단하게 지탱해 주는 그 의지되는 존재가 바로 영웅이 형이다.', showBg:'yeongwoong_end_photo', chars:{left:null, right:null}, bgm:'Clutter'},
+  {type:'thought', text:'그리고 지금 내 삶에서, 나를 가장 단단하게 지탱해 주는 그 의지되는 존재가 바로 영웅이 형이다.', showBg:'yeongwoong_end_photo', chars:{left:null, right:null}, bgm:'Fading Echoes'},
   {type:'line', speaker:YEONGWOONG, text:'야! 이 새끼 ㅋㅋㅋ 거기서 똥폼 잡고 혼자 분위기 타고 뭐 하냐? ㅋㅋㅋ 형이 너 얼굴 좀 보려고 바쁜 시간 쪼개서 친히 와줬다. 그래, 오늘 본 9평은 잘 쳤냐?', chars:{left:null, right:null}},
   {type:'narration', text:'교문 옆 벤치에 앉아 있던 내 앞에, 특유의 시원시원한 웃음을 지으며 영웅이 형이 다가왔다.'},
   {type:'narration', text:'치열한 노력 끝에 당당히 건국대 의대에 진학해 바쁜 대학 생활을 보내면서도, 형은 나를 잊지 않고 종종 이렇게 찾아와 내 안부를 묻곤 했다.'},
