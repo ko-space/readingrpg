@@ -18,6 +18,12 @@ let PLAYER_NAME = "기본 캐릭터";
 let ticketBalance = 0;
 let cachedProgress = null;      // {scene_key, state} | null
 let currentSceneKey = null;     // 지금 플레이 중인 씬(메뉴의 "저장 및 종료"가 저장할 체크포인트)
+// 티켓 확인 모달에서 취소했을 때 "가려던 다음 씬"을 기억해둔다({sceneKey, proceedFn} | null) - 그
+// 선택은 이미 끝난 상태라 다음 씬이 이미 확정돼 있는데, 이걸 기억 안 해두면 로비에서 "이어보기"를
+// 눌렀을 때 체크포인트 씬(대사를 처음부터 다시 보여주는 것뿐인)으로 떨어지면서 방금 한 선택이 통째로
+// 무시되는 것처럼 보인다(같은 브라우저 세션 안에서만 유효 - 새로고침하면 사라지고 기존 체크포인트
+// 재생으로 자연스럽게 폴백된다).
+let pendingGate = null;
 let unlockedCgSet = new Set();  // CG_GALLERY_ITEMS의 id 모음(서버에서 받아온 값을 그대로 캐시)
 let autoUseTickets = localStorage.getItem(AUTO_USE_STORAGE_KEY) === "1";
 
@@ -2242,10 +2248,14 @@ function showChoiceGeneric(choiceData, onPick){
    ========================================================= */
 function gateNextScene(sceneKey, proceedFn){
   const savePrev = currentSceneKey ? serverSaveCheckpoint(currentSceneKey) : Promise.resolve();
+  // 이 게이트를 "가려던 다음 씬"으로 기억해둔다 - 취소해도 로비의 "이어보기"가 체크포인트 재생 대신
+  // 이 게이트를 그대로 재시도할 수 있게(아래 이어보기 버튼 핸들러 참고).
+  pendingGate = { sceneKey, proceedFn };
 
   function afterTicketOk(){
     currentSceneKey = sceneKey;
     serverSaveCheckpoint(sceneKey);
+    pendingGate = null;
     proceedFn();
   }
   function afterTicketFail(){
@@ -2961,6 +2971,7 @@ function showGameOver(){
 
 function startGame(){
   serverClearProgress();
+  pendingGate = null; // 새로 시작하니 이전 회차에서 취소했던 게이트가 남아있다면 무효화
   currentSceneKey = 'scene1';
   choice1 = null;
   affJuheon = 0;
@@ -3099,6 +3110,14 @@ document.getElementById('episode-detail-restart-btn').addEventListener('click', 
 
 // 시작하기 버튼(진행 기록 없음): 확인 모달 없이 바로 티켓 소모를 시도한다(취소할 "이전 씬"이 아직 없으므로).
 document.getElementById('episode-detail-start-btn').addEventListener('click', async ()=>{
+  if(pendingGate){
+    // 직전에 취소했던 씬 전환 게이트가 남아있다(같은 세션 안) - 그 선택은 이미 끝나서 다음 씬이
+    // 확정돼 있으므로, 체크포인트 씬을 처음부터 재생하는 대신 그 게이트를 그대로 재시도한다.
+    // gateNextScene이 자동사용 여부에 따라 확인 모달/즉시 소모를 알아서 처리해준다.
+    lobbyWrap.classList.add('hidden');
+    gateNextScene(pendingGate.sceneKey, pendingGate.proceedFn);
+    return;
+  }
   if(cachedProgress){
     // 이어보기: 체크포인트는 항상 "직전 선택 이후 도달한 다음 씬"을 가리킨다. 씬 전환 게이트
     // (gateNextScene)와 똑같이, 자동사용이 꺼져 있으면 "다음 장면에서 티켓을 사용하시겠습니까?"
