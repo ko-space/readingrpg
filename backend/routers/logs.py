@@ -13,6 +13,9 @@ router = APIRouter(prefix="/logs", tags=["logs"])
 DIFFICULTY_MULTIPLIER = {"문학": 1.0, "비문학": 1.5}
 SUBJECT_SET = {"국어", "수학", "영어", "탐구", "기타"}
 MOCK_EXAM_MINUTES = {"국어": 80, "수학": 100, "수학(하프)": 50, "영어": 70, "영어(하프)": 40, "탐구": 30}
+DAILY_READING_MINUTES_CAP = 18 * 60  # 하루 최대 인정 독서시간(1080분) - 기기 시스템 시간을 조작해서
+# 한 번에 비정상적으로 긴 시간을 보고하는 부정행위를 막기 위한 상한. session_type과 무관하게 그날(KST)
+# 누적된 daily_reading_minutes 전체에 적용된다.
 # 모의고사의 "하프" 변형은 배수 판정에서 원래 과목과 같은 것으로 취급한다(수학과 영어만 하프가 있음).
 MOCK_EXAM_BASE_SUBJECT = {"수학(하프)": "수학", "영어(하프)": "영어"}
 KST = timezone(timedelta(hours=9))
@@ -126,6 +129,21 @@ def add_reading_log(
     if reading_minutes < 0:
         raise HTTPException(status_code=400, detail="독서 시간은 0 이상이어야 합니다.")
 
+    # 하루 누적 상한(18시간) 적용 - 오늘(KST) 자정이 지났으면 먼저 리셋하고, 남은 여유만큼만 인정한다.
+    # 보상(exp/gold)도 이 잘라낸 reading_minutes를 기준으로 계산되므로, 기기 시간을 조작해 한 번에
+    # 몰아서 보고해도 상한을 넘는 만큼은 보상이 발생하지 않는다.
+    today = _today_kst()
+    if user.daily_reading_date != today:
+        user.daily_reading_minutes = 0
+        user.daily_reading_date = today
+    remaining_daily_cap = max(0, DAILY_READING_MINUTES_CAP - user.daily_reading_minutes)
+    if remaining_daily_cap <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"하루 최대 독서 시간({DAILY_READING_MINUTES_CAP // 60}시간)을 이미 채웠습니다.",
+        )
+    reading_minutes = min(reading_minutes, remaining_daily_cap)
+
     equipped = _get_equipped_character(user)
     matched_subject = _resolve_matched_subject(log_data.session_type, log_data.difficulty)
     character_exp_multiplier = _equipped_character_exp_multiplier(equipped, matched_subject)
@@ -136,11 +154,7 @@ def add_reading_log(
     user.gold += gained_gold
     user.lifetime_gold += gained_gold
 
-    # 일일 독서시간 누적 (KST 자정 지나면 0부터 다시 시작)
-    today = _today_kst()
-    if user.daily_reading_date != today:
-        user.daily_reading_minutes = 0
-        user.daily_reading_date = today
+    # 일일 독서시간 누적 (리셋은 위 상한 계산 때 이미 처리됨)
     user.daily_reading_minutes += reading_minutes
     user.lifetime_reading_minutes += reading_minutes
 

@@ -1349,7 +1349,7 @@
         const casterX = actorRect.left + actorRect.width / 2 - fieldRect.left;
 
         const targets = hits.map((hit) => {
-            const hitSlot = findHitSlot(actorSide, hit.target);
+            const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
             const targetImg = hitSlot ? document.querySelector(`[data-unit="${hitSlot}"] .battle-unit-img`) : null;
             if (!targetImg) return { hit, dir: 1, dist: 60 };
             const targetRect = targetImg.getBoundingClientRect();
@@ -2009,8 +2009,12 @@
         return null;
     }
 
-    // 스킬 이벤트의 target 이름만으로는 어느 편인지 알 수 없어서(자해 스킬도 있음) 양쪽을 다 찾아본다.
-    function findHitSlot(actorSide, name) {
+    // side가 주어지면(백엔드가 각 대상에 붙여 보내는 target_side) 그 편에서만 이름을 찾는다 - 이름만으로
+    // 찾으면(과거 방식, side 없을 때의 폴백) 같은 캐릭터가 양 팀에 모두 있을 때(미러/유사 편성) 항상
+    // "적 쪽 우선"으로 걸려서, own_team을 때리는 효과(aoe_all_others_damage 등)의 대상이 엉뚱하게
+    // 적 쪽 동명 캐릭터로 잘못 표시되는 등 실제로 맞은 유닛과 화면에 반영되는 유닛이 어긋날 수 있었다.
+    function findHitSlot(actorSide, name, side) {
+        if (side) return findSlotByName(side, name);
         const targetSide = actorSide === "attacker" ? "defender" : "attacker";
         return findSlotByName(targetSide, name) || findSlotByName(actorSide, name);
     }
@@ -2167,7 +2171,7 @@
             // 캐릭터 전용 스킬 발사체 연출. 김남옥(여성 대상 기절 성공)·이종복은 투사체가 대상에
             // 닿는 순간에 맞춰 피해/상태 표시를 늦추고, 서민석·임소정은 즉시 반영하면서 투사체만 얹는다.
             if (dispatchEffectType === "conditional_target_debuff" && event.detail?.stunned && actorSlot) {
-                const hitSlot = event.detail.target ? findHitSlot(actorSide, event.detail.target) : null;
+                const hitSlot = event.detail.target ? findHitSlot(actorSide, event.detail.target, event.detail.target_side) : null;
                 if (hitSlot) {
                     playDualCrayonSkillProjectile(actorSlot, hitSlot, () => {
                         flashEffectAura(hitSlot, "cc");
@@ -2178,7 +2182,7 @@
                     });
                 }
             } else if (dispatchEffectType === "stun_target" && event.detail?.hit) {
-                const hitSlot = event.detail.target ? findHitSlot(actorSide, event.detail.target) : null;
+                const hitSlot = event.detail.target ? findHitSlot(actorSide, event.detail.target, event.detail.target_side) : null;
                 if (hitSlot) {
                     flashEffectAura(hitSlot, "cc");
                     setStatusIcon(hitSlot, "stun", {
@@ -2188,7 +2192,7 @@
                 }
             } else if (dispatchEffectType === "damage_hp_percent_plus_atk" && actorSlot && event.detail?.hits?.length) {
                 const hit = event.detail.hits[0];
-                const hitSlot = findHitSlot(actorSide, hit.target);
+                const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                 if (hitSlot) {
                     spawnMeteorProjectile(actorSlot, hitSlot, () => {
                         units[hitSlot].hp = hit.target_hp_after;
@@ -2198,7 +2202,7 @@
                 }
             } else if (dispatchEffectType === "aoe_gendered_damage" && actorSlot) {
                 (event.detail?.hits || []).forEach((hit) => {
-                    const hitSlot = findHitSlot(actorSide, hit.target);
+                    const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                     if (!hitSlot) return;
                     units[hitSlot].hp = hit.target_hp_after;
                     renderUnit(hitSlot);
@@ -2208,7 +2212,7 @@
                 });
             } else if (dispatchEffectType === "debuff_atk_and_damage" && actorSlot && event.detail?.hits?.length) {
                 const hit = event.detail.hits[0];
-                const hitSlot = findHitSlot(actorSide, hit.target);
+                const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                 if (hitSlot) {
                     units[hitSlot].hp = hit.target_hp_after;
                     renderUnit(hitSlot);
@@ -2222,7 +2226,7 @@
                 }
             } else if (dispatchEffectType === "bonus_damage_knockback" && actorSlot && event.detail?.hits?.length) {
                 const hit = event.detail.hits[0];
-                const hitSlot = findHitSlot(actorSide, hit.target);
+                const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                 if (hitSlot) {
                     units[hitSlot].hp = hit.target_hp_after;
                     renderUnit(hitSlot);
@@ -2233,7 +2237,7 @@
                 }
             } else if (dispatchEffectType === "aoe_enemy_damage" && actorSlot) {
                 (event.detail?.hits || []).forEach((hit) => {
-                    const hitSlot = findHitSlot(actorSide, hit.target);
+                    const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                     if (!hitSlot) return;
                     units[hitSlot].hp = hit.target_hp_after;
                     renderUnit(hitSlot);
@@ -2241,7 +2245,7 @@
                 });
                 spawnGasBreathStream(actorSlot, () => {});
             } else if (dispatchEffectType === "heal_ally_percent_max_hp" && event.detail?.healed) {
-                const healSlot = findHitSlot(actorSide, event.detail.target);
+                const healSlot = findHitSlot(actorSide, event.detail.target, event.detail.target_side);
                 if (healSlot) {
                     spawnHealingHeart(healSlot, () => {
                         units[healSlot].hp = Math.min(units[healSlot].maxHp, units[healSlot].hp + event.detail.amount);
@@ -2262,7 +2266,7 @@
                 // 불빠따 김어진 "불빠따" - 발밑에서 좌우로 땅불이 번져나가며, 자신을 제외한 아군 1명 +
                 // 적 전체를 때린다(arena-battle.js와 동일). 각 대상은 불이 실제로 닿는 시점에 맞춰 반영.
                 spawnGroundFireCanvas(actorSlot, event.detail.hits, (hit) => {
-                    const hitSlot = findHitSlot(actorSide, hit.target);
+                    const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                     if (!hitSlot) return;
                     units[hitSlot].hp = hit.target_hp_after;
                     renderUnit(hitSlot);
@@ -2270,7 +2274,7 @@
                 });
             } else {
                 (event.detail?.hits || []).forEach((hit) => {
-                    const hitSlot = findHitSlot(actorSide, hit.target);
+                    const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                     if (hitSlot) {
                         units[hitSlot].hp = hit.target_hp_after;
                         renderUnit(hitSlot);

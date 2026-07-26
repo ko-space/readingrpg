@@ -189,6 +189,34 @@ def _alive_target(team):
     return units[0] if units else None
 
 
+def _tag_target_sides(detail, side_name, own_team, enemy_team):
+    """스킬 결과(detail)의 각 피격 대상에 실제로 맞은 쪽(attacker/defender)을 명시적으로 붙인다.
+    이름만으로는 프론트가 대상을 못 찾는다 - 같은 캐릭터가 양 팀에 모두 있으면(미러/유사 편성)
+    이름만 보고는 어느 쪽이 맞았는지 알 수 없어서, 항상 attacker 쪽을 먼저 찾는 폴백 때문에
+    실제로는 적이 죽었는데 화면에는 아군이 죽었다가(다음 갱신에서 원래 체력으로) 되살아난 것처럼
+    보이는 버그가 있었다. 각 핸들러가 dict에 심어둔 _target_ref(실제 유닛 객체 참조)의 identity로
+    own_team/enemy_team 중 어디 소속인지 판정해서 target_side를 붙이고, 참조는 다시 지운다
+    (그대로 두면 JSON으로 직렬화할 수 없다)."""
+    if not detail:
+        return detail
+    enemy_side = "defender" if side_name == "attacker" else "attacker"
+    own_ids = {id(u) for u in _all_slots(own_team) if u is not None}
+
+    def resolve(ref):
+        return side_name if id(ref) in own_ids else enemy_side
+
+    for hit in detail.get("hits") or []:
+        ref = hit.pop("_target_ref", None)
+        if ref is not None:
+            hit["target_side"] = resolve(ref)
+
+    ref = detail.pop("_target_ref", None)
+    if ref is not None:
+        detail["target_side"] = resolve(ref)
+
+    return detail
+
+
 def _team_alive(team):
     return bool(_alive_target(team))
 
@@ -544,7 +572,7 @@ def _skill_conditional_target_debuff(caster, own_team, enemy_team, params, time_
         target["status"]["stun_until"] = time_elapsed + params["stun_seconds"]
 
     return {
-        "hit": True, "target": target["name"], "stunned": condition_met,
+        "hit": True, "target": target["name"], "_target_ref": target, "stunned": condition_met,
         "stun_seconds": params["stun_seconds"] if condition_met else 0,
         "haste_percent": params["haste_percent"],
         "haste_seconds": params["haste_seconds"],  # 프론트 상태 아이콘(공격속도 증가)의 지속시간 표시용
@@ -558,7 +586,7 @@ def _skill_heal_ally_percent_max_hp(caster, own_team, enemy_team, params, time_e
     heal = round(ally["max_hp"] * params["percent"] / 100)
     before = ally["hp"]
     ally["hp"] = min(ally["max_hp"], ally["hp"] + heal)
-    return {"healed": True, "target": ally["name"], "amount": ally["hp"] - before}
+    return {"healed": True, "target": ally["name"], "_target_ref": ally, "amount": ally["hp"] - before}
 
 
 def _skill_self_shield_duration(caster, own_team, enemy_team, params, time_elapsed):
@@ -605,7 +633,7 @@ def _skill_bonus_damage_knockback(caster, own_team, enemy_team, params, time_ela
         if u.get("is_melee"):
             u["next_attack_time"] = max(u["next_attack_time"], reapproach_by)
 
-    return {"hits": [{"target": target["name"], "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}]}
+    return {"hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}]}
 
 
 def _skill_aoe_gendered_damage(caster, own_team, enemy_team, params, time_elapsed):
@@ -618,7 +646,7 @@ def _skill_aoe_gendered_damage(caster, own_team, enemy_team, params, time_elapse
         damage = atk * mult / 100 * type_mult
         damage = _apply_gendered_damage_bonus(caster, t, damage)
         dealt = _apply_damage(t, damage, time_elapsed)
-        hits.append({"target": t["name"], "damage": dealt, "target_hp_after": t["hp"], "target_max_hp": t["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
+        hits.append({"target": t["name"], "_target_ref": t, "damage": dealt, "target_hp_after": t["hp"], "target_max_hp": t["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
     return {"hits": hits}
 
 
@@ -641,7 +669,7 @@ def _skill_copy_target_skill(caster, own_team, enemy_team, params, time_elapsed)
     damage = atk * params["fallback_multiplier"] / 100 * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
     dealt = _apply_damage(target, damage, time_elapsed)
-    return {"hits": [{"target": target["name"], "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}]}
+    return {"hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}]}
 
 
 def _skill_stun_target(caster, own_team, enemy_team, params, time_elapsed):
@@ -649,7 +677,7 @@ def _skill_stun_target(caster, own_team, enemy_team, params, time_elapsed):
     if target is None:
         return {"hit": False}
     target["status"]["stun_until"] = time_elapsed + params["seconds"]
-    return {"hit": True, "target": target["name"], "stun_seconds": params["seconds"]}
+    return {"hit": True, "target": target["name"], "_target_ref": target, "stun_seconds": params["seconds"]}
 
 
 def _skill_aoe_enemy_damage(caster, own_team, enemy_team, params, time_elapsed):
@@ -660,7 +688,7 @@ def _skill_aoe_enemy_damage(caster, own_team, enemy_team, params, time_elapsed):
         damage = atk * params["multiplier"] / 100 * type_mult
         damage = _apply_gendered_damage_bonus(caster, t, damage)
         dealt = _apply_damage(t, damage, time_elapsed)
-        hits.append({"target": t["name"], "damage": dealt, "target_hp_after": t["hp"], "target_max_hp": t["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
+        hits.append({"target": t["name"], "_target_ref": t, "damage": dealt, "target_hp_after": t["hp"], "target_max_hp": t["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
     return {"hits": hits}
 
 
@@ -672,7 +700,7 @@ def _skill_damage_hp_percent_plus_atk(caster, own_team, enemy_team, params, time
     damage = target["hp"] * params["hp_percent"] / 100 + atk * params["atk_percent"] / 100
     damage = _apply_gendered_damage_bonus(caster, target, damage)
     dealt = _apply_damage(target, damage, time_elapsed)
-    return {"hits": [{"target": target["name"], "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": 1.0}]}
+    return {"hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": 1.0}]}
 
 
 def _skill_debuff_atk_and_damage(caster, own_team, enemy_team, params, time_elapsed):
@@ -687,7 +715,7 @@ def _skill_debuff_atk_and_damage(caster, own_team, enemy_team, params, time_elap
     damage = _apply_gendered_damage_bonus(caster, target, damage)
     dealt = _apply_damage(target, damage, time_elapsed)
     return {
-        "hits": [{"target": target["name"], "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
+        "hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
         "debuff_seconds": params["debuff_seconds"],  # 프론트 상태 아이콘(공격력 감소)의 지속시간 표시용
         "debuff_target": target["name"],
     }
@@ -700,14 +728,14 @@ def _skill_aoe_all_others_damage(caster, own_team, enemy_team, params, time_elap
             continue
         atk, is_crit = _roll_damage_atk(caster, time_elapsed)
         dealt = _apply_damage(u, atk * params["multiplier"] / 100, time_elapsed)
-        hits.append({"target": u["name"], "damage": dealt, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": 1.0})
+        hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": 1.0})
     for u in _alive_units(enemy_team):
         type_mult = get_type_multiplier(caster["attack_type"], u["defense_type"])
         atk, is_crit = _roll_damage_atk(caster, time_elapsed)
         damage = atk * params["multiplier"] / 100 * type_mult
         damage = _apply_gendered_damage_bonus(caster, u, damage)
         dealt = _apply_damage(u, damage, time_elapsed)
-        hits.append({"target": u["name"], "damage": dealt, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
+        hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
     return {"hits": hits}
 
 
@@ -815,6 +843,7 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
                     if time_elapsed >= unit["cast_end_time"]:
                         handler = SKILL_EFFECT_HANDLERS.get(unit["skill_effect_type"])
                         detail = handler(unit, own_team, enemy_team, unit["skill_params"], time_elapsed) if handler else {}
+                        detail = _tag_target_sides(detail, side_name, own_team, enemy_team)
                         events.append({
                             "time": time_elapsed, "event_type": "skill_resolve", "side": side_name,
                             "actor": unit["name"], "effect_type": unit["skill_effect_type"], "detail": detail,
