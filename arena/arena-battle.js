@@ -424,9 +424,21 @@
 
     Object.keys(units).forEach(renderUnit);
 
-    // 전투 시작 전 공격 프레임을 미리 확인한다.
+    // 전투 시작 전 공격/스킬/복귀 프레임 개수를 전부 미리 확인해둔다. 이걸 안 해두면 각 캐릭터가
+    // "처음" 스킬을 쓰거나 복귀 애니메이션을 재생할 때 그제서야 프레임 개수를 탐색하는데(최대 9장까지
+    // 순차적으로 404 확인), 그 탐색 자체가 실제 시간을 꽤 잡아먹는다 - 그동안 서버가 정해둔 이벤트
+    // 타임라인은 그대로 흘러가서, 탐색이 끝나기도 전에 다음 이벤트(skill_resolve 등)가 같은 유닛의
+    // 애니메이션 토큰을 갈아치워버리고, 결과적으로 "모든 캐릭터의 첫 스킬 사용"만 애니메이션이 끝까지
+    // 재생되지 못하고 중간에 잘리는 버그로 이어졌다. 두 번째 사용부터는 캐시가 이미 있어서 즉시
+    // 반환되므로 이 문제가 없었다 - 그래서 아예 전투 시작 시점에 한꺼번에 미리 채워둔다. 이의진처럼
+    // type2 변형이 있는 캐릭터가 아니면 "_type2" 프레임은 존재하지 않아 0으로만 캐시되고 끝난다(손해 없음).
     Object.values(units).forEach((unit) => {
         getAttackFrameCount(unit.outfit);
+        getSkillFrameCount(unit.outfit);
+        getReturnFrameCount(unit.outfit);
+        getAttackFrameCount(unit.outfit, "_type2");
+        getSkillFrameCount(unit.outfit, "_type2");
+        getReturnFrameCount(unit.outfit, "_type2");
     });
 
     // ===== 근거리 이동: 매 프레임마다 실제 위치를 재서 조금씩 다가가는 방식 =====
