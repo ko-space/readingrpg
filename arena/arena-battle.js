@@ -971,7 +971,7 @@
 
         // 대상마다 캐스터 기준 좌(-1)/우(1) 방향과 거리를 구한다.
         const targets = hits.map((hit) => {
-            const hitKey = findHitKey(hit.target);
+            const hitKey = findHitKey(hit.target, hit.target_side);
             const targetImg = hitKey ? document.querySelector(`[data-unit="${hitKey}"] .battle-unit-img`) : null;
             if (!targetImg) return { hit, dir: 1, dist: 60 };
             const targetRect = targetImg.getBoundingClientRect();
@@ -1852,15 +1852,19 @@
     }
 
     // 스킬 발동(skill_resolve)의 detail.hits[]에 담긴 피해를 대상들에게 반영하고 화면을 갱신한다.
-    // 스킬 이벤트의 target 이름만으로는 어느 편인지 알 수 없어서(자해 스킬도 있음) 양쪽을 다 찾아본다.
-    function findHitKey(name) {
+    // side가 주어지면(백엔드가 각 대상에 붙여 보내는 target_side) 그 편에서만 이름을 찾는다 - 이름만으로
+    // 양쪽을 다 찾으면(과거 방식) 같은 캐릭터가 양 팀에 모두 있을 때(미러/유사 편성) 항상 attacker 쪽이
+    // 먼저 걸려서, 실제로는 적이 맞았는데 화면에는 엉뚱하게 아군이 맞고 죽었다가(다음 갱신에서 원래
+    // 체력으로) 되살아난 것처럼 보이는 버그가 있었다. side가 없는 옛 이벤트/호출부만 양쪽 폴백 검색한다.
+    function findHitKey(name, side) {
+        if (side) return findUnitKey(side, name);
         return findUnitKey("attacker", name) || findUnitKey("defender", name);
     }
 
     function applySkillHits(event) {
         const hits = event.detail?.hits || [];
         hits.forEach((hit) => {
-            const hitKey = findHitKey(hit.target);
+            const hitKey = findHitKey(hit.target, hit.target_side);
             if (!hitKey) return;
             units[hitKey].hp = hit.target_hp_after;
             renderUnit(hitKey);
@@ -2054,7 +2058,7 @@
             // 닿는 순간에 맞춰 피해/상태 표시를 늦추고, 서민석·임소정은 즉시 반영하면서 투사체만 얹는다.
             // (dispatchEffectType 기준으로 분기하므로, 강승유가 이 스킬들을 복제했을 때도 동일하게 탄다.)
             if (dispatchEffectType === "conditional_target_debuff" && event.detail?.stunned && actorKey) {
-                const targetKey = event.detail.target ? findHitKey(event.detail.target) : null;
+                const targetKey = event.detail.target ? findHitKey(event.detail.target, event.detail.target_side) : null;
                 if (targetKey) {
                     playDualCrayonSkillProjectile(actorKey, targetKey, () => {
                         // 기절(CC기) = 보라색 오라 + 기절 아이콘(지속시간 동안). source=시전자 - 같은
@@ -2071,7 +2075,7 @@
                     appendLog(`${event.actor}의 스킬 발동!`, event.side);
                 }
             } else if (dispatchEffectType === "stun_target" && event.detail?.hit) {
-                const stunTargetKey = event.detail.target ? findHitKey(event.detail.target) : null;
+                const stunTargetKey = event.detail.target ? findHitKey(event.detail.target, event.detail.target_side) : null;
                 if (stunTargetKey) {
                     flashEffectAura(stunTargetKey, "cc");
                     setStatusIcon(stunTargetKey, "stun", {
@@ -2082,7 +2086,7 @@
                 appendLog(`${event.actor}의 스킬 발동!`, event.side);
             } else if (dispatchEffectType === "damage_hp_percent_plus_atk" && actorKey && event.detail?.hits?.length) {
                 const hit = event.detail.hits[0];
-                const targetKey = findHitKey(hit.target);
+                const targetKey = findHitKey(hit.target, hit.target_side);
                 if (targetKey) {
                     spawnMeteorProjectile(actorKey, targetKey, () => {
                         units[targetKey].hp = hit.target_hp_after;
@@ -2097,7 +2101,7 @@
             } else if (dispatchEffectType === "aoe_gendered_damage" && actorKey) {
                 applySkillHits(event);
                 (event.detail?.hits || []).forEach((hit) => {
-                    const targetKey = findHitKey(hit.target);
+                    const targetKey = findHitKey(hit.target, hit.target_side);
                     if (!targetKey) return;
                     const gender = effectiveGender(hit.target, targetKey);
                     spawnHeartProjectile(actorKey, targetKey, gender === "여" ? "heart-red" : "heart-pink", () => {});
@@ -2106,7 +2110,7 @@
             } else if (dispatchEffectType === "debuff_atk_and_damage" && actorKey && event.detail?.hits?.length) {
                 applySkillHits(event);
                 const hit = event.detail.hits[0];
-                const targetKey = findHitKey(hit.target);
+                const targetKey = findHitKey(hit.target, hit.target_side);
                 if (targetKey) {
                     playElectricConnector(actorKey, targetKey, "electric-yellow", 9, null);
                     // 공격력 감소(디버프) = 파란색 오라 + 공격력 감소 아이콘(지속시간 동안)
@@ -2120,7 +2124,7 @@
             } else if (dispatchEffectType === "bonus_damage_knockback" && actorKey && event.detail?.hits?.length) {
                 applySkillHits(event);
                 const hit = event.detail.hits[0];
-                const targetKey = findHitKey(hit.target);
+                const targetKey = findHitKey(hit.target, hit.target_side);
                 if (targetKey) {
                     applyKnockback(targetKey);
                     // 넉백(CC기) = 보라색 오라 + 넉백 아이콘(순간 표시 후 사라짐)
@@ -2134,7 +2138,7 @@
                 spawnGasBreathStream(actorKey, () => applySkillHits(event));
                 appendLog(`${event.actor}의 스킬 발동!`, event.side);
             } else if (dispatchEffectType === "heal_ally_percent_max_hp" && event.detail?.healed) {
-                const healTargetKey = findHitKey(event.detail.target);
+                const healTargetKey = findHitKey(event.detail.target, event.detail.target_side);
                 if (healTargetKey) {
                     spawnHealingHeart(healTargetKey, () => {
                         units[healTargetKey].hp = Math.min(units[healTargetKey].maxHp, units[healTargetKey].hp + event.detail.amount);
@@ -2164,7 +2168,7 @@
                 // 불빠따 김어진 "불빠따" - 발밑에서 좌우로 땅불이 번져나가며, 자신을 제외한 아군 1명 +
                 // 적 전체를 때린다. 각 대상은 불이 실제로 그 위치까지 번져야(거리 비례) 피해가 반영된다.
                 spawnGroundFireCanvas(actorKey, event.detail.hits, (hit) => {
-                    const hitKey = findHitKey(hit.target);
+                    const hitKey = findHitKey(hit.target, hit.target_side);
                     if (!hitKey) return;
                     units[hitKey].hp = hit.target_hp_after;
                     renderUnit(hitKey);
