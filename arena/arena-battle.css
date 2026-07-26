@@ -653,6 +653,31 @@ body {
 .gbd5 { --dot: 5px; --startY:  -6px; --dotX: calc(var(--reach) * 0.68); --dotY: -24px; animation-delay: 320ms; }
 .gbd6 { --dot: 7px; --startY:   0px; --dotX: calc(var(--reach) * 0.86); --dotY:   6px; animation-delay: 390ms; }
 
+/* ── 불빠따 김어진 스킬 전용: 캐스터 발밑에서 좌우로 번져나가는 땅불(캔버스로 그림 - 참고 데모
+   ground_slam_fire_toggle_optimized.html의 화염/불씨/연기/균열 드로잉을 그대로 옮겨왔다). 실제 그리기
+   로직은 arena-battle.js의 spawnGroundFireCanvas가 담당하고, 여기서는 캔버스 위치/크기만 잡는다. ── */
+.ground-fire-canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+    z-index: 4;
+}
+
+/* 참고 데모의 화면 흔들림(.scene.shake) - 불이 발밑에서 터지는 충격을 표현. 좌우 패널(체력바/로스터)은
+   .battle-field 바깥에 있어서 이 흔들림에 영향받지 않는다. */
+@keyframes ground-fire-shake {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    14% { transform: translate3d(-5px, 2px, 0) rotate(-.18deg); }
+    28% { transform: translate3d(6px, -3px, 0) rotate(.2deg); }
+    42% { transform: translate3d(-4px, 2px, 0) rotate(-.14deg); }
+    58% { transform: translate3d(3px, -1px, 0) rotate(.1deg); }
+    76% { transform: translate3d(-2px, 1px, 0); }
+}
+.battle-field.ground-fire-shake {
+    animation: ground-fire-shake 420ms ease-out;
+}
+
 /* ── 서민석 기본공격 전용: 책 모양 투사체. 던져진 책이 빙글빙글 도는 느낌으로 계속 회전한다. ── */
 @keyframes book-tumble {
     to { transform: rotate(360deg); }
