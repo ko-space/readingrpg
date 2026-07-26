@@ -54,11 +54,14 @@ async function fetchStoryState() {
 }
 
 // 체크포인트 저장. 서버는 scene_key/state를 그대로 저장/반환만 하고 해석하지 않으므로,
-// 원본의 saveCheckpoint처럼 실패해도(네트워크 문제 등) 진행을 막지 않는다(await 하지 않고 fire-and-forget).
+// 원본의 saveCheckpoint처럼 실패해도(네트워크 문제 등) 진행을 막지 않는다. 다만 호출부(gateNextScene)가
+// "이전 씬 저장 -> 다음 씬 저장"을 순서 보장 없이 연달아 fire-and-forget으로 쏘면, 네트워크 타이밍에 따라
+// 나중에 보낸(다음 씬) 요청의 응답이 먼저 보낸(이전 씬) 요청보다 서버에 먼저 반영되고 이전 씬 저장이
+// 그 위에 덮어써질 수 있다 - 그래서 프라미스를 돌려줘서 호출부가 필요하면 순서를 강제할 수 있게 한다.
 function serverSaveCheckpoint(sceneKey) {
     const state = { choice1, affJuheon, affSeungyu, affYeongwoong, affGanghee };
     cachedProgress = { scene_key: sceneKey, state };
-    fetch(`${API_BASE_URL}/story/progress`, {
+    return fetch(`${API_BASE_URL}/story/progress`, {
         method: "POST",
         headers: authHeaders(true),
         body: JSON.stringify({ story_id: STORY_ID, scene_key: sceneKey, state }),
@@ -2230,11 +2233,15 @@ function showChoiceGeneric(choiceData, onPick){
    - 게이트에 도달하자마자(티켓 소모 성공 여부와 무관하게) 지금까지 온 지점(currentSceneKey)을 먼저
      체크포인트로 저장해둔다. 이걸 안 하면 취소/티켓부족으로 못 넘어갔을 때 저장된 진행이 하나도 없어서
      "이어보기"가 아예 안 뜨고, 다시 시도할 때마다 입장 티켓을 새로 내고 처음부터 다시 봐야 했다.
+   - 이 첫 저장(이전 씬)과 티켓 성공 후 저장(다음 씬)은 반드시 순서대로 서버에 반영되어야 한다 - 둘 다
+     fire-and-forget으로 거의 동시에 쏘면, 네트워크 타이밍에 따라 "다음 씬" 응답이 서버에 먼저 반영된
+     뒤 "이전 씬" 응답이 뒤늦게 도착해 그 위를 덮어써버릴 수 있다. 그러면 실제로는 다음 씬까지 잘
+     진행했는데도 서버에는 한 씬 전(심하면 계속 반복되면서 결국 맨 처음 씬)이 저장되어, 나중에
+     "이어하기"를 누르면 진행이 갑자기 뒤로 돌아간 것처럼 보인다 - 그래서 첫 저장이 끝난 뒤에야
+     티켓 소모를 시도해서 두 저장이 항상 순서대로 서버에 도착하게 한다.
    ========================================================= */
 function gateNextScene(sceneKey, proceedFn){
-  if(currentSceneKey){
-    serverSaveCheckpoint(currentSceneKey);
-  }
+  const savePrev = currentSceneKey ? serverSaveCheckpoint(currentSceneKey) : Promise.resolve();
 
   function afterTicketOk(){
     currentSceneKey = sceneKey;
@@ -2245,7 +2252,7 @@ function gateNextScene(sceneKey, proceedFn){
     showTicketInsufficientModal();
   }
   function tryConsume(){
-    consumeTicketOnServer().then(ok=>{
+    savePrev.then(consumeTicketOnServer).then(ok=>{
       if(ok) afterTicketOk(); else afterTicketFail();
     });
   }
@@ -3090,22 +3097,38 @@ document.getElementById('episode-detail-restart-btn').addEventListener('click', 
   startGame();
 });
 
-// 이어보기/시작하기 버튼: 확인 모달 없이 바로 티켓 소모를 시도한다(취소할 "이전 씬"이 아직 없으므로).
-// 이어보기도 시작하기와 똑같이 티켓을 낸다 - 체크포인트는 항상 "아직 하지 않은 선택" 직전 지점이라,
-// 예전처럼 무료로 재방문을 허용하면 그 선택을 몇 번이고 공짜로 다시 시도해서 호감도 등을 유리한 쪽으로
-// 골라잡는 악용이 가능했다. 티켓을 내야 하므로 재시도할 때마다 실제 비용이 든다.
+// 시작하기 버튼(진행 기록 없음): 확인 모달 없이 바로 티켓 소모를 시도한다(취소할 "이전 씬"이 아직 없으므로).
 document.getElementById('episode-detail-start-btn').addEventListener('click', async ()=>{
+  if(cachedProgress){
+    // 이어보기: 체크포인트는 항상 "직전 선택 이후 도달한 다음 씬"을 가리킨다. 씬 전환 게이트
+    // (gateNextScene)와 똑같이, 자동사용이 꺼져 있으면 "다음 장면에서 티켓을 사용하시겠습니까?"
+    // 확인을 거치고 켜져 있으면 곧바로 소모한다 - 예전처럼 무료 재방문을 허용하면 그 씬의 선택을
+    // 몇 번이고 공짜로 다시 시도해서 호감도 등을 유리한 쪽으로 골라잡는 악용이 가능했다.
+    function tryResume(){
+      consumeTicketOnServer().then(ok=>{
+        if(ok){
+          lobbyWrap.classList.add('hidden');
+          resumeGame(cachedProgress);
+        } else {
+          showTicketInsufficientModal();
+        }
+      });
+    }
+    if(autoUseTickets){
+      tryResume();
+    } else {
+      showTicketConfirmModal(tryResume, ()=>{});
+    }
+    return;
+  }
+
   const ok = await consumeTicketOnServer();
   if(!ok){
     showTicketInsufficientModal();
     return;
   }
   lobbyWrap.classList.add('hidden');
-  if(cachedProgress){
-    resumeGame(cachedProgress);
-  } else {
-    startGame();
-  }
+  startGame();
 });
 
 /* ---- 신규: 스토리 진행 중 메뉴 모달 ----

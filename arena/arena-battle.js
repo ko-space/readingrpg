@@ -938,6 +938,275 @@
         }, durationMs);
     }
 
+    // 불빠따 김어진 스킬(aoe_all_others_damage) 전용: 캐스터 발밑에서 좌우로 번져나가는 땅불을 캔버스에
+    // 직접 그린다(참고 데모 ground_slam_fire_toggle_optimized.html의 화염/불씨/연기/균열 드로잉 로직을
+    // 그대로 옮김). 그 데모는 버튼으로 "번짐"과 "사그라듦"을 따로 눌렀지만, 여기서는 두 단계를 자동으로
+    // 이어붙인다 - 좌우 모두 다 번져서(대상 전원에게 닿아서) 시야에 꽉 찬 순간, 곧바로 발밑 쪽부터
+    // 좁아지며 사라지는 두 번째 전환으로 넘어간다(참고 데모의 extinguish()와 동일한 방식 - 끝지점은
+    // 고정한 채 시작지점만 0→1로 밀고 들어가서, 결과적으로 "발끝부터" 사라지는 것처럼 보인다).
+    // 아군 1명 + 적 전체를 동시에 때리는 스킬이라 좌/우 양쪽에 독립적인 최대 사거리를 두고, 각 대상은
+    // 불이 실제로 그 x좌표까지 번진 시점(자기 쪽 사거리 대비 거리 비율)에 맞춰 onHit이 불린다.
+    function spawnGroundFireCanvas(actorKey, hits, onHit) {
+        const layer = document.getElementById("projectile-layer");
+        const fieldEl = document.querySelector(".battle-field");
+        const actorImg = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);
+        if (!layer || !fieldEl || !actorImg) { hits.forEach(onHit); return; }
+
+        const fieldRect = fieldEl.getBoundingClientRect();
+        const actorRect = actorImg.getBoundingClientRect();
+        const groundY = actorRect.bottom - fieldRect.top;
+        const casterX = actorRect.left + actorRect.width / 2 - fieldRect.left;
+
+        // 대상마다 캐스터 기준 좌(-1)/우(1) 방향과 거리를 구한다.
+        const targets = hits.map((hit) => {
+            const hitKey = findHitKey(hit.target);
+            const targetImg = hitKey ? document.querySelector(`[data-unit="${hitKey}"] .battle-unit-img`) : null;
+            if (!targetImg) return { hit, dir: 1, dist: 60 };
+            const targetRect = targetImg.getBoundingClientRect();
+            const x = targetRect.left + targetRect.width / 2 - fieldRect.left;
+            return { hit, dir: x < casterX ? -1 : 1, dist: Math.max(1, Math.abs(x - casterX)) };
+        });
+        const leftDists = targets.filter((t) => t.dir < 0).map((t) => t.dist);
+        const rightDists = targets.filter((t) => t.dir > 0).map((t) => t.dist);
+        const maxDistOf = { "-1": leftDists.length ? Math.max(...leftDists) : 60, "1": rightDists.length ? Math.max(...rightDists) : 60 };
+
+        const APPEAR_MS = 520;
+        const DISAPPEAR_MS = 480;
+
+        const dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+        const canvas = document.createElement("canvas");
+        canvas.className = "ground-fire-canvas";
+        canvas.style.width = `${fieldRect.width}px`;
+        canvas.style.height = `${fieldRect.height}px`;
+        canvas.width = Math.round(fieldRect.width * dpr);
+        canvas.height = Math.round(fieldRect.height * dpr);
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        layer.appendChild(canvas);
+
+        // 참고 데모의 화면 흔들림 - 불이 터지는 충격 연출. 좌우 패널은 .battle-field 바깥이라 안 흔들린다.
+        fieldEl.classList.remove("ground-fire-shake");
+        void fieldEl.offsetWidth;
+        fieldEl.classList.add("ground-fire-shake");
+
+        function seeded(index, salt) {
+            const v = Math.sin(index * 12.9898 + salt * 78.233) * 43758.5453;
+            return v - Math.floor(v);
+        }
+        function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+        function easeInOutCubic(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+        function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+
+        const reach = Math.max(maxDistOf["-1"], maxDistOf["1"]);
+        const flameCount = Math.max(24, Math.ceil(reach / 14));
+        const flameSeeds = [];
+        for (let i = 0; i < flameCount; i++) {
+            flameSeeds.push({
+                n: i / Math.max(1, flameCount - 1),
+                phase: seeded(i, 1) * Math.PI * 2,
+                height: 16 + seeded(i, 2) * 22,
+                width: 4 + seeded(i, 3) * 4,
+                lean: (seeded(i, 4) - 0.5) * 7,
+            });
+        }
+        const emberSeeds = [];
+        for (let i = 0; i < 20; i++) {
+            emberSeeds.push({
+                n: seeded(i, 5),
+                phase: seeded(i, 6) * Math.PI * 2,
+                lift: 10 + seeded(i, 7) * 32,
+                size: 0.7 + seeded(i, 8) * 1.4,
+            });
+        }
+        const smokeSeeds = [];
+        for (let i = 0; i < 10; i++) {
+            smokeSeeds.push({
+                n: seeded(i, 9),
+                phase: seeded(i, 10) * Math.PI * 2,
+                lift: 10 + seeded(i, 11) * 22,
+                size: 6 + seeded(i, 12) * 11,
+            });
+        }
+
+        function sideX(direction, normalized) {
+            return casterX + direction * normalized * maxDistOf[String(direction)];
+        }
+
+        function drawCrack(direction, start, end) {
+            if (end - start <= 0.001) return;
+            const x0 = sideX(direction, start);
+            const x1 = sideX(direction, end);
+            const segments = Math.max(3, Math.ceil(Math.abs(x1 - x0) / 40));
+            ctx.save();
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.beginPath();
+            for (let i = 0; i <= segments; i++) {
+                const n = i / segments;
+                const x = x0 + (x1 - x0) * n;
+                const wobble = Math.sin(n * 17 + direction * 2) * 1.8 + Math.sin(n * 43) * 0.9;
+                const y = groundY + 2 + wobble;
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.strokeStyle = "rgba(255,55,12,.20)";
+            ctx.lineWidth = 7;
+            ctx.stroke();
+            ctx.strokeStyle = "rgba(255,124,48,.66)";
+            ctx.lineWidth = 1.8;
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawFlames(direction, start, end, time) {
+            if (end - start <= 0.001) return;
+            const outerX = sideX(direction, end);
+            const innerX = sideX(direction, start);
+            const minX = Math.min(innerX, outerX);
+            const maxX = Math.max(innerX, outerX);
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(minX - 14, groundY - 64, maxX - minX + 28, 88);
+            ctx.clip();
+            ctx.globalCompositeOperation = "lighter";
+
+            const groundGlow = ctx.createLinearGradient(minX, groundY, maxX, groundY);
+            groundGlow.addColorStop(0, "rgba(255,220,120,.16)");
+            groundGlow.addColorStop(.35, "rgba(255,98,20,.28)");
+            groundGlow.addColorStop(1, "rgba(255,56,5,.18)");
+            ctx.fillStyle = groundGlow;
+            ctx.fillRect(minX, groundY - 10, maxX - minX, 22);
+
+            for (const seed of flameSeeds) {
+                if (seed.n < start || seed.n > end) continue;
+                const x = sideX(direction, seed.n);
+                const flicker = Math.sin(time * 0.009 + seed.phase) * 4 + Math.sin(time * 0.018 + seed.phase * 1.7) * 2;
+                const flameHeight = Math.max(8, seed.height + flicker);
+                const lean = seed.lean * direction + Math.sin(time * 0.006 + seed.phase) * 2.4;
+
+                const gradient = ctx.createLinearGradient(x, groundY + 2, x + lean, groundY - flameHeight);
+                gradient.addColorStop(0, "rgba(255,250,190,.92)");
+                gradient.addColorStop(.25, "rgba(255,178,52,.88)");
+                gradient.addColorStop(.62, "rgba(255,73,9,.67)");
+                gradient.addColorStop(1, "rgba(255,30,0,0)");
+
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.moveTo(x - seed.width, groundY + 2);
+                ctx.quadraticCurveTo(x - seed.width * .4 + lean * .35, groundY - flameHeight * .58, x + lean, groundY - flameHeight);
+                ctx.quadraticCurveTo(x + seed.width * .55 + lean * .2, groundY - flameHeight * .47, x + seed.width, groundY + 2);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            const headX = sideX(direction, end);
+            const headGlow = ctx.createRadialGradient(headX, groundY - 2, 1, headX, groundY - 2, 26);
+            headGlow.addColorStop(0, "rgba(255,245,190,.5)");
+            headGlow.addColorStop(.35, "rgba(255,129,31,.22)");
+            headGlow.addColorStop(1, "rgba(255,50,0,0)");
+            ctx.fillStyle = headGlow;
+            ctx.beginPath();
+            ctx.arc(headX, groundY - 2, 26, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function drawEmbers(direction, start, end, time) {
+            if (end - start <= 0.001) return;
+            ctx.save();
+            ctx.globalCompositeOperation = "lighter";
+            for (const seed of emberSeeds) {
+                const n = start + (end - start) * seed.n;
+                const cycle = (time * 0.00034 + seed.phase / (Math.PI * 2)) % 1;
+                const x = sideX(direction, n) + Math.sin(time * 0.004 + seed.phase) * 5;
+                const y = groundY - cycle * seed.lift;
+                ctx.globalAlpha = Math.sin(cycle * Math.PI) * .7;
+                ctx.fillStyle = cycle < .42 ? "#fff0a8" : "#ff6b19";
+                ctx.beginPath();
+                ctx.arc(x, y, seed.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        function drawSmoke(direction, start, end, time) {
+            if (end - start <= 0.001) return;
+            ctx.save();
+            for (const seed of smokeSeeds) {
+                const n = start + (end - start) * seed.n;
+                const cycle = (time * 0.00013 + seed.phase / (Math.PI * 2)) % 1;
+                const x = sideX(direction, n) + Math.sin(time * 0.0015 + seed.phase) * 8;
+                const y = groundY - 6 - cycle * seed.lift;
+                ctx.globalAlpha = Math.sin(cycle * Math.PI) * .08;
+                ctx.fillStyle = "#b08a7b";
+                ctx.beginPath();
+                ctx.arc(x, y, seed.size * (1 + cycle * .5), 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        function drawCenterGlow() {
+            const glow = ctx.createRadialGradient(casterX, groundY, 3, casterX, groundY, 100);
+            glow.addColorStop(0, "rgba(255,205,115,.16)");
+            glow.addColorStop(.34, "rgba(255,90,17,.07)");
+            glow.addColorStop(1, "rgba(255,60,0,0)");
+            ctx.fillStyle = glow;
+            ctx.fillRect(casterX - 100, groundY - 90, 200, 130);
+        }
+
+        // 좌(-1)/우(1) 각각 [start, end](0~1) 구간을 따로 관리한다 - 사거리가 달라서 한쪽이 먼저 다
+        // 번지고 먼저 사그라들 수 있다. 번지는 동안은 end가 0->1로 커지고(start는 0 고정), 사그라들
+        // 때는 end를 1에 고정한 채 start가 0->1로 따라붙어서 "발끝부터" 사라지는 것처럼 보인다.
+        const range = { "-1": { start: 0, end: 0 }, "1": { start: 0, end: 0 } };
+
+        targets.forEach(({ hit, dir, dist }) => {
+            const maxD = maxDistOf[String(dir)];
+            setTimeout(() => onHit(hit), maxD > 0 ? (dist / maxD) * APPEAR_MS : 0);
+        });
+
+        let phase = "appear";
+        let phaseStart = performance.now();
+
+        function frame(now) {
+            const elapsed = now - phaseStart;
+            if (phase === "appear") {
+                const eased = easeOutCubic(clamp01(elapsed / APPEAR_MS));
+                range["-1"].end = eased;
+                range["1"].end = eased;
+                if (elapsed >= APPEAR_MS) {
+                    range["-1"].end = 1;
+                    range["1"].end = 1;
+                    phase = "disappear";
+                    phaseStart = now;
+                }
+            } else {
+                const raw = clamp01(elapsed / DISAPPEAR_MS);
+                const eased = easeInOutCubic(raw);
+                range["-1"].start = eased;
+                range["1"].start = eased;
+                if (raw >= 1) {
+                    canvas.remove();
+                    return;
+                }
+            }
+
+            ctx.clearRect(0, 0, fieldRect.width, fieldRect.height);
+            if (range["-1"].end > 0.001 || range["1"].end > 0.001) drawCenterGlow();
+            [-1, 1].forEach((dir) => {
+                const r = range[String(dir)];
+                drawCrack(dir, r.start, r.end);
+                drawSmoke(dir, r.start, r.end, now);
+                drawFlames(dir, r.start, r.end, now);
+                drawEmbers(dir, r.start, r.end, now);
+            });
+
+            requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+    }
+
     // 임소정 전용: 캐스터-대상을 잠깐 잇는 전기(이동하는 점이 아니라, 두 위치 사이를 잇는 막대를 회전시켜 만든다).
     // 기본공격은 얇고 푸른색(electric-blue), 스킬은 더 두껍고 노란색(electric-yellow)으로 호출한다.
     // 전기는 사실상 즉발이라 onArrive는 아주 짧게만 대기한 뒤 부른다(null이면 안 부름 - 스킬처럼 이미
@@ -1879,6 +2148,17 @@
                     `${event.actor}의 스킬 발동! ${event.detail?.type2_active ? "염색체 변환(type2)" : "염색체 변환(type1)"} - 체력 ${event.detail?.healed_amount || 0} 회복`,
                     event.side
                 );
+            } else if (dispatchEffectType === "aoe_all_others_damage" && actorKey && event.detail?.hits?.length) {
+                // 불빠따 김어진 "불빠따" - 발밑에서 좌우로 땅불이 번져나가며, 자신을 제외한 아군 1명 +
+                // 적 전체를 때린다. 각 대상은 불이 실제로 그 위치까지 번져야(거리 비례) 피해가 반영된다.
+                spawnGroundFireCanvas(actorKey, event.detail.hits, (hit) => {
+                    const hitKey = findHitKey(hit.target);
+                    if (!hitKey) return;
+                    units[hitKey].hp = hit.target_hp_after;
+                    renderUnit(hitKey);
+                    flashHit(hitKey, hit.is_crit, hit.type_multiplier);
+                });
+                appendLog(`${event.actor}의 스킬 발동!`, event.side);
             } else {
                 applySkillHits(event);
                 if (dispatchEffectType === "summon_clone" && event.detail?.summoned) {
