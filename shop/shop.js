@@ -4,7 +4,7 @@
     // API_BASE_URL은 shared/api-config.js가 이 스크립트보다 먼저 로드되어 전역으로 제공한다.
     const OUTFIT_IMAGE_BASE = `${API_BASE_URL}/static/outfits/`;
 
-    const OUTCOME_LABELS = { success: "성공", maintain: "유지", destroy: "파괴" };
+    const OUTCOME_LABELS = { success: "성공", maintain: "유지", destroy: "파괴", super_success: "슈퍼 성공" };
 
     const modal = document.getElementById("modal-shop");
     const content = document.getElementById("shop-content");
@@ -57,6 +57,18 @@
         if (item.effect_type === "force") {
             const base = `강화 결과를 반드시 ${OUTCOME_LABELS[p.outcome] || p.outcome}으로 만듭니다.`;
             return p.outcome === "destroy" ? `${base} 인물 1장으로 강화가 가능합니다.` : base;
+        }
+        if (item.effect_type === "super_success_shift") {
+            return `강화 시 성공 확률 ${Math.abs(p.success_delta || 0)}%p를 슈퍼 성공(2성치 강화) 확률로 옮깁니다.`;
+        }
+        if (item.effect_type === "material_substitute") {
+            return "강화 시 재료 인물 카드 1장을 대신합니다.";
+        }
+        if (item.effect_type === "next_enhance_buff") {
+            return `강화 성공 시, 그 카드의 다음 강화에서 파괴 확률 ${Math.abs(p.destroy_delta || 0)}%p 감소, 유지 확률 ${p.maintain_delta || 0}%p 증가 효과를 예약합니다.`;
+        }
+        if (item.effect_type === "dust_convert") {
+            return "강화 성공/유지/파괴 확률이 사라지고, 성급별 확률로 인물 3장이 먼지 1개로 바뀝니다. 다른 강화 아이템과 함께 사용할 수 없습니다.";
         }
         return "";
     }

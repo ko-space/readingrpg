@@ -59,6 +59,20 @@ class Character(Base):
     owner = relationship("User", back_populates="characters", foreign_keys=[user_id])
 
 
+class CharacterEnhanceBuff(Base):
+    """"강승유의 마우스피스"(next_enhance_buff) 전용 - 강화 성공 시 그 카드에 걸어두는 1회성 예약 효과.
+    Character에 컬럼을 바로 추가하면 이미 배포된 운영 DB(로컬과 같은 Supabase를 공유)에는 반영이 안 된다 -
+    create_all은 없는 테이블만 새로 만들 뿐 기존 테이블에 컬럼을 추가해주지 않는다. 그래서 새 테이블로
+    분리해서 서버 재시작만으로 자동 생성되게 한다. 카드(character_id)당 최대 1행 - 다음 강화 시도 때
+    한 번 읽혀서 규칙에 반영된 뒤 결과와 무관하게 곧바로 삭제된다(1회 소모)."""
+    __tablename__ = "character_enhance_buffs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    character_id = Column(Integer, ForeignKey("characters.id"), unique=True)
+    destroy_delta = Column(Float, default=0)   # 퍼센트포인트(음수 = 감소)
+    maintain_delta = Column(Float, default=0)  # 퍼센트포인트(양수 = 증가)
+
+
 class ReadingLog(Base):
     __tablename__ = "reading_logs"
 

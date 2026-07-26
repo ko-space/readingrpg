@@ -1,4 +1,5 @@
 import json
+import os
 from database import SessionLocal
 from models import (
     Item, Region, Achievement, GachaBanner, GachaBannerPickup, Quest, UserQuestClaim,
@@ -11,6 +12,10 @@ with open("characters.json", "r", encoding="utf-8") as f:
 
 RARITY_PRICE = {"일반": 100, "희귀": 300, "영웅": 700, "전설": 1500}
 SEASON_MULTIPLIER = {"기본": 1.0, "여름": 1.5, "겨울": 1.5}
+
+# 아직 기획 검증 중인 강화 아이템을 실유저에게는 안 보이게 숨기고 로컬에서만 켜서 테스트하기 위한 스위치.
+# 로컬 .env에 SHOW_TEST_ITEMS=1을 추가하면 켜진다 - 운영 서버 .env엔 이 값이 없으니 항상 꺼진 채로 배포된다.
+SHOW_TEST_ITEMS = os.getenv("SHOW_TEST_ITEMS") == "1"
 
 # 수영복 스킨은 일반 계절 의상과 달리 상점에 상시 진열되는 고가 스킨.
 # (구매 로직 자체는 열려 있지만, 착용 이펙트가 구현되기 전까지는 사실상 못 사게 가격을 높게 잡아둠)
@@ -104,7 +109,7 @@ def seed_enhancement_items():
             {
                 "name": "송주헌의 독서대",
                 "source_character": "송주헌",
-                "price": 300,
+                "price": 200,
                 "icon_file": "assets/items/songjuheon_desk.png",
                 "description": "방치되어 있지만 존재는 합니다.",
                 "effect_type": "shift",
@@ -113,7 +118,7 @@ def seed_enhancement_items():
             {
                 "name": "김남옥의 크레파스",
                 "source_character": "김남옥",
-                "price": 300,
+                "price": 100,
                 "icon_file": "assets/items/namok_crayon.png",
                 "description": "어린이가 사용하는 물건이니 조심히 다루세요.",
                 "effect_type": "shift",
@@ -122,7 +127,7 @@ def seed_enhancement_items():
             {
                 "name": "윤영준의 오페라 하우스",
                 "source_character": "윤영준",
-                "price": 1500,
+                "price": 500,
                 "icon_file": "assets/items/youngjun_opera.png",
                 "description": "조심하세요. 윤영준의 수행평가는 복불복입니다.",
                 "effect_type": "redistribute",
@@ -141,11 +146,61 @@ def seed_enhancement_items():
                 "name": "초심자의 행운",
                 "source_character": None,
                 "purchase_limit": 1,
-                "price": 1000,
+                "price": 1500,
                 "icon_file": "assets/items/초심자의 행운.png",
                 "description": "어느 업적을 달성해야 살 수 있는 걸까요?",
                 "effect_type": "force",
                 "effect_params": {"outcome": "success"},
+            },
+            # ── 아래는 기획 검증 중인 신규 아이템(SHOW_TEST_ITEMS로 상점 노출을 게이팅) ──
+            {
+                "name": "최재혁의 마법 영약",
+                "source_character": "최재혁",
+                "price": 150,
+                "icon_file": "assets/items/jaehyuk_elixir.png",
+                "description": "모든 것을 형태가 없는 재로 만들어버리는 영약입니다.",
+                # 별도 effect_type: 성공/유지/파괴 확률표를 통째로 대체한다(성급별 "먼지 생성" 확률).
+                # 성공하면 재료 3장이 전부 소모되고 먼지 1개를 얻는다. 실패하면 아무 카드도 소모되지 않는다
+                # (골드와 아이템 자체만 소모). 다른 강화 아이템과 함께 쓸 수 없다(enhance_character에서 검증).
+                "effect_type": "dust_convert",
+                "effect_params": {"1": 75, "2": 50, "3": 25, "4": 10, "5": 5},
+                "is_shop_active": SHOW_TEST_ITEMS,
+            },
+            {
+                "name": "먼지",
+                "source_character": None,
+                "price": 0,  # 상점에서 팔지 않음(마법 영약 성공 시에만 획득) - is_shop_active를 항상 False로 고정
+                "icon_file": "assets/items/dust.png",
+                "description": "이 힘은, 대체 뭐지? 무언가... '뭔가'가 있다!",
+                # 강화 시 재료 카드 1장을 대신한다(material_substitute) - shift/redistribute/force처럼 확률에
+                # 관여하지 않고, _choose_enhancement_cards가 필요로 하는 실제 캐릭터 카드 수를 1장 줄여준다.
+                "effect_type": "material_substitute",
+                "effect_params": {},
+                "is_shop_active": False,
+            },
+            {
+                "name": "이의진의 연분홍색 크록스",
+                "source_character": "이의진",
+                "price": 300,
+                "icon_file": "assets/items/eujin_crocs.png",
+                "description": "행운을 시험해볼까요?",
+                # 성공 확률 중 일부를 슈퍼 성공(2성치 강화)으로 옮긴다 - shift와 비슷하지만 "성공" 항목을
+                # 두 종류(success/super_success)로 쪼갠다는 점이 달라서 별도 effect_type으로 둔다.
+                "effect_type": "super_success_shift",
+                "effect_params": {"success_delta": -5, "super_success_delta": 5},
+                "is_shop_active": SHOW_TEST_ITEMS,
+            },
+            {
+                "name": "강승유의 마우스피스",
+                "source_character": "강승유",
+                "price": 350,
+                "icon_file": "assets/items/seungyu_piece.png",
+                "description": "일종의 보험이라고 생각하세요.",
+                # 이번 강화가 성공(슈퍼 성공 포함)하면, 그 카드의 "다음" 강화 시도에 파괴 -10%p/유지 +10%p를
+                # 1회 예약해둔다(CharacterEnhanceBuff 테이블). 이번 판정 자체에는 영향 없음.
+                "effect_type": "next_enhance_buff",
+                "effect_params": {"destroy_delta": -10, "maintain_delta": 10},
+                "is_shop_active": SHOW_TEST_ITEMS,
             },
         ]
 
@@ -153,6 +208,7 @@ def seed_enhancement_items():
         changed = False
 
         for item in items:
+            is_shop_active = item.get("is_shop_active", True)
             row = existing_rows.get(item["name"])
             if row:
                 # 이미 있는 행이면 최신 값으로 갱신한다(icon_file 등을 나중에 추가/수정해도
@@ -166,7 +222,7 @@ def seed_enhancement_items():
                 row.effect_params = item["effect_params"]
                 row.required_achievement = item.get("required_achievement")
                 row.purchase_limit = item.get("purchase_limit")
-                row.is_shop_active = True
+                row.is_shop_active = is_shop_active
             else:
                 db.add(Item(
                     name=item["name"],
@@ -180,7 +236,7 @@ def seed_enhancement_items():
                     effect_params=item["effect_params"],
                     required_achievement=item.get("required_achievement"),
                     purchase_limit=item.get("purchase_limit"),
-                    is_shop_active=True,
+                    is_shop_active=is_shop_active,
                 ))
             changed = True
 
@@ -1259,6 +1315,14 @@ NOTICES = [
             "- 좋은화면(패드 전용 화면) 반응형 패치\n"
             "- 실모단 업적 버그 수정\n"
             "- '윤영준의 오페라하우스' 디자인 개선"
+        ),
+    },
+    {
+        "title": "[인물 소개 - 이의진]",
+        "image_file": "assets/notices/eujin.png",
+        "body": (
+            "\"나는 이의진이라고 해. 왜 눈을 뜨지 않냐고? 묻지마. 다쳐.\"\n\n"
+            "연분홍색 크록스가 매력 포인트입니다. 그는 왜 눈을 뜨지 않는 걸까요?"
         ),
     },
 ]

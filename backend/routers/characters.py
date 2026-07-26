@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, Character, Item, UserItem, ActivityLog
+from models import User, Character, Item, UserItem, ActivityLog, CharacterEnhanceBuff
 from schemas import EquipRequest, CharacterOutfitRequest, EnhancementRequest
 from security import get_current_user
 from character_visibility import is_hidden_override
@@ -182,7 +182,15 @@ def get_enhancement_inventory(
         .all()
     )
     has_shredder = any(_is_force_destroy_item(ui.item) for ui in owned_enhancement_items)
-    min_required_copies = 1 if has_shredder else ENHANCEMENT_REQUIRED_COPIES
+    # "먼지"를 갖고 있으면 카드가 한 장 덜 있어도(2장) 강화 대상이 될 수 있다 - 한 번에 최대 1개만
+    # 재료로 대신할 수 있으므로(같은 아이템 중복 선택 불가) 최대 -1까지만 줄어든다.
+    has_dust = any(ui.item.effect_type == "material_substitute" for ui in owned_enhancement_items)
+    if has_shredder:
+        min_required_copies = 1
+    elif has_dust:
+        min_required_copies = ENHANCEMENT_REQUIRED_COPIES - 1
+    else:
+        min_required_copies = ENHANCEMENT_REQUIRED_COPIES
 
     for row in rows:
         rule = ENHANCEMENT_RULES.get(row["star"])
@@ -198,6 +206,7 @@ def get_enhancement_inventory(
         "required_copies": ENHANCEMENT_REQUIRED_COPIES,
         "min_required_copies": min_required_copies,
         "has_shredder": has_shredder,
+        "has_dust": has_dust,
         "rules": ENHANCEMENT_RULES,
         "characters": rows,
     }
@@ -305,11 +314,36 @@ def _apply_force(rule: dict, params: dict) -> dict:
     return {"success": 0, "maintain": 0, "destroy": 0, outcome: 100, "cost": rule.get("cost", 0)}
 
 
+def _apply_super_success_shift(rule: dict, params: dict) -> dict:
+    """"이의진의 연분홍색 크록스" 전용 - 성공 확률 일부를 슈퍼 성공(2성치 강화) 몫으로 옮긴다.
+    _apply_shift와 비슷하지만, "성공"이 하나의 항목에서 두 항목(success/super_success)으로
+    쪼개진다는 점이 달라서 별도 함수로 둔다."""
+    result = dict(rule)
+    result["success"] = max(0, result.get("success", 0) + params.get("success_delta", 0))
+    result["super_success"] = max(0, result.get("super_success", 0) + params.get("super_success_delta", 0))
+    return result
+
+
+def _apply_next_enhance_buff(rule: dict, buff: CharacterEnhanceBuff) -> dict:
+    """"강승유의 마우스피스"로 이 카드에 예약돼 있던 1회성 효과를 이번 판정에 반영한다."""
+    result = dict(rule)
+    result["destroy"] = max(0, result.get("destroy", 0) + (buff.destroy_delta or 0))
+    result["maintain"] = max(0, result.get("maintain", 0) + (buff.maintain_delta or 0))
+    return result
+
+
 def _is_force_destroy_item(item: Item) -> bool:
     """"강 희의 파쇄기"(파괴 확률 100%로 고정)인지 판별한다.
     이 아이템만 가진 특수 규칙(다른 효과 무시 최우선 적용, 카드 1장으로 강화 가능)을
     이름이 아니라 effect_type/effect_params로 식별해서, seed 데이터의 이름이 바뀌어도 안전하다."""
     return item.effect_type == "force" and (item.effect_params or {}).get("outcome") == "destroy"
+
+
+def _is_dust_convert_item(item: Item) -> bool:
+    """"최재혁의 마법 영약"인지 판별한다 - 성공/유지/파괴 확률표를 통째로 대체하는 특수 아이템이라
+    _apply_enhancement_items의 일반 파이프라인(shift/redistribute/force)을 안 타고 enhance_character에서
+    따로 분기 처리한다."""
+    return item.effect_type == "dust_convert"
 
 
 def _apply_enhancement_items(rule: dict, item_defs: list) -> dict:
@@ -331,6 +365,8 @@ def _apply_enhancement_items(rule: dict, item_defs: list) -> dict:
             result = _apply_redistribute(result, item.effect_params)
         elif item.effect_type == "force":
             result = _apply_force(result, item.effect_params)
+        elif item.effect_type == "super_success_shift":
+            result = _apply_super_success_shift(result, item.effect_params)
     return result
 
 
@@ -341,11 +377,16 @@ def enhance_character(
     user: User = Depends(get_current_user),
 ):
     """같은 이름·같은 성급 캐릭터 세 장으로 강화를 시도한다.
-    (단, "강 희의 파쇄기"를 함께 쓰면 파괴가 확정이라 카드 한 장만으로도 시도할 수 있다.)
+    (단, "강 희의 파쇄기"를 함께 쓰면 파괴가 확정이라 카드 한 장만으로도 시도할 수 있고,
+    "먼지"를 재료로 함께 쓰면 실제 카드가 한 장 덜 필요하다.)
 
-    - 성공: 기준 카드가 다음 성급이 되고 재료 두 장이 소모된다.
-    - 유지: 기준 카드의 성급은 유지되고 재료 두 장이 소모된다.
+    - 슈퍼 성공("이의진의 연분홍색 크록스" 전용): 기준 카드가 2성치 오르고(★6 상한) 재료가 소모된다.
+    - 성공: 기준 카드가 다음 성급이 되고 재료가 소모된다.
+    - 유지: 기준 카드의 성급은 유지되고 재료가 소모된다.
     - 파괴: 기준 카드와 재료가 모두 소모된다.
+
+    "최재혁의 마법 영약"을 쓰면 위 네 가지 대신 완전히 다른 결과가 나온다(성급별 확률로 카드 3장이
+    "먼지" 1개로 바뀌거나, 실패 시 카드가 하나도 소모되지 않음) - 아래에서 별도로 분기 처리한다.
     """
     if req.star not in ENHANCEMENT_RULES:
         raise HTTPException(
@@ -365,6 +406,9 @@ def enhance_character(
 
     if len(req.item_ids) != len(set(req.item_ids)):
         raise HTTPException(status_code=400, detail="같은 아이템을 중복해서 선택할 수 없습니다.")
+
+    if len(req.item_ids) > 3:
+        raise HTTPException(status_code=400, detail="강화 도움 아이템은 한 번에 최대 3개까지만 사용할 수 있습니다.")
 
     selected_user_items = []
     for item_id in req.item_ids:
@@ -386,9 +430,18 @@ def enhance_character(
 
     item_defs = [user_item.item for user_item in selected_user_items]
 
+    is_dust_convert = any(_is_dust_convert_item(item) for item in item_defs)
+    if is_dust_convert and len(item_defs) > 1:
+        raise HTTPException(status_code=400, detail="최재혁의 마법 영약은 다른 강화 아이템과 함께 사용할 수 없습니다.")
+
     # "강 희의 파쇄기"를 쓰면 파괴가 100% 확정이니, 재료로 희생시킬 카드 없이 단 1장만으로도
-    # 강화(=파괴)를 시도할 수 있다. 그 외에는 기존 그대로 동일 캐릭터 3장이 필요하다.
-    required_copies = 1 if any(_is_force_destroy_item(item) for item in item_defs) else ENHANCEMENT_REQUIRED_COPIES
+    # 강화(=파괴)를 시도할 수 있다. "먼지"를 재료로 쓰면 그만큼 실제 카드가 덜 필요하다(마법 영약은
+    # 다른 아이템과 함께 못 쓰므로 이 둘이 동시에 적용될 일은 없다).
+    dust_material_count = sum(1 for item in item_defs if item.effect_type == "material_substitute")
+    if any(_is_force_destroy_item(item) for item in item_defs):
+        required_copies = 1
+    else:
+        required_copies = ENHANCEMENT_REQUIRED_COPIES - dust_material_count
 
     copies = (
         db.query(Character)
@@ -418,79 +471,160 @@ def enhance_character(
             detail=f"골드가 부족합니다. 강화에는 {base_rule['cost']}G가 필요합니다.",
         )
 
-    rule = _apply_enhancement_items(base_rule, item_defs)
-
     base, materials = _choose_enhancement_cards(locked_user, copies, required_copies - 1)
     selected = [base, *materials]
     selected_ids = {c.id for c in selected}
 
     locked_user.gold -= base_rule["cost"]
 
-    roll = _rng.uniform(0, 100)
-    success_boundary = rule["success"]
-    maintain_boundary = rule["success"] + rule["maintain"]
+    if is_dust_convert:
+        # ── 최재혁의 마법 영약: 성공/유지/파괴 확률표를 통째로 대체한다 ──
+        dust_def = db.query(Item).filter(Item.name == "먼지", Item.item_type == "enhancement").first()
+        if not dust_def:
+            raise HTTPException(status_code=500, detail="먼지 아이템이 아직 준비되지 않았습니다.")
 
-    if roll < success_boundary:
-        outcome = "success"
-    elif roll < maintain_boundary:
-        outcome = "maintain"
+        dust_item = item_defs[0]
+        dust_probability = dust_item.effect_params.get(str(req.star), 0)
+        roll = _rng.uniform(0, 100)
+        rule = {"dust_success": dust_probability, "cost": base_rule["cost"]}
+
+        # 파괴 불가(is_indestructible) 보상 카드가 섞여 있으면 먼지가 되지 않는다(파괴 방지 규칙과 동일).
+        if roll < dust_probability and not any(c.is_indestructible for c in selected):
+            outcome = "dust_success"
+            was_equipped = any(c.is_equipped == 1 for c in selected)
+
+            if locked_user.pvp_defense_front_id in selected_ids:
+                locked_user.pvp_defense_front_id = None
+            if locked_user.pvp_defense_back_id in selected_ids:
+                locked_user.pvp_defense_back_id = None
+
+            for character in selected:
+                character.is_equipped = 0
+                db.delete(character)
+            db.flush()
+
+            if was_equipped:
+                _select_replacement_equipped_character(db, locked_user, selected_ids)
+
+            owned_dust = (
+                db.query(UserItem)
+                .filter(UserItem.user_id == locked_user.id, UserItem.item_id == dust_def.id)
+                .with_for_update()
+                .first()
+            )
+            if owned_dust:
+                owned_dust.quantity += 1
+            else:
+                db.add(UserItem(user_id=locked_user.id, item_id=dust_def.id, quantity=1))
+
+            consumed_count = len(selected)
+            result_star = None
+            message = f"영약이 반응했습니다! {req.character_name} ★{req.star} 카드 {consumed_count}장이 먼지가 되었습니다."
+        else:
+            # 실패해도 골드와 영약 자체는 소모되지만, 카드는 한 장도 사라지지 않는다.
+            outcome = "dust_fail"
+            consumed_count = 0
+            result_star = req.star
+            message = f"영약이 반응하지 않았습니다. {req.character_name} 카드는 그대로 남았습니다."
     else:
-        outcome = "destroy"
+        # ── 일반 강화(슈퍼 성공/성공/유지/파괴) ──
+        rule = _apply_enhancement_items(base_rule, item_defs)
 
-    # 파괴 불가(is_indestructible) 보상 카드는 파괴되지 않는다 - 파괴 판정이 나와도 유지로 바뀐다.
-    if outcome == "destroy" and any(c.is_indestructible for c in selected):
-        outcome = "maintain"
-
-    if outcome == "success":
-        base.star = req.star + 1
-
-        for material in materials:
-            db.delete(material)
-
-        consumed_count = len(materials)
-        result_star = base.star
-        message = f"강화 성공! {base.name}이(가) ★{result_star}이 되었습니다."
-
-    elif outcome == "maintain":
-        for material in materials:
-            db.delete(material)
-
-        consumed_count = len(materials)
-        result_star = base.star
-        message = (
-            f"강화 수치가 유지되었습니다. "
-            f"{base.name}은(는) ★{result_star} 상태로 남았습니다."
+        # "강승유의 마우스피스"로 이 카드에 예약돼 있던 효과가 있으면 이번 판정에 1회 반영하고 지운다
+        # (이번 시도에서 쓴 아이템과 무관하게, 지난 강화에서 예약된 게 있으면 항상 먼저 적용된다).
+        pending_buff = (
+            db.query(CharacterEnhanceBuff)
+            .filter(CharacterEnhanceBuff.character_id == base.id)
+            .with_for_update()
+            .first()
         )
+        if pending_buff:
+            rule = _apply_next_enhance_buff(rule, pending_buff)
+            db.delete(pending_buff)
+            db.flush()
 
-    else:
-        was_equipped = any(c.is_equipped == 1 for c in selected)
+        roll = _rng.uniform(0, 100)
+        super_success_boundary = rule.get("super_success", 0)
+        success_boundary = super_success_boundary + rule["success"]
+        maintain_boundary = success_boundary + rule["maintain"]
 
-        if locked_user.pvp_defense_front_id in selected_ids:
-            locked_user.pvp_defense_front_id = None
-        if locked_user.pvp_defense_back_id in selected_ids:
-            locked_user.pvp_defense_back_id = None
+        if roll < super_success_boundary:
+            outcome = "super_success"
+        elif roll < success_boundary:
+            outcome = "success"
+        elif roll < maintain_boundary:
+            outcome = "maintain"
+        else:
+            outcome = "destroy"
 
-        for character in selected:
-            character.is_equipped = 0
-            db.delete(character)
+        # 파괴 불가(is_indestructible) 보상 카드는 파괴되지 않는다 - 파괴 판정이 나와도 유지로 바뀐다.
+        if outcome == "destroy" and any(c.is_indestructible for c in selected):
+            outcome = "maintain"
 
-        db.flush()
+        if outcome in ("success", "super_success"):
+            star_gain = 2 if outcome == "super_success" else 1
+            base.star = min(req.star + star_gain, 6)  # 슈퍼 성공(+2)이 최대 성급을 넘지 않도록 상한
 
-        if was_equipped:
-            _select_replacement_equipped_character(
-                db,
-                locked_user,
-                selected_ids,
+            for material in materials:
+                db.delete(material)
+
+            consumed_count = len(materials)
+            result_star = base.star
+            message = (
+                f"슈퍼 성공! {base.name}이(가) ★{result_star}이 되었습니다."
+                if outcome == "super_success"
+                else f"강화 성공! {base.name}이(가) ★{result_star}이 되었습니다."
             )
 
-        consumed_count = len(selected)
-        result_star = None
-        message = (
-            f"강화에 실패하여 {req.character_name} ★{req.star} "
-            f"캐릭터 {consumed_count}장이 파괴되었습니다."
-        )
+            # "강승유의 마우스피스"를 이번에 함께 썼다면, 이 카드의 "다음" 강화에 효과를 예약해둔다.
+            mouthpiece = next((item for item in item_defs if item.effect_type == "next_enhance_buff"), None)
+            if mouthpiece:
+                db.add(CharacterEnhanceBuff(
+                    character_id=base.id,
+                    destroy_delta=mouthpiece.effect_params.get("destroy_delta", 0),
+                    maintain_delta=mouthpiece.effect_params.get("maintain_delta", 0),
+                ))
 
-    # 강화 아이템은 결과(성공/유지/파괴)와 무관하게, 사용한 시점에 소모된다.
+        elif outcome == "maintain":
+            for material in materials:
+                db.delete(material)
+
+            consumed_count = len(materials)
+            result_star = base.star
+            message = (
+                f"강화 수치가 유지되었습니다. "
+                f"{base.name}은(는) ★{result_star} 상태로 남았습니다."
+            )
+
+        else:
+            was_equipped = any(c.is_equipped == 1 for c in selected)
+
+            if locked_user.pvp_defense_front_id in selected_ids:
+                locked_user.pvp_defense_front_id = None
+            if locked_user.pvp_defense_back_id in selected_ids:
+                locked_user.pvp_defense_back_id = None
+
+            for character in selected:
+                character.is_equipped = 0
+                db.delete(character)
+
+            db.flush()
+
+            if was_equipped:
+                _select_replacement_equipped_character(
+                    db,
+                    locked_user,
+                    selected_ids,
+                )
+
+            consumed_count = len(selected)
+            result_star = None
+            message = (
+                f"강화에 실패하여 {req.character_name} ★{req.star} "
+                f"캐릭터 {consumed_count}장이 파괴되었습니다."
+            )
+
+    # 강화 아이템은 결과와 무관하게, 사용한 시점에 소모된다.
     for user_item in selected_user_items:
         user_item.quantity -= 1
         if user_item.quantity <= 0:
@@ -498,8 +632,9 @@ def enhance_character(
 
     db.add(ActivityLog(user_id=locked_user.id, activity_type="character_enhance"))  # 퀘스트("캐릭터 강화 시도") 판정용
 
-    # 도전과제("강화 성공/파괴 누적", "아이템 사용 누적") 판정용.
-    if outcome == "success":
+    # 도전과제("강화 성공/파괴 누적", "아이템 사용 누적") 판정용. 슈퍼 성공도 성공으로 취급한다.
+    # 마법 영약의 dust_success/dust_fail은 기존 성공/파괴와 성격이 달라 이 집계에는 포함하지 않는다.
+    if outcome in ("success", "super_success"):
         db.add(ActivityLog(user_id=locked_user.id, activity_type="character_enhance_success"))
     elif outcome == "destroy":
         db.add(ActivityLog(user_id=locked_user.id, activity_type="character_enhance_destroy"))
@@ -509,7 +644,7 @@ def enhance_character(
     # 오페라 하우스 + 독서대를 "모두" 쓴 강화 성공을 캐릭터별로 기록한다.
     # ActivityLog에는 params 컬럼이 없어서 대상 캐릭터 이름을 activity_type 문자열에 함께 박는다.
     used_item_names = {item.name for item in item_defs}
-    if outcome == "success" and {"윤영준의 오페라 하우스", "송주헌의 독서대"} <= used_item_names:
+    if outcome in ("success", "super_success") and {"윤영준의 오페라 하우스", "송주헌의 독서대"} <= used_item_names:
         db.add(ActivityLog(
             user_id=locked_user.id,
             activity_type=f"enh_evt_01:{req.character_name}",

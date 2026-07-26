@@ -90,7 +90,23 @@
             </div>
 
             <div class="enhancement-rule-panel">
-                <div class="enhancement-rule-row">
+                <div class="enhancement-rule-row" id="enhancement-dust-rate-row" hidden>
+                    <span>먼지 생성 확률</span>
+                    <strong
+                        class="success"
+                        id="enhancement-dust-rate"
+                    >-</strong>
+                </div>
+
+                <div class="enhancement-rule-row" id="enhancement-super-success-row" hidden>
+                    <span>슈퍼 성공</span>
+                    <strong
+                        class="success"
+                        id="enhancement-super-success-rate"
+                    >-</strong>
+                </div>
+
+                <div class="enhancement-rule-row" id="enhancement-success-row">
                     <span>성공</span>
                     <strong
                         class="success"
@@ -98,7 +114,7 @@
                     >-</strong>
                 </div>
 
-                <div class="enhancement-rule-row">
+                <div class="enhancement-rule-row" id="enhancement-maintain-row">
                     <span>유지</span>
                     <strong
                         class="maintain"
@@ -106,7 +122,7 @@
                     >-</strong>
                 </div>
 
-                <div class="enhancement-rule-row">
+                <div class="enhancement-rule-row" id="enhancement-destroy-row">
                     <span>파괴</span>
                     <strong
                         class="destroy"
