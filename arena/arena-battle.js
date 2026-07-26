@@ -1219,17 +1219,23 @@
         requestAnimationFrame(frame);
     }
 
+    // 임소정 전기의 발사 시작점
+    // fx(오른쪽일수록 값이 큼)/fy(아래쪽일수록 값이 큼)
+    const ELECTRIC_ORIGIN_BASIC = { fx: 0.9, fy: 0.27 };
+    const ELECTRIC_ORIGIN_SKILL = { fx: 0.9, fy: 0.28 };
+
     // 임소정 전용: 캐스터-대상을 잠깐 잇는 전기(이동하는 점이 아니라, 두 위치 사이를 잇는 막대를 회전시켜 만든다).
     // 기본공격은 얇고 푸른색(electric-blue), 스킬은 더 두껍고 노란색(electric-yellow)으로 호출한다.
     // 전기는 사실상 즉발이라 onArrive는 아주 짧게만 대기한 뒤 부른다(null이면 안 부름 - 스킬처럼 이미
     // 피해를 즉시 반영해둔 경우).
-    function playElectricConnector(actorKey, targetKey, colorClass, radiusPx, onArrive) {
+    function playElectricConnector(actorKey, targetKey, colorClass, radiusPx, onArrive, origin) {
         const layer = document.getElementById("projectile-layer");
         const actorImg = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);
         const targetImg = document.querySelector(`[data-unit="${targetKey}"] .battle-unit-img`);
         if (!layer || !actorImg || !targetImg) { if (onArrive) onArrive(); return; }
 
-        const start = fieldRelativeCenter(actorImg);
+        const o = origin || ELECTRIC_ORIGIN_BASIC;
+        const start = imageContentPoint(actorImg, o.fx, o.fy);
         const end = fieldRelativeCenter(targetImg);
         const distance = Math.hypot(end.x - start.x, end.y - start.y);
         const angle = angleDeg(start, end);
@@ -1372,7 +1378,7 @@
         else if (style === "instant_flash") playInstantFlash(actorKey, targetKey, onArrive);
         else if (style === "text_particles") playTextParticles(actorKey, targetKey, onArrive);
         else if (style === "crayon") spawnCrayonProjectile(actorKey, targetKey, onArrive);
-        else if (style === "electric") playElectricConnector(actorKey, targetKey, "electric-blue", 5, onArrive);
+        else if (style === "electric") playElectricConnector(actorKey, targetKey, "electric-blue", 5, onArrive, ELECTRIC_ORIGIN_BASIC);
         else if (style === "book") spawnBookProjectile(actorKey, targetKey, onArrive);
         else if (style === "eye_laser") spawnEyeLaserBeam(actorKey, targetKey, units[actorKey]?.isType2 ? "type2" : "type1", onArrive);
         else spawnProjectile(actorKey, targetKey, onArrive);
@@ -2112,7 +2118,7 @@
                 const hit = event.detail.hits[0];
                 const targetKey = findHitKey(hit.target, hit.target_side);
                 if (targetKey) {
-                    playElectricConnector(actorKey, targetKey, "electric-yellow", 9, null);
+                    playElectricConnector(actorKey, targetKey, "electric-yellow", 9, null, ELECTRIC_ORIGIN_SKILL);
                     // 공격력 감소(디버프) = 파란색 오라 + 공격력 감소 아이콘(지속시간 동안)
                     flashEffectAura(targetKey, "debuff");
                     setStatusIcon(targetKey, "atk_down", {
