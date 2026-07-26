@@ -4,7 +4,7 @@
     const PARTIAL_URL = "enhancement/enhancement-partial.html";
     // API_BASE_URL은 shared/api-config.js가 이 스크립트보다 먼저 로드되어 전역으로 제공한다.
     const OUTFIT_IMAGE_BASE = `${API_BASE_URL}/static/outfits/`;
-    const OUTCOME_LABELS = { success: "성공", maintain: "유지", destroy: "파괴" };
+    const OUTCOME_LABELS = { success: "성공", maintain: "유지", destroy: "파괴", super_success: "슈퍼 성공" };
 
     const contentEl = document.getElementById("enhancement-content");
     const modalEl = document.getElementById("modal-enhancement");
@@ -95,6 +95,18 @@
             // 파괴가 확정이면 재료를 잃을 이유가 없으니, 카드 한 장만으로도 강화(=파괴)를 시도할 수 있다.
             return p.outcome === "destroy" ? `${base}, 1장으로 강화 가능` : base;
         }
+        if (item.effect_type === "super_success_shift") {
+            return `성공 ${Math.abs(p.success_delta || 0)}%p → 슈퍼 성공(2성치 강화)`;
+        }
+        if (item.effect_type === "material_substitute") {
+            return "강화 시 재료 카드 1장을 대신함";
+        }
+        if (item.effect_type === "next_enhance_buff") {
+            return `강화 성공 시, 그 카드의 다음 강화 파괴 ${Math.abs(p.destroy_delta || 0)}%p↓/유지 ${p.maintain_delta || 0}%p↑`;
+        }
+        if (item.effect_type === "dust_convert") {
+            return "성공/유지/파괴 확률이 사라지고 성급별 먼지 생성 확률로 대체됨. 다른 아이템과 함께 사용 불가";
+        }
         return "";
     }
 
@@ -123,6 +135,13 @@
         return { success: 0, maintain: 0, destroy: 0, [params.outcome]: 100, cost: rule.cost };
     }
 
+    function applySuperSuccessShift(rule, params) {
+        const result = { ...rule };
+        result.success = Math.max(0, (result.success || 0) + (params.success_delta || 0));
+        result.super_success = Math.max(0, (result.super_success || 0) + (params.super_success_delta || 0));
+        return result;
+    }
+
     // 지금 선택된 아이템 정의 목록. 확률 미리보기와 "카드 몇 장 필요한지" 계산이 둘 다 이걸 쓴다.
     function getSelectedItemDefs() {
         return myEnhancementItems.filter((item) => selectedItemIds.includes(item.item_id));
@@ -133,6 +152,16 @@
         return getSelectedItemDefs().some(
             (item) => item.effect_type === "force" && item.effect_params?.outcome === "destroy"
         );
+    }
+
+    // "먼지"를 지금 재료로 선택했는지 - 선택했으면 실제 카드가 한 장 덜 필요하다.
+    function hasMaterialSubstituteSelected() {
+        return getSelectedItemDefs().some((item) => item.effect_type === "material_substitute");
+    }
+
+    // "최재혁의 마법 영약"을 지금 선택했는지 - 선택했으면 성공/유지/파괴 표 자체가 다른 걸로 바뀐다.
+    function hasDustConvertSelected() {
+        return getSelectedItemDefs().some((item) => item.effect_type === "dust_convert");
     }
 
     function computePreviewRule(baseRule, items) {
@@ -150,6 +179,7 @@
             if (item.effect_type === "shift") result = applyShift(result, item.effect_params);
             else if (item.effect_type === "redistribute") result = applyRedistribute(result, item.effect_params);
             else if (item.effect_type === "force") result = applyForce(result, item.effect_params);
+            else if (item.effect_type === "super_success_shift") result = applySuperSuccessShift(result, item.effect_params);
         });
         return result;
     }
@@ -388,11 +418,17 @@
             "enhancement-current-count"
         ).textContent = `${group.count}장 보유`;
 
-        // "강 희의 파쇄기"를 지금 선택했으면 재료 없이 카드 1장만 있어도 되고, 아니면 기존 3장이 필요하다.
+        // "강 희의 파쇄기"를 지금 선택했으면 재료 없이 카드 1장만 있어도 되고, "먼지"를 선택했으면
+        // 카드가 한 장 덜 있어도 된다(마법 영약은 다른 아이템과 함께 못 쓰므로 항상 3장 그대로 필요하다).
         // (백엔드가 준 enhancement.required_copies는 "그 아이템을 어딘가 보유는 하고 있는지"에 대한
         // 힌트일 뿐이라, 실제 이번 시도에 뭘 선택했는지는 여기서 다시 계산해야 정확하다.)
         const shredderSelected = hasForceDestroySelected();
-        const requiredForThisAttempt = shredderSelected ? 1 : (enhancementData.required_copies || 3);
+        const dustSelected = hasMaterialSubstituteSelected();
+        const requiredForThisAttempt = shredderSelected
+            ? 1
+            : dustSelected
+                ? Math.max(1, (enhancementData.required_copies || 3) - 1)
+                : (enhancementData.required_copies || 3);
 
         document.getElementById(
             "enhancement-required-count"
@@ -401,10 +437,14 @@
                 ? "최대 성급"
                 : `같은 카드 ${requiredForThisAttempt}장 필요`;
 
-        // 선택된 아이템을 반영한 확률 미리보기
+        // 선택된 아이템을 반영한 확률 미리보기 (마법 영약은 성공/유지/파괴 표 자체가 다른 걸로 바뀐다)
         const selectedItemDefs = getSelectedItemDefs();
-        const previewRule = baseRule ? computePreviewRule(baseRule, selectedItemDefs) : null;
-        setRuleText(previewRule);
+        if (hasDustConvertSelected()) {
+            setDustRuleText(baseRule, selectedItemDefs.find((item) => item.effect_type === "dust_convert"));
+        } else {
+            const previewRule = baseRule ? computePreviewRule(baseRule, selectedItemDefs) : null;
+            setRuleText(previewRule);
+        }
         renderSelectedItemsSummary();
 
         const hasCopies = group.count >= requiredForThisAttempt;
@@ -434,6 +474,18 @@
     }
 
     function setRuleText(rule) {
+        document.getElementById("enhancement-dust-rate-row").hidden = true;
+        document.getElementById("enhancement-super-success-row").hidden = !(rule && rule.super_success);
+        document.getElementById("enhancement-success-row").hidden = false;
+        document.getElementById("enhancement-maintain-row").hidden = false;
+        document.getElementById("enhancement-destroy-row").hidden = false;
+
+        if (rule && rule.super_success) {
+            document.getElementById(
+                "enhancement-super-success-rate"
+            ).textContent = `${Math.round(rule.super_success)}%`;
+        }
+
         document.getElementById(
             "enhancement-success-rate"
         ).textContent = rule ? `${Math.round(rule.success)}%` : "-";
@@ -450,6 +502,25 @@
             "enhancement-cost"
         ).textContent = rule
             ? `${Number(rule.cost).toLocaleString()}G`
+            : "-";
+    }
+
+    // "최재혁의 마법 영약" 전용 - 성공/유지/파괴/슈퍼성공 행을 다 숨기고 먼지 생성 확률 한 줄만 보여준다.
+    function setDustRuleText(baseRule, dustItem) {
+        document.getElementById("enhancement-super-success-row").hidden = true;
+        document.getElementById("enhancement-success-row").hidden = true;
+        document.getElementById("enhancement-maintain-row").hidden = true;
+        document.getElementById("enhancement-destroy-row").hidden = true;
+
+        const dustRow = document.getElementById("enhancement-dust-rate-row");
+        dustRow.hidden = false;
+        const probability = dustItem?.effect_params?.[String(selectedCharacter?.star)] ?? 0;
+        document.getElementById("enhancement-dust-rate").textContent = `${probability}%`;
+
+        document.getElementById(
+            "enhancement-cost"
+        ).textContent = baseRule
+            ? `${Number(baseRule.cost).toLocaleString()}G`
             : "-";
     }
 
@@ -661,17 +732,36 @@
             "enhancement-result-emblem"
         );
 
+        // 새 outcome(super_success/dust_success/dust_fail)은 success/maintain 계열 스타일을 재사용한다
+        // (전용 CSS가 따로 없어도 "성공 계열"인지 "실패 계열"인지는 색으로 구분되게).
+        const OUTCOME_STYLE_CLASS = {
+            super_success: "success",
+            success: "success",
+            maintain: "maintain",
+            dust_success: "success",
+            dust_fail: "maintain",
+            destroy: "destroy",
+        };
         box.classList.remove("success", "maintain", "destroy");
-        box.classList.add(result.outcome || "destroy");
+        box.classList.add(OUTCOME_STYLE_CLASS[result.outcome] || "destroy");
 
         if (result.is_error) {
             title.textContent = "강화 불가";
             emblem.textContent = "!";
+        } else if (result.outcome === "super_success") {
+            title.textContent = "슈퍼 성공!";
+            emblem.textContent = "★★";
         } else if (result.outcome === "success") {
             title.textContent = "강화 성공!";
             emblem.textContent = "★";
         } else if (result.outcome === "maintain") {
             title.textContent = "강화 유지";
+            emblem.textContent = "◇";
+        } else if (result.outcome === "dust_success") {
+            title.textContent = "먼지 생성 성공!";
+            emblem.textContent = "✦";
+        } else if (result.outcome === "dust_fail") {
+            title.textContent = "먼지 생성 실패";
             emblem.textContent = "◇";
         } else {
             title.textContent = "강화 실패";
