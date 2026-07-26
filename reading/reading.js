@@ -140,10 +140,14 @@
     let handledEnd = false;
     let tickIntervalId = null;
 
+    // segmentStartMs/accumulatedMs는 Date.now()가 아니라 performance.now()(모노토닉 시계) 기준이다 -
+    // Date.now()는 기기의 날짜/시간 설정을 그대로 반영하므로, 세션 도중 사용자가 시스템 시간을 미래로
+    // 돌리면 그만큼 elapsed가 그대로 부풀려져서 독서시간을 조작할 수 있었다. performance.now()는
+    // 페이지가 로드된 시점 기준으로 실제 흐른 시간만 단조 증가하므로 시스템 시간 변경에 영향받지 않는다.
     function getElapsedMs() {
         if (!sessionStarted) return 0;
         if (isPaused) return accumulatedMs;
-        return accumulatedMs + (Date.now() - segmentStartMs);
+        return accumulatedMs + (performance.now() - segmentStartMs);
     }
 
     function getElapsedMinutes() {
@@ -153,10 +157,10 @@
     function togglePause() {
         if (!sessionStarted || handledEnd) return;
         if (isPaused) {
-            segmentStartMs = Date.now();
+            segmentStartMs = performance.now();
             isPaused = false;
         } else {
-            accumulatedMs += Date.now() - segmentStartMs;
+            accumulatedMs += performance.now() - segmentStartMs;
             isPaused = true;
         }
         document.getElementById("reading-pause-btn").textContent = isPaused ? "재개" : "일시정지";
@@ -258,7 +262,7 @@
     }
 
     function startSessionClock() {
-        segmentStartMs = Date.now();
+        segmentStartMs = performance.now();
         sessionStarted = true;
         document.getElementById("reading-pause-btn").hidden = false;
         document.getElementById("reading-end-btn").hidden = false;
@@ -266,7 +270,7 @@
         tickIntervalId = setInterval(tick, 1000);
 
         // 모의고사는 40~100분 넘게 도는데, 브라우저는 백그라운드 탭의 setInterval을 강하게 쓰로틀링한다
-        // (심하면 분 단위로 한 번만 실행) - getElapsedMs()는 Date.now() 기반이라 계산 자체는 항상 정확하지만,
+        // (심하면 분 단위로 한 번만 실행) - getElapsedMs()는 performance.now() 기반이라 계산 자체는 항상 정확하지만,
         // 그 계산을 "확인하는" tick() 호출이 늦게 오면 시간이 다 됐는데도 한참 뒤에야 자동종료가 걸린다.
         // 탭이 다시 보이는(포그라운드로 돌아오는) 순간 즉시 한 번 더 확인해서 이 지연을 없앤다.
         document.addEventListener("visibilitychange", () => {
