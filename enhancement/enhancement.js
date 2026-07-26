@@ -142,6 +142,14 @@
         return result;
     }
 
+    // "강승유의 마우스피스"로 이 카드에 예약돼 있던 효과 - 백엔드의 _apply_next_enhance_buff와 동일 계산.
+    function applyPendingBuff(rule, buff) {
+        const result = { ...rule };
+        result.destroy = Math.max(0, (result.destroy || 0) + (buff.destroy_delta || 0));
+        result.maintain = Math.max(0, (result.maintain || 0) + (buff.maintain_delta || 0));
+        return result;
+    }
+
     // 지금 선택된 아이템 정의 목록. 확률 미리보기와 "카드 몇 장 필요한지" 계산이 둘 다 이걸 쓴다.
     function getSelectedItemDefs() {
         return myEnhancementItems.filter((item) => selectedItemIds.includes(item.item_id));
@@ -437,13 +445,19 @@
                 ? "최대 성급"
                 : `같은 카드 ${requiredForThisAttempt}장 필요`;
 
-        // 선택된 아이템을 반영한 확률 미리보기 (마법 영약은 성공/유지/파괴 표 자체가 다른 걸로 바뀐다)
+        // 선택된 아이템을 반영한 확률 미리보기 (마법 영약은 성공/유지/파괴 표 자체가 다른 걸로 바뀐다).
+        // "강승유의 마우스피스"로 예약된 효과가 있으면(백엔드와 같은 순서로) 아이템 적용 다음에 마지막으로
+        // 얹는다 - 마법 영약 사용 중에는 적용 안 함(그쪽은 확률표 자체가 다른 것이라 무관).
         const selectedItemDefs = getSelectedItemDefs();
+        const pendingBuff = enhancement.pending_buff || null;
         if (hasDustConvertSelected()) {
             setDustRuleText(baseRule, selectedItemDefs.find((item) => item.effect_type === "dust_convert"));
         } else {
-            const previewRule = baseRule ? computePreviewRule(baseRule, selectedItemDefs) : null;
-            setRuleText(previewRule);
+            let previewRule = baseRule ? computePreviewRule(baseRule, selectedItemDefs) : null;
+            if (previewRule && pendingBuff) {
+                previewRule = applyPendingBuff(previewRule, pendingBuff);
+            }
+            setRuleText(previewRule, Boolean(pendingBuff));
         }
         renderSelectedItemsSummary();
 
@@ -487,7 +501,7 @@
         document.getElementById("enhancement-destroy-row").hidden = mode === "dust";
     }
 
-    function setRuleText(rule) {
+    function setRuleText(rule, hasPendingBuff = false) {
         setRulePanelMode(rule && rule.super_success ? "quad" : "normal");
 
         if (rule && rule.super_success) {
@@ -508,6 +522,11 @@
             "enhancement-destroy-rate"
         ).textContent = rule ? `${Math.round(rule.destroy)}%` : "-";
 
+        // "강승유의 마우스피스" 예약 효과가 이번 미리보기에 반영됐으면, 그 효과가 실제로 바꾼 두 수치
+        // (파괴/유지)만 금색으로 표시해서 "이건 마우스피스 때문에 바뀐 값"이라는 걸 알 수 있게 한다.
+        document.getElementById("enhancement-maintain-rate").classList.toggle("buffed", hasPendingBuff);
+        document.getElementById("enhancement-destroy-rate").classList.toggle("buffed", hasPendingBuff);
+
         document.getElementById(
             "enhancement-cost"
         ).textContent = rule
@@ -518,6 +537,8 @@
     // "최재혁의 마법 영약" 전용 - 성공/유지/파괴/슈퍼성공 행을 다 숨기고 먼지 생성 확률 한 줄만 보여준다.
     function setDustRuleText(baseRule, dustItem) {
         setRulePanelMode("dust");
+        document.getElementById("enhancement-maintain-rate").classList.remove("buffed");
+        document.getElementById("enhancement-destroy-rate").classList.remove("buffed");
 
         const probability = dustItem?.effect_params?.[String(selectedCharacter?.star)] ?? 0;
         document.getElementById("enhancement-dust-rate").textContent = `${probability}%`;
