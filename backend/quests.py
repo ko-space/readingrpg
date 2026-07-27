@@ -129,14 +129,11 @@ def log_login_activity(db: Session, user_id: int) -> None:
     if not exists:
         db.add(ActivityLog(user_id=user_id, activity_type="login"))
         db.commit()
-    _grant_patch_0724_mail_if_eligible(db, user_id)
     _grant_patch_0727_mail_if_eligible(db, user_id)
 
 
 
-# 일회성 이벤트: 7/27(KST) 당일에 접속한 유저에게만 우편으로 골드 지급(7.27 패치 보상). 위 7/24와
-# 완전히 같은 패턴 - 날짜가 지나면 조건이 항상 거짓이 되어 자연히 죽은 코드가 되므로, 이 상수 3개와
-# 함수, 위 호출 한 줄은 나중에 통째로 지워도 된다.
+# 일회성 이벤트: 7/27(KST) 
 PATCH_0727_MAIL_TITLE = "7.27 패치 보상입니다"
 PATCH_0727_MAIL_GOLD = 200
 PATCH_0727_DATE = "2026-07-27"
