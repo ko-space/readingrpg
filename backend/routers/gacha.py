@@ -32,32 +32,53 @@ RARITY_TIER_PROBABILITY = {"신화": 0.005, "전설": 0.01, "영웅": 0.09, "희
 # 시점이 아니라, 그 항목의 start_at이 전환 시점이다(재시작은 그냥 새 일정을 서버에 알려주는 것뿐).
 # 전환되는 순간 배너 이름/이미지/픽업 캐릭터 목록이 통째로 교체되고(이전 픽업은 제거, 누적 아님),
 # 모든 유저의 모집 포인트가 골드로 1:1 전환되어 0으로 초기화된다.
+#
+# characters의 각 항목에 "rate_up"(0~1, 그 등급이 걸렸을 때 이 캐릭터로 확정될 확률 - 생략하면 DB
+# 컬럼 기본값 0.5)을 같이 넣어두면 그 값이 DB(gacha_banner_pickups.rate_up)에 반영된다. DB에서
+# 직접 rate_up을 조정할 수도 있지만, 그러면 다음 픽업 전환 때 행이 통째로 교체되면서 초기화되므로
+# 특정 픽업의 확률을 계속 유지하고 싶으면 여기(코드)에 넣어두는 편이 안전하다. rate_up만 바뀌고
+# 캐릭터 구성 자체는 그대로면 "새 픽업 시작"으로 취급하지 않는다(포인트 골드 전환 없이 값만 갱신).
 PICKUP_SCHEDULE = [
     {
         "start_at": datetime(2025, 1, 1, 0, 0, tzinfo=KST),  # 과거 날짜 = 이미 활성화된 최초 픽업
         "banner_name": "픽업모집",
         "image_file": "pickup-banner.png",
-        "characters": [{"character_name": "송주헌", "point_cost": 20}],
+        "characters": [{"character_name": "송주헌", "point_cost": 20, "rate_up": 0.99}],
     },
     {
-        "start_at": datetime(2026, 7, 27, 21, 20, tzinfo=KST),  
+        "start_at": datetime(2026, 7, 27, 21, 20, tzinfo=KST),
         "banner_name": "픽업모집",
         "image_file": "pickup-banner-new.png",
-        "characters": [{"character_name": "이의진", "point_cost": 30}],
+        "characters": [{"character_name": "이의진", "point_cost": 30, "rate_up": 0.99}], 
     },
+    {
+        "start_at": datetime(2026, 8, 3, 21, 20, tzinfo=KST),
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner.png",
+        "characters": [{"character_name": "송주헌", "point_cost": 20, "rate_up": 0.99}],  
+    },    
 ]
 
 
-def _current_scheduled_pickup():
+def _to_utc_naive(dt: datetime) -> datetime:
+    # DB DateTime 컬럼은 시간대 없는 UTC 기준(datetime.utcnow() 관례)이라, KST-aware 값을 그 형태로 맞춘다.
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _current_and_next_pickup():
+    """지금 활성화돼야 할 픽업 일정과, 그 다음 픽업이 시작되는 시각(없으면 None - "기간 미정")을 같이 돌려준다."""
     now = datetime.now(KST)
-    candidates = [p for p in PICKUP_SCHEDULE if p["start_at"] <= now]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda p: p["start_at"])
+    passed = sorted((p for p in PICKUP_SCHEDULE if p["start_at"] <= now), key=lambda p: p["start_at"])
+    if not passed:
+        return None, None
+    current = passed[-1]
+    upcoming = sorted((p for p in PICKUP_SCHEDULE if p["start_at"] > current["start_at"]), key=lambda p: p["start_at"])
+    next_start_at = upcoming[0]["start_at"] if upcoming else None
+    return current, next_start_at
 
 
 def _sync_pickup_banner(db: Session):
-    scheduled = _current_scheduled_pickup()
+    scheduled, next_start_at = _current_and_next_pickup()
     if not scheduled:
         return
 
@@ -65,28 +86,49 @@ def _sync_pickup_banner(db: Session):
     if not banner:
         return
 
+    # 배너의 시작/종료 시각도 지금 활성화된 일정에 맞춰 항상 최신으로 맞춰둔다 - 로스터 변경 여부와
+    # 무관하다(예: 지금 픽업은 그대로인데 "다음" 픽업 일정이 새로 추가되면 end_date만 새로 생긴다).
+    new_start_date = _to_utc_naive(scheduled["start_at"])
+    new_end_date = _to_utc_naive(next_start_at) if next_start_at else None
+    dates_changed = banner.start_date != new_start_date or banner.end_date != new_end_date
+    if dates_changed:
+        banner.start_date = new_start_date
+        banner.end_date = new_end_date
+
     existing_rows = db.query(GachaBannerPickup).filter(GachaBannerPickup.banner_id == banner.id).all()
     existing_set = {(row.character_name, row.point_cost) for row in existing_rows}
     new_set = {(c["character_name"], c["point_cost"]) for c in scheduled["characters"]}
-    if existing_set == new_set and banner.name == scheduled["banner_name"]:
-        return
+    roster_changed = existing_set != new_set or banner.name != scheduled["banner_name"]
 
-    banner.name = scheduled["banner_name"]
-    banner.image_file = scheduled["image_file"]
-    for row in existing_rows:
-        db.delete(row)
-    for c in scheduled["characters"]:
-        db.add(GachaBannerPickup(
-            banner_id=banner.id,
-            character_name=c["character_name"],
-            point_cost=c["point_cost"],
-        ))
-    db.commit()
+    if roster_changed:
+        # 새 픽업이 시작됨 - 배너 정보와 픽업 캐릭터 목록을 통째로 교체(이전 픽업 캐릭터는 제거).
+        banner.name = scheduled["banner_name"]
+        banner.image_file = scheduled["image_file"]
+        for row in existing_rows:
+            db.delete(row)
+        for c in scheduled["characters"]:
+            kwargs = {"banner_id": banner.id, "character_name": c["character_name"], "point_cost": c["point_cost"]}
+            if "rate_up" in c:
+                kwargs["rate_up"] = c["rate_up"]
+            db.add(GachaBannerPickup(**kwargs))
+        db.commit()
 
-    for u in db.query(User).all():
-        u.gold += u.gacha_points
-        u.gacha_points = 0
-    db.commit()
+        for u in db.query(User).all():
+            u.gold += u.gacha_points
+            u.gacha_points = 0
+        db.commit()
+    else:
+        # 캐릭터 구성은 그대로고 rate_up만 바뀌었을 수 있다 - "새 픽업"이 아니라 지금 픽업의 세부
+        # 조정이므로 포인트 골드 전환 없이 값만 맞춘다.
+        rate_by_name = {c["character_name"]: c["rate_up"] for c in scheduled["characters"] if "rate_up" in c}
+        row_changed = False
+        for row in existing_rows:
+            target_rate = rate_by_name.get(row.character_name)
+            if target_rate is not None and row.rate_up != target_rate:
+                row.rate_up = target_rate
+                row_changed = True
+        if row_changed or dates_changed:
+            db.commit()
 
 
 def _get_active_pickup_rates(db: Session, banner_id: int | None) -> dict:
