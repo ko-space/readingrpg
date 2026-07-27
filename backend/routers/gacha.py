@@ -1,5 +1,6 @@
 import random
 import json
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from database import get_db
@@ -19,10 +20,73 @@ GACHA_POINTS_PER_PULL = 1   # 모집 1회당 적립되는 모집 포인트 (성�
 DEFAULT_PICKUP_RATE_UP = 0.5  # gacha_banner_pickups.rate_up이 비어있을 때 쓰는 기본값
 RARITY_START_STAR = {"신화": 5, "전설": 4, "영웅": 3, "희귀": 2, "일반": 1}  # 모집 시 시작 성(星)
 ADMIN_USER_ID = 1  # ranking.py/pvp.py와 동일한 관리자 계정 - is_hidden 캐릭터(예: 이의진)도 테스트로 뽑을 수 있는 예외
+KST = timezone(timedelta(hours=9))
 
 # 등급별 확률(각 등급의 몫, 합이 1). pull_character의 실제 등급 추첨과 확률 안내 모달(/gacha/rates)이
 # 이 상수 하나만 보고 계산하게 해서, 둘이 서로 다른 숫자를 보여주는 일이 없게 한다.
 RARITY_TIER_PROBABILITY = {"신화": 0.005, "전설": 0.01, "영웅": 0.09, "희귀": 0.30, "일반": 0.595}
+
+# 픽업 일정(한국시간). 각 항목의 start_at이 되면 자동으로 그 픽업으로 전환된다 - 별도 스케줄러 없이,
+# 그 시각이 지난 뒤 아무 유저나 가챠 관련 요청을 처음 보낼 때(_sync_pickup_banner) 반영된다. 새 픽업을
+# 예약하려면 이 리스트 끝에 항목을 하나 추가하고 푸시 + 서버 재시작하면 된다 - 재시작 시점이 전환
+# 시점이 아니라, 그 항목의 start_at이 전환 시점이다(재시작은 그냥 새 일정을 서버에 알려주는 것뿐).
+# 전환되는 순간 배너 이름/이미지/픽업 캐릭터 목록이 통째로 교체되고(이전 픽업은 제거, 누적 아님),
+# 모든 유저의 모집 포인트가 골드로 1:1 전환되어 0으로 초기화된다.
+PICKUP_SCHEDULE = [
+    {
+        "start_at": datetime(2025, 1, 1, 0, 0, tzinfo=KST),  # 과거 날짜 = 이미 활성화된 최초 픽업
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner.png",
+        "characters": [{"character_name": "송주헌", "point_cost": 20}],
+    },
+    {
+        "start_at": datetime(2026, 7, 27, 21, 20, tzinfo=KST),  
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner-new.png",
+        "characters": [{"character_name": "이의진", "point_cost": 30}],
+    },
+]
+
+
+def _current_scheduled_pickup():
+    now = datetime.now(KST)
+    candidates = [p for p in PICKUP_SCHEDULE if p["start_at"] <= now]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda p: p["start_at"])
+
+
+def _sync_pickup_banner(db: Session):
+    scheduled = _current_scheduled_pickup()
+    if not scheduled:
+        return
+
+    banner = db.query(GachaBanner).filter(GachaBanner.banner_type == "pickup").first()
+    if not banner:
+        return
+
+    existing_rows = db.query(GachaBannerPickup).filter(GachaBannerPickup.banner_id == banner.id).all()
+    existing_set = {(row.character_name, row.point_cost) for row in existing_rows}
+    new_set = {(c["character_name"], c["point_cost"]) for c in scheduled["characters"]}
+    if existing_set == new_set and banner.name == scheduled["banner_name"]:
+        return
+
+    banner.name = scheduled["banner_name"]
+    banner.image_file = scheduled["image_file"]
+    for row in existing_rows:
+        db.delete(row)
+    for c in scheduled["characters"]:
+        db.add(GachaBannerPickup(
+            banner_id=banner.id,
+            character_name=c["character_name"],
+            point_cost=c["point_cost"],
+        ))
+    db.commit()
+
+    for u in db.query(User).all():
+        u.gold += u.gacha_points
+        u.gacha_points = 0
+    db.commit()
 
 
 def _get_active_pickup_rates(db: Session, banner_id: int | None) -> dict:
@@ -72,6 +136,8 @@ def pull_character(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    _sync_pickup_banner(db)
+
     if user.gold < GACHA_COST:
         raise HTTPException(status_code=400, detail="골드가 부족합니다.")
 
@@ -169,6 +235,7 @@ def pull_character(
 @router.get("/banners")
 def get_banners(db: Session = Depends(get_db)):
     """지금 활성화된 가챠 배너들과, 각 배너의 픽업 캐릭터/필요 포인트/사진 정보를 돌려준다."""
+    _sync_pickup_banner(db)
     banners = db.query(GachaBanner).filter(GachaBanner.is_active == True).all()
 
     result = []
@@ -206,6 +273,7 @@ def get_gacha_rates(banner_id: int | None = None, db: Session = Depends(get_db))
     banner_id가 활성 픽업 배너면 그 배너의 확률업이 반영된 실제 수치를, 아니면(없거나 상시 배너면)
     등급 내 완전 균등 확률을 돌려준다. pull_character와 완전히 같은 확률 모델
     (RARITY_TIER_PROBABILITY + _pick_character_with_pickup의 순차 시도 규칙)을 그대로 계산에 반영한다."""
+    _sync_pickup_banner(db)
     active_pickup_rates = _get_active_pickup_rates(db, banner_id)
 
     rarities = []
@@ -266,6 +334,7 @@ def select_pickup_character(
     user: User = Depends(get_current_user),
 ):
     """모집 포인트를 소모해서 픽업 캐릭터를 직접 획득한다 (뽑기가 아니라 확정 지급)."""
+    _sync_pickup_banner(db)
     pickup = db.query(GachaBannerPickup).filter(GachaBannerPickup.id == req.pickup_id).first()
     if not pickup:
         raise HTTPException(status_code=404, detail="존재하지 않는 픽업 항목입니다.")

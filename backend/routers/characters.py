@@ -194,13 +194,14 @@ def get_enhancement_inventory(
 
     for row in rows:
         rule = ENHANCEMENT_RULES.get(row["star"])
-        # "강승유의 마우스피스"로 이 그룹의 대표 카드(row["character_id"] - _build_inventory_rows가
-        # 고른 것과 동일한 기준)에 예약된 효과가 있으면 미리 알려준다. 실제 강화 시점의 기준 카드
-        # 선택(_choose_enhancement_cards)과 100% 같지는 않을 수 있지만(장착/PVP 편성 카드가 우선인
-        # 규칙이 대표 카드 선정과 유사해서), 화면 미리보기용으로는 충분하다.
+        # "강승유의 마우스피스"로 이 유저의 "캐릭터명 + 성급" 그룹에 예약된 효과가 있으면 미리 알려준다.
         pending_buff = (
             db.query(CharacterEnhanceBuff)
-            .filter(CharacterEnhanceBuff.character_id == row["character_id"])
+            .filter(
+                CharacterEnhanceBuff.user_id == user.id,
+                CharacterEnhanceBuff.character_name == row["name"],
+                CharacterEnhanceBuff.star == row["star"],
+            )
             .first()
         )
         row["enhancement"] = {
@@ -338,7 +339,7 @@ def _apply_super_success_shift(rule: dict, params: dict) -> dict:
 
 
 def _apply_next_enhance_buff(rule: dict, buff: CharacterEnhanceBuff) -> dict:
-    """"강승유의 마우스피스"로 이 카드에 예약돼 있던 1회성 효과를 이번 판정에 반영한다."""
+    """"강승유의 마우스피스"로 이 캐릭터+성급 그룹에 예약돼 있던 1회성 효과를 이번 판정에 반영한다."""
     result = dict(rule)
     result["destroy"] = max(0, result.get("destroy", 0) + (buff.destroy_delta or 0))
     result["maintain"] = max(0, result.get("maintain", 0) + (buff.maintain_delta or 0))
@@ -543,11 +544,17 @@ def enhance_character(
         # ── 일반 강화(슈퍼 성공/성공/유지/파괴) ──
         rule = _apply_enhancement_items(base_rule, item_defs)
 
-        # "강승유의 마우스피스"로 이 카드에 예약돼 있던 효과가 있으면 이번 판정에 1회 반영하고 지운다
-        # (이번 시도에서 쓴 아이템과 무관하게, 지난 강화에서 예약된 게 있으면 항상 먼저 적용된다).
+        # "강승유의 마우스피스"로 이 "캐릭터명 + 성급" 그룹에 예약돼 있던 효과가 있으면 이번 판정에
+        # 1회 반영하고 지운다(이번 시도에서 쓴 아이템과 무관하게, 지난 강화에서 예약된 게 있으면 항상
+        # 먼저 적용된다). 카드 단위(base.id)가 아니라 그룹 단위라서, 재료 선택 우선순위에 따라 실제
+        # 기준 카드로 어느 물리 카드가 뽑히든 항상 적용된다.
         pending_buff = (
             db.query(CharacterEnhanceBuff)
-            .filter(CharacterEnhanceBuff.character_id == base.id)
+            .filter(
+                CharacterEnhanceBuff.user_id == locked_user.id,
+                CharacterEnhanceBuff.character_name == req.character_name,
+                CharacterEnhanceBuff.star == req.star,
+            )
             .with_for_update()
             .first()
         )
@@ -589,14 +596,31 @@ def enhance_character(
                 else f"강화 성공! {base.name}이(가) ★{result_star}이 되었습니다."
             )
 
-            # "강승유의 마우스피스"를 이번에 함께 썼다면, 이 카드의 "다음" 강화에 효과를 예약해둔다.
+            # "강승유의 마우스피스"를 이번에 함께 썼다면, 이 "캐릭터명 + (오른) 성급" 그룹의 다음
+            # 강화에 효과를 예약해둔다 - 카드 단위가 아니라 그룹 단위라, 그 성급의 어떤 카드로 다음
+            # 강화를 시도하든 적용된다.
             mouthpiece = next((item for item in item_defs if item.effect_type == "next_enhance_buff"), None)
             if mouthpiece:
-                db.add(CharacterEnhanceBuff(
-                    character_id=base.id,
-                    destroy_delta=mouthpiece.effect_params.get("destroy_delta", 0),
-                    maintain_delta=mouthpiece.effect_params.get("maintain_delta", 0),
-                ))
+                existing_buff = (
+                    db.query(CharacterEnhanceBuff)
+                    .filter(
+                        CharacterEnhanceBuff.user_id == locked_user.id,
+                        CharacterEnhanceBuff.character_name == base.name,
+                        CharacterEnhanceBuff.star == base.star,
+                    )
+                    .first()
+                )
+                if existing_buff:
+                    existing_buff.destroy_delta = mouthpiece.effect_params.get("destroy_delta", 0)
+                    existing_buff.maintain_delta = mouthpiece.effect_params.get("maintain_delta", 0)
+                else:
+                    db.add(CharacterEnhanceBuff(
+                        user_id=locked_user.id,
+                        character_name=base.name,
+                        star=base.star,
+                        destroy_delta=mouthpiece.effect_params.get("destroy_delta", 0),
+                        maintain_delta=mouthpiece.effect_params.get("maintain_delta", 0),
+                    ))
 
         elif outcome == "maintain":
             for material in materials:
