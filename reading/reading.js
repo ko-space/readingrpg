@@ -140,6 +140,7 @@
     let handledEnd = false;
     let tickIntervalId = null;
     let cutoffPerfMs = Infinity; // 이 performance.now() 값을 넘기면 더 이상 경과시간이 안 쌓인다(아래 참고)
+    let hiddenSinceWallMs = null; // 탭/화면이 안 보이게 된 시점의 Date.now() - 다시 보일 때 이 구간만 보정(아래 startSessionClock 참고)
 
     // segmentStartMs/accumulatedMs는 Date.now()가 아니라 performance.now()(모노토닉 시계) 기준이다 -
     // Date.now()는 기기의 날짜/시간 설정을 그대로 반영하므로, 세션 도중 사용자가 시스템 시간을 미래로
@@ -297,8 +298,24 @@
         // (심하면 분 단위로 한 번만 실행) - getElapsedMs()는 performance.now() 기반이라 계산 자체는 항상 정확하지만,
         // 그 계산을 "확인하는" tick() 호출이 늦게 오면 시간이 다 됐는데도 한참 뒤에야 자동종료가 걸린다.
         // 탭이 다시 보이는(포그라운드로 돌아오는) 순간 즉시 한 번 더 확인해서 이 지연을 없앤다.
+        //
+        // 아이패드 등 일부 모바일 브라우저는 화면이 꺼지면(document.hidden = true) 탭 자체를 완전히
+        // 멈춰버려서, performance.now()가 꺼져 있던 시간만큼 정확히 전진하지 않는 경우가 있다(포그라운드
+        // 상태에서는 정상 동작). 그래서 "화면이 꺼져 있던 구간"의 길이만 Date.now() 델타로 따로 재서
+        // segmentStartMs를 그만큼 앞으로 당겨준다 - 다음 getElapsedMs() 계산에 이 구간이 자동으로
+        // 포함된다. 실제로 보고 있는 동안(포그라운드)은 여전히 performance.now()만 쓰므로, 화면을 끈
+        // 구간에 한해서만 Date.now()를 보조적으로 신뢰하는 셈이라 기기 시간 조작 방지 효과는 유지된다.
         document.addEventListener("visibilitychange", () => {
-            if (!document.hidden && sessionStarted && !handledEnd) tick();
+            if (document.hidden) {
+                hiddenSinceWallMs = Date.now();
+                return;
+            }
+            if (hiddenSinceWallMs != null && sessionStarted && !isPaused && !handledEnd) {
+                const hiddenMs = Math.max(0, Date.now() - hiddenSinceWallMs);
+                segmentStartMs -= hiddenMs;
+            }
+            hiddenSinceWallMs = null;
+            if (sessionStarted && !handledEnd) tick();
         });
     }
 
