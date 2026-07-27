@@ -141,6 +141,7 @@
     let tickIntervalId = null;
     let cutoffPerfMs = Infinity; // 이 performance.now() 값을 넘기면 더 이상 경과시간이 안 쌓인다(아래 참고)
     let hiddenSinceWallMs = null; // 탭/화면이 안 보이게 된 시점의 Date.now() - 다시 보일 때 이 구간만 보정(아래 startSessionClock 참고)
+    let hiddenSincePerfMs = null; // 같은 순간의 performance.now() - 벽시계와 비교해서 "실제로 모자란 만큼"만 계산하는 데 씀
 
     // segmentStartMs/accumulatedMs는 Date.now()가 아니라 performance.now()(모노토닉 시계) 기준이다 -
     // Date.now()는 기기의 날짜/시간 설정을 그대로 반영하므로, 세션 도중 사용자가 시스템 시간을 미래로
@@ -300,21 +301,28 @@
         // 탭이 다시 보이는(포그라운드로 돌아오는) 순간 즉시 한 번 더 확인해서 이 지연을 없앤다.
         //
         // 아이패드 등 일부 모바일 브라우저는 화면이 꺼지면(document.hidden = true) 탭 자체를 완전히
-        // 멈춰버려서, performance.now()가 꺼져 있던 시간만큼 정확히 전진하지 않는 경우가 있다(포그라운드
-        // 상태에서는 정상 동작). 그래서 "화면이 꺼져 있던 구간"의 길이만 Date.now() 델타로 따로 재서
-        // segmentStartMs를 그만큼 앞으로 당겨준다 - 다음 getElapsedMs() 계산에 이 구간이 자동으로
-        // 포함된다. 실제로 보고 있는 동안(포그라운드)은 여전히 performance.now()만 쓰므로, 화면을 끈
-        // 구간에 한해서만 Date.now()를 보조적으로 신뢰하는 셈이라 기기 시간 조작 방지 효과는 유지된다.
+        // 멈춰버려서, performance.now()가 꺼져 있던 시간만큼 정확히 전진하지 않는 경우가 있다(단순
+        // 탭 전환처럼 실제로는 안 멈추는 경우도 많다 - 그럴 땐 performance.now()가 이미 정확하다).
+        // 그래서 숨겨진 구간의 두 시계(Date.now() 벽시계, performance.now())를 같이 재서, performance.now()가
+        // "실제로 모자란 만큼"(deficit)만 segmentStartMs에 보정해 넣는다 - 이미 정상적으로 흘렀으면
+        // deficit이 0이라 아무것도 더해지지 않는다(이걸 안 하고 무조건 벽시계 구간을 통째로 더하면,
+        // performance.now()가 실제로는 안 멈췄던 경우에 시간이 두 번 반영돼 카운트가 빨리 가버린다).
+        // 실제로 보고 있는 동안(포그라운드)은 여전히 performance.now()만 쓰므로 기기 시간 조작 방지
+        // 효과는 유지된다.
         document.addEventListener("visibilitychange", () => {
             if (document.hidden) {
                 hiddenSinceWallMs = Date.now();
+                hiddenSincePerfMs = performance.now();
                 return;
             }
             if (hiddenSinceWallMs != null && sessionStarted && !isPaused && !handledEnd) {
-                const hiddenMs = Math.max(0, Date.now() - hiddenSinceWallMs);
-                segmentStartMs -= hiddenMs;
+                const wallElapsed = Math.max(0, Date.now() - hiddenSinceWallMs);
+                const perfElapsed = Math.max(0, performance.now() - hiddenSincePerfMs);
+                const deficit = wallElapsed - perfElapsed;
+                if (deficit > 0) segmentStartMs -= deficit;
             }
             hiddenSinceWallMs = null;
+            hiddenSincePerfMs = null;
             if (sessionStarted && !handledEnd) tick();
         });
     }
