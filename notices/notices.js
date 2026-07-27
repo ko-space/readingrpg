@@ -22,6 +22,18 @@
             .replaceAll("'", "&#039;");
     }
 
+    // 공지 본문 안에 [[red]]...[[/red]]로 감싼 구간만 빨간 글씨로 강조한다(seed.py의 NOTICES가 쓰는
+    // 아주 단순한 마커 - 그 외 마크업은 없음). 마커가 아닌 부분은 전부 escapeHtml을 거치므로 안전하다.
+    function renderNoticeBody(text) {
+        const segments = String(text ?? "").split(/(\[\[red\]\][\s\S]*?\[\[\/red\]\])/g);
+        return segments.map((segment) => {
+            const match = segment.match(/^\[\[red\]\]([\s\S]*)\[\[\/red\]\]$/);
+            return match
+                ? `<span class="notice-red">${escapeHtml(match[1])}</span>`
+                : escapeHtml(segment);
+        }).join("");
+    }
+
     async function ensureLoaded() {
         if (loaded || loading || !content) return;
         loading = true;
@@ -92,7 +104,7 @@
             img.hidden = true;
         }
         title.textContent = notice.title;
-        body.textContent = notice.body;
+        body.innerHTML = renderNoticeBody(notice.body);
         overlay.hidden = false;
 
         if (!notice.read) {

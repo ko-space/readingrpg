@@ -1,8 +1,7 @@
 import json
-import os
 from database import SessionLocal
 from models import (
-    Item, Region, Achievement, GachaBanner, GachaBannerPickup, Quest, UserQuestClaim,
+    Item, Region, Achievement, GachaBanner, Quest, UserQuestClaim,
     UserItem, UserItemPurchase, UserDailyItemPurchase, Notice, Challenge,
 )
 from character_visibility import is_hidden_override
@@ -12,10 +11,6 @@ with open("characters.json", "r", encoding="utf-8") as f:
 
 RARITY_PRICE = {"일반": 100, "희귀": 300, "영웅": 700, "전설": 1500}
 SEASON_MULTIPLIER = {"기본": 1.0, "여름": 1.5, "겨울": 1.5}
-
-# 아직 기획 검증 중인 강화 아이템을 실유저에게는 안 보이게 숨기고 로컬에서만 켜서 테스트하기 위한 스위치.
-# 로컬 .env에 SHOW_TEST_ITEMS=1을 추가하면 켜진다 - 운영 서버 .env엔 이 값이 없으니 항상 꺼진 채로 배포된다.
-SHOW_TEST_ITEMS = os.getenv("SHOW_TEST_ITEMS") == "1"
 
 # 수영복 스킨은 일반 계절 의상과 달리 상점에 상시 진열되는 고가 스킨.
 # (구매 로직 자체는 열려 있지만, 착용 이펙트가 구현되기 전까지는 사실상 못 사게 가격을 높게 잡아둠)
@@ -152,7 +147,6 @@ def seed_enhancement_items():
                 "effect_type": "force",
                 "effect_params": {"outcome": "success"},
             },
-            # ── 아래는 기획 검증 중인 신규 아이템(SHOW_TEST_ITEMS로 상점 노출을 게이팅) ──
             {
                 "name": "최재혁의 마법 영약",
                 "source_character": "최재혁",
@@ -163,8 +157,7 @@ def seed_enhancement_items():
                 # 성공하면 재료 3장이 전부 소모되고 먼지 1개를 얻는다. 실패하면 아무 카드도 소모되지 않는다
                 # (골드와 아이템 자체만 소모). 다른 강화 아이템과 함께 쓸 수 없다(enhance_character에서 검증).
                 "effect_type": "dust_convert",
-                "effect_params": {"1": 75, "2": 50, "3": 25, "4": 10, "5": 5},
-                "is_shop_active": SHOW_TEST_ITEMS,
+                "effect_params": {"1": 5, "2": 10, "3": 25, "4": 50, "5": 75},
             },
             {
                 "name": "먼지",
@@ -188,7 +181,6 @@ def seed_enhancement_items():
                 # 두 종류(success/super_success)로 쪼갠다는 점이 달라서 별도 effect_type으로 둔다.
                 "effect_type": "super_success_shift",
                 "effect_params": {"success_delta": -5, "super_success_delta": 5},
-                "is_shop_active": SHOW_TEST_ITEMS,
             },
             {
                 "name": "강승유의 마우스피스",
@@ -200,7 +192,6 @@ def seed_enhancement_items():
                 # 1회 예약해둔다(CharacterEnhanceBuff 테이블). 이번 판정 자체에는 영향 없음.
                 "effect_type": "next_enhance_buff",
                 "effect_params": {"destroy_delta": -10, "maintain_delta": 10},
-                "is_shop_active": SHOW_TEST_ITEMS,
             },
         ]
 
@@ -1203,36 +1194,33 @@ def seed_quests():
 
 
 def seed_gacha_banners():
-    # 프론트(gacha-partial.html)에 이미 만들어둔 픽업모집/상시모집 두 배너를 그대로 반영
+    # 픽업모집/상시모집 두 배너 행 자체만 보장해둔다(최초 1회). 실제로 "지금 어떤 픽업이 활성 상태여야
+    # 하는지"는 날짜/시각 기반이라 routers/gacha.py의 PICKUP_SCHEDULE + 매 요청마다 확인하는
+    # _sync_pickup_banner가 담당하므로 여기서는 관여하지 않는다.
     db = SessionLocal()
     try:
-        if db.query(GachaBanner).count() == 0:
-            pickup = GachaBanner(
+        changed = False
+        if db.query(GachaBanner).filter(GachaBanner.banner_type == "pickup").first() is None:
+            db.add(GachaBanner(
                 name="픽업모집",
                 banner_type="pickup",
                 image_file="pickup-banner.png",
                 start_date=None,
                 end_date=None,
                 is_active=True,
-            )
-            standard = GachaBanner(
+            ))
+            changed = True
+        if db.query(GachaBanner).filter(GachaBanner.banner_type == "standard").first() is None:
+            db.add(GachaBanner(
                 name="상시모집",
                 banner_type="standard",
                 image_file="standard-banner.png",
                 start_date=None,
                 end_date=None,
                 is_active=True,
-            )
-            db.add(pickup)
-            db.add(standard)
-            db.commit()
-            db.refresh(pickup)
-
-            db.add(GachaBannerPickup(
-                banner_id=pickup.id,
-                character_name="송주헌",
-                point_cost=20,
             ))
+            changed = True
+        if changed:
             db.commit()
     finally:
         db.close()
@@ -1323,6 +1311,32 @@ NOTICES = [
         "body": (
             "\"나는 이의진이라고 해. 왜 눈을 뜨지 않냐고? 묻지마. 다쳐.\"\n\n"
             "연분홍색 크록스가 매력 포인트입니다. 그는 왜 눈을 뜨지 않는 걸까요?"
+        ),
+    },
+    {
+        "title": "7.27 패치노트",
+        "image_file": "assets/notices/7.27note.png",
+        "body": (
+            "안녕하세요, 독서RPG입니다.\n\n"
+            "7.27 패치내역을 알려드리겠습니다.\n"
+            "- 신규 인물 \"이의진\"\n"
+            "[[red]]2026.7.27 21:20부터 새로운 픽업 모집과 함께 이의진을 모집할 수 있습니다.[[/red]]\n"
+            "[[red]]모집포인트는 새로운 픽업이 시작되면 골드로 전환됩니다.[[/red]]\n"
+            "- 신규 아이템 4종 추가\n"
+            "    - 최재혁의 마법 영약\n"
+            "    - 먼지\n"
+            "    - 이의진의 연분홍색 크록스\n"
+            "    - 강승유의 마우스피스\n"
+            "- 아이템 가격 조정\n"
+            "- 스토리모드 티켓 버그 수정\n"
+            "- 기기 시간 설정을 변경하여 독서 시간을 임의로 늘릴 수 있었던 오류 수정\n"
+            "- 절전 모드 전환 시 독서 시간이 정상적으로 기록되지 않던 오류 수정\n"
+            "- 독서 시간 측정이 매일 오전 1시에 자동으로 종료되도록 변경\n"
+            "- 일일 최대 독서 시간을 18시간으로 조정\n"
+            "- 캐릭터 3종의 스킬 모션 및 이펙트 추가\n\n"
+            "[[red]]서비스 내 오류 또는 비정상적인 동작을 발견한 경우, 이를 고의로 악용하지 마시고 "
+            "개발진들에게 제보해 주시기 바랍니다. 오류를 인지한 상태에서 반복적으로 악용하거나 "
+            "부당한 이익을 취한 사실이 확인될 경우, 운영 정책에 따라 계정이 영구 이용 제한될 수 있습니다.[[/red]]"
         ),
     },
 ]

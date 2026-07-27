@@ -170,6 +170,11 @@
     white-space: pre-wrap;
 }
 
+.notice-detail-body .notice-red {
+    color: #ff5c5c;
+    font-weight: 700;
+}
+
 @media (max-width: 650px) {
     #modal-alerts .notices-modal-box {
         width: 96vw;

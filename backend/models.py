@@ -60,15 +60,24 @@ class Character(Base):
 
 
 class CharacterEnhanceBuff(Base):
-    """"강승유의 마우스피스"(next_enhance_buff) 전용 - 강화 성공 시 그 카드에 걸어두는 1회성 예약 효과.
-    Character에 컬럼을 바로 추가하면 이미 배포된 운영 DB(로컬과 같은 Supabase를 공유)에는 반영이 안 된다 -
-    create_all은 없는 테이블만 새로 만들 뿐 기존 테이블에 컬럼을 추가해주지 않는다. 그래서 새 테이블로
-    분리해서 서버 재시작만으로 자동 생성되게 한다. 카드(character_id)당 최대 1행 - 다음 강화 시도 때
-    한 번 읽혀서 규칙에 반영된 뒤 결과와 무관하게 곧바로 삭제된다(1회 소모)."""
-    __tablename__ = "character_enhance_buffs"
+    """"강승유의 마우스피스"(next_enhance_buff) 전용 - 강화 성공 시 그 유저의 "캐릭터명 + 성급" 그룹
+    전체에 걸어두는 1회성 예약 효과. 카드 한 장(character_id)에 거는 대신 (유저, 캐릭터명, 성급)
+    조합에 건다 - 다음 강화 때 기준 카드로 실제 어느 물리 카드가 뽑힐지는 재료 선택 우선순위
+    (_choose_enhancement_cards, 장착/PVP 편성 카드 우선)에 달려있어 예측할 수 없다. 카드 단위로
+    걸면 다른 카드가 기준이 됐을 때 적용이 안 되는 문제가 있어서, 그 성급의 어떤 카드가 기준이
+    되든 항상 적용되도록 그룹 단위로 바꿨다.
+    (예전엔 character_id 기준의 별도 테이블(character_enhance_buffs)이었는데, 컬럼 구조 자체가
+    바뀌어서 - Character처럼 기존 테이블에 컬럼만 추가하면 이미 배포된 운영 DB에는 반영이 안 되므로
+    - 새 테이블로 다시 분리했다. 옛 테이블은 그냥 안 쓰는 채로 남는다.)
+    (유저, 캐릭터명, 성급) 조합당 최대 1행 - 다음 강화 시도 때 한 번 읽혀서 규칙에 반영된 뒤 결과와
+    무관하게 곧바로 삭제된다(1회 소모)."""
+    __tablename__ = "character_group_enhance_buffs"
+    __table_args__ = (UniqueConstraint("user_id", "character_name", "star", name="uq_group_enhance_buff"),)
 
     id = Column(Integer, primary_key=True, index=True)
-    character_id = Column(Integer, ForeignKey("characters.id"), unique=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    character_name = Column(String, nullable=False)
+    star = Column(Integer, nullable=False)
     destroy_delta = Column(Float, default=0)   # 퍼센트포인트(음수 = 감소)
     maintain_delta = Column(Float, default=0)  # 퍼센트포인트(양수 = 증가)
 
