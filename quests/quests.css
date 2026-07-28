@@ -44,6 +44,7 @@
 }
 
 .quest-tab-btn {
+    position: relative;
     flex: 1;
     border: 1px solid rgba(201, 170, 90, .5);
     border-radius: 9px;
@@ -59,6 +60,31 @@
     background: linear-gradient(160deg, #f0dfa0, #c9964e);
     border-color: #ffe9a8;
     color: #2a2010;
+}
+
+/* 탭별 미수령 보상 개수 배지 - shared/lobby.css의 .icon-badge와 같은 톤 */
+.quest-tab-badge {
+    position: absolute;
+    top: -7px;
+    right: -6px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: #d64545;
+    border: 2px solid #232c52;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .3);
+}
+
+.quest-tab-badge[hidden] {
+    display: none;
 }
 
 /* ── 완료 요약 + 모두 받기 ── */

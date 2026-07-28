@@ -26,15 +26,25 @@
             .replaceAll("'", "&#039;");
     }
 
+    function updateTabBadge(period, count) {
+        const el = document.querySelector(`.quest-tab-badge[data-badge="${period}"]`);
+        if (!el) return;
+        el.textContent = count > 99 ? "99+" : count;
+        el.hidden = count === 0;
+    }
+
     function updateQuestBadge() {
+        const dailyClaimable = (questData.daily || []).filter((q) => q.claimable && !q.claimed).length;
+        const weeklyClaimable = (questData.weekly || []).filter((q) => q.claimable && !q.claimed).length;
+        const challengeClaimable = challengeData.filter((c) => c.claimable && !c.claimed).length;
+
+        updateTabBadge("daily", dailyClaimable);
+        updateTabBadge("weekly", weeklyClaimable);
+        updateTabBadge("challenge", challengeClaimable);
+
         const badge = document.getElementById("quest-badge");
         if (!badge) return;
-        const questClaimable = ["daily", "weekly"].reduce(
-            (sum, period) => sum + (questData[period] || []).filter((q) => q.claimable && !q.claimed).length,
-            0
-        );
-        const challengeClaimable = challengeData.filter((c) => c.claimable && !c.claimed).length;
-        const claimableCount = questClaimable + challengeClaimable;
+        const claimableCount = dailyClaimable + weeklyClaimable + challengeClaimable;
         badge.textContent = claimableCount;
         badge.hidden = claimableCount === 0;
     }
