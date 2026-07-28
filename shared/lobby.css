@@ -639,6 +639,13 @@ body, html {
 .daily-summary-item + .daily-summary-item {
     margin-top: 2px;
 }
+.daily-summary-total {
+    color: #4a3c2a;
+    font-weight: 900;
+    padding-bottom: 4px;
+    margin-bottom: 2px;
+    border-bottom: 1px solid rgba(74, 60, 42, .2);
+}
 
 /*=======icon image========*/
 .icon-img {

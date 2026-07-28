@@ -197,22 +197,26 @@ function renderProfile(data) {
 
 }
 
-// "N시간 M분 S초" 포맷 - 분 단위로만 기록되는 학습시간을 초 단위까지 일관되게 표시(초는 항상 0).
-function formatHms(totalMinutes) {
-    const totalSeconds = Math.max(0, Math.round(totalMinutes)) * 60;
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    return `${hours}시간 ${minutes}분 ${seconds}초`;
+// "N시간 M분" 포맷
+function formatHm(totalMinutes) {
+    const minutesRounded = Math.max(0, Math.round(totalMinutes));
+    const hours = Math.floor(minutesRounded / 60);
+    const minutes = minutesRounded % 60;
+    return `${hours}시간 ${minutes}분`;
 }
 
-// {"비문학": 45, "문학": 0} 같은 항목별 분을 "비문학: N시간 M분 S초" 줄들로 렌더링한다.
+// {"비문학": 45, "문학": 0} 같은 항목별 분을 "전체" 합계 줄 + "비문학: N시간 M분" 줄들로 렌더링한다.
 function renderDailySummaryList(listEl, breakdown) {
     listEl.innerHTML = '';
+    const total = Object.values(breakdown).reduce((sum, minutes) => sum + minutes, 0);
+    const totalRow = document.createElement('div');
+    totalRow.className = 'daily-summary-item daily-summary-total';
+    totalRow.innerHTML = `<span>전체</span><span>${formatHm(total)}</span>`;
+    listEl.appendChild(totalRow);
     Object.entries(breakdown).forEach(([label, minutes]) => {
         const row = document.createElement('div');
         row.className = 'daily-summary-item';
-        row.innerHTML = `<span>${label}</span><span>${formatHms(minutes)}</span>`;
+        row.innerHTML = `<span>${label}</span><span>${formatHm(minutes)}</span>`;
         listEl.appendChild(row);
     });
 }
