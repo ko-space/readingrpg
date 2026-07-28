@@ -54,18 +54,27 @@ async function fetchStoryState() {
 }
 
 // 체크포인트 저장. 서버는 scene_key/state를 그대로 저장/반환만 하고 해석하지 않으므로,
-// 원본의 saveCheckpoint처럼 실패해도(네트워크 문제 등) 진행을 막지 않는다. 다만 호출부(gateNextScene)가
-// "이전 씬 저장 -> 다음 씬 저장"을 순서 보장 없이 연달아 fire-and-forget으로 쏘면, 네트워크 타이밍에 따라
-// 나중에 보낸(다음 씬) 요청의 응답이 먼저 보낸(이전 씬) 요청보다 서버에 먼저 반영되고 이전 씬 저장이
-// 그 위에 덮어써질 수 있다 - 그래서 프라미스를 돌려줘서 호출부가 필요하면 순서를 강제할 수 있게 한다.
+// 원본의 saveCheckpoint처럼 실패해도(네트워크 문제 등) 진행을 막지 않는다. 게이트를 짧은 간격으로 연달아
+// 통과하면(예: 티켓 자동사용 ON으로 빠르게 클릭) 호출도 연달아 일어나는데, 서로 다른 fetch를 순서
+// 보장 없이 fire-and-forget으로 쏘면 네트워크 타이밍에 따라 나중에 보낸(다음 씬) 요청이 먼저 보낸
+// (이전 씬) 요청보다 서버에 먼저 반영되고 그 위에 이전 씬 저장이 덮어쓸 수 있다 - 그래서 직전 저장이
+// 끝난 뒤에만 다음 저장을 보내도록 프라미스 체인으로 순서를 강제한다.
+let checkpointSaveChain = Promise.resolve();
 function serverSaveCheckpoint(sceneKey) {
     const state = { choice1, affJuheon, affSeungyu, affYeongwoong, affGanghee };
     cachedProgress = { scene_key: sceneKey, state };
-    return fetch(`${API_BASE_URL}/story/progress`, {
-        method: "POST",
-        headers: authHeaders(true),
-        body: JSON.stringify({ story_id: STORY_ID, scene_key: sceneKey, state }),
-    }).catch(() => {});
+    // keepalive: 이 저장이 응답을 기다리는 동안 유저가 "나가기"로 홈에 갔다가(예: 티켓 구매) 돌아오는
+    // 등 페이지를 이동하면, keepalive 없이는 브라우저가 아직 안 끝난 이 요청을 그대로 중단시켜서 체크포인트가
+    // 저장되지 않은 채로 남는다 - "이어보기"가 예전 씬부터 재생되며 같은 장면이 반복되는 것처럼 보이는 원인이었다.
+    checkpointSaveChain = checkpointSaveChain.then(() =>
+        fetch(`${API_BASE_URL}/story/progress`, {
+            method: "POST",
+            headers: authHeaders(true),
+            body: JSON.stringify({ story_id: STORY_ID, scene_key: sceneKey, state }),
+            keepalive: true,
+        }).catch(() => {})
+    );
+    return checkpointSaveChain;
 }
 
 function serverClearProgress() {
@@ -73,6 +82,7 @@ function serverClearProgress() {
     fetch(`${API_BASE_URL}/story/progress?story_id=${encodeURIComponent(STORY_ID)}`, {
         method: "DELETE",
         headers: authHeaders(),
+        keepalive: true,
     }).catch(() => {});
 }
 
