@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, UserAchievement, PvpBattleLog
+from models import User, UserAchievement, PvpBattleLog, ReadingLog
 
 router = APIRouter(prefix="/ranking", tags=["ranking"])
 
@@ -13,7 +13,7 @@ ADMIN_USER_ID = 1  # 유저ID 1(닉네임 "관리자")은 모든 랭킹에서 �
 KST = timezone(timedelta(hours=9))
 
 CATEGORIES = {
-    "reading_lifetime",
+    "reading_weekly",
     "reading_daily",
     "gold",
     "titles",
@@ -48,15 +48,27 @@ def get_ranking(category: str, db: Session = Depends(get_db), limit: int = 50):
     if category not in CATEGORIES:
         raise HTTPException(status_code=404, detail=f"존재하지 않는 랭킹 종류입니다: {category}")
 
-    if category == "reading_lifetime":
-        users = (
-            db.query(User)
-            .filter(User.id != ADMIN_USER_ID)
-            .order_by(User.lifetime_reading_minutes.desc())
-            .limit(limit)
+    if category == "reading_weekly":
+        # 이번 주(KST, 월요일 0시 시작) 동안 쌓인 ReadingLog 합계로 매긴다 - quests.py의 주간 퀘스트와
+        # 같은 기준(월요일 시작)이라 "이번 주 읽은 시간" 감각이 서로 어긋나지 않는다.
+        today = _today_kst()
+        monday = today - timedelta(days=today.weekday())
+        start_utc = datetime(monday.year, monday.month, monday.day, tzinfo=KST).astimezone(timezone.utc).replace(tzinfo=None)
+        end_utc = start_utc + timedelta(days=7)
+        rows = (
+            db.query(ReadingLog.user_id, func.sum(ReadingLog.reading_minutes))
+            .filter(ReadingLog.created_at >= start_utc, ReadingLog.created_at < end_utc)
+            .group_by(ReadingLog.user_id)
             .all()
         )
-        return [_row(i + 1, u, u.lifetime_reading_minutes) for i, u in enumerate(users)]
+        minutes_by_user = {user_id: total or 0 for user_id, total in rows}
+        users = (
+            db.query(User)
+            .filter(User.id != ADMIN_USER_ID, User.id.in_(minutes_by_user.keys()))
+            .all()
+        )
+        ranked = sorted(users, key=lambda u: minutes_by_user[u.id], reverse=True)[:limit]
+        return [_row(i + 1, u, minutes_by_user[u.id]) for i, u in enumerate(ranked)]
 
     if category == "reading_daily":
         # daily_reading_minutes는 유저 본인이 요청을 보낼 때만 자정(KST) 리셋이 반영되는 지연 초기화 필드다.

@@ -15,7 +15,7 @@
     const GROUPS = {
         reading: [
             { key: "reading_daily", label: "오늘 독서시간", format: formatMinutes },
-            { key: "reading_lifetime", label: "누적 독서시간", format: formatMinutes },
+            { key: "reading_weekly", label: "주간 독서시간", format: formatMinutes },
         ],
         wealth: [
             { key: "gold", label: "보유 골드", format: (v) => `${v.toLocaleString()} G` },
