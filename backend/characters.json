@@ -21,12 +21,15 @@
         "5": 2.8,
         "6": 15
       },
-      "exp_subjects": ["수학", "기타"],
+      "exp_subjects": [
+        "수학",
+        "기타"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
-        "3": "해당 성급의 별도 효과가 없습니다.",
-        "4": "해당 성급의 별도 효과가 없습니다.",
+        "3": "자신의 공격력과 최대 체력 5% 증가, 적 전체의 공격력과 최대 체력 5% 감소",
+        "4": "자신의 공격력과 최대 체력 5% 증가, 적 전체의 공격력과 최대 체력 5% 감소",
         "5": "자신의 공격력과 최대 체력 5% 증가, 적 전체의 공격력과 최대 체력 5% 감소",
         "6": "자신의 공격력과 최대 체력 15% 증가, 적 전체의 공격력과 최대 체력 15% 감소"
       },
@@ -34,9 +37,9 @@
         "1": null,
         "2": null,
         "3": null,
-        "4": null,
-        "5": "카메라 업그레이드: 전투 종료 시까지 자신의 공격력 5% 증가, 최대 6회 중첩",
-        "6": "카메라 업그레이드: 전투 종료 시까지 자신의 공격력 15% 증가, 최대 10회 중첩"
+        "4": "카메라 업그레이드: 전투 종료 시까지 자신의 공격력 15% 증가, 최대 6회 중첩",
+        "5": "카메라 업그레이드: 전투 종료 시까지 자신의 공격력 15% 증가, 최대 6회 중첩",
+        "6": "카메라 업그레이드: 전투 종료 시까지 자신의 공격력 30% 증가, 최대 6회 중첩"
       },
       "trait_effects": {
         "1": null,
@@ -49,23 +52,50 @@
       "skill_mechanics": {
         "effect_type": "self_stack_buff",
         "params": {
-          "5": { "stat": "atk", "percent_per_stack": 5, "max_stacks": 6 },
-          "6": { "stat": "atk", "percent_per_stack": 15, "max_stacks": 10 }
+          "5": {
+            "stat": "atk",
+            "percent_per_stack": 15,
+            "max_stacks": 6
+          },
+          "6": {
+            "stat": "atk",
+            "percent_per_stack": 30,
+            "max_stacks": 6
+          },
+          "4": {
+            "stat": "atk",
+            "percent_per_stack": 15,
+            "max_stacks": 6
+          }
         }
       },
       "trait_mechanics": {
         "effect_type": "ally_synergy_remove_absorb",
         "partner_name": "윤영준",
         "params": {
-          "5": { "absorb_percent": 120 },
-          "6": { "absorb_percent": 150 }
+          "5": {
+            "absorb_percent": 120
+          },
+          "6": {
+            "absorb_percent": 150
+          }
         }
       },
       "star_mechanics": {
         "effect_type": "self_buff_enemy_debuff",
         "params": {
-          "5": { "percent": 5 },
-          "6": { "percent": 15 }
+          "3": {
+            "percent": 5
+          },
+          "4": {
+            "percent": 5
+          },
+          "5": {
+            "percent": 5
+          },
+          "6": {
+            "percent": 15
+          }
         }
       }
     },
@@ -90,12 +120,15 @@
         "5": 2.8,
         "6": 15
       },
-      "exp_subjects": ["국어", "영어"],
+      "exp_subjects": [
+        "국어",
+        "영어"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
-        "3": "해당 성급의 별도 효과가 없습니다.",
-        "4": "해당 성급의 별도 효과가 없습니다.",
+        "3": "공격력과 최대 체력 5% 증가, 적 전체의 공격력과 최대 체력 5% 감소",
+        "4": "공격력과 최대 체력 5% 증가, 적 전체의 공격력과 최대 체력 5% 감소",
         "5": "공격력과 최대 체력 5% 증가, 적 전체의 공격력과 최대 체력 5% 감소",
         "6": "공격력과 최대 체력 15% 증가, 적 전체의 공격력과 최대 체력 15% 감소"
       },
@@ -103,9 +136,9 @@
         "1": null,
         "2": null,
         "3": null,
-        "4": null,
+        "4": "3D Print: 전투 시작 시 자신의 최대 체력 15%와 공격력 40%를 지닌 복제체 1명 소환 (단, 복제체는 스킬 및 특성 사용 불가)",
         "5": "3D Print: 전투 시작 시 자신의 최대 체력 15%와 공격력 40%를 지닌 복제체 1명 소환 (단, 복제체는 스킬 및 특성 사용 불가)",
-        "6": "3D Print: 전투 시작 시 자신의 최대 체력 15%와 공격력 100%를 지닌 복제체 1명 소환 (단, 복제체는 스킬 및 특성 사용 불가)"
+        "6": "3D Print: 전투 시작 시 자신의 최대 체력 30%와 공격력 100%를 지닌 복제체 1명 소환 (단, 복제체는 스킬 및 특성 사용 불가)"
       },
       "trait_effects": {
         "1": null,
@@ -113,28 +146,52 @@
         "3": null,
         "4": null,
         "5": "대노: 강 희와 함께 편성 시 공격력 30% 증가",
-        "6": "대노: 강 희와 함께 사용 시 공격력 300% 증가"
+        "6": "대노: 강 희와 함께 사용 시 공격력 100% 증가"
       },
       "skill_mechanics": {
         "effect_type": "summon_clone",
         "params": {
-          "5": { "hp_percent": 15, "atk_percent": 40 },
-          "6": { "hp_percent": 15, "atk_percent": 100 }
+          "5": {
+            "hp_percent": 15,
+            "atk_percent": 40
+          },
+          "6": {
+            "hp_percent": 30,
+            "atk_percent": 100
+          },
+          "4": {
+            "hp_percent": 15,
+            "atk_percent": 40
+          }
         }
       },
       "trait_mechanics": {
         "effect_type": "ally_synergy_atk_buff",
         "partner_name": "강 희",
         "params": {
-          "5": { "atk_percent": 30 },
-          "6": { "atk_percent": 300 }
+          "5": {
+            "atk_percent": 30
+          },
+          "6": {
+            "atk_percent": 100
+          }
         }
       },
       "star_mechanics": {
         "effect_type": "self_buff_enemy_debuff",
         "params": {
-          "5": { "percent": 5 },
-          "6": { "percent": 15 }
+          "3": {
+            "percent": 5
+          },
+          "4": {
+            "percent": 5
+          },
+          "5": {
+            "percent": 5
+          },
+          "6": {
+            "percent": 15
+          }
         }
       }
     }
@@ -155,26 +212,30 @@
       "defense_type": "Parent",
       "exp_multiplier": {
         "1": null,
-        "2": null,
-        "3": null,
-        "4": 2.7,
+        "2": 2.0,
+        "3": 2.0,
+        "4": 2.0,
         "5": 2.7,
         "6": 14.5
       },
-      "exp_subjects": ["수학", "탐구", "기타"],
+      "exp_subjects": [
+        "수학",
+        "탐구",
+        "기타"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
-        "3": "해당 성급의 별도 효과가 없습니다.",
-        "4": "기본 공격 시 주 대상에게 공격력의 100%만큼 피해, 다른 적에게 각각 공격력의 25%만큼 피해, 공격력 5% 증가",
-        "5": "기본 공격 시 주 대상에게 공격력의 100%만큼 피해, 다른 적에게 각각 공격력의 25%만큼 피해, 공격력 5% 증가",
+        "3": "기본 공격 시 주 대상에게 공격력의 100%만큼 피해, 다른 적에게 각각 공격력의 25%만큼 피해, 자신의 공격력 5% 증가",
+        "4": "기본 공격 시 주 대상에게 공격력의 100%만큼 피해, 다른 적에게 각각 공격력의 25%만큼 피해, 자신의 공격력 5% 증가",
+        "5": "기본 공격 시 주 대상에게 공격력의 100%만큼 피해, 다른 적에게 각각 공격력의 25%만큼 피해, 자신의 공격력 5% 증가",
         "6": "기본 공격으로 적 전체 대상 피해, 공격력 15% 상승"
       },
       "skill_effects": {
         "1": null,
         "2": null,
         "3": null,
-        "4": null,
+        "4": "엑스칼리버: 공격 대상이 여성인 경우 1초 기절, 공격 속도 2초간 20% 증가",
         "5": "엑스칼리버: 공격 대상이 여성인 경우 1초 기절, 공격 속도 2초간 20% 증가",
         "6": "엑스칼리버: 공격 대상이 여성인 경우 3초 기절, 공격 속도 3초간 50% 증가"
       },
@@ -183,22 +244,60 @@
         "2": null,
         "3": null,
         "4": null,
-        "5": null,
-        "6": null
+        "5": "자애심: 직업:학생과 함께 사용 시 자신을 비롯한 아군 전원 최대 체력 20% 상승",
+        "6": "자애심: 직업:학생과 함께 사용 시 자신을 비롯한 아군 전원 최대 체력 50% 상승"
       },
       "skill_mechanics": {
         "effect_type": "conditional_target_debuff",
         "params": {
-          "5": { "condition": "target_gender_female", "stun_seconds": 1, "haste_percent": 20, "haste_seconds": 2 },
-          "6": { "condition": "target_gender_female", "stun_seconds": 3, "haste_percent": 50, "haste_seconds": 3 }
+          "5": {
+            "condition": "target_gender_female",
+            "stun_seconds": 1,
+            "haste_percent": 20,
+            "haste_seconds": 2
+          },
+          "6": {
+            "condition": "target_gender_female",
+            "stun_seconds": 3,
+            "haste_percent": 50,
+            "haste_seconds": 3
+          },
+          "4": {
+            "condition": "target_gender_female",
+            "stun_seconds": 1,
+            "haste_percent": 20,
+            "haste_seconds": 2
+          }
         }
       },
       "star_mechanics": {
         "effect_type": "self_stat_percent",
         "params": {
-          "4": { "atk_percent": 5 },
-          "5": { "atk_percent": 5 },
-          "6": { "atk_percent": 15 }
+          "3": {
+            "atk_percent": 5
+          },
+          "4": {
+            "atk_percent": 5
+          },
+          "5": {
+            "atk_percent": 5
+          },
+          "6": {
+            "atk_percent": 15
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "ally_job_conditional_team_buff",
+        "params": {
+          "5": {
+            "job_type": "Student",
+            "hp_percent": 20
+          },
+          "6": {
+            "job_type": "Student",
+            "hp_percent": 50
+          }
         }
       }
     },
@@ -217,50 +316,87 @@
       "defense_type": "Parent",
       "exp_multiplier": {
         "1": null,
-        "2": null,
-        "3": null,
-        "4": 2.6,
+        "2": 1.9,
+        "3": 1.9,
+        "4": 1.9,
         "5": 2.6,
         "6": 14
       },
-      "exp_subjects": ["국어"],
+      "exp_subjects": [
+        "국어"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
-        "3": "해당 성급의 별도 효과가 없습니다.",
-        "4": "아군 전체의 최대 체력 20% 증가",
-        "5": "아군 전체의 최대 체력 20% 증가",
-        "6": "팀원과 자신의 체력 60% 상승"
+        "3": "아군 전체의 최대 체력 15% 증가",
+        "4": "아군 전체의 최대 체력 15% 증가",
+        "5": "아군 전체의 최대 체력 15% 증가",
+        "6": "아군 전체의 최대 체력 45% 증가"
       },
       "skill_effects": {
         "1": null,
         "2": null,
         "3": null,
-        "4": null,
+        "4": "질량 충격파: 공격 대상에게 대상 현재 체력의 20%와 자신의 공격력의 200%를 합한 만큼 피해",
         "5": "질량 충격파: 공격 대상에게 대상 현재 체력의 20%와 자신의 공격력의 200%를 합한 만큼 피해",
-        "6": "질량 충격파: 공격 대상에게 대상 현재 체력의 50%와 자신의 공격력의 400%를 합한 만큼 피해"
+        "6": "질량 충격파: 공격 대상에게 대상 현재 체력의 20%와 자신의 공격력의 400%를 합한 만큼 피해"
       },
       "trait_effects": {
         "1": null,
         "2": null,
         "3": null,
         "4": null,
-        "5": null,
-        "6": null
+        "5": "유일한 대마법사: 임소정, 이종복 대상으로 공격력 40% 증가",
+        "6": "유일한 대마법사: 임소정, 이종복 대상으로 공격력 100% 증가"
       },
       "skill_mechanics": {
         "effect_type": "damage_hp_percent_plus_atk",
         "params": {
-          "5": { "hp_percent": 20, "atk_percent": 200 },
-          "6": { "hp_percent": 50, "atk_percent": 400 }
+          "5": {
+            "hp_percent": 20,
+            "atk_percent": 200
+          },
+          "6": {
+            "hp_percent": 20,
+            "atk_percent": 400
+          },
+          "4": {
+            "hp_percent": 20,
+            "atk_percent": 200
+          }
         }
       },
       "star_mechanics": {
         "effect_type": "ally_team_stat_percent",
         "params": {
-          "4": { "stat": "hp", "percent": 20 },
-          "5": { "stat": "hp", "percent": 20 },
-          "6": { "stat": "hp", "percent": 60 }
+          "3": {
+            "stat": "hp",
+            "percent": 15
+          },
+          "4": {
+            "stat": "hp",
+            "percent": 15
+          },
+          "5": {
+            "stat": "hp",
+            "percent": 15
+          },
+          "6": {
+            "stat": "hp",
+            "percent": 45
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "ally_synergy_atk_buff",
+        "partner_name": "임소정",
+        "params": {
+          "5": {
+            "atk_percent": 40
+          },
+          "6": {
+            "atk_percent": 100
+          }
         }
       }
     },
@@ -278,27 +414,29 @@
       "attack_type": "Teacher",
       "defense_type": "Student",
       "exp_multiplier": {
-        "1": null,
-        "2": null,
-        "3": null,
-        "4": 2.8,
+        "1": 1.1,
+        "2": 2.1,
+        "3": 2.1,
+        "4": 2.1,
         "5": 2.8,
         "6": 15
       },
-      "exp_subjects": ["수학"],
+      "exp_subjects": [
+        "수학"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
-        "3": "해당 성급의 별도 효과가 없습니다.",
-        "4": "아군 전체의 공격력 20% 증가",
-        "5": "아군 전체의 공격력 20% 증가",
-        "6": "아군 전체의 공격력 60% 증가"
+        "3": "아군 전체의 공격력 15% 증가",
+        "4": "아군 전체의 공격력 15% 증가",
+        "5": "아군 전체의 공격력 15% 증가",
+        "6": "아군 전체의 공격력 45% 증가"
       },
       "skill_effects": {
         "1": null,
         "2": null,
         "3": null,
-        "4": null,
+        "4": "전자기파: 공격 대상의 공격력 1.5초간 10% 감소, 공격력의 300%만큼 피해",
         "5": "전자기파: 공격 대상의 공격력 1.5초간 10% 감소, 공격력의 300%만큼 피해",
         "6": "전자기파: 공격 대상의 공격력 3초간 20% 감소, 공격력의 600%만큼 피해"
       },
@@ -307,22 +445,60 @@
         "2": null,
         "3": null,
         "4": null,
-        "5": null,
-        "6": null
+        "5": "유일한 대마법사: 임소정, 이종복 대상으로 공격력 40% 증가",
+        "6": "유일한 대마법사: \"임소정\",\"이종복\" 캐릭터 대상으로 공격력 100% 증가"
       },
       "skill_mechanics": {
         "effect_type": "debuff_atk_and_damage",
         "params": {
-          "5": { "atk_debuff_percent": 10, "debuff_seconds": 1.5, "multiplier": 300 },
-          "6": { "atk_debuff_percent": 20, "debuff_seconds": 3.0, "multiplier": 600 }
+          "5": {
+            "atk_debuff_percent": 10,
+            "debuff_seconds": 1.5,
+            "multiplier": 300
+          },
+          "6": {
+            "atk_debuff_percent": 20,
+            "debuff_seconds": 3.0,
+            "multiplier": 600
+          },
+          "4": {
+            "atk_debuff_percent": 10,
+            "debuff_seconds": 1.5,
+            "multiplier": 300
+          }
         }
       },
       "star_mechanics": {
         "effect_type": "ally_team_stat_percent",
         "params": {
-          "4": { "stat": "atk", "percent": 20 },
-          "5": { "stat": "atk", "percent": 20 },
-          "6": { "stat": "atk", "percent": 60 }
+          "3": {
+            "stat": "atk",
+            "percent": 15
+          },
+          "4": {
+            "stat": "atk",
+            "percent": 15
+          },
+          "5": {
+            "stat": "atk",
+            "percent": 15
+          },
+          "6": {
+            "stat": "atk",
+            "percent": 45
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "ally_synergy_atk_buff",
+        "partner_name": "이종복",
+        "params": {
+          "5": {
+            "atk_percent": 40
+          },
+          "6": {
+            "atk_percent": 100
+          }
         }
       }
     }
@@ -343,51 +519,79 @@
       "defense_type": "Student",
       "exp_multiplier": {
         "1": null,
-        "2": null,
+        "2": 1.9,
         "3": 1.9,
-        "4": 2.5,
+        "4": 1.9,
         "5": 2.5,
         "6": 13
       },
-      "exp_subjects": ["수학"],
+      "exp_subjects": [
+        "수학"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
         "3": "자신을 제외한 모든 캐릭터 공격력 25% 감소",
         "4": "자신을 제외한 모든 캐릭터 공격력 25% 감소",
-        "5": "자신을 제외한 모든 캐릭터의 공격력 25% 감소",
+        "5": "자신을 제외한 모든 캐릭터 공격력 25% 감소",
         "6": "자신을 제외한 모든 캐릭터의 공격력 50% 감소"
       },
       "skill_effects": {
         "1": null,
         "2": null,
         "3": null,
-        "4": null,
-        "5": "청진기 진료: 아군의 체력을 대상의 최대 체력의 5%만큼 회복",
-        "6": "청진기 진료: 아군의 체력을 대상의 최대 체력의 15%만큼 회복"
+        "4": "청진기 진료: 아군의 체력을 대상의 최대 체력의 10%만큼 회복",
+        "5": "청진기 진료: 아군의 체력을 대상의 최대 체력의 10%만큼 회복",
+        "6": "청진기 진료: 아군의 체력을 대상의 최대 체력의 20%만큼 회복"
       },
       "trait_effects": {
         "1": null,
         "2": null,
         "3": null,
         "4": null,
-        "5": null,
-        "6": null
+        "5": "히포크라테스 선서: 자신이 죽을 때, 아군에게 \"이영웅\"의 최대 체력의 10%만큼 회복",
+        "6": "히포크라테스 선서: 자신이 죽을 때, 아군에게 \"이영웅\"의 최대 체력의 20%만큼 회복"
       },
       "skill_mechanics": {
         "effect_type": "heal_ally_percent_max_hp",
         "params": {
-          "5": { "percent": 5 },
-          "6": { "percent": 15 }
+          "5": {
+            "percent": 10
+          },
+          "6": {
+            "percent": 20
+          },
+          "4": {
+            "percent": 10
+          }
         }
       },
       "star_mechanics": {
         "effect_type": "debuff_all_others_atk",
         "params": {
-          "3": { "percent": 25 },
-          "4": { "percent": 25 },
-          "5": { "percent": 25 },
-          "6": { "percent": 50 }
+          "3": {
+            "percent": 25
+          },
+          "4": {
+            "percent": 25
+          },
+          "5": {
+            "percent": 25
+          },
+          "6": {
+            "percent": 50
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "death_heal_ally",
+        "params": {
+          "5": {
+            "percent": 10
+          },
+          "6": {
+            "percent": 20
+          }
         }
       }
     },
@@ -406,26 +610,28 @@
       "defense_type": "Teacher",
       "exp_multiplier": {
         "1": null,
-        "2": null,
+        "2": 1.9,
         "3": 1.9,
-        "4": 2.5,
+        "4": 1.9,
         "5": 2.5,
         "6": 13
       },
-      "exp_subjects": ["탐구"],
+      "exp_subjects": [
+        "탐구"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
-        "3": "남성인 적에게 주는 피해 35% 증가",
-        "4": "남성인 적에게 주는 피해 35% 증가",
-        "5": "남성인 적에게 주는 피해 35% 증가",
-        "6": "남성인 적에게 주는 피해 105% 증가"
+        "3": "남성인 적에게 주는 피해 30% 증가",
+        "4": "남성인 적에게 주는 피해 30% 증가",
+        "5": "남성인 적에게 주는 피해 30% 증가",
+        "6": "남성인 적에게 주는 피해 90% 증가"
       },
       "skill_effects": {
         "1": null,
         "2": null,
         "3": null,
-        "4": null,
+        "4": "불빠따: 자신을 제외한 모든 캐릭터에게 공격력의 150%만큼 피해",
         "5": "불빠따: 자신을 제외한 모든 캐릭터에게 공격력의 150%만큼 피해",
         "6": "불빠따: 자신을 제외한 모든 캐릭터에게 공격력의 300%만큼 피해"
       },
@@ -434,23 +640,53 @@
         "2": null,
         "3": null,
         "4": null,
-        "5": null,
-        "6": null
+        "5": "교권 보호: 팀 내 교사 타입 보유 캐릭터에게 (공격/방어 상관없이) 최대 체력 40% 증가",
+        "6": "교권 보호: 팀 내 교사 타입 보유 캐릭터에게 (공격/방어 상관없이) 최대 체력 100% 증가"
       },
       "skill_mechanics": {
         "effect_type": "aoe_all_others_damage",
         "params": {
-          "5": { "multiplier": 150 },
-          "6": { "multiplier": 300 }
+          "5": {
+            "multiplier": 150
+          },
+          "6": {
+            "multiplier": 300
+          },
+          "4": {
+            "multiplier": 150
+          }
         }
       },
       "star_mechanics": {
         "effect_type": "damage_to_gender_bonus",
         "params": {
-          "3": { "gender": "남", "bonus_percent": 35 },
-          "4": { "gender": "남", "bonus_percent": 35 },
-          "5": { "gender": "남", "bonus_percent": 35 },
-          "6": { "gender": "남", "bonus_percent": 105 }
+          "3": {
+            "gender": "남",
+            "bonus_percent": 30
+          },
+          "4": {
+            "gender": "남",
+            "bonus_percent": 30
+          },
+          "5": {
+            "gender": "남",
+            "bonus_percent": 30
+          },
+          "6": {
+            "gender": "남",
+            "bonus_percent": 90
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "team_teacher_hp_buff",
+        "params": {
+          "5": {
+            "percent": 40
+          },
+          "6": {
+            "percent": 100
+          }
         }
       }
     },
@@ -468,26 +704,28 @@
       "defense_type": "Student",
       "exp_multiplier": {
         "1": null,
-        "2": null,
+        "2": 1.9,
         "3": 1.9,
-        "4": 2.5,
+        "4": 1.9,
         "5": 2.5,
         "6": 13
       },
-      "exp_subjects": ["탐구"],
+      "exp_subjects": [
+        "탐구"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
         "3": "치명타 피해량 200%",
         "4": "치명타 피해량 200%",
         "5": "치명타 피해량 200%",
-        "6": "치명타 피해량 300%"
+        "6": "치명타 피해량 200%, 치명타 확률 2배"
       },
       "skill_effects": {
         "1": null,
         "2": null,
         "3": null,
-        "4": null,
+        "4": "염색체 변환: type1이면 type2로, type2면 type1로 전환. 전환 시 최대체력의 5% 회복. [type1](남) 추가효과 없음 / [type2](여) 기본공격이 남성 적에게 0.5초 기절",
         "5": "염색체 변환: type1이면 type2로, type2면 type1로 전환. 전환 시 최대체력의 5% 회복. [type1](남) 추가효과 없음 / [type2](여) 기본공격이 남성 적에게 0.5초 기절",
         "6": "염색체 변환: 전환 시 최대체력의 15% 회복. [type1](남) 추가효과 없음 / [type2](여) 기본공격이 남성 적에게 0.75초 기절"
       },
@@ -496,23 +734,55 @@
         "2": null,
         "3": null,
         "4": null,
-        "5": null,
-        "6": null
+        "5": "복수: 전장 내 이영웅이 존재할 시 자신의 공격 속도 30% 증가",
+        "6": "복수: 전장 내 이영웅이 존재할 시 자신의 공격 속도 50% 증가"
       },
       "skill_mechanics": {
         "effect_type": "self_type_swap_heal",
         "params": {
-          "5": { "heal_percent": 5, "type2_stun_seconds": 0.5 },
-          "6": { "heal_percent": 15, "type2_stun_seconds": 0.75 }
+          "5": {
+            "heal_percent": 5,
+            "type2_stun_seconds": 0.5
+          },
+          "6": {
+            "heal_percent": 15,
+            "type2_stun_seconds": 0.75
+          },
+          "4": {
+            "heal_percent": 5,
+            "type2_stun_seconds": 0.5
+          }
         }
       },
       "star_mechanics": {
         "effect_type": "self_crit_multiplier",
         "params": {
-          "3": { "multiplier": 3.0 },
-          "4": { "multiplier": 3.0 },
-          "5": { "multiplier": 3.0 },
-          "6": { "multiplier": 4.5 }
+          "3": {
+            "multiplier": 3.0
+          },
+          "4": {
+            "multiplier": 3.0
+          },
+          "5": {
+            "multiplier": 3.0
+          },
+          "6": {
+            "multiplier": 3.0,
+            "chance_multiplier": 2
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "battlefield_presence_haste",
+        "params": {
+          "5": {
+            "target_name": "이영웅",
+            "haste_percent": 30
+          },
+          "6": {
+            "target_name": "이영웅",
+            "haste_percent": 50
+          }
         }
       }
     }
@@ -535,24 +805,26 @@
         "1": null,
         "2": 1.8,
         "3": 1.8,
-        "4": 2.4,
+        "4": 1.8,
         "5": 2.4,
         "6": 12
       },
-      "exp_subjects": ["영어"],
+      "exp_subjects": [
+        "영어"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
         "3": "여성인 아군 전체의 공격력과 최대 체력 25% 증가",
         "4": "여성인 아군 전체의 공격력과 최대 체력 25% 증가",
-        "5": "팀원 성별 여 캐릭터의 체력 25% 공격력 25% 상승",
+        "5": "여성인 아군 전체의 공격력과 최대 체력 25% 증가",
         "6": "팀원 성별 여 캐릭터의 체력 75% 공격력 75% 상승"
       },
       "skill_effects": {
         "1": null,
         "2": null,
         "3": null,
-        "4": null,
+        "4": "고백: 남성인 적 전체에게 공격력의 150%만큼 피해, 여성인 적 전체에게 공격력의 300%만큼 피해",
         "5": "고백: 남성인 적 전체에게 공격력의 150%만큼 피해, 여성인 적 전체에게 공격력의 300%만큼 피해",
         "6": "고백: 남성인 적 전체에게 공격력의 300%만큼 피해, 여성인 적 전체에게 공격력의 600%만큼 피해"
       },
@@ -561,23 +833,60 @@
         "2": null,
         "3": null,
         "4": null,
-        "5": null,
-        "6": null
+        "5": "본능: (전장 내 여성 인물의 수)x20%만큼 공격속도 증가",
+        "6": "본능: (전장 내 여성 인물의 수)x30%만큼 공격속도 증가"
       },
       "skill_mechanics": {
         "effect_type": "aoe_gendered_damage",
         "params": {
-          "5": { "male_multiplier": 150, "female_multiplier": 300 },
-          "6": { "male_multiplier": 300, "female_multiplier": 600 }
+          "5": {
+            "male_multiplier": 150,
+            "female_multiplier": 300
+          },
+          "6": {
+            "male_multiplier": 300,
+            "female_multiplier": 600
+          },
+          "4": {
+            "male_multiplier": 150,
+            "female_multiplier": 300
+          }
         }
       },
       "star_mechanics": {
         "effect_type": "ally_gender_stat_percent",
         "params": {
-          "3": { "gender": "여", "atk_percent": 25, "hp_percent": 25 },
-          "4": { "gender": "여", "atk_percent": 25, "hp_percent": 25 },
-          "5": { "gender": "여", "atk_percent": 25, "hp_percent": 25 },
-          "6": { "gender": "여", "atk_percent": 75, "hp_percent": 75 }
+          "3": {
+            "gender": "여",
+            "atk_percent": 25,
+            "hp_percent": 25
+          },
+          "4": {
+            "gender": "여",
+            "atk_percent": 25,
+            "hp_percent": 25
+          },
+          "5": {
+            "gender": "여",
+            "atk_percent": 25,
+            "hp_percent": 25
+          },
+          "6": {
+            "gender": "여",
+            "atk_percent": 75,
+            "hp_percent": 75
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "female_count_haste",
+        "params": {
+          "5": {
+            "percent_per_female": 20
+          },
+          "6": {
+            "percent_per_female": 30
+          }
         }
       }
     },
@@ -598,49 +907,88 @@
         "1": null,
         "2": 1.8,
         "3": 1.8,
-        "4": 2.4,
+        "4": 1.8,
         "5": 2.4,
         "6": 12
       },
-      "exp_subjects": ["수학"],
+      "exp_subjects": [
+        "수학"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
-        "3": "자신의 공격력과 최대 체력 20% 증가",
-        "4": "자신의 공격력과 최대 체력 20% 증가",
-        "5": "자신의 공격력과 최대 체력 20% 증가",
-        "6": "자신의 공격력과 최대 체력 60% 증가"
+        "3": "자신의 공격력과 최대 체력 15% 증가",
+        "4": "자신의 공격력과 최대 체력 15% 증가",
+        "5": "자신의 공격력과 최대 체력 15% 증가",
+        "6": "자신의 공격력과 최대 체력 45% 증가"
       },
       "skill_effects": {
         "1": null,
         "2": null,
         "3": null,
-        "4": null,
-        "5": "성대모사: 공격 대상이 보유한 스킬 복제, 복제한 스킬의 피해량·회복량·보호막 수치·지속시간 50% 적용, 복제 가능한 스킬이 없는 경우 공격력의 150%만큼 피해",
-        "6": "성대모사: 공격 대상이 보유한 스킬 복제, 복제한 스킬의 피해량·회복량·보호막 수치·지속시간 100% 적용, 복제 가능한 스킬이 없는 경우 공격력의 450%만큼 피해"
+        "4": "성대모사: 공격 대상이 보유한 [Active] 복제, 복제한 [Active]의 피해량·회복량·보호막 수치·지속시간 50% 적용, 복제 가능한 [Active]가 없는 경우 공격력의 150%만큼 피해",
+        "5": "성대모사: 공격 대상이 보유한 [Active] 복제, 복제한 [Active]의 피해량·회복량·보호막 수치·지속시간 50% 적용, 복제 가능한 [Active]가 없는 경우 공격력의 150%만큼 피해",
+        "6": "성대모사: 공격 대상이 보유한 [Active] 복제, 복제한 [Active]의 피해량·회복량·보호막 수치·지속시간 100% 적용, 복제 가능한 [Active]가 없는 경우 공격력의 450%만큼 피해"
       },
       "trait_effects": {
         "1": null,
         "2": null,
         "3": null,
         "4": null,
-        "5": null,
-        "6": null
+        "5": "친근감: 직업:학생과 함께 편성 시 아군의 공격력과 최대 체력 15% 증가",
+        "6": "친근감: 직업:학생과 함께 편성 시 아군의 공격력과 최대 체력 45% 증가"
       },
       "skill_mechanics": {
         "effect_type": "copy_target_skill",
         "params": {
-          "5": { "potency_percent": 50, "fallback_multiplier": 150 },
-          "6": { "potency_percent": 100, "fallback_multiplier": 450 }
+          "5": {
+            "potency_percent": 50,
+            "fallback_multiplier": 150
+          },
+          "6": {
+            "potency_percent": 100,
+            "fallback_multiplier": 450
+          },
+          "4": {
+            "potency_percent": 50,
+            "fallback_multiplier": 150
+          }
         }
       },
       "star_mechanics": {
         "effect_type": "self_stat_percent",
         "params": {
-          "3": { "atk_percent": 20, "hp_percent": 20 },
-          "4": { "atk_percent": 20, "hp_percent": 20 },
-          "5": { "atk_percent": 20, "hp_percent": 20 },
-          "6": { "atk_percent": 60, "hp_percent": 60 }
+          "3": {
+            "atk_percent": 15,
+            "hp_percent": 15
+          },
+          "4": {
+            "atk_percent": 15,
+            "hp_percent": 15
+          },
+          "5": {
+            "atk_percent": 15,
+            "hp_percent": 15
+          },
+          "6": {
+            "atk_percent": 45,
+            "hp_percent": 45
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "ally_job_conditional_team_buff",
+        "params": {
+          "5": {
+            "job_type": "Student",
+            "atk_percent": 15,
+            "hp_percent": 15
+          },
+          "6": {
+            "job_type": "Student",
+            "atk_percent": 45,
+            "hp_percent": 45
+          }
         }
       }
     },
@@ -661,49 +1009,86 @@
         "1": null,
         "2": 1.9,
         "3": 1.9,
-        "4": 2.5,
+        "4": 1.9,
         "5": 2.5,
         "6": 13
       },
-      "exp_subjects": ["독서"],
+      "exp_subjects": [
+        "독서"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
         "3": "자신 제외 아군의 최대 체력 25% 증가",
         "4": "자신 제외 아군의 최대 체력 25% 증가",
-        "5": "아군의 최대 체력 25% 증가",
+        "5": "자신 제외 아군의 최대 체력 25% 증가",
         "6": "아군의 최대 체력 75% 증가"
       },
       "skill_effects": {
         "1": null,
         "2": null,
         "3": null,
-        "4": null,
-        "5": "격차 벌리기: 공격 대상 2초 기절",
-        "6": "격차 벌리기: 공격 대상 4초 기절"
+        "4": "격차 벌리기: 공격 대상 2초 기절, 공격 대상에게 공격력의 150%만큼 피해",
+        "5": "격차 벌리기: 공격 대상 2초 기절, 공격 대상에게 공격력의 150%만큼 피해",
+        "6": "격차 벌리기: 공격 대상 4초 기절, 공격 대상에게 공격력의 450%만큼 피해"
       },
       "trait_effects": {
         "1": null,
         "2": null,
         "3": null,
         "4": null,
-        "5": null,
-        "6": null
+        "5": "페이스 메이커: 자신 제외 아군의 최대 체력 75% 증가, 자신의 체력 50% 감소",
+        "6": "페이스 메이커: 자신 제외 아군의 최대 체력 225% 증가, 자신의 체력 50% 감소"
       },
       "skill_mechanics": {
         "effect_type": "stun_target",
         "params": {
-          "5": { "seconds": 2 },
-          "6": { "seconds": 4 }
+          "5": {
+            "seconds": 2,
+            "multiplier": 150
+          },
+          "6": {
+            "seconds": 4,
+            "multiplier": 450
+          },
+          "4": {
+            "seconds": 2,
+            "multiplier": 150
+          }
         }
       },
       "star_mechanics": {
         "effect_type": "teammate_stat_percent",
         "params": {
-          "3": { "stat": "hp", "percent": 25 },
-          "4": { "stat": "hp", "percent": 25 },
-          "5": { "stat": "hp", "percent": 25 },
-          "6": { "stat": "hp", "percent": 75 }
+          "3": {
+            "stat": "hp",
+            "percent": 25
+          },
+          "4": {
+            "stat": "hp",
+            "percent": 25
+          },
+          "5": {
+            "stat": "hp",
+            "percent": 25
+          },
+          "6": {
+            "stat": "hp",
+            "percent": 75
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "teammate_hp_buff_self_cost",
+        "params": {
+          "5": {
+            "hp_percent": 75,
+            "self_hp_loss_percent": 50
+          },
+          "6": {
+            "hp_percent": 225,
+            "self_hp_loss_percent": 50
+          }
         }
       }
     }
@@ -726,40 +1111,79 @@
         "1": 1.1,
         "2": 1.7,
         "3": 1.7,
-        "4": 2.2,
+        "4": 1.7,
         "5": 2.2,
         "6": 11
       },
-      "exp_subjects": ["영어"],
+      "exp_subjects": [
+        "영어"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
         "3": "후방 적 우선 공격",
         "4": "후방 적 우선 공격",
         "5": "후방 적 우선 공격",
-        "6": "후방 적 우선 공격"
+        "6": "후방 적 우선 공격, 후방 적 생존 시 공격력 25% 증가"
       },
       "skill_effects": {
         "1": null,
         "2": null,
         "3": null,
-        "4": null,
-        "5": "환상살: 자신에게 0.5초간 모든 피해를 무효화하는 보호막 부여",
-        "6": "환상살: 자신에게 1.5초간 모든 피해를 무효화하는 보호막 부여"
+        "4": "환상살: 자신에게 1.5초간 모든 피해를 무효화하는 보호막 부여",
+        "5": "환상살: 자신에게 1.5초간 모든 피해를 무효화하는 보호막 부여",
+        "6": "환상살: 자신에게 3초간 모든 피해를 무효화하는 보호막 부여"
       },
       "trait_effects": {
         "1": null,
         "2": null,
         "3": null,
         "4": null,
-        "5": null,
-        "6": null
+        "5": "마법사 아카데미: 직업:마법사와 함께 편성 시 아군 마법사 또한 후방 적 우선 공격",
+        "6": "마법사 아카데미: 직업:마법사와 함께 사용 시 아군 마법사 또한 후방 적 우선 공격 + 후방 적 생존 시 아군 공격력 25% 증가"
       },
       "skill_mechanics": {
         "effect_type": "self_shield_duration",
         "params": {
-          "5": { "seconds": 0.5 },
-          "6": { "seconds": 1.5 }
+          "5": {
+            "seconds": 1.5
+          },
+          "6": {
+            "seconds": 3
+          },
+          "4": {
+            "seconds": 1.5
+          }
+        }
+      },
+      "star_mechanics": {
+        "effect_type": "self_rear_priority",
+        "params": {
+          "3": {
+            "active": true
+          },
+          "4": {
+            "active": true
+          },
+          "5": {
+            "active": true
+          },
+          "6": {
+            "active": true,
+            "survive_atk_percent": 25
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "dynamic_grant_rear_priority",
+        "params": {
+          "5": {
+            "active": true
+          },
+          "6": {
+            "active": true,
+            "survive_atk_percent": 25
+          }
         }
       }
     },
@@ -779,48 +1203,81 @@
       "exp_multiplier": {
         "1": 1.0,
         "2": 1.5,
-        "3": 2.0,
-        "4": 2.5,
-        "5": 3.0,
+        "3": 1.5,
+        "4": 1.5,
+        "5": 2.5,
         "6": 1.0
       },
-      "exp_subjects": ["독서"],
+      "exp_subjects": [
+        "독서"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
         "3": "공격력 25% 증가",
         "4": "공격력 25% 증가",
         "5": "공격력 25% 증가",
-        "6": "해당 성급의 별도 효과가 없습니다."
+        "6": "공격력 25% 증가"
       },
       "skill_effects": {
         "1": null,
         "2": null,
         "3": null,
-        "4": null,
+        "4": "강한 타격: 공격 대상에게 공격력의 300%만큼 피해, 대상 밀쳐내기",
         "5": "강한 타격: 공격 대상에게 공격력의 300%만큼 피해, 대상 밀쳐내기",
-        "6": null
+        "6": "강한 타격: 공격 대상에게 공격력의 300%만큼 피해, 대상 밀쳐내기"
       },
       "trait_effects": {
         "1": null,
         "2": null,
         "3": null,
         "4": null,
-        "5": null,
-        "6": null
+        "5": "???: 송주헌과 함께 사용시 최대 체력의 45% 상승",
+        "6": "???: 송주헌과 함께 사용시 최대 체력의 45% 상승"
       },
       "skill_mechanics": {
         "effect_type": "bonus_damage_knockback",
         "params": {
-          "5": { "multiplier": 300 }
+          "5": {
+            "multiplier": 300
+          },
+          "6": {
+            "multiplier": 300
+          },
+          "4": {
+            "multiplier": 300
+          }
         }
       },
       "star_mechanics": {
         "effect_type": "self_stat_percent",
         "params": {
-          "3": { "atk_percent": 25 },
-          "4": { "atk_percent": 25 },
-          "5": { "atk_percent": 25 }
+          "3": {
+            "atk_percent": 25
+          },
+          "4": {
+            "atk_percent": 25
+          },
+          "5": {
+            "atk_percent": 25
+          },
+          "6": {
+            "atk_percent": 25
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "ally_synergy_atk_buff",
+        "partner_name": "송주헌",
+        "params": {
+          "5": {
+            "stat": "hp",
+            "hp_percent": 45
+          },
+          "6": {
+            "stat": "hp",
+            "hp_percent": 45
+          }
         }
       }
     },
@@ -841,49 +1298,79 @@
         "1": 1.1,
         "2": 1.7,
         "3": 1.7,
-        "4": 2.2,
+        "4": 1.7,
         "5": 2.2,
         "6": 11
       },
-      "exp_subjects": ["국어"],
+      "exp_subjects": [
+        "국어"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
         "3": "최대 체력 25% 증가",
         "4": "최대 체력 25% 증가",
         "5": "최대 체력 25% 증가",
-        "6": "체력 75% 상승"
+        "6": "최대 체력 75% 증가"
       },
       "skill_effects": {
         "1": null,
         "2": null,
         "3": null,
-        "4": null,
+        "4": "생화학 구취 브레스: 적 전체에게 각각 공격력의 200%만큼 피해",
         "5": "생화학 구취 브레스: 적 전체에게 각각 공격력의 200%만큼 피해",
-        "6": "생화학 구취 브레스: 적 전체에게 각각 공격력의 400%만큼 피해"
+        "6": "생화학 구취 브레스: 적 전체에게 각각 공격력의 500%만큼 피해"
       },
       "trait_effects": {
         "1": null,
         "2": null,
         "3": null,
         "4": null,
-        "5": null,
-        "6": null
+        "5": "광역 도발: 공격타입:교사와 함께 편성 시 아군의 공격력 25% 증가, 방어타입:교사와 함께 편성 시 아군의 최대 체력 25% 증가 (중첩 가능)",
+        "6": "광역 도발: 공격타입:교사와 함께 편성 시 아군의 공격력 75% 증가, 방어타입:교사와 함께 편성 시 아군의 최대 체력 75% 증가 (중첩 가능)"
       },
       "skill_mechanics": {
         "effect_type": "aoe_enemy_damage",
         "params": {
-          "5": { "multiplier": 200 },
-          "6": { "multiplier": 400 }
+          "5": {
+            "multiplier": 200
+          },
+          "6": {
+            "multiplier": 500
+          },
+          "4": {
+            "multiplier": 200
+          }
         }
       },
       "star_mechanics": {
         "effect_type": "self_stat_percent",
         "params": {
-          "3": { "hp_percent": 25 },
-          "4": { "hp_percent": 25 },
-          "5": { "hp_percent": 25 },
-          "6": { "hp_percent": 75 }
+          "3": {
+            "hp_percent": 25
+          },
+          "4": {
+            "hp_percent": 25
+          },
+          "5": {
+            "hp_percent": 25
+          },
+          "6": {
+            "hp_percent": 75
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "ally_type_conditional_team_buff",
+        "params": {
+          "5": {
+            "atk_percent": 25,
+            "hp_percent": 25
+          },
+          "6": {
+            "atk_percent": 75,
+            "hp_percent": 75
+          }
         }
       }
     }

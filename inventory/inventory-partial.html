@@ -60,34 +60,34 @@
             <div class="inventory-info-row"><span>공격 타입</span><strong id="inventory-info-attack">-</strong></div>
             <div class="inventory-info-row"><span>방어 타입</span><strong id="inventory-info-defense">-</strong></div>
         </div>
-
-        <div class="inventory-skill-trait-row">
-            <button class="inventory-skill-trait-btn" id="inventory-skill-btn" type="button" data-kind="skill">
-                <span>스킬</span>
-                <img class="inventory-skill-trait-lock" src="assets/icons/lock.png" alt="" onerror="this.outerHTML='🔒'" hidden>
-            </button>
-            <button class="inventory-skill-trait-btn" id="inventory-trait-btn" type="button" data-kind="trait">
-                <span>특성</span>
-                <img class="inventory-skill-trait-lock" src="assets/icons/lock.png" alt="" onerror="this.outerHTML='🔒'" hidden>
-            </button>
-        </div>
+        <div class="inventory-info-row inventory-info-row-wide"><span>EXP 과목</span><strong id="inventory-info-exp-subject">-</strong></div>
+        <div class="inventory-info-row inventory-info-row-wide"><span>EXP 배수</span><strong id="inventory-info-exp-rate">-</strong></div>
 
         <div class="inventory-description" id="inventory-description"></div>
 
-        <div class="inventory-star-section">
-            <div class="inventory-section-label">성급 정보</div>
-            <div class="inventory-star-buttons" id="inventory-star-buttons"></div>
-            <div class="inventory-star-effect" id="inventory-star-effect"></div>
+        <div class="inventory-ability-section">
+            <div class="inventory-ability-group">
+                <div class="inventory-section-label">[Passive]</div>
+                <div class="inventory-ability-buttons" id="inventory-ability-passive"></div>
+            </div>
+            <div class="inventory-ability-group">
+                <div class="inventory-section-label">[Active]</div>
+                <div class="inventory-ability-buttons" id="inventory-ability-active"></div>
+            </div>
+            <div class="inventory-ability-group">
+                <div class="inventory-section-label">[Special]</div>
+                <div class="inventory-ability-buttons" id="inventory-ability-special"></div>
+            </div>
         </div>
 
         <button class="inventory-equip-button" id="inventory-equip-button" type="button">로비에 장착하기</button>
     </section>
 
-    <!-- 스킬/특성 버튼 클릭 시 뜨는 서브 모달 - 인벤토리와 같은 톤, 헤더는 제거한 "기본 정보" 타이틀 스타일 재사용 -->
+    <!-- 스킬 버튼 클릭 시 뜨는 서브 모달 - 인벤토리와 같은 톤, 헤더는 제거한 "기본 정보" 타이틀 스타일 재사용 -->
     <div class="inventory-subinfo-overlay" id="inventory-subinfo-overlay" hidden>
         <div class="inventory-subinfo-panel">
             <button class="modal-close" id="inventory-subinfo-close" type="button">✕</button>
-            <div class="inventory-info-title" id="inventory-subinfo-title">스킬</div>
+            <div class="inventory-info-title" id="inventory-subinfo-title">[Passive]</div>
             <div class="inventory-subinfo-body" id="inventory-subinfo-body"></div>
         </div>
     </div>

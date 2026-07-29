@@ -219,7 +219,8 @@ class Achievement(Base):
     # 보상 - 코드에 캐릭터/아이템 지급 로직을 흩어두지 않고, 여기 세 필드(데이터)로 표현한다.
     reward_gold = Column(Integer, default=0)
     reward_exp = Column(Integer, default=0)
-    reward_items = Column(JSON, nullable=True)  # [{"type": "character"|"item", "name": str, "quantity": int, "indestructible": bool?}]
+    reward_items = Column(JSON, nullable=True)  # [{"type": "character"|"item"|"gacha_points", "name": str?, "quantity": int, "indestructible": bool?}]
+                                                   # gacha_points는 name 없이 quantity만큼 user.gacha_points에 더한다.
 
 
 class UserAchievement(Base):

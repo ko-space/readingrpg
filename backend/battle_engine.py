@@ -31,6 +31,7 @@ CHARACTER_RANGE = {char["name"]: char.get("range", "근거리") for char in _ALL
 ATTACK_TYPE = {char["name"]: char.get("attack_type", "Student") for char in _ALL_CHARACTERS}
 DEFENSE_TYPE = {char["name"]: char.get("defense_type", "Student") for char in _ALL_CHARACTERS}
 CHARACTER_GENDER = {char["name"]: char.get("gender") for char in _ALL_CHARACTERS}
+CHARACTER_JOB_CLASS = {char["name"]: char.get("job_class") for char in _ALL_CHARACTERS}
 
 
 def _effective_gender(unit):
@@ -128,7 +129,7 @@ def compute_unit_stats(character_name, star, owner_level, slot="front", override
         if star_params:
             trait_effect_type = trait_mech["effect_type"]
             trait_params = dict(star_params)
-            trait_partner_name = trait_mech["partner_name"]
+            trait_partner_name = trait_mech.get("partner_name")
 
     star_effect_type = None
     star_params_out = None
@@ -146,6 +147,7 @@ def compute_unit_stats(character_name, star, owner_level, slot="front", override
         "atk": atk,
         "star": star,
         "is_melee": is_melee,
+        "job_class": CHARACTER_JOB_CLASS.get(character_name),
         "attack_type": ATTACK_TYPE.get(character_name, "Student"),
         "defense_type": DEFENSE_TYPE.get(character_name, "Student"),
         "attack_interval": attack_interval,
@@ -236,13 +238,14 @@ def _select_basic_attack_target(unit, enemy_team):
     후방이 죽어도 전방은 변하지 않는다.
 
     - 기본: 현재 전방(목록의 맨 앞, 복제체가 있으면 복제체)을 때린다.
-    - 최재혁(★3부터)만 예외: "무조건" 현재 후방(살아있는 유닛 중 맨 뒤)을 먼저 때린다 - 복제체(미끼)가
-      있어도 무시하고 후방을 노린다. 살아있는 적이 1명뿐이면 그가 곧 전방이자 유일한 대상이다."""
+    - rear_priority 플래그가 있는 유닛(최재혁 ★3부터, 또는 "마법사 아카데미"로 그 효과를 받은 아군
+      마법사)만 예외: "무조건" 현재 후방(살아있는 유닛 중 맨 뒤)을 먼저 때린다 - 복제체(미끼)가 있어도
+      무시하고 후방을 노린다. 살아있는 적이 1명뿐이면 그가 곧 전방이자 유일한 대상이다."""
     units = _alive_units(enemy_team)
     if not units:
         return None
 
-    if unit["name"] == "최재혁" and unit.get("star", 1) >= 3:
+    if unit.get("rear_priority"):
         return units[-1] if len(units) >= 2 else units[0]
 
     return units[0]
@@ -279,9 +282,11 @@ CRIT_MULTIPLIER = 1.5     # 공격력의 1.5배
 
 def _roll_damage_atk(unit, time_elapsed):
     """피해 공식의 시작점(공격력 값 하나). 기본공격이든 스킬이든 이 함수를 거쳐서 공격력을 구하면
-    10% 확률로 치명타(공격력 1.5배)가 함께 적용된다 - (사용할 공격력, 치명타 여부)를 돌려준다."""
+    10% 확률(unit에 crit_chance가 있으면 그 값)로 치명타(공격력 1.5배, crit_multiplier가 있으면 그 값)가
+    함께 적용된다 - (사용할 공격력, 치명타 여부)를 돌려준다."""
     atk = _effective_atk(unit, time_elapsed)
-    is_crit = random.random() < CRIT_CHANCE
+    chance = unit.get("crit_chance", CRIT_CHANCE)
+    is_crit = random.random() < chance
     if is_crit:
         atk = round(atk * unit.get("crit_multiplier", CRIT_MULTIPLIER))
     return atk, is_crit
@@ -302,8 +307,10 @@ def _scale_params(params, factor):
 
 
 # ───────────────────────── 특성(trait) - 전투 시작 시 1회만 판정 ─────────────────────────
+# 모든 핸들러는 (caster, team, enemy_team, params, events, side) 시그니처로 통일한다 - 이의진/서민석처럼
+# 상대 팀까지 봐야 하는 특성이 있어서, 자기 팀만 보는 특성도 안 쓰는 enemy_team 인자를 그냥 받아둔다.
 
-def _trait_ally_synergy_remove_absorb(caster, team, params, events, side):
+def _trait_ally_synergy_remove_absorb(caster, team, enemy_team, params, events, side):
     partner = _teammate(team, caster)
     if not partner or partner["name"] != caster["trait_partner_name"] or partner["hp"] <= 0:
         return
@@ -319,32 +326,199 @@ def _trait_ally_synergy_remove_absorb(caster, team, params, events, side):
     })
 
 
-def _trait_ally_synergy_atk_buff(caster, team, params, events, side):
+def _trait_ally_synergy_atk_buff(caster, team, enemy_team, params, events, side):
+    # 파트너가 있으면 자신에게 버프 - stat이 "hp"면 체력을(청년↔송주헌), 기본(atk, 윤영준↔강 희)이면
+    # 공격력을 올린다. 이종복↔임소정처럼 서로가 서로를 partner_name으로 지정해두면, 양쪽 다 이 핸들러가
+    # 각자 자신에게 버프를 걸어서 "함께 있으면 둘 다 강해짐"이 자연히 성립한다.
     partner = _teammate(team, caster)
     if not partner or partner["name"] != caster["trait_partner_name"] or partner["hp"] <= 0:
         return
-    caster["status"]["atk_percent_bonus"] += params["atk_percent"]
+    stat = params.get("stat", "atk")
+    if stat == "hp":
+        percent = params["hp_percent"]
+        gain = round(caster["max_hp"] * percent / 100)
+        caster["max_hp"] += gain
+        caster["hp"] += gain
+        detail = {"partner": partner["name"], "hp_percent": percent}
+    else:
+        percent = params["atk_percent"]
+        caster["status"]["atk_percent_bonus"] += percent
+        detail = {"partner": partner["name"], "atk_percent": percent}
     events.append({
         "time": 0, "event_type": "trait_resolve", "side": side, "actor": caster["name"],
-        "effect_type": "ally_synergy_atk_buff",
-        "detail": {"partner": partner["name"], "atk_percent": params["atk_percent"]},
+        "effect_type": "ally_synergy_atk_buff", "detail": detail,
     })
+
+
+def _trait_ally_job_conditional_team_buff(caster, team, enemy_team, params, events, side):
+    # 김남옥(자애심)/강승유(친근감): 파트너의 역할(attack_type)이 job_type과 일치하면(예: "Student")
+    # 아군 전체(자신 포함) 공격력/체력 X% 증가. "직업:학생"처럼 텍스트가 말하는 직업 카테고리는 이
+    # 게임에서 캐릭터의 attack_type 삼각 상성값(Student/Parent/Teacher)과 대응된다 - job_class는
+    # "1반 학생"/"초심자"처럼 캐릭터마다 제각각인 순수 설정 문구라 조건 판정에 쓰기엔 너무 좁다.
+    partner = _teammate(team, caster)
+    if not partner or partner["hp"] <= 0 or partner.get("attack_type") != params["job_type"]:
+        return
+    atk_percent = params.get("atk_percent", 0)
+    hp_percent = params.get("hp_percent", 0)
+    for ally in _alive_units(team):
+        if atk_percent:
+            ally["status"]["atk_percent_bonus"] += atk_percent
+        if hp_percent:
+            gain = round(ally["max_hp"] * hp_percent / 100)
+            ally["max_hp"] += gain
+            ally["hp"] += gain
+    events.append({
+        "time": 0, "event_type": "trait_resolve", "side": side, "actor": caster["name"],
+        "effect_type": "ally_job_conditional_team_buff",
+        "detail": {"partner": partner["name"], "atk_percent": atk_percent, "hp_percent": hp_percent},
+    })
+
+
+def _trait_ally_type_conditional_team_buff(caster, team, enemy_team, params, events, side):
+    # 강 희(광역 도발): 파트너의 공격 타입이 Teacher면 아군 전체 공격력 X%, 방어 타입이 Teacher면
+    # 아군 전체 체력 X% - 두 조건은 독립적이라 파트너가 둘 다 Teacher면 둘 다 적용된다("중첩 가능").
+    partner = _teammate(team, caster)
+    if not partner or partner["hp"] <= 0:
+        return
+    atk_percent = params.get("atk_percent", 0) if partner.get("attack_type") == "Teacher" else 0
+    hp_percent = params.get("hp_percent", 0) if partner.get("defense_type") == "Teacher" else 0
+    if not (atk_percent or hp_percent):
+        return
+    for ally in _alive_units(team):
+        if atk_percent:
+            ally["status"]["atk_percent_bonus"] += atk_percent
+        if hp_percent:
+            gain = round(ally["max_hp"] * hp_percent / 100)
+            ally["max_hp"] += gain
+            ally["hp"] += gain
+    events.append({
+        "time": 0, "event_type": "trait_resolve", "side": side, "actor": caster["name"],
+        "effect_type": "ally_type_conditional_team_buff",
+        "detail": {"partner": partner["name"], "atk_percent": atk_percent, "hp_percent": hp_percent},
+    })
+
+
+def _trait_team_teacher_hp_buff(caster, team, enemy_team, params, events, side):
+    # 불빠따 김어진(교권 보호): 팀 내(자신 포함) 공격/방어 타입 중 하나라도 Teacher인 캐릭터 전원의
+    # 최대 체력 X% 증가.
+    percent = params["percent"]
+    targets = []
+    for u in _alive_units(team):
+        if u.get("attack_type") == "Teacher" or u.get("defense_type") == "Teacher":
+            gain = round(u["max_hp"] * percent / 100)
+            u["max_hp"] += gain
+            u["hp"] += gain
+            targets.append(u["name"])
+    if not targets:
+        return
+    events.append({
+        "time": 0, "event_type": "trait_resolve", "side": side, "actor": caster["name"],
+        "effect_type": "team_teacher_hp_buff",
+        "detail": {"targets": targets, "hp_percent": percent},
+    })
+
+
+def _trait_teammate_hp_buff_self_cost(caster, team, enemy_team, params, events, side):
+    # 송주헌(페이스 메이커): 파트너 최대 체력 X% 증가 + 자신의 최대 체력 50% 감소(대가).
+    partner = _teammate(team, caster)
+    if partner and partner["hp"] > 0:
+        gain = round(partner["max_hp"] * params["hp_percent"] / 100)
+        partner["max_hp"] += gain
+        partner["hp"] += gain
+    loss = round(caster["max_hp"] * params["self_hp_loss_percent"] / 100)
+    caster["max_hp"] = max(1, caster["max_hp"] - loss)
+    caster["hp"] = min(caster["hp"], caster["max_hp"])
+    events.append({
+        "time": 0, "event_type": "trait_resolve", "side": side, "actor": caster["name"],
+        "effect_type": "teammate_hp_buff_self_cost",
+        "detail": {
+            "partner": partner["name"] if partner else None,
+            "hp_percent": params["hp_percent"], "self_hp_loss_percent": params["self_hp_loss_percent"],
+        },
+    })
+
+
+def _trait_battlefield_presence_haste(caster, team, enemy_team, params, events, side):
+    # 이의진(복수): 전장(양 팀 모두) 내에 특정 이름의 캐릭터가 있으면 자신의 공격 속도가 전투 끝까지 증가.
+    target_name = params["target_name"]
+    present = any(u and u["name"] == target_name for u in _all_slots(team)) or \
+        any(u and u["name"] == target_name for u in _all_slots(enemy_team))
+    if not present:
+        return
+    caster["status"]["haste_percent"] = params["haste_percent"]
+    caster["status"]["haste_until"] = float("inf")  # 전투가 끝날 때까지(사실상 영구) 유지
+    events.append({
+        "time": 0, "event_type": "trait_resolve", "side": side, "actor": caster["name"],
+        "effect_type": "battlefield_presence_haste",
+        "detail": {"target_name": target_name, "haste_percent": params["haste_percent"]},
+    })
+
+
+def _trait_female_count_haste(caster, team, enemy_team, params, events, side):
+    # 서민석(본능): 전장(양 팀 모두) 내 여성 인물 수 x X%만큼 공격 속도 증가(전투 끝까지 유지).
+    female_count = sum(
+        1 for u in list(_all_slots(team)) + list(_all_slots(enemy_team))
+        if u and _effective_gender(u) == "여"
+    )
+    if female_count <= 0:
+        return
+    haste_percent = female_count * params["percent_per_female"]
+    caster["status"]["haste_percent"] = haste_percent
+    caster["status"]["haste_until"] = float("inf")
+    events.append({
+        "time": 0, "event_type": "trait_resolve", "side": side, "actor": caster["name"],
+        "effect_type": "female_count_haste",
+        "detail": {"female_count": female_count, "haste_percent": haste_percent},
+    })
+
+
+def _trait_dynamic_grant_rear_priority(caster, team, enemy_team, params, events, side):
+    # 최재혁(마법사 아카데미): 파트너의 직업이 마법사면, 그 파트너도 자신처럼 후방 적 우선 공격을 하게
+    # 만든다(_select_basic_attack_target이 rear_priority 플래그로 판정). survive_atk_percent가 있으면
+    # (6성 "+" 티어) 파트너도 후방 적 생존 시 공격력 증가 조건부 보너스를 함께 받는다.
+    partner = _teammate(team, caster)
+    if not partner or partner["hp"] <= 0 or partner.get("job_class") != "마법사":
+        return
+    partner["rear_priority"] = True
+    survive_atk_percent = params.get("survive_atk_percent")
+    if survive_atk_percent:
+        partner["rear_survive_atk_percent"] = survive_atk_percent
+    events.append({
+        "time": 0, "event_type": "trait_resolve", "side": side, "actor": caster["name"],
+        "effect_type": "dynamic_grant_rear_priority",
+        "detail": {"partner": partner["name"]},
+    })
+
+
+def _trait_death_heal_ally(caster, team, enemy_team, params, events, side):
+    # 이영웅(히포크라테스 선서): 지금은 그냥 "장전"만 해둔다 - 실제 발동(회복)은 자신이 죽는 순간
+    # _apply_death_triggers가 매 틱 감지해서 처리한다. 전투 시작 시점엔 아직 아무 일도 안 일어났으므로
+    # 여기선 이벤트를 남기지 않는다.
+    caster["death_heal_percent"] = params["percent"]
 
 
 TRAIT_EFFECT_HANDLERS = {
     "ally_synergy_remove_absorb": _trait_ally_synergy_remove_absorb,
     "ally_synergy_atk_buff": _trait_ally_synergy_atk_buff,
+    "ally_job_conditional_team_buff": _trait_ally_job_conditional_team_buff,
+    "ally_type_conditional_team_buff": _trait_ally_type_conditional_team_buff,
+    "team_teacher_hp_buff": _trait_team_teacher_hp_buff,
+    "teammate_hp_buff_self_cost": _trait_teammate_hp_buff_self_cost,
+    "battlefield_presence_haste": _trait_battlefield_presence_haste,
+    "female_count_haste": _trait_female_count_haste,
+    "dynamic_grant_rear_priority": _trait_dynamic_grant_rear_priority,
+    "death_heal_ally": _trait_death_heal_ally,
 }
 
 
-def _apply_battle_start_traits(team, events, side):
+def _apply_battle_start_traits(team, enemy_team, events, side):
     for slot in ("front", "back"):
         unit = team[slot]
         if not unit or unit["hp"] <= 0 or not unit.get("trait_effect_type"):
             continue
         handler = TRAIT_EFFECT_HANDLERS.get(unit["trait_effect_type"])
         if handler:
-            handler(unit, team, unit["trait_params"], events, side)
+            handler(unit, team, enemy_team, unit["trait_params"], events, side)
 
 
 # ───────────────────────── 성급별 효과(star_effects) - 전투 시작 시 1회만 판정 ─────────────────────────
@@ -463,10 +637,30 @@ def _star_damage_to_gender_bonus(unit, own_team, enemy_team, params):
 
 def _star_self_crit_multiplier(unit, own_team, enemy_team, params):
     # 이의진: 치명타 발동 시 피해 배수를 전역 기본값(CRIT_MULTIPLIER) 대신 이 값으로 대체한다
-    # (_roll_damage_atk가 unit.get("crit_multiplier", CRIT_MULTIPLIER)로 조회). atk/hp 변화는 아니지만
-    # 프론트에 상태 아이콘(치명타 피해량 증가)을 띄우기 위해 5번째 원소(crit_sign)로 표시해서 돌려준다.
+    # (_roll_damage_atk가 unit.get("crit_multiplier", CRIT_MULTIPLIER)로 조회). chance_multiplier가 있으면
+    # (6성 "+" 티어) 치명타 확률도 전역 기본값(CRIT_CHANCE)의 그 배수로 대체한다. atk/hp 변화는 아니지만
+    # 프론트에 상태 아이콘을 띄우기 위해 5번째(crit_sign)/6번째(crit_chance_sign) 원소로 신호를 얹어 돌려준다.
     unit["crit_multiplier"] = params["multiplier"]
-    return [("own", unit, 0, 0, 1)]
+    chance_multiplier = params.get("chance_multiplier")
+    crit_chance_sign = 0
+    if chance_multiplier:
+        unit["crit_chance"] = CRIT_CHANCE * chance_multiplier
+        crit_chance_sign = 1
+    return [("own", unit, 0, 0, 1, crit_chance_sign)]
+
+
+def _star_self_rear_priority(unit, own_team, enemy_team, params):
+    # 최재혁: 후방 적 우선 공격 자체는 _select_basic_attack_target이 unit["rear_priority"] 플래그로
+    # 판정한다(과거엔 이름 하드코딩이었으나 "마법사 아카데미" 특성이 아군에게도 이 플래그를 동적으로
+    # 줄 수 있어야 해서 플래그 기반으로 일반화함). survive_atk_percent가 있으면(6성 "+" 티어) 후방 적이
+    # 그 공격에서 죽지 않고 생존했을 때 공격력을 영구히 올려주는 조건부 보너스도 함께 켠다
+    # (_do_basic_attack에서 실제 판정). atk/hp/치명타 변화는 아니고 상태 아이콘 전용 신호라 7번째
+    # 원소(rear_sign)로 얹어 돌려준다.
+    unit["rear_priority"] = True
+    survive_atk_percent = params.get("survive_atk_percent")
+    if survive_atk_percent:
+        unit["rear_survive_atk_percent"] = survive_atk_percent
+    return [("own", unit, 0, 0, 0, 0, 1)]
 
 
 STAR_EFFECT_HANDLERS = {
@@ -478,6 +672,7 @@ STAR_EFFECT_HANDLERS = {
     "ally_gender_stat_percent": _star_ally_gender_stat_percent,
     "damage_to_gender_bonus": _star_damage_to_gender_bonus,
     "self_crit_multiplier": _star_self_crit_multiplier,
+    "self_rear_priority": _star_self_rear_priority,
 }
 
 
@@ -500,14 +695,15 @@ def _apply_battle_start_star_effects(attacker_team, defender_team, events=None):
             changes = handler(unit, own_team, enemy_team, unit["star_params"]) or []
             if events is None:
                 continue
-            # 튜플은 보통 (rel, target, atk_sign, hp_sign) 4개지만, 이의진(self_crit_multiplier)처럼
-            # 스탯이 아니라 다른 신호(치명타 배수 등)를 알려야 하는 핸들러는 5번째로 crit_sign을 더 얹어
-            # 돌려준다 - 나머지 핸들러는 그대로 4-튜플이라 crit_sign은 기본 0으로 취급된다.
+            # 튜플은 보통 (rel, target, atk_sign, hp_sign) 4개지만, 스탯이 아니라 다른 신호를 알려야 하는
+            # 핸들러는 5번째(crit_sign)/6번째(crit_chance_sign)/7번째(rear_sign)를 더 얹어 돌려준다 -
+            # 나머지 핸들러는 그대로 4-튜플이라 이 신호들은 기본 0으로 취급된다.
             change_dicts = []
             for change in changes:
                 rel, target, atk_sign, hp_sign, *extra = change
-                crit_sign = extra[0] if extra else 0
-                if not (atk_sign or hp_sign or crit_sign):
+                extra = list(extra) + [0, 0, 0]
+                crit_sign, crit_chance_sign, rear_sign = extra[0], extra[1], extra[2]
+                if not (atk_sign or hp_sign or crit_sign or crit_chance_sign or rear_sign):
                     continue
                 change_dicts.append({
                     "target": target["name"],
@@ -515,6 +711,8 @@ def _apply_battle_start_star_effects(attacker_team, defender_team, events=None):
                     "atk": atk_sign,
                     "hp": hp_sign,
                     "crit": crit_sign,
+                    "crit_chance": crit_chance_sign,
+                    "rear_priority": rear_sign,
                 })
             if change_dicts:
                 events.append({
@@ -677,7 +875,21 @@ def _skill_stun_target(caster, own_team, enemy_team, params, time_elapsed):
     if target is None:
         return {"hit": False}
     target["status"]["stun_until"] = time_elapsed + params["seconds"]
-    return {"hit": True, "target": target["name"], "_target_ref": target, "stun_seconds": params["seconds"]}
+    result = {"hit": True, "target": target["name"], "_target_ref": target, "stun_seconds": params["seconds"]}
+    # multiplier가 있으면(송주헌 "격차 벌리기") 기절과 함께 피해도 준다 - 없으면 예전처럼 순수 기절만.
+    multiplier = params.get("multiplier")
+    if multiplier:
+        type_mult = get_type_multiplier(caster["attack_type"], target["defense_type"])
+        atk, is_crit = _roll_damage_atk(caster, time_elapsed)
+        damage = atk * multiplier / 100 * type_mult
+        damage = _apply_gendered_damage_bonus(caster, target, damage)
+        dealt = _apply_damage(target, damage, time_elapsed)
+        result["hits"] = [{
+            "target": target["name"], "_target_ref": target, "damage": dealt,
+            "target_hp_after": target["hp"], "target_max_hp": target["max_hp"],
+            "is_crit": is_crit, "type_multiplier": type_mult,
+        }]
+    return result
 
 
 def _skill_aoe_enemy_damage(caster, own_team, enemy_team, params, time_elapsed):
@@ -776,7 +988,7 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events):
     targets = _alive_units(enemy_team)
     if not targets:
         return
-    if unit["name"] == "김남옥" and unit.get("star", 1) >= 4:
+    if unit["name"] == "김남옥" and unit.get("star", 1) >= 3:
         for i, target in enumerate(targets):
             mult = 1.0 if i == 0 else 0.25
             type_mult = get_type_multiplier(unit["attack_type"], target["defense_type"])
@@ -801,12 +1013,48 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events):
         damage = _apply_gendered_damage_bonus(unit, target, damage)
         dealt = _apply_damage(target, damage, time_elapsed)
         stun_seconds = _apply_type2_stun_if_active(unit, target, time_elapsed)
+        # 최재혁 6성 "+": 후방 우선 타겟(target)이 이 공격에서 죽지 않고 생존하면, 그 시점부터 전투가
+        # 끝날 때까지 영구히 공격력이 오른다 - 한 번만 트리거되도록 플래그로 막는다(재적용/누적 방지).
+        rear_bonus = unit.get("rear_survive_atk_percent")
+        if rear_bonus and target["hp"] > 0 and not unit.get("_rear_survive_bonus_granted"):
+            unit["_rear_survive_bonus_granted"] = True
+            unit["status"]["atk_percent_bonus"] += rear_bonus
         events.append({
             "time": time_elapsed, "event_type": "basic_attack", "side": side, "type_multiplier": type_mult,
             "actor": unit["name"], "target": target["name"], "damage": dealt,
             "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit,
             "target_stunned": bool(stun_seconds), "stun_seconds": stun_seconds,
         })
+
+
+def _apply_death_triggers(team, side, events, time_elapsed):
+    """이영웅(히포크라테스 선서): 사망 시 1회 아군 전체를 회복시키는 것처럼, "죽는 순간" 발동하는
+    효과 전용 훅. 매 틱마다 각 팀을 훑어서 "죽었는데 아직 트리거 안 한" 유닛을 찾아 1회만 발동한다 -
+    사망은 여러 곳(기본공격/각종 스킬)에서 일어날 수 있어 그 모든 지점에 훅을 심는 대신, 여기 한
+    곳에서 "죽어 있음" 상태만 감지한다(최대 1틱=0.05초 지연이지만 체감상 차이 없음)."""
+    for slot in ("front", "back", "summon"):
+        unit = team[slot]
+        if not unit or unit["hp"] > 0 or not unit.get("death_heal_percent") or unit.get("_death_triggered"):
+            continue
+        unit["_death_triggered"] = True
+        heal_base = unit["max_hp"]
+        heal_percent = unit["death_heal_percent"]
+        heals = []
+        for ally in _alive_units(team):
+            heal = round(heal_base * heal_percent / 100)
+            before = ally["hp"]
+            ally["hp"] = min(ally["max_hp"], ally["hp"] + heal)
+            if ally["hp"] != before:
+                heals.append({
+                    "target": ally["name"], "amount": ally["hp"] - before,
+                    "target_hp_after": ally["hp"], "target_max_hp": ally["max_hp"],
+                })
+        if heals:
+            events.append({
+                "time": time_elapsed, "event_type": "death_trigger_resolve", "side": side,
+                "actor": unit["name"], "effect_type": "death_heal_ally",
+                "detail": {"heals": heals},
+            })
 
 
 def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
@@ -819,12 +1067,15 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
     time_elapsed = 0.0
     events = []
 
-    _apply_battle_start_traits(attacker_team, events, "attacker")
-    _apply_battle_start_traits(defender_team, events, "defender")
+    _apply_battle_start_traits(attacker_team, defender_team, events, "attacker")
+    _apply_battle_start_traits(defender_team, attacker_team, events, "defender")
     _apply_battle_start_star_effects(attacker_team, defender_team, events)
 
     while _team_alive(attacker_team) and _team_alive(defender_team):
         time_elapsed = round(time_elapsed + TICK, 2)
+
+        _apply_death_triggers(attacker_team, "attacker", events, time_elapsed)
+        _apply_death_triggers(defender_team, "defender", events, time_elapsed)
 
         for side_name, own_team, enemy_team in (
             ("attacker", attacker_team, defender_team),

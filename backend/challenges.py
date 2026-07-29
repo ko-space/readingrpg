@@ -37,7 +37,10 @@ def compute_progress(db: Session, user, challenge: Challenge) -> dict:
     target = challenge.condition_value or 1
     current = 0
 
-    if ctype == "cg_unlocked":
+    if ctype == "level":
+        current = user.level
+
+    elif ctype == "cg_unlocked":
         target = 1
         exists = db.query(UserCgUnlock).filter(
             UserCgUnlock.user_id == user.id,

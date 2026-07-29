@@ -36,7 +36,8 @@
         if (ach.reward_gold) parts.push(`골드 ${Number(ach.reward_gold).toLocaleString()}`);
         if (ach.reward_exp) parts.push(`EXP ${Number(ach.reward_exp).toLocaleString()}`);
         (ach.reward_items || []).forEach((item) => {
-            parts.push(`${item.name} x${item.quantity || 1}`);
+            const label = item.type === "gacha_points" ? "모집 포인트" : item.name;
+            parts.push(`${label} x${item.quantity || 1}`);
         });
         return parts.length ? `보상: ${parts.join(" · ")}` : "";
     }
