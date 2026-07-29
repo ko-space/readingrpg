@@ -108,12 +108,42 @@
     function traitLogText(event) {
         const d = event.detail || {};
         if (event.effect_type === "ally_synergy_remove_absorb") {
-            return `${event.actor}의 특성 발동! ${d.removed}을(를) 흡수하여 공격력·최대체력 ${d.absorb_percent}% 증가`;
+            return `${event.actor}의 [Special] 발동! ${d.removed}을(를) 흡수하여 공격력·최대체력 ${d.absorb_percent}% 증가`;
         }
         if (event.effect_type === "ally_synergy_atk_buff") {
-            return `${event.actor}의 특성 발동! ${d.partner}와(과)의 시너지로 공격력 ${d.atk_percent}% 증가`;
+            if (d.hp_percent !== undefined) {
+                return `${event.actor}의 [Special] 발동! ${d.partner}와(과)의 시너지로 최대 체력 ${d.hp_percent}% 증가`;
+            }
+            return `${event.actor}의 [Special] 발동! ${d.partner}와(과)의 시너지로 공격력 ${d.atk_percent}% 증가`;
         }
-        return `${event.actor}의 특성 발동! (${event.effect_type}) ${JSON.stringify(d)}`;
+        if (event.effect_type === "ally_job_conditional_team_buff") {
+            const parts = [];
+            if (d.atk_percent) parts.push(`공격력 ${d.atk_percent}%`);
+            if (d.hp_percent) parts.push(`최대 체력 ${d.hp_percent}%`);
+            return `${event.actor}의 [Special] 발동! ${d.partner}와(과)의 시너지로 아군 전체 ${parts.join("·")} 증가`;
+        }
+        if (event.effect_type === "ally_type_conditional_team_buff") {
+            const parts = [];
+            if (d.atk_percent) parts.push(`공격력 ${d.atk_percent}%`);
+            if (d.hp_percent) parts.push(`최대 체력 ${d.hp_percent}%`);
+            return `${event.actor}의 [Special] 발동! 아군 전체 ${parts.join("·")} 증가`;
+        }
+        if (event.effect_type === "team_teacher_hp_buff") {
+            return `${event.actor}의 [Special] 발동! 팀 내 선생 타입 캐릭터 최대 체력 ${d.hp_percent}% 증가`;
+        }
+        if (event.effect_type === "teammate_hp_buff_self_cost") {
+            return `${event.actor}의 [Special] 발동! ${d.partner ? `${d.partner} 최대 체력 ${d.hp_percent}% 증가, ` : ""}자신의 최대 체력 ${d.self_hp_loss_percent}% 감소`;
+        }
+        if (event.effect_type === "battlefield_presence_haste") {
+            return `${event.actor}의 [Special] 발동! 전장의 ${d.target_name}에게 반응해 공격 속도 ${d.haste_percent}% 증가`;
+        }
+        if (event.effect_type === "female_count_haste") {
+            return `${event.actor}의 [Special] 발동! 전장 내 여성 ${d.female_count}명 - 공격 속도 ${d.haste_percent}% 증가`;
+        }
+        if (event.effect_type === "dynamic_grant_rear_priority") {
+            return `${event.actor}의 [Special] 발동! ${d.partner}도 후방 적 우선 공격`;
+        }
+        return `${event.actor}의 [Special] 발동! (${event.effect_type}) ${JSON.stringify(d)}`;
     }
 
     function log(text) {
@@ -581,6 +611,16 @@
             if (!targetSlot) return { text: "대상 없음" };
             units[targetSlot].status.stunUntil = performance.now() + params.seconds * 1000;
             renderUnit(targetSlot);
+            // 송주헌 "격차 벌리기": multiplier가 있으면 기절과 함께 피해도 준다.
+            if (params.multiplier) {
+                const caster = units[casterSlot];
+                const target = units[targetSlot];
+                const typeMult = getTypeMultiplier(caster.attackType, target.defenseType);
+                const [atk, isCrit] = rollDamageAtk(casterSlot);
+                const dealt = applyDamage(targetSlot, atk * params.multiplier / 100 * typeMult);
+                hitVisual(targetSlot, isCrit, typeMult);
+                return { text: `${target.name} ${params.seconds}초 기절, 피해 ${dealt}${isCrit ? "(치명타!)" : ""}`, targetSlot };
+            }
             return { text: `${units[targetSlot].name} ${params.seconds}초 기절`, targetSlot };
         },
 
@@ -828,6 +868,7 @@
     const STATUS_ICON_FILES = {
         atk_up: "Combat_Icon_Buff_ATK.png", maxhp_up: "Combat_Icon_Buff_MAXHP.png",
         atk_speed_up: "Combat_Icon_Buff_AttackSpeed.png", crit_up: "Combat_Icon_Buff_CriticalDamage.png",
+        crit_chance_up: "Combat_Icon_Buff_CriticalChance.png", rear_priority: "Combat_Icon_Special_AttackRear.png",
         atk_down: "Combat_Icon_Debuff_ATK.png",
         maxhp_down: "Combat_Icon_Debuff_MAXHP.png", stun: "Combat_Icon_CC_Stunned.png",
         knockback: "Combat_Icon_CC_Knockback.png", heal: "Combat_Icon_Recovery_Heal.png",
@@ -1906,7 +1947,7 @@
                     setStatusIcon(actorSlot, "heal", { source: `${actorSlot}:type_swap_heal`, durationMs: MOMENT_ICON_MS });
                 }
 
-                log(`[수동] ${units[actorSlot].name} 스킬 발동! (${skillMech.effect_type}) - ${result.text}`);
+                log(`[수동] ${units[actorSlot].name} [Active] 발동! (${skillMech.effect_type}) - ${result.text}`);
             }, MANUAL_CAST_MS);
         });
     }
@@ -2057,6 +2098,8 @@
                 if (change.hp > 0) setStatusIcon(changedSlot, "maxhp_up", { source });
                 if (change.hp < 0) setStatusIcon(changedSlot, "maxhp_down", { source });
                 if (change.crit > 0) setStatusIcon(changedSlot, "crit_up", { source });
+                if (change.crit_chance > 0) setStatusIcon(changedSlot, "crit_chance_up", { source });
+                if (change.rear_priority > 0) setStatusIcon(changedSlot, "rear_priority", { source });
                 flashEffectAura(changedSlot, (change.atk < 0 || change.hp < 0) ? "debuff" : "buff");
             });
             log(`[성급효과] ${event.actor} (${event.effect_type}) ${JSON.stringify(event.detail?.changes)}`);
@@ -2072,8 +2115,28 @@
                 }
             } else if (event.effect_type === "ally_synergy_atk_buff" && actorSlot) {
                 flashEffectAura(actorSlot, "buff");
-                setStatusIcon(actorSlot, "atk_up", { source: `${actorSlot}:${event.effect_type}` });
+                if (event.detail?.hp_percent !== undefined) {
+                    setStatusIcon(actorSlot, "maxhp_up", { source: `${actorSlot}:${event.effect_type}` });
+                } else {
+                    setStatusIcon(actorSlot, "atk_up", { source: `${actorSlot}:${event.effect_type}` });
+                }
+            } else if (event.effect_type === "dynamic_grant_rear_priority" && event.detail?.partner) {
+                const partnerSlot = findSlotByName(actorSide, event.detail.partner);
+                if (partnerSlot) {
+                    setStatusIcon(partnerSlot, "rear_priority", { source: `${partnerSlot}:${event.effect_type}` });
+                }
             }
+        } else if (event.event_type === "death_trigger_resolve") {
+            // 이영웅 "히포크라테스 선서": 자신이 죽는 순간 아군을 회복.
+            (event.detail?.heals || []).forEach((heal) => {
+                const healSlot = findSlotByName(actorSide, heal.target);
+                if (!healSlot) return;
+                units[healSlot].hp = heal.target_hp_after;
+                renderUnit(healSlot);
+                flashEffectAura(healSlot, "heal");
+                setStatusIcon(healSlot, "heal", { source: `${event.actor}:death_heal`, durationMs: 1200 });
+            });
+            log(`[특성] ${event.actor}의 [Special] 발동! 사망과 함께 아군 회복`);
         } else if (event.event_type === "cast_start") {
             if (actorSlot) {
                 const castImgEl = document.querySelector(`[data-unit="${actorSlot}"] .battle-unit-img`);
@@ -2195,6 +2258,16 @@
                         source: `${event.actor}:stun`,
                         durationMs: (event.detail.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
                     });
+                }
+                // 송주헌 "격차 벌리기": 기절과 함께 피해도 준다 - hits가 있으면 데미지 숫자/체력바도 반영.
+                if (event.detail?.hits?.length) {
+                    const hit = event.detail.hits[0];
+                    const dmgSlot = findHitSlot(actorSide, hit.target, hit.target_side);
+                    if (dmgSlot) {
+                        units[dmgSlot].hp = hit.target_hp_after;
+                        renderUnit(dmgSlot);
+                        flashHit(dmgSlot, hit.is_crit, hit.type_multiplier);
+                    }
                 }
             } else if (dispatchEffectType === "damage_hp_percent_plus_atk" && actorSlot && event.detail?.hits?.length) {
                 const hit = event.detail.hits[0];

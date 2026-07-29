@@ -50,24 +50,35 @@ def get_character_catalog(name: str) -> dict | None:
 MAX_PASSES = 20  # 메타 업적끼리 서로를 트리거하며 무한 루프에 빠지는 실수를 막는 안전장치
 
 
+# 성급별 텍스트가 "이 성급엔 효과 없음"을 나타낼 때 쓰는 자리표시 문구(주로 패시브) - inventory.js의
+# NO_EFFECT_TEXT와 동일 문구. 콜론이 없어서 그대로 두면 "이름"으로 잘못 뽑힐 수 있어 항상 걸러야 한다.
+NO_EFFECT_TEXT = "해당 성급의 별도 효과가 없습니다."
+
+
 def _extract_name(effect_text: str | None) -> str | None:
     """skill_effects/trait_effects는 "이름: 설명" 형식의 문장이다(예: "청진기 진료: 아군의 체력을...").
-    획득 연출(가챠 결과화면 등)에는 설명 없이 이름만 필요해서, 콜론 앞부분만 잘라 돌려준다."""
-    if not effect_text:
+    획득 연출(가챠 결과화면 등)에는 설명 없이 이름만 필요해서, 콜론 앞부분만 잘라 돌려준다. 콜론이
+    없으면(패시브 대부분) 아직 이름이 없다는 뜻이라 None."""
+    if not effect_text or ":" not in effect_text:
         return None
     return effect_text.split(":", 1)[0].strip()
 
 
-def _first_unlocked_name(effects_by_star: dict | None) -> str | None:
-    """스킬/특성은 낮은 성급에선 아직 null이었다가 특정 성급부터 생기는데, 이름 자체는 성급과 무관하게
-    "그 캐릭터가 가진 스킬/특성이 뭔지" 보여주는 용도라서, 아직 해금 전이어도(예: 갓 뽑은 낮은 성급)
-    1성부터 순서대로 훑어서 처음 나오는(=언젠가 해금될) 이름을 보여준다. 아예 스킬/특성이 없는
-    캐릭터는(전 성급 null) 그대로 None -> 화면에서 "없음"."""
+def _first_unlocked_text(effects_by_star: dict | None) -> str | None:
+    """스킬/특성/패시브는 낮은 성급에선 아직 null이거나 자리표시 문구였다가 특정 성급부터 실제 내용이
+    생기는데, 그 내용 자체는 성급과 무관하게 "그 캐릭터가 가진 능력이 뭔지" 보여주는 용도라서, 아직
+    해금 전이어도(예: 갓 뽑은 낮은 성급) 1성부터 순서대로 훑어서 처음 나오는(=언젠가 해금될) 원문을
+    돌려준다. NO_EFFECT_TEXT(자리표시)는 실제 내용이 아니므로 건너뛴다."""
     for star_key in ["1", "2", "3", "4", "5", "6"]:
-        extracted = _extract_name((effects_by_star or {}).get(star_key))
-        if extracted:
-            return extracted
+        text = (effects_by_star or {}).get(star_key)
+        if text and text != NO_EFFECT_TEXT:
+            return text
     return None
+
+
+def _first_unlocked_name(effects_by_star: dict | None) -> str | None:
+    """이름(콜론 앞부분)만 필요할 때 - 없으면 None -> 화면에서 "없음"."""
+    return _extract_name(_first_unlocked_text(effects_by_star))
 
 
 def resolve_character_reveal_info(name: str, star: int) -> dict:
@@ -77,12 +88,18 @@ def resolve_character_reveal_info(name: str, star: int) -> dict:
     안 쓰지만, 나중에 성급별로 다른 이름을 쓰게 되면 다시 필요해질 수 있어 시그니처는 유지)."""
     catalog = _CHARACTER_BY_NAME.get(name)
     if not catalog:
-        return {"gender": None, "attack_type": None, "defense_type": None, "skill_name": None, "trait_name": None}
+        return {
+            "gender": None, "attack_type": None, "defense_type": None,
+            "passive_name": None, "skill_name": None, "trait_name": None,
+        }
 
     return {
         "gender": catalog.get("gender"),
         "attack_type": catalog.get("attack_type"),
         "defense_type": catalog.get("defense_type"),
+        # 패시브(star_effects)는 대부분 아직 "이름: 설명" 형식이 아니라 설명만 있어서(_first_unlocked_name이
+        # None을 돌려줌) - 그런 경우 자리표시 이름("패시브")으로 대체한다.
+        "passive_name": _first_unlocked_name(catalog.get("star_effects")) or "패시브",
         "skill_name": _first_unlocked_name(catalog.get("skill_effects")),
         "trait_name": _first_unlocked_name(catalog.get("trait_effects")),
     }
@@ -334,6 +351,8 @@ def _grant_reward_items(db: Session, user, reward_items) -> list[Character]:
                 user_item.quantity += quantity
             else:
                 db.add(UserItem(user_id=user.id, item_id=item_row.id, quantity=quantity))
+        elif kind == "gacha_points":
+            user.gacha_points += quantity
 
     return granted
 

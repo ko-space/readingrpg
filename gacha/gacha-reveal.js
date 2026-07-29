@@ -2,7 +2,7 @@
 // window.showCharacterReveal(characters, onClose)를 호출해서 띄운다. 이 파일은 호출부와 별개로 동작 -
 // 호출부가 이 파일 내부를 몰라도 되고, 이 파일도 호출부 내부를 몰라도 됨.
 // characters: [{ id, name, rarity, job_class, description, outfit, gender, attack_type, defense_type,
-//                skill_name, trait_name, is_pickup, is_duplicate }, ...]
+//                passive_name, skill_name, trait_name, is_pickup, is_duplicate }, ...]
 // 같은 이름의 캐릭터가 여러 장 섞여 있으면 이름 기준으로 중복 제거해서 한 번만 보여주고,
 // 서로 다른 캐릭터가 여러 명이면 큐에 쌓아뒀다가 하나씩(빈 화면 클릭 또는 "장착하기" 클릭 시) 순차 재생한다.
 (function () {
@@ -52,28 +52,36 @@
                     <div class="reveal-info-label">희귀도</div>
                     <div class="reveal-info-value" id="reveal-rarity-value"></div>
                 </div>
-                <div class="reveal-info-row">
-                    <div class="reveal-info-label">직업</div>
-                    <div class="reveal-info-value" id="reveal-job-value"></div>
+                <div class="reveal-info-row-split">
+                    <div class="reveal-info-col">
+                        <div class="reveal-info-label">직업</div>
+                        <div class="reveal-info-value" id="reveal-job-value"></div>
+                    </div>
+                    <div class="reveal-info-col">
+                        <div class="reveal-info-label">성별</div>
+                        <div class="reveal-info-value" id="reveal-gender-value"></div>
+                    </div>
+                </div>
+                <div class="reveal-info-row-split">
+                    <div class="reveal-info-col">
+                        <div class="reveal-info-label">공격 타입</div>
+                        <div class="reveal-info-value" id="reveal-attack-type-value"></div>
+                    </div>
+                    <div class="reveal-info-col">
+                        <div class="reveal-info-label">방어 타입</div>
+                        <div class="reveal-info-value" id="reveal-defense-type-value"></div>
+                    </div>
                 </div>
                 <div class="reveal-info-row">
-                    <div class="reveal-info-label">성별</div>
-                    <div class="reveal-info-value" id="reveal-gender-value"></div>
+                    <div class="reveal-info-label">Passive</div>
+                    <div class="reveal-info-value" id="reveal-passive-value"></div>
                 </div>
                 <div class="reveal-info-row">
-                    <div class="reveal-info-label">공격 타입</div>
-                    <div class="reveal-info-value" id="reveal-attack-type-value"></div>
-                </div>
-                <div class="reveal-info-row">
-                    <div class="reveal-info-label">방어 타입</div>
-                    <div class="reveal-info-value" id="reveal-defense-type-value"></div>
-                </div>
-                <div class="reveal-info-row">
-                    <div class="reveal-info-label">스킬</div>
+                    <div class="reveal-info-label">Active</div>
                     <div class="reveal-info-value" id="reveal-skill-value"></div>
                 </div>
                 <div class="reveal-info-row">
-                    <div class="reveal-info-label">특성</div>
+                    <div class="reveal-info-label">Special</div>
                     <div class="reveal-info-value" id="reveal-trait-value"></div>
                 </div>
                 <button class="reveal-equip-btn" id="reveal-equip-btn">장착하기</button>
@@ -186,7 +194,7 @@
     }
 
     // character: { id, name, rarity, job_class, description, outfit, gender, attack_type, defense_type,
-    //              skill_name, trait_name, is_pickup, is_duplicate }
+    //              passive_name, skill_name, trait_name, is_pickup, is_duplicate }
     function playReveal(overlay, character) {
         skipped = false;
         clearTimers();
@@ -203,6 +211,7 @@
         overlay.querySelector("#reveal-gender-value").textContent = character.gender || "-";
         overlay.querySelector("#reveal-attack-type-value").textContent = TYPE_LABELS[character.attack_type] || character.attack_type || "-";
         overlay.querySelector("#reveal-defense-type-value").textContent = TYPE_LABELS[character.defense_type] || character.defense_type || "-";
+        overlay.querySelector("#reveal-passive-value").textContent = character.passive_name || "없음";
         overlay.querySelector("#reveal-skill-value").textContent = character.skill_name || "없음";
         overlay.querySelector("#reveal-trait-value").textContent = character.trait_name || "없음";
         overlay.querySelector("#reveal-name").textContent = character.name;

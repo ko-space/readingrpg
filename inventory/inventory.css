@@ -544,35 +544,55 @@
 
 .inventory-info-row strong { color: #1f3f54; }
 
-/* ── 스킬/특성 버튼(한 줄에 나란히) ── */
-.inventory-skill-trait-row {
+.inventory-info-row-wide {
+    flex-shrink: 0;
+}
+
+/* ── 스킬 3분류([Passive]/[Active]/[Special]) 버튼 - 한 줄(가로 3칸)에 배치 ── */
+.inventory-ability-section {
     flex-shrink: 0;
     display: flex;
+    flex-direction: row;
     gap: 10px;
 }
 
-.inventory-skill-trait-btn {
+.inventory-ability-group {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.inventory-ability-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.inventory-ability-btn {
     flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    padding: 10px 12px;
+    padding: 10px 8px;
     border: 1px solid #8cb4c7;
     border-radius: 6px;
     background: linear-gradient(160deg, #eaf6fb, #d8edf5);
     color: #1f3f54;
     font-weight: 900;
-    font-size: 14px;
+    font-size: 13px;
+    text-align: center;
     cursor: pointer;
 }
 
-.inventory-skill-trait-btn:hover:not(:disabled) {
+.inventory-ability-btn:hover:not(:disabled) {
     box-shadow: 0 0 10px rgba(78, 183, 223, .5);
 }
 
-/* 해당 성급에 스킬/특성이 없으면 비활성화 + 자물쇠 아이콘(썸네일 성급 버튼과 같은 톤) */
-.inventory-skill-trait-btn:disabled {
+/* 해당 성급에 아직 없으면 비활성화 + 자물쇠 아이콘(썸네일 성급 버튼과 같은 톤) */
+.inventory-ability-btn:disabled {
     cursor: not-allowed;
     opacity: .6;
     background: #e4eaec;
@@ -594,120 +614,7 @@
     background: #eef7fa;
 }
 
-/*
- * flex: 1 (= flex-basis: 0%)을 쓰면 이 섹션이 "축소 압박"에서 완전히 면제돼(scaled shrink factor가 0이
- * 되기 때문) 오히려 위쪽 형제 요소(basic-info/description 등)만 계속 짜부라들고, 정작 이 섹션 안의
- * 성급 효과 박스는 자기 min-height(92px)를 지키려다 부모 박스 경계 밖으로 새어나가 장착 버튼에 가려지는
- * 문제가 있었다. flex-basis를 auto로 바꿔 "내용물 크기 이하로는 절대 줄어들지 않게" 하고, 대신 공간이
- * 부족하면 바깥 .inventory-detail-right의 overflow-y:auto가 패널 전체를 스크롤하게 맡긴다.
- */
-.inventory-star-section {
-    display: flex;
-    flex-direction: column;
-    gap: 9px;
-    min-height: 0;
-    flex: 1 0 auto;
-}
 .inventory-section-label { color: #31566c; font-weight: 900; }
-.inventory-star-buttons { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; }
-.inventory-star-button {
-    position: relative;
-    min-width: 0;
-    padding: 10px 3px;
-    border: 2px solid #a7bfcb;
-    border-radius: 6px;
-    background: #e8eff2;
-    color: #70838e;
-    font-weight: 900;
-    cursor: pointer;
-}
-.inventory-star-button.owned { color: #8b6700; border-color: #e4bd3b; background: #fff6c7; }
-.inventory-star-button.selected { color: white; border-color: #2e7397; background: #347fa7; box-shadow: 0 0 0 2px rgba(72,160,202,.25); }
-
-/* 존재는 하지만 아직 달성 못 한 성급: 자물쇠 표시, 흐리게 */
-.inventory-star-button.locked {
-    color: #8a94a0;
-    background: #dde4e8;
-    border-color: #b7c2ca;
-    cursor: not-allowed;
-    opacity: .78;
-}
-
-/* 이 캐릭터 등급상 애초에 존재할 수 없는 성급: 자물쇠 없이 그냥 흐리게 */
-.inventory-star-button.nonexistent {
-    color: #b7c2ca;
-    background: #eef2f4;
-    border-color: #d3dbe0;
-    border-style: dashed;
-    cursor: not-allowed;
-    opacity: .55;
-}
-
-/* 자물쇠를 별도 줄로 빼지 않고 "★N" 텍스트 위에 겹쳐서, 버튼 세로 길이가 늘어나지 않게 한다
-   (성급 버튼들이 길어지면 아래 성급별 효과 박스가 장착하기 버튼에 밀려 잘리는 문제가 있었음). */
-.inventory-star-lock {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 16px;
-    height: 16px;
-    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .6));
-}
-.inventory-star-owned-count {
-    position: absolute;
-    top: -7px;
-    right: -5px;
-    min-width: 19px;
-    height: 19px;
-    padding: 0 4px;
-    border-radius: 10px;
-    display: grid;
-    place-items: center;
-    color: white;
-    background: #e69c24;
-    font-size: 9px;
-}
-.inventory-star-effect {
-    flex: 1;
-    min-height: 92px;
-    /* "효과" 문구가 길어서 flex로 배분된 높이보다 내용이 커지면, 예전엔 overflow가 그대로 아래로
-       흘러넘쳐서 장착하기 버튼에 가려졌다. 박스 안에서 자체적으로 스크롤되게 해서 절대 밖으로 안 새게 한다. */
-    overflow-y: auto;
-    padding: 14px 16px;
-    border: 2px solid #a4c2cf;
-    border-radius: 7px;
-    color: #314f60;
-    background: linear-gradient(160deg, #f8fcfd, #e7f2f6);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.star-effect-title {
-    font-weight: 900;
-    color: #1f3f54;
-    margin-bottom: 2px;
-}
-
-.star-effect-row {
-    display: flex;
-    gap: 10px;
-    line-height: 1.5;
-}
-
-.star-effect-row > span:first-child {
-    flex: 0 0 auto;
-    min-width: 58px;
-    font-weight: 900;
-    color: #5c7683;
-}
-
-.star-effect-row > span:last-child,
-.star-effect-row > strong {
-    color: #314f60;
-    font-weight: 700;
-}
 
 .inventory-equip-button {
     flex-shrink: 0;
@@ -757,6 +664,11 @@
     font-weight: 700;
 }
 
+.subinfo-number {
+    color: #b1550f;
+    font-weight: 900;
+}
+
 @media (max-width: 900px) {
     .inventory-character-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .inventory-detail-view { grid-template-columns: 42% 1fr; }
@@ -773,5 +685,4 @@
     .inventory-detail-view { display: flex; flex-direction: column; overflow-y: auto; }
     .inventory-detail-left { min-height: 540px; flex: 0 0 auto; }
     .inventory-detail-right { margin: 0 14px 20px; overflow: visible; }
-    .inventory-star-buttons { overflow-x: auto; grid-template-columns: repeat(6, 70px); }
 }

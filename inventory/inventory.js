@@ -3,6 +3,14 @@
     // API_BASE_URL은 shared/api-config.js가 이 스크립트보다 먼저 로드되어 전역으로 제공한다.
     const OUTFIT_IMAGE_BASE = `${API_BASE_URL}/static/outfits/`;
     const TYPE_LABELS = { Teacher: "교사", Parent: "부모", Student: "학생" };
+    // 스킬 3분류 - 필드명은 그대로(star_effects=Passive, skill_effects=Active, trait_effects=Special)
+    // 두고 화면에만 새 명칭을 쓴다. fallbackName은 "이름:설명" 형식이 아닌 텍스트(주로 Passive)일 때
+    // 버튼에 표시할 이름이 없어서 대신 쓰는 값.
+    const ABILITY_META = {
+        passive: { field: "star_effects", bracket: "Passive", fallbackName: "패시브" },
+        active: { field: "skill_effects", bracket: "Active", fallbackName: "액티브" },
+        special: { field: "trait_effects", bracket: "Special", fallbackName: "스페셜" },
+    };
 
     const modal = document.getElementById("modal-character");
     const box = document.getElementById("inventory-modal-box");
@@ -81,11 +89,9 @@
         });
         document.getElementById("inventory-outfit-button")?.addEventListener("click", toggleOutfitPanel);
         document.getElementById("inventory-equip-button")?.addEventListener("click", equipSelectedCharacter);
-        document.getElementById("inventory-skill-btn")?.addEventListener("click", () => openSkillTraitModal("skill"));
-        document.getElementById("inventory-trait-btn")?.addEventListener("click", () => openSkillTraitModal("trait"));
-        document.getElementById("inventory-subinfo-close")?.addEventListener("click", closeSkillTraitModal);
+        document.getElementById("inventory-subinfo-close")?.addEventListener("click", closeAbilityModal);
         document.getElementById("inventory-subinfo-overlay")?.addEventListener("click", (e) => {
-            if (e.target.id === "inventory-subinfo-overlay") closeSkillTraitModal();
+            if (e.target.id === "inventory-subinfo-overlay") closeAbilityModal();
         });
     }
 
@@ -279,123 +285,106 @@
         equipButton.disabled = Boolean(g.is_equipped);
         equipButton.textContent = g.is_equipped ? "현재 로비에 장착 중" : "로비에 장착하기";
 
-        renderStarButtons(g.star);
+        renderAbilities();
         renderOutfitChoices();
         document.getElementById("inventory-outfit-panel").hidden = true;
-        closeSkillTraitModal();
+        closeAbilityModal();
     }
 
-    function renderStarButtons(initialStar) {
-        const holder = document.getElementById("inventory-star-buttons");
+    // 성급별 텍스트가 "이 성급엔 효과 없음"을 나타낼 때 쓰는 자리표시 문구(주로 패시브) - 문자열 자체는
+    // 채워져 있어서 단순 truthy 체크로는 "있음"으로 오판된다.
+    const NO_EFFECT_TEXT = "해당 성급의 별도 효과가 없습니다.";
+
+    function isAbilityAvailable(text) {
+        return Boolean(text) && text !== NO_EFFECT_TEXT;
+    }
+
+    // "이름: 설명" 형식에서 이름만 떼어낸다. 패시브는 보통 콜론이 없는 설명뿐이라 이름이 없는 채로 온다.
+    function splitAbilityText(text) {
+        if (!text) return { name: "", desc: "" };
+        const idx = text.indexOf(":");
+        if (idx === -1) return { name: "", desc: text.trim() };
+        return { name: text.slice(0, idx).trim(), desc: text.slice(idx + 1).trim() };
+    }
+
+    // 지금 성급에 아직 잠긴 능력이라도 버튼엔 이름을 보여줘야 하므로, 이 캐릭터의 전 성급(1~6)을 훑어서
+    // "이름: 설명" 형식이 처음 나오는 성급의 이름을 능력의 "정식 이름"으로 쓴다(성급이 올라가도 이름 자체는
+    // 안 바뀌는 게 원칙이라 어느 성급에서 찾든 같은 이름이어야 정상). 패시브처럼 애초에 이름이 없는
+    // 능력은 못 찾으면 fallback으로 대체된다 - 나중에 characters.json의 star_effects에 "이름: 설명"
+    // 형식으로 이름을 채우면 코드 변경 없이 자동으로 이 이름이 뜬다.
+    function findCanonicalAbilityName(effectsByStar) {
+        for (let star = 1; star <= 6; star++) {
+            const text = effectsByStar?.[String(star)];
+            if (!isAbilityAvailable(text)) continue;
+            const { name } = splitAbilityText(text);
+            if (name) return name;
+        }
+        return "";
+    }
+
+    // 숫자(퍼센트/배수 등 뒤에 붙는 단위 포함)를 굵게 강조. escapeHtml을 숫자 매치 앞뒤로만 따로 적용해서,
+    // "&#039;" 같은 엔티티 안의 숫자가 강조 정규식에 걸려 태그가 깨지는 일이 없게 한다.
+    function highlightNumbers(rawText) {
+        const NUM_RE = /\d+(?:\.\d+)?(?:%|배|회|초|명|x|X)?/g;
+        let out = "";
+        let lastIndex = 0;
+        let match;
+        while ((match = NUM_RE.exec(rawText)) !== null) {
+            out += escapeHtml(rawText.slice(lastIndex, match.index));
+            out += `<strong class="subinfo-number">${escapeHtml(match[0])}</strong>`;
+            lastIndex = match.index + match[0].length;
+        }
+        out += escapeHtml(rawText.slice(lastIndex));
+        return out;
+    }
+
+    // 카드 자체의 현재 성급(g.star) 기준으로만 보여준다 - 예전처럼 다른 성급을 미리 눌러보는 기능은 없앰.
+    function renderAbilities() {
+        const g = selectedGroup;
+        const key = String(g.star);
+
+        const expMultiplier = g.exp_multiplier?.[key];
+        const expSubjects = g.exp_subjects || [];
+        document.getElementById("inventory-info-exp-subject").textContent = expSubjects.length ? expSubjects.join(", ") : "-";
+        document.getElementById("inventory-info-exp-rate").textContent = expMultiplier == null ? "-" : `${expMultiplier}배`;
+
+        Object.entries(ABILITY_META).forEach(([kind, meta]) => {
+            const effectsByStar = g[meta.field] || {};
+            renderAbilityGroup(kind, meta, effectsByStar[key], findCanonicalAbilityName(effectsByStar));
+        });
+    }
+
+    function renderAbilityGroup(kind, meta, text, canonicalName) {
+        const holder = document.getElementById(`inventory-ability-${kind}`);
+        if (!holder) return;
         holder.innerHTML = "";
 
-        // 캐릭터 등급별 시작 성급보다 낮은 성급은 이 캐릭터에게 구조적으로 존재하지 않는다
-        // (예: 신화 등급은 ★5부터 시작하므로 ★1~★4는 애초에 있을 수 없음).
-        const startStar = selectedGroup.start_star || 1;
+        const { desc } = splitAbilityText(text);
+        const available = isAbilityAvailable(text);
+        const label = canonicalName || meta.fallbackName;
 
-        for (let star = 1; star <= 6; star++) {
-            const ownedGroup = (inventoryData.characters || []).find(
-                (row) => row.name === selectedGroup.name && row.star === star
-            );
-            const exists = star >= startStar;      // 이 캐릭터 등급상 가능한 성급인지
-            const unlocked = Boolean(ownedGroup);   // 실제로 보유(달성)한 적 있는지
-
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "inventory-star-button";
-            if (ownedGroup) button.classList.add("owned");
-            if (star === initialStar) button.classList.add("selected");
-
-            if (!exists) {
-                // 구조상 존재하지 않는 성급: 자물쇠 없이 그냥 비활성화
-                button.classList.add("nonexistent");
-                button.disabled = true;
-            } else if (!unlocked) {
-                // 존재는 하지만 아직 달성 못 한 성급: 자물쇠 표시하고 비활성화
-                button.classList.add("locked");
-                button.disabled = true;
-            }
-
-            const lockIcon = (exists && !unlocked)
-                ? `<img class="inventory-star-lock" src="assets/icons/lock.png" alt="" onerror="this.outerHTML='🔒'">`
-                : "";
-
-            button.innerHTML = `
-                ★${star}
-                ${ownedGroup ? `<span class="inventory-star-owned-count">${ownedGroup.count}</span>` : ""}
-                ${lockIcon}
-            `;
-
-            if (exists && unlocked) {
-                button.addEventListener("click", () => selectStarInfo(star, button));
-            }
-
-            holder.appendChild(button);
-        }
-        showStarEffect(initialStar);
-    }
-
-    function selectStarInfo(star, button) {
-        document.querySelectorAll(".inventory-star-button").forEach((b) => b.classList.remove("selected"));
-        button.classList.add("selected");
-        showStarEffect(star);
-    }
-
-    function showStarEffect(star) {
-        const key = String(star);
-        const effect = selectedGroup.star_effects?.[key] || "해당 성급의 변경사항이 아직 등록되지 않았습니다.";
-        const expMultiplier = selectedGroup.exp_multiplier?.[key];
-        const expSubjects = selectedGroup.exp_subjects || [];
-        const expLabel = expMultiplier == null
-            ? "-"
-            : expSubjects.length
-                ? `${expSubjects.join(", ")}에서 ${expMultiplier}배`
-                : `${expMultiplier}배`;
-        const skill = selectedGroup.skill_effects?.[key];
-        const trait = selectedGroup.trait_effects?.[key];
-
-        document.getElementById("inventory-star-effect").innerHTML = `
-            <div class="star-effect-title">★${star}</div>
-            <div class="star-effect-row"><span>EXP 배수</span><strong>${expLabel}</strong></div>
-            <div class="star-effect-row"><span>효과</span><span>${escapeHtml(effect)}</span></div>
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "inventory-ability-btn";
+        button.disabled = !available;
+        button.innerHTML = `
+            <span>${escapeHtml(label)}</span>
+            ${!available ? `<img class="inventory-skill-trait-lock" src="assets/icons/lock.png" alt="" onerror="this.outerHTML='🔒'">` : ""}
         `;
-
-        // 스킬/특성은 텍스트 표시 대신 버튼 형태 - 이 성급에 없으면 버튼을 비활성화하고 자물쇠 아이콘을 보여준다.
-        // 버튼을 누르면 openSkillTraitModal()이 이 값을 그대로 서브 모달에 띄운다.
-        updateSkillTraitButton("skill", skill);
-        updateSkillTraitButton("trait", trait);
-
-        // 성급을 바꿨는데 지금 열려 있던 서브 모달이 있으면(예: 스킬 보다가 성급 변경) 새 값으로 갱신
-        if (!document.getElementById("inventory-subinfo-overlay").hidden) {
-            const openKind = document.getElementById("inventory-subinfo-overlay").dataset.kind;
-            if (openKind) openSkillTraitModal(openKind);
+        if (available) {
+            button.addEventListener("click", () => openAbilityModal(meta.bracket, desc));
         }
+        holder.appendChild(button);
     }
 
-    function updateSkillTraitButton(kind, text) {
-        const btn = document.getElementById(`inventory-${kind}-btn`);
-        if (!btn) return;
-        const available = Boolean(text);
-        btn.disabled = !available;
-        btn.dataset.text = text || "";
-        const lockIcon = btn.querySelector(".inventory-skill-trait-lock");
-        if (lockIcon) lockIcon.hidden = available;
+    function openAbilityModal(bracket, desc) {
+        document.getElementById("inventory-subinfo-title").textContent = `[${bracket}]`;
+        document.getElementById("inventory-subinfo-body").innerHTML = highlightNumbers(desc);
+        document.getElementById("inventory-subinfo-overlay").hidden = false;
     }
 
-    function openSkillTraitModal(kind) {
-        const btn = document.getElementById(`inventory-${kind}-btn`);
-        if (!btn || btn.disabled) return;
-        const overlay = document.getElementById("inventory-subinfo-overlay");
-        overlay.dataset.kind = kind;
-        document.getElementById("inventory-subinfo-title").textContent = kind === "skill" ? "스킬" : "특성";
-        document.getElementById("inventory-subinfo-body").textContent = btn.dataset.text || "정보가 없습니다.";
-        overlay.hidden = false;
-    }
-
-    function closeSkillTraitModal() {
-        const overlay = document.getElementById("inventory-subinfo-overlay");
-        overlay.hidden = true;
-        delete overlay.dataset.kind;
+    function closeAbilityModal() {
+        document.getElementById("inventory-subinfo-overlay").hidden = true;
     }
 
     function getOutfitChoices() {

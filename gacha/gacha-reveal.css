@@ -270,7 +270,7 @@
     position: absolute;
     top: 50%;
     left: 64%;
-    width: 260px;
+    width: 300px;
     max-height: 88vh;
     overflow-y: auto;
     z-index: 3;
@@ -313,6 +313,22 @@
     font-size: 15px;
     color: #222;
     font-weight: 900;
+}
+
+/* 직업+성별, 공격/방어 타입처럼 한 줄에 여러 항목을 나란히 배치할 때 - 항목마다 각자 어두운 박스를
+   따로 갖는다(.reveal-info-row 하나를 통째로 공유하지 않음). */
+.reveal-info-row-split {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.reveal-info-col {
+    flex: 1;
+    min-width: 0;
+    background: rgba(0, 0, 0, 0.035);
+    border-radius: 8px;
+    padding: 6px 12px;
 }
 
 .reveal-equip-btn {

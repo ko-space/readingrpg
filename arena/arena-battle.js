@@ -195,12 +195,42 @@
     function traitLogText(event) {
         const d = event.detail || {};
         if (event.effect_type === "ally_synergy_remove_absorb") {
-            return `${event.actor}의 특성 발동! ${d.removed}을(를) 흡수하여 공격력·최대체력 ${d.absorb_percent}% 증가`;
+            return `${event.actor}의 [Special] 발동! ${d.removed}을(를) 흡수하여 공격력·최대체력 ${d.absorb_percent}% 증가`;
         }
         if (event.effect_type === "ally_synergy_atk_buff") {
-            return `${event.actor}의 특성 발동! ${d.partner}와(과)의 시너지로 공격력 ${d.atk_percent}% 증가`;
+            if (d.hp_percent !== undefined) {
+                return `${event.actor}의 [Special] 발동! ${d.partner}와(과)의 시너지로 최대 체력 ${d.hp_percent}% 증가`;
+            }
+            return `${event.actor}의 [Special] 발동! ${d.partner}와(과)의 시너지로 공격력 ${d.atk_percent}% 증가`;
         }
-        return `${event.actor}의 특성 발동!`;
+        if (event.effect_type === "ally_job_conditional_team_buff") {
+            const parts = [];
+            if (d.atk_percent) parts.push(`공격력 ${d.atk_percent}%`);
+            if (d.hp_percent) parts.push(`최대 체력 ${d.hp_percent}%`);
+            return `${event.actor}의 [Special] 발동! ${d.partner}와(과)의 시너지로 아군 전체 ${parts.join("·")} 증가`;
+        }
+        if (event.effect_type === "ally_type_conditional_team_buff") {
+            const parts = [];
+            if (d.atk_percent) parts.push(`공격력 ${d.atk_percent}%`);
+            if (d.hp_percent) parts.push(`최대 체력 ${d.hp_percent}%`);
+            return `${event.actor}의 [Special] 발동! 아군 전체 ${parts.join("·")} 증가`;
+        }
+        if (event.effect_type === "team_teacher_hp_buff") {
+            return `${event.actor}의 [Special] 발동! 팀 내 선생 타입 캐릭터 최대 체력 ${d.hp_percent}% 증가`;
+        }
+        if (event.effect_type === "teammate_hp_buff_self_cost") {
+            return `${event.actor}의 [Special] 발동! ${d.partner ? `${d.partner} 최대 체력 ${d.hp_percent}% 증가, ` : ""}자신의 최대 체력 ${d.self_hp_loss_percent}% 감소`;
+        }
+        if (event.effect_type === "battlefield_presence_haste") {
+            return `${event.actor}의 [Special] 발동! 전장의 ${d.target_name}에게 반응해 공격 속도 ${d.haste_percent}% 증가`;
+        }
+        if (event.effect_type === "female_count_haste") {
+            return `${event.actor}의 [Special] 발동! 전장 내 여성 ${d.female_count}명 - 공격 속도 ${d.haste_percent}% 증가`;
+        }
+        if (event.effect_type === "dynamic_grant_rear_priority") {
+            return `${event.actor}의 [Special] 발동! ${d.partner}도 후방 적 우선 공격`;
+        }
+        return `${event.actor}의 [Special] 발동!`;
     }
 
     /*
@@ -1646,6 +1676,8 @@
         maxhp_up: "Combat_Icon_Buff_MAXHP.png",
         atk_speed_up: "Combat_Icon_Buff_AttackSpeed.png",
         crit_up: "Combat_Icon_Buff_CriticalDamage.png",
+        crit_chance_up: "Combat_Icon_Buff_CriticalChance.png",
+        rear_priority: "Combat_Icon_Special_AttackRear.png",
         atk_down: "Combat_Icon_Debuff_ATK.png",
         maxhp_down: "Combat_Icon_Debuff_MAXHP.png",
         stun: "Combat_Icon_CC_Stunned.png",
@@ -1912,9 +1944,13 @@
                 if (change.atk < 0) setStatusIcon(changedKey, "atk_down", { source });
                 if (change.hp > 0) setStatusIcon(changedKey, "maxhp_up", { source });
                 if (change.hp < 0) setStatusIcon(changedKey, "maxhp_down", { source });
-                // 이의진: 치명타 피해량 증가(self_crit_multiplier) - 스탯 변화는 아니지만 같은 방식(전투
-                // 끝까지 유지)으로 아이콘을 띄운다.
+                // 이의진: 치명타 피해량/확률 증가(self_crit_multiplier) - 스탯 변화는 아니지만 같은
+                // 방식(전투 끝까지 유지)으로 아이콘을 띄운다.
                 if (change.crit > 0) setStatusIcon(changedKey, "crit_up", { source });
+                if (change.crit_chance > 0) setStatusIcon(changedKey, "crit_chance_up", { source });
+                // 최재혁(또는 "마법사 아카데미"로 부여받은 아군): 후방 적 우선 공격 - 마찬가지로 스탯
+                // 변화는 아니지만 전투 내내 유지되는 상태라 같은 방식으로 아이콘만 띄운다.
+                if (change.rear_priority > 0) setStatusIcon(changedKey, "rear_priority", { source });
                 flashEffectAura(changedKey, (change.atk < 0 || change.hp < 0) ? "debuff" : "buff");
             });
         } else if (eventType === "trait_resolve") {
@@ -1933,8 +1969,20 @@
                     setStatusIcon(traitActorKey, "maxhp_up", { source: `${traitActorKey}:${event.effect_type}` });
                 }
             } else if (event.effect_type === "ally_synergy_atk_buff" && traitActorKey) {
+                // stat이 "hp"면(청년 - 송주헌과의 시너지) 체력 버프, 그 외(기본값)는 공격력 버프.
                 flashEffectAura(traitActorKey, "buff");
-                setStatusIcon(traitActorKey, "atk_up", { source: `${traitActorKey}:${event.effect_type}` });
+                if (event.detail?.hp_percent !== undefined) {
+                    setStatusIcon(traitActorKey, "maxhp_up", { source: `${traitActorKey}:${event.effect_type}` });
+                } else {
+                    setStatusIcon(traitActorKey, "atk_up", { source: `${traitActorKey}:${event.effect_type}` });
+                }
+            } else if (event.effect_type === "dynamic_grant_rear_priority" && event.detail?.partner) {
+                // 최재혁 "마법사 아카데미": 파트너(아군 마법사)도 후방 우선 타겟팅을 받는다 - 캐스터 본인의
+                // 아이콘은 star_effect_resolve(self_rear_priority)가 이미 띄우므로, 여기선 파트너 몫만 켠다.
+                const partnerKey = findUnitKey(event.side, event.detail.partner);
+                if (partnerKey) {
+                    setStatusIcon(partnerKey, "rear_priority", { source: `${partnerKey}:${event.effect_type}` });
+                }
             }
             appendLog(traitLogText(event), "trait");
         } else if (eventType === "cast_start") {
@@ -1946,7 +1994,7 @@
                 if (event.actor === "강승유") castStartImgEl?.classList.add("casting-rainbow");
                 playCastFrames(actorKey, event.duration * 1000 * PLAYBACK_SPEED);
             }
-            appendLog(`${event.actor}, 스킬 시전 중...`, event.side);
+            appendLog(`${event.actor}, [Active] 시전 중...`, event.side);
         } else if (eventType === "skill_resolve") {
             const actorKey = eventActorKey(event);
             // 강승유(copy_target_skill)는 event.effect_type이 항상 "copy_target_skill"로 찍히지만,
@@ -2074,11 +2122,11 @@
                             source: `${event.actor}:stun`,
                             durationMs: (event.detail.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
                         });
-                        appendLog(`${event.actor}의 스킬 발동!`, event.side);
+                        appendLog(`${event.actor}의 [Active] 발동!`, event.side);
                     });
                 } else {
                     applySkillHits(event);
-                    appendLog(`${event.actor}의 스킬 발동!`, event.side);
+                    appendLog(`${event.actor}의 [Active] 발동!`, event.side);
                 }
             } else if (dispatchEffectType === "stun_target" && event.detail?.hit) {
                 const stunTargetKey = event.detail.target ? findHitKey(event.detail.target, event.detail.target_side) : null;
@@ -2089,7 +2137,9 @@
                         durationMs: (event.detail.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
                     });
                 }
-                appendLog(`${event.actor}의 스킬 발동!`, event.side);
+                // 송주헌 "격차 벌리기": 기절과 함께 피해도 준다 - hits가 있으면 데미지 숫자/체력바도 반영.
+                if (event.detail?.hits?.length) applySkillHits(event);
+                appendLog(`${event.actor}의 [Active] 발동!`, event.side);
             } else if (dispatchEffectType === "damage_hp_percent_plus_atk" && actorKey && event.detail?.hits?.length) {
                 const hit = event.detail.hits[0];
                 const targetKey = findHitKey(hit.target, hit.target_side);
@@ -2098,11 +2148,11 @@
                         units[targetKey].hp = hit.target_hp_after;
                         renderUnit(targetKey);
                         flashHit(targetKey, hit.is_crit, hit.type_multiplier);
-                        appendLog(`${event.actor}의 스킬 발동!`, event.side);
+                        appendLog(`${event.actor}의 [Active] 발동!`, event.side);
                     });
                 } else {
                     applySkillHits(event);
-                    appendLog(`${event.actor}의 스킬 발동!`, event.side);
+                    appendLog(`${event.actor}의 [Active] 발동!`, event.side);
                 }
             } else if (dispatchEffectType === "aoe_gendered_damage" && actorKey) {
                 applySkillHits(event);
@@ -2112,7 +2162,7 @@
                     const gender = effectiveGender(hit.target, targetKey);
                     spawnHeartProjectile(actorKey, targetKey, gender === "여" ? "heart-red" : "heart-pink", () => {});
                 });
-                appendLog(`${event.actor}의 스킬 발동!`, event.side);
+                appendLog(`${event.actor}의 [Active] 발동!`, event.side);
             } else if (dispatchEffectType === "debuff_atk_and_damage" && actorKey && event.detail?.hits?.length) {
                 applySkillHits(event);
                 const hit = event.detail.hits[0];
@@ -2126,7 +2176,7 @@
                         durationMs: (event.detail?.debuff_seconds || 0) * 1000 * PLAYBACK_SPEED,
                     });
                 }
-                appendLog(`${event.actor}의 스킬 발동!`, event.side);
+                appendLog(`${event.actor}의 [Active] 발동!`, event.side);
             } else if (dispatchEffectType === "bonus_damage_knockback" && actorKey && event.detail?.hits?.length) {
                 applySkillHits(event);
                 const hit = event.detail.hits[0];
@@ -2137,12 +2187,12 @@
                     flashEffectAura(targetKey, "cc");
                     setStatusIcon(targetKey, "knockback", { source: `${event.actor}:knockback`, durationMs: MOMENT_ICON_MS });
                 }
-                appendLog(`${event.actor}의 스킬 발동!`, event.side);
+                appendLog(`${event.actor}의 [Active] 발동!`, event.side);
             } else if (dispatchEffectType === "aoe_enemy_damage" && actorKey) {
                 // 가스 숨결이 화면을 가로질러 실제로 닿는 순간(onArrive)에 맞춰 피해/HP/피격 이펙트를 반영한다 -
                 // 예전엔 스킬 발동 즉시 피해가 반영돼서 투사체가 아직 날아가는 중인데 이미 맞은 것처럼 보였다.
                 spawnGasBreathStream(actorKey, () => applySkillHits(event));
-                appendLog(`${event.actor}의 스킬 발동!`, event.side);
+                appendLog(`${event.actor}의 [Active] 발동!`, event.side);
             } else if (dispatchEffectType === "heal_ally_percent_max_hp" && event.detail?.healed) {
                 const healTargetKey = findHitKey(event.detail.target, event.detail.target_side);
                 if (healTargetKey) {
@@ -2152,10 +2202,10 @@
                         // 회복 = 연두색 오라 + 회복 아이콘(회복되는 순간 생겼다가 사라짐)
                         flashEffectAura(healTargetKey, "heal");
                         setStatusIcon(healTargetKey, "heal", { source: `${event.actor}:heal`, durationMs: MOMENT_ICON_MS });
-                        appendLog(`${event.actor}의 스킬 발동! ${event.detail.target} 체력 ${event.detail.amount} 회복`, event.side);
+                        appendLog(`${event.actor}의 [Active] 발동! ${event.detail.target} 체력 ${event.detail.amount} 회복`, event.side);
                     });
                 } else {
-                    appendLog(`${event.actor}의 스킬 발동!`, event.side);
+                    appendLog(`${event.actor}의 [Active] 발동!`, event.side);
                 }
             } else if (dispatchEffectType === "self_type_swap_heal" && actorKey) {
                 // 이의진 "염색체 변환" - isType2는 위에서 이미 토글해뒀다(playReturnFrames가 새 스프라이트로
@@ -2167,7 +2217,7 @@
                 flashEffectAura(actorKey, "heal");
                 setStatusIcon(actorKey, "heal", { source: `${actorKey}:type_swap_heal`, durationMs: MOMENT_ICON_MS });
                 appendLog(
-                    `${event.actor}의 스킬 발동! ${event.detail?.type2_active ? "염색체 변환(type2)" : "염색체 변환(type1)"} - 체력 ${event.detail?.healed_amount || 0} 회복`,
+                    `${event.actor}의 [Active] 발동! ${event.detail?.type2_active ? "염색체 변환(type2)" : "염색체 변환(type1)"} - 체력 ${event.detail?.healed_amount || 0} 회복`,
                     event.side
                 );
             } else if (dispatchEffectType === "aoe_all_others_damage" && actorKey && event.detail?.hits?.length) {
@@ -2180,7 +2230,7 @@
                     renderUnit(hitKey);
                     flashHit(hitKey, hit.is_crit, hit.type_multiplier);
                 });
-                appendLog(`${event.actor}의 스킬 발동!`, event.side);
+                appendLog(`${event.actor}의 [Active] 발동!`, event.side);
             } else {
                 applySkillHits(event);
                 if (dispatchEffectType === "summon_clone" && event.detail?.summoned) {
@@ -2191,9 +2241,21 @@
                         event.side
                     );
                 } else {
-                    appendLog(`${event.actor}의 스킬 발동!`, event.side);
+                    appendLog(`${event.actor}의 [Active] 발동!`, event.side);
                 }
             }
+        } else if (eventType === "death_trigger_resolve") {
+            // 이영웅 "히포크라테스 선서": 자신이 죽는 순간 아군을 회복시킨다. 회복은 여럿에게 동시에
+            // 갈 수 있어(heal_ally_percent_max_hp와 달리) 투사체 연출 없이 곧바로 반영한다.
+            (event.detail?.heals || []).forEach((heal) => {
+                const healTargetKey = findUnitKey(event.side, heal.target);
+                if (!healTargetKey) return;
+                units[healTargetKey].hp = heal.target_hp_after;
+                renderUnit(healTargetKey);
+                flashEffectAura(healTargetKey, "heal");
+                setStatusIcon(healTargetKey, "heal", { source: `${event.actor}:death_heal`, durationMs: MOMENT_ICON_MS });
+            });
+            appendLog(`${event.actor}의 [Special] 발동! 사망과 함께 아군 회복`, event.side);
         } else {
             // basic_attack (기존 로직 + 원거리 5명 전용 연출)
             const actorKey = eventActorKey(event);
