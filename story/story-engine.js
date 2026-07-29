@@ -280,7 +280,7 @@ const SCENE2_INTRO_3 = [
   {type:'narration', text:'그렇지만 뒤로 그에게 한마디도 하지 않았던 터라, 다시 접점이 생기기를 기대하며 수업만 듣다가 학교 일정이 마무리되었다.'},
   {type:'thought', text:'흐뭇하다.'},
   {type:'narration', text:'(...)'},
-  {type:'narration', text:'그 뒤, 혼자 하교를 하던 중 익숙한 실루엣을 발견했다.'},
+  {type:'narration', text:'그 뒤, 혼자 하교를 하던 중 익숙한 실루엣을 발견했다.', chars:{left:'seungyu_sil', right:'juheon_sil'}},
   {type:'narration', text:'주헌이와 승유가 나란히 걷고 있었다.'},
   {type:'line', speaker:PLAYER, text:'승유야. 안녕!'},
   {type:'narration', text:'평소에 승유랑은 그래도 친하게 지내던 터라 용기내어 말을 걸어본다.'},

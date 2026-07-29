@@ -1416,6 +1416,10 @@
 
 
     let eventIndex = 0;
+    // 이벤트 재생 시각을 "재생 시작 시점" 기준 절대 목표 시각으로 스케줄하기 위한 기준점.
+    // startPreparation()이 첫 playNext() 호출 직전에 채운다.
+    let playbackOriginWallMs = 0;
+    let playbackOriginEventTime = 0;
 
     function eventTargetKey(event) {
         const targetSide =
@@ -2308,14 +2312,20 @@
         eventIndex += 1;
 
         const nextEvent = data.events[eventIndex];
-        const delayMs = nextEvent
-            ? Math.max(
-                50,
-                (nextEvent.time - event.time) *
-                    1000 *
-                    PLAYBACK_SPEED
-            )
-            : 500;
+        // 재생 시작 시점(playbackOriginWallMs/-EventTime) 기준 "절대 목표 시각"으로 다음 이벤트를
+        // 스케줄한다 - 이전엔 매 이벤트 쌍마다 Math.max(50, 직전 이벤트와의 시간차)를 누적하는
+        // 상대 지연 방식이었는데, 백엔드 tick에 여러 이벤트가 같은 시각으로 몰리면(흔한 일 - 여러
+        // 유닛이 같은 틱에 동시에 행동함) 그 바닥값(50ms)이 이벤트 개수만큼 반복 누적돼서, 시전
+        // 애니메이션(playCastFrames)은 정확한 시간에 끝나는데 그 뒤에 올 skill_resolve만 계속
+        // 밀려 "모션 끝나고 한참 뜸 들이다 발동"하는 버그가 있었다. 절대 시각 기준이면 한 스텝의
+        // 바닥값이 다음 스텝에서 자동으로 상쇄되어 누적되지 않는다.
+        let delayMs;
+        if (nextEvent) {
+            const targetWallMs = playbackOriginWallMs + (nextEvent.time - playbackOriginEventTime) * 1000 * PLAYBACK_SPEED;
+            delayMs = Math.max(16, targetWallMs - performance.now());
+        } else {
+            delayMs = 500;
+        }
 
         setTimeout(playNext, delayMs);
     }
@@ -2381,6 +2391,8 @@
             setTimeout(() => {
                 startMeleeWalker();
                 startRosterOrderWatcher();
+                playbackOriginWallMs = performance.now();
+                playbackOriginEventTime = data.events[0]?.time ?? 0;
                 playNext();
             }, PREP_MS);
             return;
@@ -2410,6 +2422,8 @@
 
             startMeleeWalker();
             startRosterOrderWatcher();
+            playbackOriginWallMs = performance.now();
+            playbackOriginEventTime = data.events[0]?.time ?? 0;
             playNext();
         }, PREP_MS);
     }
