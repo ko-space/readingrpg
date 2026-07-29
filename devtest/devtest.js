@@ -2043,6 +2043,8 @@
         });
         renderAll();
         startMeleeWalker();
+        playbackOriginWallMs = performance.now();
+        playbackOriginEventTime = data.events[0]?.time ?? 0;
         playEvents(data.events, 0);
     }
 
@@ -2065,6 +2067,11 @@
         const targetSide = actorSide === "attacker" ? "defender" : "attacker";
         return findSlotByName(targetSide, name) || findSlotByName(actorSide, name);
     }
+
+    // 이벤트 재생 시각을 "재생 시작 시점" 기준 절대 목표 시각으로 스케줄하기 위한 기준점.
+    // onBattlePosted(또는 재생을 시작하는 지점)이 첫 playEvents() 호출 직전에 채운다.
+    let playbackOriginWallMs = 0;
+    let playbackOriginEventTime = 0;
 
     function playEvents(events, index) {
         if (index >= events.length) {
@@ -2402,7 +2409,16 @@
         }
 
         const nextEvent = events[index + 1];
-        const delayMs = nextEvent ? Math.max(50, (nextEvent.time - event.time) * 1000 * PLAYBACK_SPEED) : 400;
+        // 재생 시작 시점 기준 절대 목표 시각으로 스케줄한다 - arena-battle.js와 동일한 이유(상대 지연을
+        // 누적하면 같은 tick에 여러 이벤트가 몰릴 때 Math.max(50,...) 바닥값이 반복 누적돼 시전
+        // 애니메이션은 제때 끝나는데 skill_resolve만 계속 밀리는 버그가 있었다).
+        let delayMs;
+        if (nextEvent) {
+            const targetWallMs = playbackOriginWallMs + (nextEvent.time - playbackOriginEventTime) * 1000 * PLAYBACK_SPEED;
+            delayMs = Math.max(16, targetWallMs - performance.now());
+        } else {
+            delayMs = 400;
+        }
 
         setTimeout(() => playEvents(events, index + 1), delayMs);
     }
