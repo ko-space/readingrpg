@@ -3,6 +3,7 @@ const AVATAR_CROP_OVERRIDES = {
     "tutor/basic": { xPercent: 50, yPercent: 0, scale: 2.0 },
     "photographer/basic": { xPercent: 50, yPercent: 3, scale: 4.0 },
     "sj/basic": { xPercent: 50, yPercent: 10, scale: 3.0 },
+    "mage/basic": { xPercent: 50, yPercent: 2, scale: 4.0 },
     "beginner/swimsuit": { xPercent: 50, yPercent: 0, scale: 1.5 },
     "international/basic": { xPercent: 50, yPercent: 0, scale: 3.0 },
 };
