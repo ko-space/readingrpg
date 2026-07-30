@@ -78,8 +78,10 @@ class CharacterEnhanceBuff(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     character_name = Column(String, nullable=False)
     star = Column(Integer, nullable=False)
-    destroy_delta = Column(Float, default=0)   # 퍼센트포인트(음수 = 감소)
-    maintain_delta = Column(Float, default=0)  # 퍼센트포인트(양수 = 증가)
+    destroy_delta = Column(Float, default=0)  # 퍼센트포인트(음수 = 감소)
+    # 원래는 "유지" 확률에 더하는 값이었으나 마우스피스 효과가 "성공" 확률 업으로 바뀌었다 - 이미 배포된
+    # DB 컬럼(maintain_delta)은 스키마 변경 없이 그대로 재사용하고, 파이썬 쪽 이름만 success_delta로 맞춘다.
+    success_delta = Column("maintain_delta", Float, default=0)  # 퍼센트포인트(양수 = 증가)
 
 
 class ReadingLog(Base):

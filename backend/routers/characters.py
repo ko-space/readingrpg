@@ -210,7 +210,7 @@ def get_enhancement_inventory(
             "next_star": row["star"] + 1 if rule else None,
             "rule": rule,
             "pending_buff": (
-                {"destroy_delta": pending_buff.destroy_delta, "maintain_delta": pending_buff.maintain_delta}
+                {"destroy_delta": pending_buff.destroy_delta, "success_delta": pending_buff.success_delta}
                 if pending_buff else None
             ),
         }
@@ -342,7 +342,7 @@ def _apply_next_enhance_buff(rule: dict, buff: CharacterEnhanceBuff) -> dict:
     """"강승유의 마우스피스"로 이 캐릭터+성급 그룹에 예약돼 있던 1회성 효과를 이번 판정에 반영한다."""
     result = dict(rule)
     result["destroy"] = max(0, result.get("destroy", 0) + (buff.destroy_delta or 0))
-    result["maintain"] = max(0, result.get("maintain", 0) + (buff.maintain_delta or 0))
+    result["success"] = max(0, result.get("success", 0) + (buff.success_delta or 0))
     return result
 
 
@@ -612,14 +612,14 @@ def enhance_character(
                 )
                 if existing_buff:
                     existing_buff.destroy_delta = mouthpiece.effect_params.get("destroy_delta", 0)
-                    existing_buff.maintain_delta = mouthpiece.effect_params.get("maintain_delta", 0)
+                    existing_buff.success_delta = mouthpiece.effect_params.get("success_delta", 0)
                 else:
                     db.add(CharacterEnhanceBuff(
                         user_id=locked_user.id,
                         character_name=base.name,
                         star=base.star,
                         destroy_delta=mouthpiece.effect_params.get("destroy_delta", 0),
-                        maintain_delta=mouthpiece.effect_params.get("maintain_delta", 0),
+                        success_delta=mouthpiece.effect_params.get("success_delta", 0),
                     ))
 
         elif outcome == "maintain":
