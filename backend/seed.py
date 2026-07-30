@@ -188,10 +188,10 @@ def seed_enhancement_items():
                 "price": 350,
                 "icon_file": "assets/items/seungyu_piece.png",
                 "description": "일종의 보험이라고 생각하세요.",
-                # 이번 강화가 성공(슈퍼 성공 포함)하면, 그 카드의 "다음" 강화 시도에 파괴 -10%p/유지 +10%p를
+                # 이번 강화가 성공(슈퍼 성공 포함)하면, 그 카드의 "다음" 강화 시도에 파괴 -10%p/성공 +10%p를
                 # 1회 예약해둔다(CharacterEnhanceBuff 테이블). 이번 판정 자체에는 영향 없음.
                 "effect_type": "next_enhance_buff",
-                "effect_params": {"destroy_delta": -10, "maintain_delta": 10},
+                "effect_params": {"destroy_delta": -10, "success_delta": 10},
             },
         ]
 

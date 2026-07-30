@@ -102,7 +102,7 @@
             return "강화 시 재료 카드 1장을 대신함";
         }
         if (item.effect_type === "next_enhance_buff") {
-            return `강화 성공 시, 그 카드의 다음 강화 파괴 ${Math.abs(p.destroy_delta || 0)}%p↓/유지 ${p.maintain_delta || 0}%p↑`;
+            return `강화 성공 시, 그 카드의 다음 강화 파괴 ${Math.abs(p.destroy_delta || 0)}%p↓/성공 ${p.success_delta || 0}%p↑`;
         }
         if (item.effect_type === "dust_convert") {
             return "성공/유지/파괴 확률이 사라지고 성급별 먼지 생성 확률로 대체됨. 다른 아이템과 함께 사용 불가";
@@ -146,7 +146,7 @@
     function applyPendingBuff(rule, buff) {
         const result = { ...rule };
         result.destroy = Math.max(0, (result.destroy || 0) + (buff.destroy_delta || 0));
-        result.maintain = Math.max(0, (result.maintain || 0) + (buff.maintain_delta || 0));
+        result.success = Math.max(0, (result.success || 0) + (buff.success_delta || 0));
         return result;
     }
 
@@ -523,8 +523,8 @@
         ).textContent = rule ? `${Math.round(rule.destroy)}%` : "-";
 
         // "강승유의 마우스피스" 예약 효과가 이번 미리보기에 반영됐으면, 그 효과가 실제로 바꾼 두 수치
-        // (파괴/유지)만 금색으로 표시해서 "이건 마우스피스 때문에 바뀐 값"이라는 걸 알 수 있게 한다.
-        document.getElementById("enhancement-maintain-rate").classList.toggle("buffed", hasPendingBuff);
+        // (파괴/성공)만 금색으로 표시해서 "이건 마우스피스 때문에 바뀐 값"이라는 걸 알 수 있게 한다.
+        document.getElementById("enhancement-success-rate").classList.toggle("buffed", hasPendingBuff);
         document.getElementById("enhancement-destroy-rate").classList.toggle("buffed", hasPendingBuff);
 
         document.getElementById(
@@ -537,7 +537,7 @@
     // "최재혁의 마법 영약" 전용 - 성공/유지/파괴/슈퍼성공 행을 다 숨기고 먼지 생성 확률 한 줄만 보여준다.
     function setDustRuleText(baseRule, dustItem) {
         setRulePanelMode("dust");
-        document.getElementById("enhancement-maintain-rate").classList.remove("buffed");
+        document.getElementById("enhancement-success-rate").classList.remove("buffed");
         document.getElementById("enhancement-destroy-rate").classList.remove("buffed");
 
         const probability = dustItem?.effect_params?.[String(selectedCharacter?.star)] ?? 0;

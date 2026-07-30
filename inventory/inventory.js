@@ -204,7 +204,7 @@
             return "기능: 강화 시 재료 인물 카드 1장을 대신합니다.";
         }
         if (item.effect_type === "next_enhance_buff") {
-            return `기능: 강화 성공 시, 그 캐릭터의 다음 강화에서 파괴 확률 ${Math.abs(p.destroy_delta || 0)}%p 감소, 유지 확률 ${p.maintain_delta || 0}%p 증가 효과를 예약합니다.`;
+            return `기능: 강화 성공 시, 그 캐릭터의 다음 강화에서 파괴 확률 ${Math.abs(p.destroy_delta || 0)}%p 감소, 성공 확률 ${p.success_delta || 0}%p 증가 효과를 예약합니다.`;
         }
         if (item.effect_type === "dust_convert") {
             return "기능: 강화 성공/유지/파괴 확률이 사라지고, 성급별 확률로 인물 3장이 먼지 1개로 바뀝니다. 다른 강화 아이템과 함께 사용할 수 없습니다.";
