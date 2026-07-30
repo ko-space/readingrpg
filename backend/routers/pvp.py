@@ -97,23 +97,6 @@ def _ensure_defense_assigned(user: User, db: Session):
 
 
 def _get_candidate_pool(user: User, db: Session):
-    """
-    후보 풀을 (User, rank_changeable) 튜플 목록으로 돌려준다. 관리자(ADMIN_USER_ID)는 항상
-    pvp_rank=0으로 고정돼 있어(_ensure_rank_assigned) 아래 규칙에서 자연스럽게 "0등"으로 취급된다.
-
-    - 0~3등: {0,1,2,3} 중 자신을 제외한 나머지 세 자리를 그대로 보여준다(고정, 무작위 아님).
-    - 4등: {0,1,2,3} 중 3명을 무작위로 보여준다.
-    - 5등 이하: 자신 바로 위 5자리(예: 5등이면 {0,1,2,3,4}, 6등이면 {1,2,3,4,5}, 7등이면
-      {2,3,4,5,6}) 중 3명을 무작위로 보여준다 - 상위 5명 고정이 아니라 내 순위를 따라 창이 움직인다.
-
-    나보다 순위가 높은(숫자가 작은) 상대에게 도전해 이기면 그 자리를 빼앗아 순위가 바뀐다
-    (rank_changeable=True). 반대로 나보다 순위가 낮은(숫자가 큰) 상대는 친선전(rank_changeable=False) -
-    이미 나보다 아래인 사람을 이겼다고 그 사람 자리로 "내려가는" 건 말이 안 되고, 실제로 시도하면
-    run_battle의 순위 재배치 구간 계산이 역전되어(defender_rank_before > attacker_rank_before) 두 유저가
-    동시에 같은 순위를 갖게 되는 상황이 생겨 pvp_rank의 유니크 제약을 위반하고 서버 에러가 난다.
-    관리자와의 대결도 항상 친선전이다 - 관리자는 항상 0등에 고정되므로, 만약 이겨서 순위가 바뀐다면
-    두 유저가 동시에 0등이 되어 역시 유니크 제약을 위반한다.
-    """
     others = (
         db.query(User)
         .filter(User.pvp_rank.isnot(None), User.id != user.id)
