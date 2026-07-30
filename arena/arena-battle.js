@@ -1607,7 +1607,7 @@
             imgEl.src = `${OUTFIT_IMAGE_BASE}${units[key].outfit}/battle_idle${spriteVariantSuffix(key)}.png`;
         }
         flashEffectAura(key, "cc");
-        appendLog(`${units[key].name}의 시전이 기절로 취소됐다!`, side);
+        appendLog(`${units[key].name}의 [Active] 시전이 기절로 취소됐다!`, side);
     }
 
     /*
@@ -1660,6 +1660,15 @@
             `${event.actor}의 공격! ${event.target}에게 ${event.damage}만큼 피해!${event.is_crit ? " 치명타!" : ""}`,
             event.side
         );
+    }
+
+    // 스킬 발동 로그에 실제 피해/효과를 덧붙이기 위한 요약 문구. hits(피해 이벤트 배열)를
+    // "OOO에게 123만큼 피해(치명타!), XXX에게 45만큼 피해" 식으로 이어붙인다.
+    function hitsSummaryText(hits) {
+        if (!hits || !hits.length) return "";
+        return hits
+            .map((hit) => `${hit.target}에게 ${hit.damage}만큼 피해${hit.is_crit ? "(치명타!)" : ""}`)
+            .join(", ");
     }
 
     // ===== 효과 수신자 오라 =====
@@ -2147,8 +2156,11 @@
             // 캐릭터 전용 스킬 발사체 연출. 김남옥(여성 대상 기절 성공)·이종복은 투사체가 대상에
             // 닿는 순간에 맞춰 피해/상태 표시를 늦추고, 서민석·임소정은 즉시 반영하면서 투사체만 얹는다.
             // (dispatchEffectType 기준으로 분기하므로, 강승유가 이 스킬들을 복제했을 때도 동일하게 탄다.)
-            if (dispatchEffectType === "conditional_target_debuff" && event.detail?.stunned && actorKey) {
-                const targetKey = event.detail.target ? findHitKey(event.detail.target, event.detail.target_side) : null;
+            if (dispatchEffectType === "conditional_target_debuff" && actorKey) {
+                // 공격속도 증가는 대상 성별과 무관하게 항상 발동, 기절은 조건(대상 여성) 충족 시에만.
+                const hasteText = `공격 속도 ${event.detail?.haste_percent || 0}% 증가`;
+                const targetKey = event.detail?.stunned && event.detail.target
+                    ? findHitKey(event.detail.target, event.detail.target_side) : null;
                 if (targetKey) {
                     playDualCrayonSkillProjectile(actorKey, targetKey, () => {
                         // 기절(CC기) = 보라색 오라 + 기절 아이콘(지속시간 동안). source=시전자 - 같은
@@ -2159,11 +2171,11 @@
                             durationMs: (event.detail.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
                         });
                         if (event.detail?.interrupted_cast) interruptCasting(targetKey, event.detail.target_side);
-                        appendLog(`${event.actor}의 [Active] 발동!`, event.side);
+                        appendLog(`${event.actor}의 [Active] 발동! ${hasteText}, ${event.detail.target} ${event.detail.stun_seconds}초 기절`, event.side);
                     });
                 } else {
                     applySkillHits(event);
-                    appendLog(`${event.actor}의 [Active] 발동!`, event.side);
+                    appendLog(`${event.actor}의 [Active] 발동! ${hasteText}`, event.side);
                 }
             } else if (dispatchEffectType === "stun_target" && event.detail?.hit) {
                 const stunTargetKey = event.detail.target ? findHitKey(event.detail.target, event.detail.target_side) : null;
@@ -2177,7 +2189,8 @@
                 }
                 // 송주헌 "격차 벌리기": 기절과 함께 피해도 준다 - hits가 있으면 데미지 숫자/체력바도 반영.
                 if (event.detail?.hits?.length) applySkillHits(event);
-                appendLog(`${event.actor}의 [Active] 발동!`, event.side);
+                const dmgText = event.detail?.hits?.length ? `, ${hitsSummaryText(event.detail.hits)}` : "";
+                appendLog(`${event.actor}의 [Active] 발동! ${event.detail.target} ${event.detail.stun_seconds}초 기절${dmgText}`, event.side);
             } else if (dispatchEffectType === "damage_hp_percent_plus_atk" && actorKey && event.detail?.hits?.length) {
                 const hit = event.detail.hits[0];
                 const targetKey = findHitKey(hit.target, hit.target_side);
@@ -2186,11 +2199,11 @@
                         units[targetKey].hp = hit.target_hp_after;
                         renderUnit(targetKey);
                         flashHit(targetKey, hit.is_crit, hit.type_multiplier);
-                        appendLog(`${event.actor}의 [Active] 발동!`, event.side);
+                        appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail.hits)}`, event.side);
                     });
                 } else {
                     applySkillHits(event);
-                    appendLog(`${event.actor}의 [Active] 발동!`, event.side);
+                    appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail.hits)}`, event.side);
                 }
             } else if (dispatchEffectType === "aoe_gendered_damage" && actorKey) {
                 applySkillHits(event);
@@ -2200,7 +2213,7 @@
                     const gender = effectiveGender(hit.target, targetKey);
                     spawnHeartProjectile(actorKey, targetKey, gender === "여" ? "heart-red" : "heart-pink", () => {});
                 });
-                appendLog(`${event.actor}의 [Active] 발동!`, event.side);
+                appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail?.hits)}`, event.side);
             } else if (dispatchEffectType === "debuff_atk_and_damage" && actorKey && event.detail?.hits?.length) {
                 applySkillHits(event);
                 const hit = event.detail.hits[0];
@@ -2214,7 +2227,7 @@
                         durationMs: (event.detail?.debuff_seconds || 0) * 1000 * PLAYBACK_SPEED,
                     });
                 }
-                appendLog(`${event.actor}의 [Active] 발동!`, event.side);
+                appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail.hits)}, 공격력 감소`, event.side);
             } else if (dispatchEffectType === "bonus_damage_knockback" && actorKey && event.detail?.hits?.length) {
                 applySkillHits(event);
                 const hit = event.detail.hits[0];
@@ -2226,12 +2239,12 @@
                     setStatusIcon(targetKey, "knockback", { source: `${event.actor}:knockback`, durationMs: MOMENT_ICON_MS });
                     if (event.detail?.interrupted_cast) interruptCasting(targetKey, hit.target_side);
                 }
-                appendLog(`${event.actor}의 [Active] 발동!`, event.side);
+                appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail.hits)}, 밀쳐냄`, event.side);
             } else if (dispatchEffectType === "aoe_enemy_damage" && actorKey) {
                 // 가스 숨결이 화면을 가로질러 실제로 닿는 순간(onArrive)에 맞춰 피해/HP/피격 이펙트를 반영한다 -
                 // 예전엔 스킬 발동 즉시 피해가 반영돼서 투사체가 아직 날아가는 중인데 이미 맞은 것처럼 보였다.
                 spawnGasBreathStream(actorKey, () => applySkillHits(event));
-                appendLog(`${event.actor}의 [Active] 발동!`, event.side);
+                appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail?.hits)}`, event.side);
             } else if (dispatchEffectType === "heal_ally_percent_max_hp" && event.detail?.healed) {
                 const healTargetKey = findHitKey(event.detail.target, event.detail.target_side);
                 if (healTargetKey) {
@@ -2269,7 +2282,7 @@
                     renderUnit(hitKey);
                     flashHit(hitKey, hit.is_crit, hit.type_multiplier);
                 });
-                appendLog(`${event.actor}의 [Active] 발동!`, event.side);
+                appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail.hits)}`, event.side);
             } else {
                 applySkillHits(event);
                 if (dispatchEffectType === "summon_clone" && event.detail?.summoned) {
@@ -2279,6 +2292,12 @@
                             : `${event.actor}의 복제체가 전장에 추가로 소환됨!`,
                         event.side
                     );
+                } else if (dispatchEffectType === "self_stack_buff" && event.detail?.stack_count) {
+                    appendLog(`${event.actor}의 [Active] 발동! 공격력 ${event.detail.atk_percent_bonus || 0}% 증가 (${event.detail.stack_count}중첩)`, event.side);
+                } else if (dispatchEffectType === "self_shield_duration" && event.detail?.shield_seconds) {
+                    appendLog(`${event.actor}의 [Active] 발동! ${event.detail.shield_seconds}초간 무적 보호막`, event.side);
+                } else if (event.detail?.hits?.length) {
+                    appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail.hits)}`, event.side);
                 } else {
                     appendLog(`${event.actor}의 [Active] 발동!`, event.side);
                 }
