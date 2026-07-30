@@ -1592,6 +1592,24 @@
         }
     }
 
+    // Active 시전 중 기절 등으로 시전이 취소됐을 때 호출한다(백엔드가 발동 자체를 건너뛰므로
+    // skill_resolve 이벤트가 아예 오지 않는다 - 그 이벤트에 얹혀서 처리되는 평소의 "casting" 클래스
+    // 제거/복귀 애니메이션 로직을 못 타므로 별도로 정리해줘야 한다). 토큰을 새로 발급해서 진행 중이던
+    // playCastFrames 루프를 즉시 멈추고, 평상시 자세로 바로 스냅한다.
+    function interruptCasting(key, side) {
+        if (!key || !units[key]) return;
+        attackAnimTokens[key] = (attackAnimTokens[key] || 0) + 1;
+        attackAnimActive[key] = false;
+        const imgEl = document.querySelector(`[data-unit="${key}"] .battle-unit-img`);
+        if (imgEl) {
+            imgEl.classList.remove("casting", "casting-rainbow");
+            imgEl.onerror = null;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${units[key].outfit}/battle_idle${spriteVariantSuffix(key)}.png`;
+        }
+        flashEffectAura(key, "cc");
+        appendLog(`${units[key].name}의 시전이 기절로 취소됐다!`, side);
+    }
+
     /*
      * 시전 종료 직후 재생되는 복귀 애니메이션. 전용 프레임(return_N.png)이 있는 캐릭터만 이 프레임들을
      * 순서대로(1→N) 한 번 재생한 뒤 battle_idle.png로 정착한다. 서버가 이 동작의 시간을 따로 주지 않으므로
@@ -1935,6 +1953,20 @@
             }
         }
 
+        if (eventType === "skill_resolve") {
+            // skill_resolve가 처리되면 곧바로 playReturnFrames를 불러 시전 애니메이션의 토큰을 갈아치우는데
+            // (아래), cast_start 때 시작한 playCastFrames가 아직 프레임 루프를 다 못 돌았으면 그 시전
+            // 애니메이션이 중간에 잘려버린다. duration만큼 지나면 skill_resolve가 오도록 서버가 이미
+            // 맞춰뒀지만, 프레임 개수 확인(getSkillFrameCount 등 - 캐시 없으면 순차 이미지 probe)이나 브라우저
+            // 타이머 오차 때문에 실제 애니메이션 종료가 아주 살짝 늦어질 수 있다 - 그래서 cast_start와 똑같이
+            // "정말 끝났는지"(attackAnimActive)를 직접 확인하고, 아직이면 짧은 간격으로 재시도한다.
+            const resolveActorKey = eventActorKey(event);
+            if (resolveActorKey && attackAnimActive[resolveActorKey]) {
+                setTimeout(playNext, 20);
+                return;
+            }
+        }
+
         if (eventType === "star_effect_resolve") {
             // 성급별 효과(전투 시작 시 1회) - 스탯이 오르내린 대상마다 해당 상태 아이콘을 켠다.
             // 전투 내내 유지되는 영구 효과라 지속시간 없이 전투가 끝날 때까지(사망 전까지) 계속 떠 있는다.
@@ -2126,6 +2158,7 @@
                             source: `${event.actor}:stun`,
                             durationMs: (event.detail.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
                         });
+                        if (event.detail?.interrupted_cast) interruptCasting(targetKey, event.detail.target_side);
                         appendLog(`${event.actor}의 [Active] 발동!`, event.side);
                     });
                 } else {
@@ -2140,6 +2173,7 @@
                         source: `${event.actor}:stun`,
                         durationMs: (event.detail.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
                     });
+                    if (event.detail?.interrupted_cast) interruptCasting(stunTargetKey, event.detail.target_side);
                 }
                 // 송주헌 "격차 벌리기": 기절과 함께 피해도 준다 - hits가 있으면 데미지 숫자/체력바도 반영.
                 if (event.detail?.hits?.length) applySkillHits(event);
@@ -2190,6 +2224,7 @@
                     // 넉백(CC기) = 보라색 오라 + 넉백 아이콘(순간 표시 후 사라짐)
                     flashEffectAura(targetKey, "cc");
                     setStatusIcon(targetKey, "knockback", { source: `${event.actor}:knockback`, durationMs: MOMENT_ICON_MS });
+                    if (event.detail?.interrupted_cast) interruptCasting(targetKey, hit.target_side);
                 }
                 appendLog(`${event.actor}의 [Active] 발동!`, event.side);
             } else if (dispatchEffectType === "aoe_enemy_damage" && actorKey) {
@@ -2285,6 +2320,9 @@
                             source: `${event.actor}:stun`,
                             durationMs: (event.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
                         });
+                        if (event.interrupted_cast) {
+                            interruptCasting(targetKey, event.side === "attacker" ? "defender" : "attacker");
+                        }
                     }
                 }
                 showDamageMessage(event);

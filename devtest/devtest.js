@@ -800,6 +800,22 @@
         }
     }
 
+    // Active 시전 중 기절/넉백 등으로 시전이 취소됐을 때 호출한다(백엔드가 발동 자체를 건너뛰므로
+    // skill_resolve 이벤트가 아예 오지 않는다 - arena-battle.js와 동일한 이유).
+    function interruptCasting(slot) {
+        if (!slot || !units[slot]) return;
+        attackAnimTokens[slot] = (attackAnimTokens[slot] || 0) + 1;
+        attackAnimActive[slot] = false;
+        const imgEl = document.querySelector(`[data-unit="${slot}"] .battle-unit-img`);
+        if (imgEl) {
+            imgEl.classList.remove("casting", "casting-rainbow");
+            imgEl.onerror = null;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${units[slot].outfit}/battle_idle${spriteVariantSuffix(slot)}.png`;
+        }
+        flashEffectAura(slot, "cc");
+        log(`[특성] ${units[slot].name}의 시전이 기절로 취소됐다!`);
+    }
+
     // 치명타 시 대상 머리 위에 "치명타!" 글자가 튀어오르듯 잠깐 떴다 사라진다.
     function showCritLabel(slot) {
         const layer = document.getElementById("projectile-layer");
@@ -2093,6 +2109,14 @@
             return;
         }
 
+        if (event.event_type === "skill_resolve" && actorSlot && attackAnimActive[actorSlot]) {
+            // skill_resolve가 처리되면 곧바로 playReturnFrames가 시전 애니메이션의 토큰을 갈아치우는데,
+            // cast_start 때 시작한 playCastFrames가 아직 프레임 루프를 다 못 돌았으면 시전 애니메이션이
+            // 중간에 잘린다(arena-battle.js와 동일한 이유) - "정말 끝났는지" 직접 확인하고 재시도한다.
+            setTimeout(() => playEvents(events, index), 20);
+            return;
+        }
+
         if (event.event_type === "star_effect_resolve") {
             // 성급별 효과(전투 시작 시 1회) - 스탯이 오르내린 대상마다 해당 상태 아이콘을 켠다.
             // 전투 내내 유지되는 영구 효과라 지속시간 없이 사망 전까지 계속 떠 있는다.
@@ -2255,6 +2279,7 @@
                             source: `${event.actor}:stun`,
                             durationMs: (event.detail.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
                         });
+                        if (event.detail?.interrupted_cast) interruptCasting(hitSlot);
                     });
                 }
             } else if (dispatchEffectType === "stun_target" && event.detail?.hit) {
@@ -2265,6 +2290,7 @@
                         source: `${event.actor}:stun`,
                         durationMs: (event.detail.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
                     });
+                    if (event.detail?.interrupted_cast) interruptCasting(hitSlot);
                 }
                 // 송주헌 "격차 벌리기": 기절과 함께 피해도 준다 - hits가 있으면 데미지 숫자/체력바도 반영.
                 if (event.detail?.hits?.length) {
@@ -2320,6 +2346,7 @@
                     applyKnockback(hitSlot);
                     flashEffectAura(hitSlot, "cc");
                     setStatusIcon(hitSlot, "knockback", { source: `${event.actor}:knockback`, durationMs: MOMENT_ICON_MS });
+                    if (event.detail?.interrupted_cast) interruptCasting(hitSlot);
                 }
             } else if (dispatchEffectType === "aoe_enemy_damage" && actorSlot) {
                 (event.detail?.hits || []).forEach((hit) => {
@@ -2384,6 +2411,7 @@
                             source: `${event.actor}:stun`,
                             durationMs: (event.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
                         });
+                        if (event.interrupted_cast) interruptCasting(targetSlot);
                     }
                 }
                 log(`${event.actor} -> ${event.target} 피해 ${event.damage}${event.is_crit ? " 치명타!" : ""}`);

@@ -275,6 +275,26 @@ def _apply_damage(target, amount, time_elapsed):
     return amount
 
 
+def _interrupt_cast_if_casting(target):
+    """대상이 마침 스킬을 시전 중이었다면 취소한다 - 기절/넉백 등 CC기 공통 처리. 재개되지 않고, 다음
+    행동은 곧장 기본공격으로 넘어간다(attack_count를 0으로 되돌려서, 성공적으로 시전을 마쳤을 때와
+    동일하게 다시 기본공격 3회를 쌓아야 재시전할 수 있다). 반환값은 실제로 시전을 끊었는지 여부(프론트에
+    "시전 취소" 연출을 보여주기 위한 것)."""
+    interrupted = bool(target.get("is_casting"))
+    if interrupted:
+        target["is_casting"] = False
+        target["cast_end_time"] = None
+        target["attack_count"] = 0
+    return interrupted
+
+
+def _apply_stun(target, stun_until):
+    """대상에게 기절을 건다(+ 시전 중이었다면 취소). 기절 자체는 취소되지 않으므로 stun_until까지는
+    그대로 무행동. 반환값은 시전 취소 여부."""
+    target["status"]["stun_until"] = stun_until
+    return _interrupt_cast_if_casting(target)
+
+
 # ───────────────────────── 치명타 - 기본공격/스킬 모두 공통 ─────────────────────────
 CRIT_CHANCE = 0.10        # 10% 확률
 CRIT_MULTIPLIER = 1.5     # 공격력의 1.5배
@@ -766,12 +786,14 @@ def _skill_conditional_target_debuff(caster, own_team, enemy_team, params, time_
     caster["status"]["haste_until"] = time_elapsed + params["haste_seconds"]
 
     condition_met = params["condition"] != "target_gender_female" or _effective_gender(target) == "여"
+    interrupted_cast = False
     if condition_met:
-        target["status"]["stun_until"] = time_elapsed + params["stun_seconds"]
+        interrupted_cast = _apply_stun(target, time_elapsed + params["stun_seconds"])
 
     return {
         "hit": True, "target": target["name"], "_target_ref": target, "stunned": condition_met,
         "stun_seconds": params["stun_seconds"] if condition_met else 0,
+        "interrupted_cast": interrupted_cast,  # 프론트에 "시전 취소" 연출을 보여주기 위한 신호
         "haste_percent": params["haste_percent"],
         "haste_seconds": params["haste_seconds"],  # 프론트 상태 아이콘(공격속도 증가)의 지속시간 표시용
     }
@@ -822,6 +844,8 @@ def _skill_bonus_damage_knockback(caster, own_team, enemy_team, params, time_ela
     damage = _apply_gendered_damage_bonus(caster, target, damage)
     dealt = _apply_damage(target, damage, time_elapsed)
     target["next_attack_time"] = max(target["next_attack_time"], time_elapsed) + 1.0  # 밀쳐내기 = 다음 행동 1초 지연
+    # 넉백도 CC기라 대상이 시전 중이었다면 취소한다(_interrupt_cast_if_casting - 기절과 동일 처리).
+    interrupted_cast = _interrupt_cast_if_casting(target)
 
     # 넉백은 대상이 "뒤로 밀려난" 것으로 취급한다 - own_team 소속 근거리 유닛들(캐스터 포함)은
     # 그 대상과 다시 접촉할 때까지 걸어가야 하고, 그동안은 공격할 수 없다(첫 접근 지연과 같은 방식).
@@ -831,7 +855,10 @@ def _skill_bonus_damage_knockback(caster, own_team, enemy_team, params, time_ela
         if u.get("is_melee"):
             u["next_attack_time"] = max(u["next_attack_time"], reapproach_by)
 
-    return {"hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}]}
+    return {
+        "hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
+        "interrupted_cast": interrupted_cast,
+    }
 
 
 def _skill_aoe_gendered_damage(caster, own_team, enemy_team, params, time_elapsed):
@@ -874,8 +901,11 @@ def _skill_stun_target(caster, own_team, enemy_team, params, time_elapsed):
     target = _alive_target(enemy_team)
     if target is None:
         return {"hit": False}
-    target["status"]["stun_until"] = time_elapsed + params["seconds"]
-    result = {"hit": True, "target": target["name"], "_target_ref": target, "stun_seconds": params["seconds"]}
+    interrupted_cast = _apply_stun(target, time_elapsed + params["seconds"])
+    result = {
+        "hit": True, "target": target["name"], "_target_ref": target, "stun_seconds": params["seconds"],
+        "interrupted_cast": interrupted_cast,
+    }
     # multiplier가 있으면(송주헌 "격차 벌리기") 기절과 함께 피해도 준다 - 없으면 예전처럼 순수 기절만.
     multiplier = params.get("multiplier")
     if multiplier:
@@ -972,13 +1002,13 @@ SKILL_EFFECT_HANDLERS = {
 def _apply_type2_stun_if_active(unit, target, time_elapsed):
     """이의진 type2(Parent) 상태의 기본공격 부가효과: type2_stun_seconds가 켜져 있고(self_type_swap_heal
     스킬로 세팅됨) 대상이 남성이면 기절시킨다. 다른 캐릭터는 이 필드가 없어 항상 조용히 통과한다.
-    반환값은 실제로 적용된 기절 시간(초) - 0이면 미적용. 프론트가 상태 아이콘 지속시간을 정확히
-    맞출 수 있도록 이벤트에 그대로 실려 나간다(_do_basic_attack)."""
+    반환값은 (실제로 적용된 기절 시간(초, 0이면 미적용), 그 기절로 시전이 끊겼는지 여부) 튜플 - 프론트가
+    상태 아이콘 지속시간/시전 취소 연출을 정확히 맞출 수 있도록 이벤트에 그대로 실려 나간다(_do_basic_attack)."""
     stun_seconds = unit.get("type2_stun_seconds")
     if stun_seconds and _effective_gender(target) == "남":
-        target["status"]["stun_until"] = time_elapsed + stun_seconds
-        return stun_seconds
-    return 0
+        interrupted_cast = _apply_stun(target, time_elapsed + stun_seconds)
+        return stun_seconds, interrupted_cast
+    return 0, False
 
 
 def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events):
@@ -996,12 +1026,13 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events):
             damage = atk * mult * type_mult
             damage = _apply_gendered_damage_bonus(unit, target, damage)
             dealt = _apply_damage(target, damage, time_elapsed)
-            stun_seconds = _apply_type2_stun_if_active(unit, target, time_elapsed)
+            stun_seconds, interrupted_cast = _apply_type2_stun_if_active(unit, target, time_elapsed)
             events.append({
                 "time": time_elapsed, "event_type": "basic_attack", "side": side, "type_multiplier": type_mult,
                 "actor": unit["name"], "target": target["name"], "damage": dealt,
                 "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit,
                 "target_stunned": bool(stun_seconds), "stun_seconds": stun_seconds,
+                "interrupted_cast": interrupted_cast,
             })
     else:
         target = _select_basic_attack_target(unit, enemy_team)
@@ -1012,7 +1043,7 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events):
         damage = atk * type_mult
         damage = _apply_gendered_damage_bonus(unit, target, damage)
         dealt = _apply_damage(target, damage, time_elapsed)
-        stun_seconds = _apply_type2_stun_if_active(unit, target, time_elapsed)
+        stun_seconds, interrupted_cast = _apply_type2_stun_if_active(unit, target, time_elapsed)
         # 최재혁 6성 "+": 후방 우선 타겟(target)이 이 공격에서 죽지 않고 생존하면, 그 시점부터 전투가
         # 끝날 때까지 영구히 공격력이 오른다 - 한 번만 트리거되도록 플래그로 막는다(재적용/누적 방지).
         rear_bonus = unit.get("rear_survive_atk_percent")
@@ -1024,6 +1055,7 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events):
             "actor": unit["name"], "target": target["name"], "damage": dealt,
             "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit,
             "target_stunned": bool(stun_seconds), "stun_seconds": stun_seconds,
+            "interrupted_cast": interrupted_cast,
         })
 
 
