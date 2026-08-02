@@ -2428,7 +2428,7 @@
                 flashEffectAura(healTargetKey, "heal");
                 setStatusIcon(healTargetKey, "heal", { source: `${event.actor}:death_heal`, durationMs: MOMENT_ICON_MS });
             });
-            appendLog(`${event.actor}의 [Special] 발동! 사망과 함께 아군 회복`, event.side);
+            appendLog(`${event.actor}의 [Special] 발동! 사망과 함께 아군 회복`, "trait");
         } else if (eventType === "paint_gain_resolve") {
             // 방임석 "예술가의 혼": 물감을 얻을 때마다 상태 아이콘의 weight를 "현재 총 보유량"으로
             // 그대로 덮어쓴다(윤대웅의 self_stack_buff와 같은 방식) - 소모돼서 0이 되면 아이콘을 지운다.
@@ -2443,8 +2443,9 @@
                 }
             }
         } else if (eventType === "neglect_status_resolve") {
-            // 방임석 "방임": 학생 타입 아군이 있는 동안 영구 기절 + 받는 피해 감소. 지속시간이 없으므로
-            // (조건이 풀릴 때 active:false로만 꺼짐) durationMs 없이 걸어두고, 꺼질 때 직접 지운다.
+            // 방임석 "방임": 학생 타입 아군이 있는 동안 지속 기절 + 받는 피해 감소. 고정 지속시간이 아니라
+            // 그 아군이 죽는 순간 조건이 풀려서 해제되는 조건부 상태라 durationMs 없이 걸어두고("영구"가
+            // 아니라 "조건이 유지되는 동안"이라는 뜻), 꺼질 때(active:false) 직접 지운다.
             const neglectKey = findUnitKey(event.side, event.actor);
             if (neglectKey) {
                 if (event.detail?.active) {
@@ -2452,11 +2453,11 @@
                     setStatusIcon(neglectKey, "stun", { source: `${neglectKey}:neglect` });
                     setStatusIcon(neglectKey, "damage_reduction", { source: `${neglectKey}:neglect` });
                     if (event.detail.interrupted_cast) interruptCasting(neglectKey, event.side);
-                    appendLog(`${event.actor}의 [Special] 발동! 방임 상태(영구 기절, 받는 피해 감소)`, event.side);
+                    appendLog(`${event.actor}의 [Special] 발동! 방임 상태(지속 기절, 받는 피해 감소)`, "trait");
                 } else {
                     clearStatusIconSource(neglectKey, "stun", `${neglectKey}:neglect`);
                     clearStatusIconSource(neglectKey, "damage_reduction", `${neglectKey}:neglect`);
-                    appendLog(`${event.actor}의 방임 상태 해제!`, event.side);
+                    appendLog(`${event.actor}의 방임 상태 해제!`, "trait");
                 }
             }
         } else {
