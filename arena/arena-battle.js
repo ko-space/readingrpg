@@ -24,7 +24,7 @@
 
     const PLAYBACK_SPEED = 0.8;
     const PREP_MS = 1300;
-    const APPROACH_OVERLAP = 75;
+    const APPROACH_OVERLAP = 1;
     const PROJECTILE_TRAVEL_MS = 220;
     const MAX_ATTACK_FRAMES = 6;
     const MAX_SKILL_FRAMES = 9; // 스킬 시전 전용 사진은 캐릭터당 총 9장까지 넣기로 확정됨
@@ -41,6 +41,7 @@
         "임소정": "electric",        // 캐스터-대상을 잠깐 잇는 푸른 전기
         "서민석": "book",            // 책 던지기 - 포물선, 계속 회전
         "이의진": "eye_laser",       // 눈에서 발사되는 레이저 - type1(빨강)/type2(청록) 두 가지, isType2로 분기
+        "방임석": "paint_gold",      // 물감 투척 - 직선, 항상 황금빛(기본공격은 물감 색과 무관)
     };
 
     // 캐릭터별 성별 - 서민석 스킬(하트 색)처럼 대상 성별에 따라 연출이 갈리는 경우에 쓴다.
@@ -175,9 +176,16 @@
     function appendLog(text, side) {
         if (!logPanelEl) return null;
 
+        // "win"/"lose"/"draw"는 전투 종료 결과 전용 - 승리(초록)/패배(빨강)/무승부(회색)로 구분해서 보여준다.
         const entry = document.createElement("div");
         entry.className = `battle-log-entry ${
-            side === "attacker" ? "log-ally" : side === "defender" ? "log-enemy" : side === "trait" ? "log-trait" : "log-system"
+            side === "attacker" ? "log-ally" :
+            side === "defender" ? "log-enemy" :
+            side === "trait" ? "log-trait" :
+            side === "win" ? "log-win" :
+            side === "lose" ? "log-lose" :
+            side === "draw" ? "log-draw" :
+            "log-system"
         }`;
         entry.textContent = text;
         logPanelEl.appendChild(entry);
@@ -296,8 +304,12 @@
             return `${side}-back`;
         }
 
-        if (units[`${side}-summon`] && units[`${side}-summon`].name === name) {
-            return `${side}-summon`;
+        if (units[`${side}-summon-front`] && units[`${side}-summon-front`].name === name) {
+            return `${side}-summon-front`;
+        }
+
+        if (units[`${side}-summon-back`] && units[`${side}-summon-back`].name === name) {
+            return `${side}-summon-back`;
         }
 
         return null;
@@ -698,6 +710,50 @@
     // start->end 방향의 각도(도) - 회전이 필요한 투사체(크레파스/유성)에 쓴다.
     function angleDeg(start, end) {
         return Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI;
+    }
+
+    // 방임석 기본공격 전용: 황금빛 물감 투척, 직선(기본공격은 물감 색과 무관하게 항상 황금빛).
+    function spawnPaintProjectile(actorKey, targetKey, colorClass, onArrive) {
+        const layer = document.getElementById("projectile-layer");
+        const actorImg = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);
+        const targetImg = document.querySelector(`[data-unit="${targetKey}"] .battle-unit-img`);
+        if (!layer || !actorImg || !targetImg) { onArrive(); return; }
+
+        const start = fieldRelativeCenter(actorImg);
+        const end = fieldRelativeCenter(targetImg);
+        const dot = document.createElement("div");
+        dot.className = `paint-projectile ${colorClass}`;
+        dot.style.left = `${start.x}px`;
+        dot.style.top = `${start.y}px`;
+        layer.appendChild(dot);
+
+        requestAnimationFrame(() => {
+            dot.style.transition = `left ${PROJECTILE_TRAVEL_MS}ms linear, top ${PROJECTILE_TRAVEL_MS}ms linear`;
+            dot.style.left = `${end.x}px`;
+            dot.style.top = `${end.y}px`;
+        });
+
+        setTimeout(() => {
+            dot.remove();
+            onArrive();
+        }, PROJECTILE_TRAVEL_MS);
+    }
+
+    // 방임석 스킬 전용: 물감 투척, 포물선. colorClass로 색 지정 - 물감이 없으면 흰색, 있으면
+    // 소모한 물감 색(빨강/파랑/노랑) 중 대표색 하나(우선순위: 빨강>노랑>파랑, 아래 호출부에서 결정).
+    function spawnPaintSkillProjectile(actorKey, targetKey, colorClass, onArrive) {
+        const layer = document.getElementById("projectile-layer");
+        const actorImg = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);
+        const targetImg = document.querySelector(`[data-unit="${targetKey}"] .battle-unit-img`);
+        if (!layer || !actorImg || !targetImg) { onArrive(); return; }
+
+        const start = fieldRelativeCenter(actorImg);
+        const end = fieldRelativeCenter(targetImg);
+        const dot = document.createElement("div");
+        dot.className = `paint-projectile ${colorClass}`;
+        layer.appendChild(dot);
+
+        animateArcMotion(dot, start, end, PROJECTILE_TRAVEL_MS * 1.6, 60, onArrive);
     }
 
     // ===== 이의진 전용: 눈에서 발사되는 레이저 =====
@@ -1411,6 +1467,7 @@
         else if (style === "electric") playElectricConnector(actorKey, targetKey, "electric-blue", 5, onArrive, ELECTRIC_ORIGIN_BASIC);
         else if (style === "book") spawnBookProjectile(actorKey, targetKey, onArrive);
         else if (style === "eye_laser") spawnEyeLaserBeam(actorKey, targetKey, units[actorKey]?.isType2 ? "type2" : "type1", onArrive);
+        else if (style === "paint_gold") spawnPaintProjectile(actorKey, targetKey, "paint-gold", onArrive);
         else spawnProjectile(actorKey, targetKey, onArrive);
     }
 
@@ -1715,6 +1772,10 @@
         knockback: "Combat_Icon_CC_Knockback.png",
         heal: "Combat_Icon_Recovery_Heal.png",
         immune: "Combat_Icon_Special_ImmuneDamage.png",
+        paint_red: "Combat_Icon_Special_InkRed.png",     // 방임석 보유 물감(빨강) - weight로 개수 표시
+        paint_blue: "Combat_Icon_Special_InkBlue.png",   // 방임석 보유 물감(파랑)
+        paint_yellow: "Combat_Icon_Special_InkYellow.png", // 방임석 보유 물감(노랑)
+        damage_reduction: "Combat_Icon_Buff_DamageRatio.png", // 방임석 "방임" - 받는 피해 감소
     };
     const MOMENT_ICON_MS = 1200; // 순간 효과(회복, 넉백)는 이 시간만 표시됐다가 사라짐
 
@@ -1905,21 +1966,6 @@
         }, 450);
     }
 
-    // 최재혁 전용(self_shield_duration) - 캐릭터를 감싸는 푸른 원형 보호막. .battle-unit의 자식으로 붙여서
-    // 걷기(translateX)를 따라 자동으로 함께 움직이게 하고, 실드 지속시간이 끝나면 스스로 제거된다.
-    function spawnShieldRing(actorKey, durationMs) {
-        const unitEl = document.querySelector(`[data-unit="${actorKey}"]`);
-        if (!unitEl) return;
-        unitEl.querySelector(".shield-ring-wrap")?.remove();
-
-        const wrap = document.createElement("div");
-        wrap.className = "shield-ring-wrap";
-        wrap.innerHTML = `<div class="shield-ring"></div>`;
-        unitEl.appendChild(wrap);
-
-        setTimeout(() => wrap.remove(), durationMs);
-    }
-
     // 스킬 발동(skill_resolve)의 detail.hits[]에 담긴 피해를 대상들에게 반영하고 화면을 갱신한다.
     // side가 주어지면(백엔드가 각 대상에 붙여 보내는 target_side) 그 편에서만 이름을 찾는다 - 이름만으로
     // 양쪽을 다 찾으면(과거 방식) 같은 캐릭터가 양 팀에 모두 있을 때(미러/유사 편성) 항상 attacker 쪽이
@@ -2079,7 +2125,6 @@
                     const shieldMs = event.detail.shield_seconds * 1000 * PLAYBACK_SPEED;
                     flashEffectAura(actorKey, "special"); // 무적(실드) = 스페셜(흰색)
                     setStatusIcon(actorKey, "immune", { source: `${actorKey}:self_shield_duration`, durationMs: shieldMs });
-                    spawnShieldRing(actorKey, shieldMs);
                 }
 
                 if (dispatchEffectType === "conditional_target_debuff") {
@@ -2090,10 +2135,11 @@
                     setStatusIcon(actorKey, "atk_speed_up", { source: `${actorKey}:haste`, ...(hasteMs ? { durationMs: hasteMs } : {}) });
                 }
 
-                // 복제체(윤영준)는 기존 전방/후방을 대체하지 않는 3번째 유닛 - 전용 summon 슬롯에 매번 새로 생성한다.
+                // 복제체(윤영준/강승유)는 기존 전방/후방을 대체하지 않는 추가 유닛 - 시전자 전용 summon 슬롯에
+                // 매번 새로 생성한다(clone_slot이 "summon-front"/"summon-back"으로 시전자의 자리를 알려준다).
                 // (이미 그 슬롯에 이전 복제체가 있었다면 detail.replaced에 이름이 담겨오지만, 살아있는 아군이 제거되는 일은 없다.)
                 if (dispatchEffectType === "summon_clone" && event.detail?.summoned) {
-                    const cloneKey = `${event.side}-summon`;
+                    const cloneKey = `${event.side}-${event.detail.clone_slot || "summon"}`;
                     const caster = units[actorKey];
 
                     units[cloneKey] = {
@@ -2107,31 +2153,29 @@
 
                     const cloneEl = document.querySelector(`[data-unit="${cloneKey}"]`);
                     const casterEl = document.querySelector(`[data-unit="${actorKey}"]`);
-                    // 복제체는 적 전방 유닛이 서 있는 바로 그 자리에 생성된다(캐스터 자신의 자리가 아님).
-                    const enemyFrontKey = event.side === "attacker" ? "defender-front" : "attacker-front";
-                    const enemyFrontEl = document.querySelector(`[data-unit="${enemyFrontKey}"]`);
+                    // 복제체는 시전자 본인이 서 있는 바로 그 자리에 생성된다.
                     if (cloneEl) {
                         cloneEl.hidden = false;
                         cloneEl.style.transform = ""; // 이전 복제체가 남긴 인라인 transform이 있으면 먼저 지운다
                         // getCurrentTranslateX로 "현재(방금 리셋한 CSS 기본값 포함) translateX"를 읽어서
                         // 그 위에 델타를 더해야 한다 - transform을 절대값으로 통째로 덮어쓰면서 델타를
-                        // "리셋된 위치 기준"으로만 계산하면, attacker-summon/defender-summon의 CSS 기본
-                        // transform(칸 밖으로 translateX(±(폭+20px)) 빼두는 값)이 통째로 상쇄되지 않고
-                        // 그대로 더 얹혀서 엉뚱한 자리에 생성된다.
-                        if (enemyFrontEl) {
+                        // "리셋된 위치 기준"으로만 계산하면, summon 슬롯의 CSS 기본 transform(칸 밖으로
+                        // 빼두는 값)이 통째로 상쇄되지 않고 그대로 더 얹혀서 엉뚱한 자리에 생성된다.
+                        if (casterEl) {
                             const cloneRect = cloneEl.getBoundingClientRect();
-                            const targetRect = enemyFrontEl.getBoundingClientRect();
+                            const casterRect = casterEl.getBoundingClientRect();
                             const currentCloneX = getCurrentTranslateX(cloneEl);
-                            cloneEl.style.transform = `translateX(${currentCloneX + (targetRect.left - cloneRect.left)}px)`;
+                            cloneEl.style.transform = `translateX(${currentCloneX + (casterRect.left - cloneRect.left)}px)`;
+
+                            // 시전자는 복제체가 자기 자리를 차지한 만큼, 복제체 너비만큼 뒤로 밀려난다(서로
+                            // 겹치지 않게) - 청년의 넉백(applyKnockback)과 완전히 같은 방식: CSS 트랜지션으로
+                            // 부드럽게 밀려나고(한 번 점프시키고 손을 뗀다), 넉백(CC기) 오라/아이콘도 동일하게 뜬다.
+                            // 밀려난 뒤 되돌아오는 별도 연출은 없다 - suspendSelfWalker 덕분에 트랜지션이
+                            // 끝나자마자 walker가 깨어나 원래 근접 거리를 목표로 자연스럽게 다시 걸어온다.
+                            flashEffectAura(actorKey, "cc");
+                            setStatusIcon(actorKey, "knockback", { source: `${actorKey}:knockback`, durationMs: MOMENT_ICON_MS });
+                            applyKnockback(actorKey, { distance: cloneRect.width, durationMs: 380, suspendSelfWalker: true });
                         }
-                    }
-                    // 원본(윤영준)은 복제체를 소환한 반동으로 살짝 밀려난다 - 청년의 넉백(applyKnockback)과
-                    // 같은 방식(한 번 점프시키고 손을 뗀다)이되, 거리는 더 짧고 트랜지션은 더 느려서 부드럽다.
-                    // 밀려난 뒤 되돌아오는 별도 연출은 없다 - suspendSelfWalker 덕분에 트랜지션이 끝나자마자
-                    // walker가 깨어나 원래 근접 거리를 목표로 자연스럽게 다시 걸어온다(청년에게 맞은 근접
-                    // 유닛이 다시 다가가는 것과 동일한 흐름).
-                    if (casterEl) {
-                        applyKnockback(actorKey, { distance: 90, durationMs: 380, suspendSelfWalker: true });
                     }
                     attackAnimActive[cloneKey] = false;
                     getAttackFrameCount(units[cloneKey].outfit);
@@ -2144,9 +2188,10 @@
                     // 근거리 복제체는 다른 근접 유닛과 완전히 동일하게 취급한다 - meleeArrived를 false로
                     // 두면 이동 루프(tick)가 다음 프레임에 실제 겹침 여부를 직접 재서 판정하고, 도착으로
                     // 확인되는 순간에만 faceToward를 걸고 공격을 허용한다(waitForMeleeArrival이 그 전까지
-                    // 공격 자체를 막는다) - 이미 적과 같은 자리에서 스폰되므로 사실상 다음 프레임에 바로
-                    // 도착 처리되지만, "겹쳤을 때만 공격 가능"이라는 규칙 자체는 예외 없이 그대로 적용된다.
+                    // 공격 자체를 막는다). 이제 시전자 자리에서 스폰되므로(적 자리가 아님) 다른 근접
+                    // 유닛과 마찬가지로 실제로 걸어서 접근하는 과정을 거친다.
                     if (units[cloneKey].isMelee) {
+                        const enemyFrontKey = event.side === "attacker" ? "defender-front" : "attacker-front";
                         meleeTargetKey[cloneKey] = enemyFrontKey;
                         meleeArrived[cloneKey] = false;
                     }
@@ -2283,6 +2328,76 @@
                     flashHit(hitKey, hit.is_crit, hit.type_multiplier);
                 });
                 appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail.hits)}`, event.side);
+            } else if (dispatchEffectType === "consume_paint_multi_effect" && actorKey) {
+                // 방임석 "제목은 관객이 정하세요": 보유한 물감 색깔별로 각각 독립된 투사체를 동시에 날린다
+                // (서민석의 aoe_gendered_damage와 같은 "여러 투사체 병렬 발사" 패턴). 물감이 하나도
+                // 없으면 흰색 투사체 하나로 강한 단일 피해만 준다.
+                const d = event.detail || {};
+                const hasAnyPaint = d.red || d.blue || d.yellow;
+                const logParts = [];
+
+                if (!hasAnyPaint && d.hits?.length) {
+                    const hit = d.hits[0];
+                    const targetKey = findHitKey(hit.target, hit.target_side);
+                    if (targetKey) {
+                        spawnPaintSkillProjectile(actorKey, targetKey, "paint-white", () => {
+                            units[targetKey].hp = hit.target_hp_after;
+                            renderUnit(targetKey);
+                            flashHit(targetKey, hit.is_crit, hit.type_multiplier);
+                        });
+                    }
+                    logParts.push(hitsSummaryText(d.hits));
+                } else {
+                    if (d.red && d.hits?.length) {
+                        const hit = d.hits[0];
+                        const targetKey = findHitKey(hit.target, hit.target_side);
+                        if (targetKey) {
+                            spawnPaintSkillProjectile(actorKey, targetKey, "paint-red", () => {
+                                units[targetKey].hp = hit.target_hp_after;
+                                renderUnit(targetKey);
+                                flashHit(targetKey, hit.is_crit, hit.type_multiplier);
+                            });
+                        }
+                        logParts.push(hitsSummaryText(d.hits));
+                    }
+
+                    if (d.blue && d.heals?.length) {
+                        const heal = d.heals[0];
+                        // 회복은 항상 시전자와 같은 편(아군) 대상이라 event.side로 바로 찾는다(_target_ref 없음).
+                        const healTargetKey = findHitKey(heal.target, event.side);
+                        if (healTargetKey) {
+                            spawnPaintSkillProjectile(actorKey, healTargetKey, "paint-blue", () => {
+                                units[healTargetKey].hp = heal.target_hp_after;
+                                renderUnit(healTargetKey);
+                                flashEffectAura(healTargetKey, "heal");
+                                setStatusIcon(healTargetKey, "heal", { source: `${event.actor}:paint_heal`, durationMs: MOMENT_ICON_MS });
+                            });
+                        }
+                        logParts.push(`${heal.target} 체력 ${heal.amount} 회복`);
+                    }
+
+                    if (d.yellow && d.stunned?.length) {
+                        // 노란 물감 = 적 전체 기절 - 대표로 첫 대상에게 투사체를 날리고, 도착 시 전원에게 한번에 적용한다.
+                        const firstStunKey = findHitKey(d.stunned[0].target, d.stunned[0].target_side);
+                        const applyAllStuns = () => {
+                            d.stunned.forEach((s) => {
+                                const sKey = findHitKey(s.target, s.target_side);
+                                if (!sKey) return;
+                                flashEffectAura(sKey, "cc");
+                                setStatusIcon(sKey, "stun", {
+                                    source: `${event.actor}:stun`,
+                                    durationMs: (d.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
+                                });
+                                if (s.interrupted_cast) interruptCasting(sKey, s.target_side);
+                            });
+                        };
+                        if (firstStunKey) spawnPaintSkillProjectile(actorKey, firstStunKey, "paint-yellow", applyAllStuns);
+                        else applyAllStuns();
+                        logParts.push(`적 전체 ${d.stun_seconds}초 기절`);
+                    }
+                }
+
+                appendLog(`${event.actor}의 [Active] 발동! ${logParts.join(", ")}`, event.side);
             } else {
                 applySkillHits(event);
                 if (dispatchEffectType === "summon_clone" && event.detail?.summoned) {
@@ -2314,6 +2429,36 @@
                 setStatusIcon(healTargetKey, "heal", { source: `${event.actor}:death_heal`, durationMs: MOMENT_ICON_MS });
             });
             appendLog(`${event.actor}의 [Special] 발동! 사망과 함께 아군 회복`, event.side);
+        } else if (eventType === "paint_gain_resolve") {
+            // 방임석 "예술가의 혼": 물감을 얻을 때마다 상태 아이콘의 weight를 "현재 총 보유량"으로
+            // 그대로 덮어쓴다(윤대웅의 self_stack_buff와 같은 방식) - 소모돼서 0이 되면 아이콘을 지운다.
+            const paintKey = findUnitKey(event.side, event.actor);
+            if (paintKey) {
+                const iconId = `paint_${event.detail.color}`;
+                const sourceKey = `${paintKey}:${iconId}`;
+                if (event.detail.total > 0) {
+                    setStatusIcon(paintKey, iconId, { source: sourceKey, weight: event.detail.total });
+                } else {
+                    clearStatusIconSource(paintKey, iconId, sourceKey);
+                }
+            }
+        } else if (eventType === "neglect_status_resolve") {
+            // 방임석 "방임": 학생 타입 아군이 있는 동안 영구 기절 + 받는 피해 감소. 지속시간이 없으므로
+            // (조건이 풀릴 때 active:false로만 꺼짐) durationMs 없이 걸어두고, 꺼질 때 직접 지운다.
+            const neglectKey = findUnitKey(event.side, event.actor);
+            if (neglectKey) {
+                if (event.detail?.active) {
+                    flashEffectAura(neglectKey, "cc");
+                    setStatusIcon(neglectKey, "stun", { source: `${neglectKey}:neglect` });
+                    setStatusIcon(neglectKey, "damage_reduction", { source: `${neglectKey}:neglect` });
+                    if (event.detail.interrupted_cast) interruptCasting(neglectKey, event.side);
+                    appendLog(`${event.actor}의 [Special] 발동! 방임 상태(영구 기절, 받는 피해 감소)`, event.side);
+                } else {
+                    clearStatusIconSource(neglectKey, "stun", `${neglectKey}:neglect`);
+                    clearStatusIconSource(neglectKey, "damage_reduction", `${neglectKey}:neglect`);
+                    appendLog(`${event.actor}의 방임 상태 해제!`, event.side);
+                }
+            }
         } else {
             // basic_attack (기존 로직 + 원거리 5명 전용 연출)
             const actorKey = eventActorKey(event);
@@ -2390,7 +2535,11 @@
     function showResult() {
         walkerRunning = false;
         if (rosterOrderTimer) { clearInterval(rosterOrderTimer); rosterOrderTimer = null; }
-        appendLog("전투 종료!", null);
+
+        // attacker_won: true(승리)/false(패배)/null(무승부, 양팀 동시 전멸 시).
+        const outcome = data.attacker_won === true ? "win" : data.attacker_won === false ? "lose" : "draw";
+        const outcomeText = outcome === "win" ? "승리!" : outcome === "lose" ? "패배..." : "무승부";
+        appendLog(`전투 종료! ${outcomeText}`, outcome);
 
         const resultEl = document.getElementById("battle-result");
         const textEl = document.getElementById("battle-result-text");
@@ -2398,17 +2547,15 @@
 
         if (!resultEl || !textEl) return;
 
-        textEl.textContent = data.attacker_won ? "승리!" : "패배...";
-        textEl.className =
-            `battle-result-text ` +
-            `${data.attacker_won ? "battle-win" : "battle-lose"}`;
+        textEl.textContent = outcomeText;
+        textEl.className = `battle-result-text battle-${outcome}`;
 
         if (data.rank_changed) {
             textEl.textContent += ` 내 순위: ${data.my_new_rank}등`;
         }
 
         if (goldEl) {
-            if (data.attacker_won && data.gold_reward) {
+            if (data.attacker_won === true && data.gold_reward) {
                 goldEl.textContent = `+${data.gold_reward}G`;
                 goldEl.hidden = false;
             } else {

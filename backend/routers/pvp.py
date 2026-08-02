@@ -253,12 +253,12 @@ def run_battle(
     )
 
     result = simulate_battle(attacker_team, defender_team)
-    attacker_won = result["attacker_won"]
+    attacker_won = result["attacker_won"]  # True/False/None(무승부) - None은 양쪽 다 보상 없음
 
-    if attacker_won:
+    if attacker_won is True:
         user.gold += ATTACK_WIN_GOLD
         user.lifetime_gold += ATTACK_WIN_GOLD
-    else:
+    elif attacker_won is False:
         db.add(Mail(
             user_id=defender.id,
             title="전술대회 방어 보상입니다.",
@@ -269,7 +269,7 @@ def run_battle(
     defender_rank_before = defender.pvp_rank
     rank_did_change = False
 
-    if attacker_won and rank_changeable:
+    if attacker_won is True and rank_changeable:
         # pvp_rank엔 unique 제약이 걸려있어서, 아래 재배치 과정에서 어느 한 순간이라도 두 유저가
         # 같은 순위를 가리키면 즉시 UniqueViolation이 난다. 그래서 순서를 신경 써서 처리한다:
         # 1) 나를 먼저 범위 밖 임시값(음수)으로 비켜둔다.
@@ -307,7 +307,7 @@ def run_battle(
     log = PvpBattleLog(
         attacker_id=user.id,
         defender_id=defender.id,
-        winner_id=user.id if attacker_won else defender.id,
+        winner_id=user.id if attacker_won is True else (defender.id if attacker_won is False else None),
         rank_changed=rank_did_change,
         attacker_rank_before=attacker_rank_before,
         defender_rank_before=defender_rank_before,
@@ -326,7 +326,7 @@ def run_battle(
     return {
         "battle_log_id": log.id,
         "attacker_won": attacker_won,
-        "gold_reward": ATTACK_WIN_GOLD if attacker_won else 0,
+        "gold_reward": ATTACK_WIN_GOLD if attacker_won is True else 0,
         "duration": result["duration"],
         "events": result["events"],
         "rank_changed": rank_did_change,

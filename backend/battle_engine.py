@@ -42,6 +42,19 @@ CHARACTER_SKILL_MECHANICS = {char["name"]: char["skill_mechanics"] for char in _
 CHARACTER_TRAIT_MECHANICS = {char["name"]: char["trait_mechanics"] for char in _ALL_CHARACTERS if char.get("trait_mechanics")}
 CHARACTER_STAR_MECHANICS = {char["name"]: char["star_mechanics"] for char in _ALL_CHARACTERS if char.get("star_mechanics")}
 
+# 방임석("예술가의 혼") 전용 - 다른 캐릭터의 [Active] 스킬을 피해/회복,특수/강화,약화,CC 세 종류로
+# 분류한다. characters.json의 "skill_categories"(캐릭터별 데이터)에서 그대로 읽어오므로, 새 캐릭터를
+# 추가할 때도 이 파일은 건드릴 필요 없이 characters.json에 skill_categories만 채우면 된다("첫 번째
+# 효과"만 보는 게 아니라, 스킬이 가진 효과 종류 전부에 대해 물감을 각각 받는다 - 예) 임소정은
+# 약화+피해를 모두 가지므로 노란+빨간 물감을 동시에 받는다). 강승유(copy_target_skill)는 매번 실제로
+# 복제한 스킬의 effect_type이 달라지므로 이 표의 값은 폴백(복제 실패 시 순수 피해)이고,
+# _apply_paint_gain이 detail["copied_effect_type"]을 우선 조회해서 동적으로 분류한다.
+SKILL_TYPE_CATEGORY = {
+    char["skill_mechanics"]["effect_type"]: tuple(char["skill_categories"])
+    for char in _ALL_CHARACTERS
+    if char.get("skill_mechanics") and char.get("skill_categories")
+}
+
 # 삼각 상성: 키가 이기는(유리한) 대상 = 값. 예) TYPE_ADVANTAGE["Parent"] == "Teacher" -> Parent가 Teacher에게 유리
 TYPE_ADVANTAGE = {"Parent": "Teacher", "Student": "Parent", "Teacher": "Student"}
 TYPE_ADVANTAGE_MULT = 1.5
@@ -77,6 +90,9 @@ def _new_status():
         "shield_until": None,        # 이 시간까지는 받는 피해가 0
         "stun_until": None,          # 이 시간까지는 아무 행동도 못 함
         "stack_count": 0,
+        "paint_red": 0,               # 방임석 전용 - 물감(빨강/파랑/노랑) 보유 개수, 다른 캐릭터는 항상 0
+        "paint_blue": 0,
+        "paint_yellow": 0,
     }
 
 
@@ -169,20 +185,23 @@ def compute_unit_stats(character_name, star, owner_level, slot="front", override
 
 
 def build_team(front, back):
-    # "summon" 슬롯은 기존 전방/후방과 별개로 존재하는 3번째 자리 - 윤영준의 복제체처럼
-    # 인원을 대체하지 않고 "추가로" 소환되는 유닛 전용이다. 평소엔 비어있다(None).
-    return {"front": front, "back": back, "summon": None}
+    # "summon_front"/"summon_back"은 기존 전방/후방과 별개로 존재하는 전용 자리 - 윤영준의 복제체처럼
+    # 인원을 대체하지 않고 "추가로" 소환되는 유닛 전용이다. 평소엔 비어있다(None). 시전자가 front면
+    # summon_front, back이면 summon_back을 쓰므로, 같은 팀에 summon_clone을 쓰는 캐릭터가 둘(예:
+    # 윤영준+강승유) 있어도 서로의 복제체를 밀어내지 않고 각자 자기 몫의 복제체를 유지할 수 있다.
+    return {"front": front, "back": back, "summon_front": None, "summon_back": None}
 
 
 def _all_slots(team):
-    return (team["front"], team["back"], team.get("summon"))
+    return (team["front"], team["back"], team.get("summon_front"), team.get("summon_back"))
 
 
 def _alive_units(team):
-    """생존 유닛을 우선순위 순서로 반환한다. 윤영준의 복제체는 미끼 역할이라
-    배치와 무관하게 항상 맨 앞(최우선 타겟)으로 온다 - 그 외에는 front, back, summon 순서 그대로."""
+    """생존 유닛을 우선순위 순서로 반환한다. front, back, summon_front, summon_back 순서 그대로 -
+    복제체(클론)라고 해서 특별히 최우선 타겟이 되지 않는다. 기본 규칙은 항상 "전방이 먼저"이고,
+    전방이 죽으면 그다음(후방)이 새 전방이 되는 식으로 자연히 앞당겨진다 - 복제체는 그 뒤에 붙는
+    추가 유닛일 뿐이라, 전방/후방이 모두 죽어야 비로소 공격 대상이 된다."""
     units = [u for u in _all_slots(team) if u and u["hp"] > 0]
-    units.sort(key=lambda u: 0 if u.get("is_clone") else 1)
     return units
 
 
@@ -207,10 +226,13 @@ def _tag_target_sides(detail, side_name, own_team, enemy_team):
     def resolve(ref):
         return side_name if id(ref) in own_ids else enemy_side
 
-    for hit in detail.get("hits") or []:
-        ref = hit.pop("_target_ref", None)
-        if ref is not None:
-            hit["target_side"] = resolve(ref)
+    # "hits"는 모든 단일/다중 대상 피해 스킬이 쓰는 표준 목록. "stunned"는 방임석의 "제목은 관객이
+    # 정하세요"(노란 물감)처럼 피해 없이 대상만 기절시키는 경우 전용 - 같은 방식으로 태깅한다.
+    for key in ("hits", "stunned"):
+        for hit in detail.get(key) or []:
+            ref = hit.pop("_target_ref", None)
+            if ref is not None:
+                hit["target_side"] = resolve(ref)
 
     ref = detail.pop("_target_ref", None)
     if ref is not None:
@@ -224,7 +246,7 @@ def _team_alive(team):
 
 
 def _teammate(team, unit):
-    """자신을 제외한 다른 팀원 1명(살아있든 아니든) - front/back/summon 순서로 첫 번째를 반환."""
+    """자신을 제외한 다른 팀원 1명(살아있든 아니든) - front/back/summon_front/summon_back 순서로 첫 번째를 반환."""
     for other in _all_slots(team):
         if other is not None and other is not unit:
             return other
@@ -233,20 +255,22 @@ def _teammate(team, unit):
 
 def _select_basic_attack_target(unit, enemy_team):
     """기본공격 대상 선정. 전방/후방은 고정 슬롯이 아니라 "살아있는 유닛의 순서"로 매번 다시 정해진다:
-    _alive_units가 복제체(미끼) -> 전방 -> 후방 순으로 돌려주므로, 전방이 죽으면 그다음 유닛(원래 후방)이
-    자연히 새 전방(첫 타겟)이 되고, (복제체가 있어 3인일 때) 후방이 죽으면 그 앞 유닛이 새 후방이 된다 -
-    후방이 죽어도 전방은 변하지 않는다.
+    _alive_units가 전방 -> 후방 -> summon_front -> summon_back 순으로 돌려주므로, 전방이 죽으면
+    그다음 유닛(원래 후방)이 자연히 새 전방(첫 타겟)이 된다. 복제체는 전방/후방과 무관한 별도 슬롯이라
+    특별 취급 없이 이 순서 그대로 맨 뒤에 붙는다(전방/후방이 모두 죽어야 비로소 대상이 됨).
 
-    - 기본: 현재 전방(목록의 맨 앞, 복제체가 있으면 복제체)을 때린다.
+    - 기본: 현재 전방(목록의 맨 앞)을 때린다.
     - rear_priority 플래그가 있는 유닛(최재혁 ★3부터, 또는 "마법사 아카데미"로 그 효과를 받은 아군
-      마법사)만 예외: "무조건" 현재 후방(살아있는 유닛 중 맨 뒤)을 먼저 때린다 - 복제체(미끼)가 있어도
-      무시하고 후방을 노린다. 살아있는 적이 1명뿐이면 그가 곧 전방이자 유일한 대상이다."""
+      마법사)만 예외: "무조건" 현재 후방(전방/후방 중 뒤쪽)을 먼저 때린다 - 복제체가 살아있어도 무시하고
+      후방을 노린다(복제체는 전방도 후방도 아니라서 이 규칙 밖). 전방/후방 중 살아있는 게 1명뿐이면
+      그가 곧 유일한 대상이다."""
     units = _alive_units(enemy_team)
     if not units:
         return None
 
     if unit.get("rear_priority"):
-        return units[-1] if len(units) >= 2 else units[0]
+        front_back_units = [u for u in units if not u.get("is_clone")]
+        return front_back_units[-1] if len(front_back_units) >= 2 else units[0]
 
     return units[0]
 
@@ -267,9 +291,13 @@ def _effective_interval(unit, time_elapsed):
 
 
 def _apply_damage(target, amount, time_elapsed):
-    """실드가 떠 있으면 피해를 0으로 만든다. 실제로 깎인 양을 반환."""
+    """실드가 떠 있으면 피해를 0으로 만든다. 방임석의 "방임" 상태가 활성이면(neglect_active) 대신
+    받는 피해를 dr_percent만큼 줄인다 - 실드와 동시에 걸릴 일은 없다(둘 다 self 전용 상태라 서로 다른
+    캐릭터에게만 각각 있음). 실제로 깎인 양을 반환."""
     if target["status"]["shield_until"] is not None and time_elapsed < target["status"]["shield_until"]:
         amount = 0
+    elif target.get("neglect_active") and target.get("neglect_config"):
+        amount *= (1 - target["neglect_config"]["dr_percent"] / 100)
     amount = max(0, round(amount))
     target["hp"] = max(0, target["hp"] - amount)
     return amount
@@ -517,6 +545,16 @@ def _trait_death_heal_ally(caster, team, enemy_team, params, events, side):
     caster["death_heal_percent"] = params["percent"]
 
 
+def _trait_conditional_stun_dr_ally_type(caster, team, enemy_team, params, events, side):
+    # 방임석(방임): 지금은 설정만 해둔다 - 실제 판정(영구 기절 + 받는 피해 감소)은 조건(학생 타입 아군의
+    # 생존 여부)이 전투 중 바뀔 수 있어서 매 틱 _apply_neglect_status가 다시 확인한다.
+    caster["neglect_config"] = {
+        "ally_attack_type": params["ally_attack_type"],
+        "dr_percent": params["dr_percent"],
+        "paint_interval_seconds": params.get("paint_interval_seconds"),
+    }
+
+
 TRAIT_EFFECT_HANDLERS = {
     "ally_synergy_remove_absorb": _trait_ally_synergy_remove_absorb,
     "ally_synergy_atk_buff": _trait_ally_synergy_atk_buff,
@@ -528,6 +566,7 @@ TRAIT_EFFECT_HANDLERS = {
     "female_count_haste": _trait_female_count_haste,
     "dynamic_grant_rear_priority": _trait_dynamic_grant_rear_priority,
     "death_heal_ally": _trait_death_heal_ally,
+    "conditional_stun_dr_ally_type": _trait_conditional_stun_dr_ally_type,
 }
 
 
@@ -683,7 +722,16 @@ def _star_self_rear_priority(unit, own_team, enemy_team, params):
     return [("own", unit, 0, 0, 0, 0, 1)]
 
 
+def _star_gain_paint_on_active_use(unit, own_team, enemy_team, params):
+    # 방임석(예술가의 혼): 다른 캐릭터들의 [Active] 스킬 사용 이 "장전"만 해둔다 - 실제 발동(물감 획득)은
+    # 전장 어딘가에서 [Active]가 실제로 발동될 때마다 _apply_paint_gain이 매번 감지해서 처리한다
+    # (death_heal_ally/_apply_death_triggers와 같은 "설정 후 매 틱 감지" 패턴).
+    unit["paint_gain_amount"] = params["amount_per_use"]
+    return []
+
+
 STAR_EFFECT_HANDLERS = {
+    "gain_paint_on_active_use": _star_gain_paint_on_active_use,
     "self_stat_percent": _star_self_stat_percent,
     "self_buff_enemy_debuff": _star_self_buff_enemy_debuff,
     "ally_team_stat_percent": _star_ally_team_stat_percent,
@@ -753,9 +801,13 @@ def _skill_self_stack_buff(caster, own_team, enemy_team, params, time_elapsed):
 
 
 def _skill_summon_clone(caster, own_team, enemy_team, params, time_elapsed):
-    # 복제체는 기존 전방/후방 인원을 대체하지 않고, 별도의 "summon" 자리에 추가로 나타난다(3번째 유닛).
-    # 이미 복제체가 있으면(이전 캐스팅에서 소환한 것) 그것만 제거하고 새 복제체로 교체한다 - 항상 최대 1마리.
-    replaced = own_team.get("summon")
+    # 복제체는 기존 전방/후방 인원을 대체하지 않고, 시전자 본인 전용 자리에 추가로 나타난다 - 시전자가
+    # front면 summon_front, back이면 summon_back(own_team["front"] is caster로 판정). 같은 팀에
+    # summon_clone을 쓰는 캐릭터가 둘이어도 서로 다른 자리를 쓰므로 서로의 복제체를 밀어내지 않는다.
+    # 단, 같은 캐릭터가 재시전(재소환)하면 자기 자리에 있던 이전 복제체만 교체한다 - 항상 캐릭터당 최대 1마리.
+    caster_slot = "front" if own_team.get("front") is caster else "back"
+    target_key = f"summon_{caster_slot}"
+    replaced = own_team.get(target_key)
 
     clone_max_hp = round(caster["max_hp"] * params["hp_percent"] / 100)
     clone_atk = round(caster["atk"] * params["atk_percent"] / 100)
@@ -769,10 +821,10 @@ def _skill_summon_clone(caster, own_team, enemy_team, params, time_elapsed):
         "trait_effect_type": None, "trait_params": None, "trait_partner_name": None,
         "status": _new_status(), "is_clone": True,
     }
-    own_team["summon"] = clone
+    own_team[target_key] = clone
     return {
         "summoned": True, "clone_name": clone["name"], "clone_hp": clone_max_hp, "clone_atk": clone_atk,
-        "clone_slot": "summon", "replaced": replaced["name"] if replaced else None,
+        "clone_slot": target_key.replace("_", "-"), "replaced": replaced["name"] if replaced else None,
     }
 
 
@@ -981,6 +1033,78 @@ def _skill_aoe_all_others_damage(caster, own_team, enemy_team, params, time_elap
     return {"hits": hits}
 
 
+def _skill_consume_paint_multi_effect(caster, own_team, enemy_team, params, time_elapsed):
+    # 방임석 "제목은 관객이 정하세요": 보유한 물감(빨강/파랑/노랑)을 색깔별로 전부 소모해서 한 번에
+    # 발동한다. "1개당" 수치는 색깔별로 각각 따로 발동하는 게 아니라(개별 히트 N번) 개수만큼 배수로
+    # 늘려서 색깔당 딱 한 번만 적용한다(윤대웅의 자가 스택 버프와 같은 "총량 스케일링" 방식) - 그래야
+    # 크리티컬/기절 판정도 색깔당 1번으로 끝난다. 세 색을 동시에 보유했으면 세 효과 모두 함께 발동한다.
+    status = caster["status"]
+    red = status.get("paint_red", 0)
+    blue = status.get("paint_blue", 0)
+    yellow = status.get("paint_yellow", 0)
+    status["paint_red"] = 0
+    status["paint_blue"] = 0
+    status["paint_yellow"] = 0
+
+    detail = {"red": red, "blue": blue, "yellow": yellow}
+
+    if not (red or blue or yellow):
+        # 물감이 하나도 없으면 대신 강한 단일 피해
+        target = _alive_target(enemy_team)
+        if target is None:
+            return {"hit": False}
+        type_mult = get_type_multiplier(caster["attack_type"], target["defense_type"])
+        atk, is_crit = _roll_damage_atk(caster, time_elapsed)
+        damage = atk * params["no_paint_multiplier"] / 100 * type_mult
+        damage = _apply_gendered_damage_bonus(caster, target, damage)
+        dealt = _apply_damage(target, damage, time_elapsed)
+        detail["hits"] = [{
+            "target": target["name"], "_target_ref": target, "damage": dealt,
+            "target_hp_after": target["hp"], "target_max_hp": target["max_hp"],
+            "is_crit": is_crit, "type_multiplier": type_mult,
+        }]
+        return detail
+
+    if red:
+        target = _alive_target(enemy_team)
+        if target is not None:
+            type_mult = get_type_multiplier(caster["attack_type"], target["defense_type"])
+            atk, is_crit = _roll_damage_atk(caster, time_elapsed)
+            damage = atk * (params["red_percent_per_paint"] * red) / 100 * type_mult
+            damage = _apply_gendered_damage_bonus(caster, target, damage)
+            dealt = _apply_damage(target, damage, time_elapsed)
+            detail["hits"] = [{
+                "target": target["name"], "_target_ref": target, "damage": dealt,
+                "target_hp_after": target["hp"], "target_max_hp": target["max_hp"],
+                "is_crit": is_crit, "type_multiplier": type_mult,
+            }]
+
+    if blue:
+        # 체력이 가장 낮은 아군(자신 포함) - "자신을 제외한"이라는 조건이 없으므로 자신도 대상이 될 수 있다.
+        lowest = min(_alive_units(own_team), key=lambda u: u["hp"], default=None)
+        if lowest is not None:
+            heal_amount = round(lowest["max_hp"] * (params["blue_percent_per_paint"] * blue) / 100)
+            before = lowest["hp"]
+            lowest["hp"] = min(lowest["max_hp"], lowest["hp"] + heal_amount)
+            # 아군 대상 회복이라 항상 시전자와 같은 편 - 이영웅의 death_heal_ally와 동일하게 _target_ref 없이
+            # target_side를 프론트가 event.side로 바로 판정하게 둔다.
+            detail["heals"] = [{
+                "target": lowest["name"], "amount": lowest["hp"] - before,
+                "target_hp_after": lowest["hp"], "target_max_hp": lowest["max_hp"],
+            }]
+
+    if yellow:
+        stun_seconds = params["yellow_seconds_per_paint"] * yellow
+        stunned = []
+        for enemy in _alive_units(enemy_team):
+            interrupted = _apply_stun(enemy, time_elapsed + stun_seconds)
+            stunned.append({"target": enemy["name"], "_target_ref": enemy, "interrupted_cast": interrupted})
+        detail["stunned"] = stunned
+        detail["stun_seconds"] = stun_seconds
+
+    return detail
+
+
 SKILL_EFFECT_HANDLERS = {
     "self_stack_buff": _skill_self_stack_buff,
     "summon_clone": _skill_summon_clone,
@@ -996,6 +1120,7 @@ SKILL_EFFECT_HANDLERS = {
     "damage_hp_percent_plus_atk": _skill_damage_hp_percent_plus_atk,
     "debuff_atk_and_damage": _skill_debuff_atk_and_damage,
     "aoe_all_others_damage": _skill_aoe_all_others_damage,
+    "consume_paint_multi_effect": _skill_consume_paint_multi_effect,
 }
 
 
@@ -1064,7 +1189,7 @@ def _apply_death_triggers(team, side, events, time_elapsed):
     효과 전용 훅. 매 틱마다 각 팀을 훑어서 "죽었는데 아직 트리거 안 한" 유닛을 찾아 1회만 발동한다 -
     사망은 여러 곳(기본공격/각종 스킬)에서 일어날 수 있어 그 모든 지점에 훅을 심는 대신, 여기 한
     곳에서 "죽어 있음" 상태만 감지한다(최대 1틱=0.05초 지연이지만 체감상 차이 없음)."""
-    for slot in ("front", "back", "summon"):
+    for slot in ("front", "back", "summon_front", "summon_back"):
         unit = team[slot]
         if not unit or unit["hp"] > 0 or not unit.get("death_heal_percent") or unit.get("_death_triggered"):
             continue
@@ -1089,6 +1214,80 @@ def _apply_death_triggers(team, side, events, time_elapsed):
             })
 
 
+def _apply_neglect_status(team, side, events, time_elapsed):
+    """방임석(방임): "학생 타입 아군이 존재하는 동안" 자신은 영구 기절 + 받는 피해 대폭 감소. death_heal_ally와
+    달리 조건이 한 번 성립하고 끝이 아니라(그 아군이 죽으면 조건이 풀려서 다시 정상적으로 움직여야 함)
+    매 틱 다시 판정해야 하는 유일한 특성이라 별도 훅으로 둔다. neglect_active 변화(꺼짐<->켜짐) 시점에만
+    이벤트를 남겨서 프론트가 상태 아이콘을 그때만 갱신하면 되게 한다."""
+    for unit in _alive_units(team):
+        config = unit.get("neglect_config")
+        if not config:
+            continue
+        ally_type = config["ally_attack_type"]
+        has_qualifying_ally = any(
+            other is not unit and other.get("attack_type") == ally_type
+            for other in _alive_units(team)
+        )
+        was_active = unit.get("neglect_active", False)
+        unit["neglect_active"] = has_qualifying_ally
+
+        if has_qualifying_ally and not was_active:
+            unit["_neglect_last_paint_time"] = time_elapsed
+            interrupted = _interrupt_cast_if_casting(unit)
+            events.append({
+                "time": time_elapsed, "event_type": "neglect_status_resolve", "side": side,
+                "actor": unit["name"], "detail": {"active": True, "interrupted_cast": interrupted},
+            })
+        elif not has_qualifying_ally and was_active:
+            events.append({
+                "time": time_elapsed, "event_type": "neglect_status_resolve", "side": side,
+                "actor": unit["name"], "detail": {"active": False},
+            })
+
+        # 6성+ 전용: 방임 상태인 동안 일정 주기마다 무작위 색 물감 1개를 추가로 획득한다.
+        interval = config.get("paint_interval_seconds")
+        if has_qualifying_ally and interval:
+            last = unit.get("_neglect_last_paint_time", time_elapsed)
+            if time_elapsed - last >= interval:
+                unit["_neglect_last_paint_time"] = time_elapsed
+                color = random.choice(("red", "blue", "yellow"))
+                paint_key = f"paint_{color}"
+                unit["status"][paint_key] += 1
+                events.append({
+                    "time": time_elapsed, "event_type": "paint_gain_resolve", "side": side,
+                    "actor": unit["name"],
+                    "detail": {"color": color, "amount": 1, "total": unit["status"][paint_key], "source_actor": unit["name"]},
+                })
+
+
+def _apply_paint_gain(caster, effect_type, attacker_team, defender_team, side_name, events, time_elapsed):
+    """방임석(예술가의 혼): 자신을 제외한 전장의 누군가(아군이든 적이든)가 [Active]를 발동할 때마다,
+    그 스킬이 가진 효과 종류 전부(SKILL_TYPE_CATEGORY - 하나의 스킬이 여러 효과를 가지면 그만큼 색깔도
+    여러 개)에 대해 각각 물감을 받는다. 다른 편 유닛의 행동에도 반응하는 이 게임 유일의 "관찰자형"
+    패시브라 전용 훅으로 뺐다(death_heal_ally처럼 캐스터 자신에게만 적용되는 훅들과 달리 양 팀을 모두
+    훑어야 한다). 시전이 중간에 CC로 취소되면 애초에 skill_resolve 자체가 발생하지 않으므로(main
+    loop에서 완료된 캐스팅에 대해서만 호출) 취소된 시전에서는 물감이 전혀 쌓이지 않는다."""
+    categories = SKILL_TYPE_CATEGORY.get(effect_type)
+    if not categories:
+        return
+    for team, team_side in ((attacker_team, "attacker"), (defender_team, "defender")):
+        for unit in _alive_units(team):
+            if unit is caster or not unit.get("paint_gain_amount"):
+                continue
+            amount = unit["paint_gain_amount"]
+            for category in categories:
+                paint_key = f"paint_{category}"
+                unit["status"][paint_key] += amount
+                events.append({
+                    "time": time_elapsed, "event_type": "paint_gain_resolve", "side": team_side,
+                    "actor": unit["name"],
+                    "detail": {
+                        "color": category, "amount": amount, "total": unit["status"][paint_key],
+                        "source_actor": caster["name"], "source_side": side_name,
+                    },
+                })
+
+
 def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
     """
     두 팀(전방+후방)을 받아 시간 기반으로 전투를 시뮬레이션한다.
@@ -1108,18 +1307,23 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
 
         _apply_death_triggers(attacker_team, "attacker", events, time_elapsed)
         _apply_death_triggers(defender_team, "defender", events, time_elapsed)
+        _apply_neglect_status(attacker_team, "attacker", events, time_elapsed)
+        _apply_neglect_status(defender_team, "defender", events, time_elapsed)
 
         for side_name, own_team, enemy_team in (
             ("attacker", attacker_team, defender_team),
             ("defender", defender_team, attacker_team),
         ):
-            for slot in ("front", "back", "summon"):
+            for slot in ("front", "back", "summon_front", "summon_back"):
                 unit = own_team[slot]
                 if unit is None or unit["hp"] <= 0:
                     continue
 
                 status = unit["status"]
                 if status["stun_until"] is not None and time_elapsed < status["stun_until"]:
+                    continue
+
+                if unit.get("neglect_active"):
                     continue
 
                 if unit["is_casting"]:
@@ -1131,6 +1335,11 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
                             "time": time_elapsed, "event_type": "skill_resolve", "side": side_name,
                             "actor": unit["name"], "effect_type": unit["skill_effect_type"], "detail": detail,
                         })
+                        # 방임석(예술가의 혼): 방금 발동한 [Active]를 전장의 다른 관찰자들에게 알린다 -
+                        # 강승유가 복제한 스킬이면 실제로 복제된 원본 효과 타입(copied_effect_type)을 기준으로
+                        # 분류해야, 방임석이 "강승유가 뭘 복제했는지"까지 정확히 반영해서 물감을 받는다.
+                        used_effect_type = detail.get("copied_effect_type") or unit["skill_effect_type"]
+                        _apply_paint_gain(unit, used_effect_type, attacker_team, defender_team, side_name, events, time_elapsed)
                         unit["is_casting"] = False
                         unit["cast_end_time"] = None
                         unit["attack_count"] = 0
@@ -1169,8 +1378,15 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
         attacker_won = True
     elif defender_alive and not attacker_alive:
         attacker_won = False
+    elif not attacker_alive and not defender_alive:
+        # 무승부: 같은 틱에 양팀이 동시에 전멸한 경우. 아군까지 함께 때리는 광역기(예: 김어진 "불빠따")가
+        # 마지막 남은 아군을 쓰러뜨리는 것과 동시에 적팀도 전멸시키는 극히 드문 상황에서만 발생한다 -
+        # 시전자 본인은 자기 광역기에 맞지 않으므로 일반적으로는 나오기 어렵다. None으로 표시하고,
+        # 호출부(routers/pvp.py)에서 승패 어느 쪽에도 해당하는 보상/순위 변동을 주지 않는다.
+        attacker_won = None
     else:
-        # 시간 초과(둘 다 생존) - 남은 체력 비율이 높은 쪽이 승리 (복제체가 있으면 그 체력도 합산)
+        # 이 분기는 현재 while 루프가 "둘 다 생존"인 동안에만 반복되는 구조상 실제로는 도달하지 않는다
+        # (배틀에 시간 제한이 없다) - 혹시 모를 안전망으로만 남겨둔다.
         def _hp_ratio(team):
             alive = [u for u in _all_slots(team) if u]
             total_hp = sum(u["hp"] for u in alive)

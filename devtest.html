@@ -81,8 +81,15 @@
             <div class="projectile-layer" id="projectile-layer"></div>
 
             <div class="battle-row">
-                <!-- 소환수(summon) 자리 - 평소엔 비어있다가(hidden) 윤영준류의 "추가 소환" 스킬이 발동될 때만 나타남 -->
-                <div class="battle-unit" data-unit="attacker-summon" hidden>
+                <!-- 소환수(summon) 자리 - 평소엔 비어있다가(hidden) 윤영준류의 "추가 소환" 스킬이 발동될 때만 나타남.
+                     시전자가 front/back 어느 쪽이든 각자 전용 자리를 가진다(summon-front/summon-back). -->
+                <div class="battle-unit" data-unit="attacker-summon-front" hidden>
+                    <img class="battle-unit-img" src="" alt="">
+                    <div class="battle-unit-shadow"></div>
+                    <div class="dt-status-icons"></div>
+                    <div class="dt-unit-hp-track"><div class="dt-unit-hp-fill"></div></div>
+                </div>
+                <div class="battle-unit" data-unit="attacker-summon-back" hidden>
                     <img class="battle-unit-img" src="" alt="">
                     <div class="battle-unit-shadow"></div>
                     <div class="dt-status-icons"></div>
@@ -112,7 +119,13 @@
                     <div class="dt-status-icons"></div>
                     <div class="dt-unit-hp-track"><div class="dt-unit-hp-fill"></div></div>
                 </div>
-                <div class="battle-unit" data-unit="defender-summon" hidden>
+                <div class="battle-unit" data-unit="defender-summon-front" hidden>
+                    <img class="battle-unit-img" src="" alt="">
+                    <div class="battle-unit-shadow"></div>
+                    <div class="dt-status-icons"></div>
+                    <div class="dt-unit-hp-track"><div class="dt-unit-hp-fill"></div></div>
+                </div>
+                <div class="battle-unit" data-unit="defender-summon-back" hidden>
                     <img class="battle-unit-img" src="" alt="">
                     <div class="battle-unit-shadow"></div>
                     <div class="dt-status-icons"></div>

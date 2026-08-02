@@ -26,6 +26,7 @@
         "임소정": "electric",        // 캐스터-대상을 잠깐 잇는 푸른 전기
         "서민석": "book",            // 책 던지기 - 포물선, 계속 회전
         "이의진": "eye_laser",       // 눈에서 발사되는 레이저 - type1(빨강)/type2(청록) 두 가지, isType2로 분기(arena-battle.js와 동일)
+        "방임석": "paint_gold",      // 물감 투척 - 직선, 항상 황금빛(arena-battle.js와 동일)
     };
 
     // 캐릭터별 성별 - 서민석 스킬(하트 색)처럼 대상 성별에 따라 연출이 갈리는 경우에 쓴다.
@@ -329,7 +330,7 @@
 
     function setupUnitSelection() {
         // summon(복제체) 슬롯도 소환된 뒤에는 클릭으로 활성 유닛 선택이 가능해야 한다.
-        [...SLOTS, "attacker-summon", "defender-summon"].forEach((slot) => {
+        [...SLOTS, "attacker-summon-front", "attacker-summon-back", "defender-summon-front", "defender-summon-back"].forEach((slot) => {
             const el = document.querySelector(`[data-unit="${slot}"]`);
             if (!el) return;
             el.addEventListener("click", () => {
@@ -368,17 +369,16 @@
         return slot.endsWith("front") ? slot.replace("front", "back") : slot.replace("back", "front");
     }
 
-    // summon(복제체) 슬롯도 상대 팀의 유효한 대상이다 - front/back과 별개로 존재하는 3번째 자리.
+    // summon(복제체) 슬롯도 상대 팀의 유효한 대상이다 - front/back과 별개로 존재하는 추가 자리(캐릭터별로 2개까지).
     function enemySlots(slot) {
         const enemySide = slot.startsWith("attacker") ? "defender" : "attacker";
-        return [`${enemySide}-front`, `${enemySide}-back`, `${enemySide}-summon`];
+        return [`${enemySide}-front`, `${enemySide}-back`, `${enemySide}-summon-front`, `${enemySide}-summon-back`];
     }
 
-    // 복제체(미끼)가 있으면 front/back 배치와 무관하게 항상 최우선 타겟이 된다 - battle_engine.py의 _alive_units와 동일한 규칙.
+    // front -> back -> summon-front -> summon-back 순서 그대로 - 복제체라고 최우선 타겟이 되지 않는다
+    // (battle_engine.py의 _alive_units와 동일한 규칙). 전방이 우선이고, 전방/후방이 모두 죽어야 복제체가 대상이 된다.
     function aliveEnemyUnits(slot) {
-        const alive = enemySlots(slot).filter((s) => units[s] && units[s].hp > 0);
-        alive.sort((a, b) => (units[a].isClone ? 0 : 1) - (units[b].isClone ? 0 : 1));
-        return alive;
+        return enemySlots(slot).filter((s) => units[s] && units[s].hp > 0);
     }
 
     function aliveEnemyTarget(slot) {
@@ -433,10 +433,12 @@
         },
 
         summon_clone(casterSlot, params) {
-            // 복제체는 기존 전방/후방 아군을 대체하지 않는 3번째 유닛 - 캐스터와 같은 편의 전용 summon 슬롯에
-            // 매번 새로 생성한다(이전 복제체가 있었다면 그것만 교체되고, 살아있는 아군은 절대 제거되지 않는다).
+            // 복제체는 기존 전방/후방 아군을 대체하지 않는 추가 유닛 - 캐스터 본인 전용 summon 슬롯에 매번
+            // 새로 생성한다(caster가 front/back 어느 쪽인지에 따라 summon-front/summon-back을 쓰므로, 같은
+            // 팀에 summon_clone을 쓰는 캐릭터가 둘이어도 서로의 복제체를 밀어내지 않는다. 재시전 시 자기
+            // 자리에 있던 이전 복제체만 교체되고, 살아있는 아군은 절대 제거되지 않는다 - arena-battle.js와 동일).
             const side = sideOf(casterSlot);
-            const cloneSlot = `${side}-summon`;
+            const cloneSlot = `${side}-summon-${casterSlot.endsWith("front") ? "front" : "back"}`;
             const replaced = units[cloneSlot];
 
             const caster = units[casterSlot];
@@ -451,28 +453,27 @@
 
             const cloneEl = document.querySelector(`[data-unit="${cloneSlot}"]`);
             const casterEl = document.querySelector(`[data-unit="${casterSlot}"]`);
-            // 복제체는 적 전방 유닛이 서 있는 바로 그 자리에 생성된다(캐스터 자신의 자리가 아님, arena-battle.js와 동일).
-            const enemyFrontSlot = opponentFrontSlot(casterSlot);
-            const enemyFrontEl = document.querySelector(`[data-unit="${enemyFrontSlot}"]`);
+            // 복제체는 캐스터 본인이 서 있는 바로 그 자리에 생성된다.
             if (cloneEl) {
                 cloneEl.hidden = false;
                 cloneEl.style.transform = ""; // 이전 복제체가 남긴 인라인 transform이 있으면 먼저 지운다
                 // getCurrentTranslateX로 "리셋된 CSS 기본값 포함 현재 translateX"를 읽어서 그 위에 델타를
-                // 더해야 한다 - 절대값으로 통째로 덮어쓰면 attacker-summon/defender-summon의 CSS 기본
-                // transform(칸 밖으로 폭+20px 빼두는 값)이 상쇄되지 않고 그대로 더 얹혀서 엉뚱한 자리에 생성된다.
-                if (enemyFrontEl) {
+                // 더해야 한다 - 절대값으로 통째로 덮어쓰면 summon 슬롯의 CSS 기본 transform(칸 밖으로
+                // 빼두는 값)이 상쇄되지 않고 그대로 더 얹혀서 엉뚱한 자리에 생성된다.
+                if (casterEl) {
                     const cloneRect = cloneEl.getBoundingClientRect();
-                    const targetRect = enemyFrontEl.getBoundingClientRect();
+                    const casterRect = casterEl.getBoundingClientRect();
                     const currentCloneX = getCurrentTranslateX(cloneEl);
-                    cloneEl.style.transform = `translateX(${currentCloneX + (targetRect.left - cloneRect.left)}px)`;
+                    cloneEl.style.transform = `translateX(${currentCloneX + (casterRect.left - cloneRect.left)}px)`;
+
+                    // 캐스터는 복제체가 자기 자리를 차지한 만큼, 복제체 너비만큼 뒤로 밀려난다(서로 겹치지
+                    // 않게) - 청년의 넉백(applyKnockback)과 완전히 같은 방식(부드러운 CSS 트랜지션 + 넉백(CC기)
+                    // 오라/아이콘, arena-battle.js와 동일). suspendSelfWalker 덕분에 트랜지션이 끝나자마자
+                    // walker가 깨어나 원래 근접 거리를 목표로 자연스럽게 다시 걸어오므로 별도의 "복귀" 연출은 필요 없다.
+                    flashEffectAura(casterSlot, "cc");
+                    setStatusIcon(casterSlot, "knockback", { source: `${casterSlot}:knockback`, durationMs: MOMENT_ICON_MS });
+                    applyKnockback(casterSlot, { distance: cloneRect.width, durationMs: 380, suspendSelfWalker: true });
                 }
-            }
-            // 원본(캐스터)은 복제체를 소환한 반동으로 살짝 밀려난다 - 청년의 넉백(applyKnockback)과 같은
-            // 방식(한 번 점프시키고 손을 뗀다)이되, 거리는 더 짧고 트랜지션은 더 느려서 부드럽다(arena-battle.js와
-            // 동일). suspendSelfWalker 덕분에 트랜지션이 끝나자마자 walker가 깨어나 원래 근접 거리를 목표로
-            // 자연스럽게 다시 걸어오므로 별도의 "복귀" 연출은 필요 없다.
-            if (casterEl) {
-                applyKnockback(casterSlot, { distance: 90, durationMs: 380, suspendSelfWalker: true });
             }
             attackAnimActive[cloneSlot] = false;
             getAttackFrameCount(units[cloneSlot].outfit);
@@ -482,8 +483,9 @@
             // 근거리 복제체는 다른 근접 유닛과 완전히 동일하게 취급한다 - meleeArrived를 false로 두면
             // 이동 루프(tick)가 다음 프레임에 실제 겹침 여부를 직접 재서 판정하고, 도착으로 확인되는
             // 순간에만 faceToward를 걸고 공격을 허용한다(waitForMeleeArrival이 그 전까지 공격을 막음,
-            // arena-battle.js와 동일).
+            // arena-battle.js와 동일). 이제 캐스터 자리에서 스폰되므로 실제로 걸어서 접근하는 과정을 거친다.
             if (units[cloneSlot].isMelee) {
+                const enemyFrontSlot = opponentFrontSlot(casterSlot);
                 meleeTargetKey[cloneSlot] = enemyFrontSlot;
                 meleeArrived[cloneSlot] = false;
                 if (!walkerRunning) startMeleeWalker();
@@ -889,6 +891,8 @@
         maxhp_down: "Combat_Icon_Debuff_MAXHP.png", stun: "Combat_Icon_CC_Stunned.png",
         knockback: "Combat_Icon_CC_Knockback.png", heal: "Combat_Icon_Recovery_Heal.png",
         immune: "Combat_Icon_Special_ImmuneDamage.png",
+        paint_red: "Combat_Icon_Special_InkRed.png", paint_blue: "Combat_Icon_Special_InkBlue.png",
+        paint_yellow: "Combat_Icon_Special_InkYellow.png", damage_reduction: "Combat_Icon_Buff_DamageRatio.png",
     };
     const MOMENT_ICON_MS = 1200;
     const statusIconState = {}; // slot -> { iconId: { el, sources: Map<sourceKey, {weight, timer}> } }
@@ -957,20 +961,6 @@
         delete statusIconState[slot];
     }
 
-    // 최재혁 전용(self_shield_duration) - 캐릭터를 감싸는 푸른 원형 보호막(arena-battle.js와 동일).
-    function spawnShieldRing(slot, durationMs) {
-        const unitEl = document.querySelector(`[data-unit="${slot}"]`);
-        if (!unitEl) return;
-        unitEl.querySelector(".shield-ring-wrap")?.remove();
-
-        const wrap = document.createElement("div");
-        wrap.className = "shield-ring-wrap";
-        wrap.innerHTML = `<div class="shield-ring"></div>`;
-        unitEl.appendChild(wrap);
-
-        setTimeout(() => wrap.remove(), durationMs);
-    }
-
     // ───────────────────────── 근거리 이동(전투 게시 재생용 - 실시간 도착 판정) ─────────────────────────
 
     // 대상이 자기 등 뒤(진영 기준 반대편)에 있어도 그쪽 면으로 붙는다 - 진행 방향이 고정돼있지 않다(arena-battle.js와 동일).
@@ -981,7 +971,7 @@
         const rect = el.getBoundingClientRect();
         const targetRect = targetEl.getBoundingClientRect();
         // overlap이 클수록 "더 깊이 파고들어야"(겹쳐야) 도착 판정이 나서 결과적으로 더 가까이 멈춘다.
-        const overlap = 75; // arena-battle.js의 APPROACH_OVERLAP과 동일
+        const overlap = 1; // arena-battle.js의 APPROACH_OVERLAP과 동일
         const myCenter = rect.left + rect.width / 2;
         const targetCenter = targetRect.left + targetRect.width / 2;
         return myCenter <= targetCenter
@@ -1135,6 +1125,49 @@
     // start->end 방향의 각도(도) - 회전이 필요한 투사체(크레파스/유성)에 쓴다.
     function angleDeg(start, end) {
         return Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI;
+    }
+
+    // 방임석 기본공격/스킬 전용 물감 투척(arena-battle.js와 동일 - 자세한 설명은 그쪽 주석 참고).
+    // 기본공격은 항상 황금빛 직선, 스킬은 소모한 물감 색(없으면 흰색)으로 포물선.
+    function spawnPaintProjectile(actorSlot, targetSlot, colorClass, onArrive) {
+        const layer = document.getElementById("projectile-layer");
+        const actorImg = document.querySelector(`[data-unit="${actorSlot}"] .battle-unit-img`);
+        const targetImg = document.querySelector(`[data-unit="${targetSlot}"] .battle-unit-img`);
+        if (!layer || !actorImg || !targetImg) { onArrive(); return; }
+
+        const start = fieldRelativeCenter(actorImg);
+        const end = fieldRelativeCenter(targetImg);
+        const dot = document.createElement("div");
+        dot.className = `paint-projectile ${colorClass}`;
+        dot.style.left = `${start.x}px`;
+        dot.style.top = `${start.y}px`;
+        layer.appendChild(dot);
+
+        requestAnimationFrame(() => {
+            dot.style.transition = `left ${PROJECTILE_TRAVEL_MS}ms linear, top ${PROJECTILE_TRAVEL_MS}ms linear`;
+            dot.style.left = `${end.x}px`;
+            dot.style.top = `${end.y}px`;
+        });
+
+        setTimeout(() => {
+            dot.remove();
+            onArrive();
+        }, PROJECTILE_TRAVEL_MS);
+    }
+
+    function spawnPaintSkillProjectile(actorSlot, targetSlot, colorClass, onArrive) {
+        const layer = document.getElementById("projectile-layer");
+        const actorImg = document.querySelector(`[data-unit="${actorSlot}"] .battle-unit-img`);
+        const targetImg = document.querySelector(`[data-unit="${targetSlot}"] .battle-unit-img`);
+        if (!layer || !actorImg || !targetImg) { onArrive(); return; }
+
+        const start = fieldRelativeCenter(actorImg);
+        const end = fieldRelativeCenter(targetImg);
+        const dot = document.createElement("div");
+        dot.className = `paint-projectile ${colorClass}`;
+        layer.appendChild(dot);
+
+        animateArcMotion(dot, start, end, PROJECTILE_TRAVEL_MS * 1.6, 60, onArrive);
     }
 
     // ===== 이의진 전용: 눈에서 발사되는 레이저(arena-battle.js와 동일 - 자세한 설명은 그쪽 주석 참고) =====
@@ -1807,6 +1840,7 @@
         else if (style === "electric") playElectricConnector(actorSlot, targetSlot, "electric-blue", 5, onArrive, ELECTRIC_ORIGIN_BASIC);
         else if (style === "book") spawnBookProjectile(actorSlot, targetSlot, onArrive);
         else if (style === "eye_laser") spawnEyeLaserBeam(actorSlot, targetSlot, units[actorSlot]?.isType2 ? "type2" : "type1", onArrive);
+        else if (style === "paint_gold") spawnPaintProjectile(actorSlot, targetSlot, "paint-gold", onArrive);
         else spawnProjectileStraight(actorSlot, targetSlot, onArrive);
     }
 
@@ -1922,7 +1956,6 @@
                 } else if (dispatchEffectType === "self_shield_duration") {
                     flashEffectAura(actorSlot, "special");
                     setStatusIcon(actorSlot, "immune", { source: `${actorSlot}:self_shield_duration`, durationMs: params.seconds * 1000 });
-                    spawnShieldRing(actorSlot, params.seconds * 1000);
                 } else if (dispatchEffectType === "conditional_target_debuff") {
                     // 공격속도 증가는 대상 성별과 무관하게 항상 자신에게 적용된다.
                     flashEffectAura(actorSlot, "buff");
@@ -2001,7 +2034,7 @@
         Object.keys(walkerSuspended).forEach((slot) => delete walkerSuspended[slot]);
 
         // 이전 전투에서 남아있던 복제체(summon)는 새 전투 시작 전에 완전히 지운다.
-        ["attacker-summon", "defender-summon"].forEach((slot) => {
+        ["attacker-summon-front", "attacker-summon-back", "defender-summon-front", "defender-summon-back"].forEach((slot) => {
             delete units[slot];
             clearAllStatusIcons(slot);
             const el = document.querySelector(`[data-unit="${slot}"]`);
@@ -2037,7 +2070,8 @@
         }
 
         const data = await res.json();
-        log(`전투 결과 수신 - 이벤트 ${data.events.length}개, 승자: ${data.attacker_won ? "공격" : "수비"}`);
+        const winnerText = data.attacker_won === true ? "공격" : data.attacker_won === false ? "수비" : "무승부";
+        log(`전투 결과 수신 - 이벤트 ${data.events.length}개, 승자: ${winnerText}`);
 
         SLOTS.forEach((slot) => {
             const side = slot.startsWith("attacker") ? "attacker" : "defender";
@@ -2067,10 +2101,12 @@
     function findSlotByName(side, name) {
         const frontSlot = `${side}-front`;
         const backSlot = `${side}-back`;
-        const summonSlot = `${side}-summon`;
+        const summonFrontSlot = `${side}-summon-front`;
+        const summonBackSlot = `${side}-summon-back`;
         if (units[frontSlot]?.name === name) return frontSlot;
         if (units[backSlot]?.name === name) return backSlot;
-        if (units[summonSlot]?.name === name) return summonSlot;
+        if (units[summonFrontSlot]?.name === name) return summonFrontSlot;
+        if (units[summonBackSlot]?.name === name) return summonBackSlot;
         return null;
     }
 
@@ -2168,6 +2204,31 @@
                 setStatusIcon(healSlot, "heal", { source: `${event.actor}:death_heal`, durationMs: 1200 });
             });
             log(`[특성] ${event.actor}의 [Special] 발동! 사망과 함께 아군 회복`);
+        } else if (event.event_type === "paint_gain_resolve") {
+            // 방임석 "예술가의 혼"(arena-battle.js와 동일) - weight를 "현재 총 보유량"으로 덮어쓰고, 0이면 지운다.
+            const paintSlot = findSlotByName(actorSide, event.actor);
+            if (paintSlot) {
+                const iconId = `paint_${event.detail.color}`;
+                const sourceKey = `${paintSlot}:${iconId}`;
+                if (event.detail.total > 0) setStatusIcon(paintSlot, iconId, { source: sourceKey, weight: event.detail.total });
+                else clearStatusIconSource(paintSlot, iconId, sourceKey);
+            }
+            log(`[패시브] ${event.actor} +${event.detail.amount} ${event.detail.color} 물감 (합계 ${event.detail.total}) <- ${event.detail.source_actor}`);
+        } else if (event.event_type === "neglect_status_resolve") {
+            // 방임석 "방임"(arena-battle.js와 동일) - 지속시간 없이 걸어두고, 꺼질 때 직접 지운다.
+            const neglectSlot = findSlotByName(actorSide, event.actor);
+            if (neglectSlot) {
+                if (event.detail?.active) {
+                    flashEffectAura(neglectSlot, "cc");
+                    setStatusIcon(neglectSlot, "stun", { source: `${neglectSlot}:neglect` });
+                    setStatusIcon(neglectSlot, "damage_reduction", { source: `${neglectSlot}:neglect` });
+                    if (event.detail.interrupted_cast) interruptCasting(neglectSlot);
+                } else {
+                    clearStatusIconSource(neglectSlot, "stun", `${neglectSlot}:neglect`);
+                    clearStatusIconSource(neglectSlot, "damage_reduction", `${neglectSlot}:neglect`);
+                }
+            }
+            log(`[특성] ${event.actor}의 방임 상태 ${event.detail?.active ? "활성화" : "해제"}`);
         } else if (event.event_type === "cast_start") {
             if (actorSlot) {
                 const castImgEl = document.querySelector(`[data-unit="${actorSlot}"] .battle-unit-img`);
@@ -2209,7 +2270,6 @@
                     const shieldMs = event.detail.shield_seconds * 1000 * PLAYBACK_SPEED;
                     flashEffectAura(actorSlot, "special");
                     setStatusIcon(actorSlot, "immune", { source: `${actorSlot}:self_shield_duration`, durationMs: shieldMs });
-                    spawnShieldRing(actorSlot, shieldMs);
                 }
 
                 if (dispatchEffectType === "conditional_target_debuff") {
@@ -2218,10 +2278,12 @@
                     setStatusIcon(actorSlot, "atk_speed_up", { source: `${actorSlot}:haste`, ...(hasteMs ? { durationMs: hasteMs } : {}) });
                 }
             }
-            // 복제체(윤영준)는 기존 전방/후방을 대체하지 않는 3번째 유닛 - 전용 summon 슬롯에 매번 새로 생성한다.
-            // (이미 그 슬롯에 이전 복제체가 있었다면 detail.replaced에 이름이 담겨오지만, 살아있는 아군이 제거되는 일은 없다.)
+            // 복제체(윤영준/강승유)는 기존 전방/후방을 대체하지 않는 추가 유닛 - 시전자 전용 summon 슬롯에
+            // 매번 새로 생성한다(clone_slot이 "summon-front"/"summon-back"으로 시전자의 자리를 알려준다,
+            // arena-battle.js와 동일). 이미 그 슬롯에 이전 복제체가 있었다면 detail.replaced에 이름이
+            // 담겨오지만, 살아있는 아군이 제거되는 일은 없다.
             if (dispatchEffectType === "summon_clone" && event.detail?.summoned) {
-                const cloneSlot = `${actorSide}-summon`;
+                const cloneSlot = `${actorSide}-${event.detail.clone_slot || "summon"}`;
                 const caster = actorSlot ? units[actorSlot] : null;
 
                 units[cloneSlot] = {
@@ -2235,24 +2297,25 @@
 
                 const cloneEl = document.querySelector(`[data-unit="${cloneSlot}"]`);
                 const casterEl = actorSlot ? document.querySelector(`[data-unit="${actorSlot}"]`) : null;
-                // 복제체는 적 전방 유닛이 서 있는 바로 그 자리에 생성된다(캐스터 자신의 자리가 아님, arena-battle.js와 동일).
-                const enemyFrontSlot = opponentFrontSlot(cloneSlot);
-                const enemyFrontEl = document.querySelector(`[data-unit="${enemyFrontSlot}"]`);
+                // 복제체는 시전자 본인이 서 있는 바로 그 자리에 생성된다.
                 if (cloneEl) {
                     cloneEl.hidden = false;
                     cloneEl.style.transform = ""; // 이전 복제체가 남긴 인라인 transform이 있으면 먼저 지운다
                     // getCurrentTranslateX로 "리셋된 CSS 기본값 포함 현재 translateX"를 읽어서 그 위에
                     // 델타를 더해야 한다 - 절대값으로 통째로 덮어쓰면 summon 슬롯의 CSS 기본 transform이
                     // 상쇄되지 않고 그대로 더 얹혀서 엉뚱한 자리에 생성된다.
-                    if (enemyFrontEl) {
+                    if (casterEl) {
                         const cloneRect = cloneEl.getBoundingClientRect();
-                        const targetRect = enemyFrontEl.getBoundingClientRect();
+                        const casterRect = casterEl.getBoundingClientRect();
                         const currentCloneX = getCurrentTranslateX(cloneEl);
-                        cloneEl.style.transform = `translateX(${currentCloneX + (targetRect.left - cloneRect.left)}px)`;
+                        cloneEl.style.transform = `translateX(${currentCloneX + (casterRect.left - cloneRect.left)}px)`;
+
+                        // 시전자는 복제체가 자기 자리를 차지한 만큼, 복제체 너비만큼 뒤로 밀려난다 - 부드러운
+                        // CSS 트랜지션 + 넉백(CC기) 오라/아이콘까지 청년의 넉백과 동일하다(arena-battle.js와 동일).
+                        flashEffectAura(actorSlot, "cc");
+                        setStatusIcon(actorSlot, "knockback", { source: `${actorSlot}:knockback`, durationMs: MOMENT_ICON_MS });
+                        applyKnockback(actorSlot, { distance: cloneRect.width, durationMs: 380, suspendSelfWalker: true });
                     }
-                }
-                if (casterEl && actorSlot) {
-                    applyKnockback(actorSlot, { distance: 90, durationMs: 380, suspendSelfWalker: true });
                 }
                 attackAnimActive[cloneSlot] = false;
                 getAttackFrameCount(units[cloneSlot].outfit);
@@ -2262,8 +2325,10 @@
 
                 // 근거리 복제체는 다른 근접 유닛과 완전히 동일하게 취급한다 - meleeArrived를 false로
                 // 두면 이동 루프(tick)가 실제 겹침 여부를 직접 재서 판정하고, 도착이 확인되는 순간에만
-                // faceToward를 걸고 공격을 허용한다.
-                if (units[cloneSlot].isMelee) {
+                // faceToward를 걸고 공격을 허용한다. 이제 시전자 자리에서 스폰되므로 실제로 걸어서
+                // 접근하는 과정을 거친다.
+                if (units[cloneSlot].isMelee && actorSlot) {
+                    const enemyFrontSlot = opponentFrontSlot(actorSlot);
                     meleeTargetKey[cloneSlot] = enemyFrontSlot;
                     meleeArrived[cloneSlot] = false;
                 }
@@ -2385,6 +2450,64 @@
                     renderUnit(hitSlot);
                     flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
                 });
+            } else if (dispatchEffectType === "consume_paint_multi_effect" && actorSlot) {
+                // 방임석 "제목은 관객이 정하세요" - 물감 색깔별로 각각 독립된 투사체를 병렬로 날린다
+                // (arena-battle.js와 동일). 물감이 하나도 없으면 흰색 단일 투사체로 강한 피해만.
+                const d = event.detail || {};
+                const hasAnyPaint = d.red || d.blue || d.yellow;
+
+                if (!hasAnyPaint && d.hits?.length) {
+                    const hit = d.hits[0];
+                    const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
+                    if (hitSlot) {
+                        spawnPaintSkillProjectile(actorSlot, hitSlot, "paint-white", () => {
+                            units[hitSlot].hp = hit.target_hp_after;
+                            renderUnit(hitSlot);
+                            flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
+                        });
+                    }
+                } else {
+                    if (d.red && d.hits?.length) {
+                        const hit = d.hits[0];
+                        const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
+                        if (hitSlot) {
+                            spawnPaintSkillProjectile(actorSlot, hitSlot, "paint-red", () => {
+                                units[hitSlot].hp = hit.target_hp_after;
+                                renderUnit(hitSlot);
+                                flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
+                            });
+                        }
+                    }
+
+                    if (d.blue && d.heals?.length) {
+                        const heal = d.heals[0];
+                        // 회복은 항상 시전자와 같은 편이라 actorSide로 바로 찾는다.
+                        const healSlot = findSlotByName(actorSide, heal.target);
+                        if (healSlot) {
+                            spawnPaintSkillProjectile(actorSlot, healSlot, "paint-blue", () => {
+                                units[healSlot].hp = heal.target_hp_after;
+                                renderUnit(healSlot);
+                                flashEffectAura(healSlot, "heal");
+                                setStatusIcon(healSlot, "heal", { source: `${event.actor}:paint_heal`, durationMs: MOMENT_ICON_MS });
+                            });
+                        }
+                    }
+
+                    if (d.yellow && d.stunned?.length) {
+                        const firstStunSlot = findHitSlot(actorSide, d.stunned[0].target, d.stunned[0].target_side);
+                        const applyAllStuns = () => {
+                            d.stunned.forEach((s) => {
+                                const sSlot = findHitSlot(actorSide, s.target, s.target_side);
+                                if (!sSlot) return;
+                                flashEffectAura(sSlot, "cc");
+                                setStatusIcon(sSlot, "stun", { source: `${event.actor}:stun`, durationMs: (d.stun_seconds || 0) * 1000 });
+                                if (s.interrupted_cast) interruptCasting(sSlot);
+                            });
+                        };
+                        if (firstStunSlot) spawnPaintSkillProjectile(actorSlot, firstStunSlot, "paint-yellow", applyAllStuns);
+                        else applyAllStuns();
+                    }
+                }
             } else {
                 (event.detail?.hits || []).forEach((hit) => {
                     const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
@@ -2460,12 +2583,12 @@
             imgEl?.classList.remove("casting", "casting-rainbow", "walking", "attacking", "hit-flash", "crit-flash", "is-clone", "flipped", "effect-aura-flash", "dying", "death-fallback-filter");
             imgEl?.style.removeProperty("--effect-aura-color");
         });
-        [...SLOTS, "attacker-summon", "defender-summon"].forEach((slot) => {
+        [...SLOTS, "attacker-summon-front", "attacker-summon-back", "defender-summon-front", "defender-summon-back"].forEach((slot) => {
             clearAllStatusIcons(slot);
             delete facingFlipped[slot];
             delete walkerSuspended[slot];
         });
-        ["attacker-summon", "defender-summon"].forEach((slot) => {
+        ["attacker-summon-front", "attacker-summon-back", "defender-summon-front", "defender-summon-back"].forEach((slot) => {
             delete units[slot];
             const el = document.querySelector(`[data-unit="${slot}"]`);
             if (el) el.hidden = true;

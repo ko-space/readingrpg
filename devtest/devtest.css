@@ -110,7 +110,9 @@ html, body {
     position: relative;
 }
 
-.battle-unit.dt-selected .battle-unit-img {
+/* 히트박스(.battle-unit) 크기에 맞춘 점선 - .battle-unit-img는 이제 세로 기준으로 자유롭게
+   커지는 순수 시각 요소라, 선택 표시는 실제 전투 로직이 쓰는 고정 크기 히트박스에 맞춰야 한다. */
+.battle-unit.dt-selected {
     outline: 3px dashed #ffe066;
 }
 

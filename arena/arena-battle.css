@@ -389,6 +389,19 @@ body {
     color: #c58bff;
 }
 
+/* 전투 종료 결과 전용 - 승리(초록)/패배(빨강)/무승부(회색)로 구분. */
+.battle-log-entry.log-win {
+    color: #5fd97a;
+}
+
+.battle-log-entry.log-lose {
+    color: #ff5c5c;
+}
+
+.battle-log-entry.log-draw {
+    color: #9aa3ad;
+}
+
 /* ===== 중앙 전투 필드 ===== */
 .battle-field {
     position: relative;
@@ -464,6 +477,24 @@ body {
 }
 .crayon-projectile.crayon-pink { background: linear-gradient(90deg, #ff1f8f, #ff6fc0); color: #ff1f8f; }
 .crayon-projectile.crayon-blue { background: linear-gradient(90deg, #2266ff, #6fa8ff); color: #2266ff; }
+
+/* ── 방임석 전용: 물감 방울 투척. 기본공격은 항상 황금빛(paint-gold), 스킬(포물선)은 소모한 물감
+   색깔에 따라 흰색(물감 없음)/빨강/파랑/노랑 중 하나로 바뀐다. ── */
+.paint-projectile {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    margin-left: -8px;
+    margin-top: -8px;
+    border-radius: 50%;
+    box-shadow: 0 0 10px 3px currentColor;
+    pointer-events: none;
+}
+.paint-projectile.paint-gold { background: radial-gradient(circle at 35% 30%, #fff3c0, #e0a92c); color: #e0a92c; }
+.paint-projectile.paint-white { background: radial-gradient(circle at 35% 30%, #ffffff, #d8d8d8); color: #e8e8e8; }
+.paint-projectile.paint-red { background: radial-gradient(circle at 35% 30%, #ff8a80, #d81f1f); color: #d81f1f; }
+.paint-projectile.paint-blue { background: radial-gradient(circle at 35% 30%, #8ab4ff, #1f4fd8); color: #1f4fd8; }
+.paint-projectile.paint-yellow { background: radial-gradient(circle at 35% 30%, #fff1a0, #d8b31f); color: #d8b31f; }
 
 /* ── 이종복 스킬 전용: 붉은 "mg"가 유성처럼 꼬리를 끌며 날아간다. 기본공격 글자(20px)보다 크게. ── */
 .meteor-projectile {
@@ -930,35 +961,6 @@ body {
 .skill-vfx-aoe .battle-unit-img { animation: battle-skill-flash 0.4s ease-out; filter: drop-shadow(0 0 16px #ff6a5a); }
 .skill-vfx-summon .battle-unit-img { animation: battle-skill-flash 0.4s ease-out; filter: drop-shadow(0 0 16px #5affe0); }
 
-/* ===================================================================
-   최재혁 전용(self_shield_duration) - 캐릭터를 감싸는 푸른 원형 보호막.
-   .battle-unit의 자식(position:relative 기준)으로 붙기 때문에 캐릭터가 걸어서 이동해도
-   translateX를 그대로 물려받아 항상 캐릭터와 같이 움직인다. 실드가 지속되는 동안
-   천천히 수축·팽창을 반복해 "오라"처럼 살아있는 느낌을 준다. */
-.shield-ring-wrap {
-    position: absolute;
-    left: 50%;
-    top: 8%;
-    width: clamp(96px, 7.6vw, 132px);
-    height: clamp(96px, 7.6vw, 132px);
-    transform: translateX(-50%);
-    pointer-events: none;
-    z-index: 3;
-}
-.shield-ring {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    border: 3px solid #6fd3ff;
-    background: radial-gradient(circle, rgba(111, 211, 255, 0.16) 0%, rgba(111, 211, 255, 0.05) 60%, transparent 76%);
-    box-shadow: 0 0 16px 4px rgba(111, 211, 255, 0.65), inset 0 0 20px rgba(111, 211, 255, 0.5);
-    animation: shield-ring-pulse 2.2s ease-in-out infinite;
-}
-@keyframes shield-ring-pulse {
-    0%, 100% { transform: scale(0.9); opacity: 0.7; }
-    50% { transform: scale(1.08); opacity: 1; }
-}
-
 /* 윤영준의 "3D Print" 복제체 - 원본과 구분되게 전체적으로 푸른 색감이 도는 홀로그램 느낌으로 표시.
    sepia+hue-rotate로 원래 색상을 지우고 파란 계열로 새로 물들인 뒤, saturate로 진하게 만든다.
    기존 drop-shadow(그림자)는 지워지지 않게 filter 체인 끝에 그대로 이어 붙인다. */
@@ -972,7 +974,7 @@ body {
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    gap: clamp(56px, 7.5vw, 120px);
+    gap: clamp(56px, 12vw, 300px);
 }
 
 .battle-field-line {
@@ -993,12 +995,26 @@ body {
     transform: translateX(-50%);
 }
 
+/* .battle-unit 자체가 "히트박스" - 근접 이동 거리 계산(getGapToTarget)·넉백·복제체 스폰 위치 등
+   전투 로직은 전부 이 바깥 엘리먼트의 getBoundingClientRect()를 기준으로 계산한다(캐릭터 이름 매칭도
+   여기 data-unit 속성으로 함). width를 여기서 고정해두면, 안쪽 .battle-unit-img가 세로 기준으로
+   자유롭게(가로는 auto) 커져도 전투 로직에 쓰이는 히트박스 크기 자체는 전혀 흔들리지 않는다 -
+   그림이 이 상자보다 넓으면 좌측 끝은 히트박스에 맞추고 우측으로만 넘치도록 둔다(overflow 제한
+   없음, 상자 안에 다 들어갈 필요는 없다). align-items:flex-start라 항상 히트박스 왼쪽 끝에 맞춰 그려진다. */
 .battle-unit {
     position: relative;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
+    width: clamp(50px, 5vw, 150px);
     transition: opacity 0.3s ease;
+}
+
+/* 적(defender)은 화면 오른쪽에서 왼쪽(전장 중앙)을 바라보는 진영이라 좌우가 반전된다 - 히트박스도
+   왼쪽 끝이 아니라 오른쪽 끝에 맞춰야, 그림이 히트박스보다 넓을 때 아군과 마찬가지로 "전장 중앙
+   쪽"(적은 왼쪽, 아군은 오른쪽)으로만 넘치고 화면 바깥쪽으로 넘치지 않는다. */
+.battle-unit[data-unit^="defender"] {
+    align-items: flex-end;
 }
 
 /* display:flex가 hidden 속성의 기본 숨김 동작을 덮어쓰는 걸 막음 - 소환수(summon) 자리는 평소 hidden 상태 */
@@ -1010,22 +1026,32 @@ body {
    원래는 .battle-row의 평범한 flex 자식이었는데, 그러면 숨어있던 자리가 하나 나타날 때마다
    justify-content:center가 전체 폭을 다시 계산해서 복제체를 제외한 다른 캐릭터들이 다같이 좌우로
    밀리는 버그가 있었다 - absolute로 빼두면 summon이 나타나든 사라지든 .battle-row의 폭/중앙 정렬에
-   전혀 영향을 주지 않는다. */
-.battle-unit[data-unit$="-summon"] {
+   전혀 영향을 주지 않는다. 실제 위치는 항상 JS가 시전자 자리 기준으로 다시 계산해서 옮기므로, 아래
+   기본 좌표는 등장 직후 JS가 재배치하기 전까지의 임시 자리일 뿐이다(front/back용을 살짝 다르게 둬서
+   둘 다 동시에 나타나도 잠깐이라도 겹쳐 보이지 않게 한다). */
+.battle-unit[data-unit*="-summon-"] {
     position: absolute;
     bottom: 0;
 }
-.battle-unit[data-unit="attacker-summon"] {
+.battle-unit[data-unit="attacker-summon-front"] {
     left: 0;
     transform: translateX(calc(-100% - 20px));
 }
-.battle-unit[data-unit="defender-summon"] {
+.battle-unit[data-unit="attacker-summon-back"] {
+    left: 0;
+    transform: translateX(calc(-100% - 90px));
+}
+.battle-unit[data-unit="defender-summon-front"] {
     right: 0;
     transform: translateX(calc(100% + 20px));
 }
+.battle-unit[data-unit="defender-summon-back"] {
+    right: 0;
+    transform: translateX(calc(100% + 90px));
+}
 
 .battle-unit-shadow {
-    width: 70%;
+    width: 100%;
     height: 16px;
     margin-top: -8px;
     border-radius: 50%;
@@ -1054,12 +1080,15 @@ body {
     );
 }
 
+/* 세로만 고정하고 가로는 auto - 원본 PNG 비율 그대로 커진다(방임석처럼 가로가 긴 캔버스도 세로
+   기준으로 정상 크기가 됨). 예전엔 이렇게 하면 프레임마다(공격/스킬 등) 원본 크기가 미묘하게
+   달라 폭이 흔들렸는데, 이제 .battle-unit(부모)이 별도의 고정폭 "히트박스" 역할을 해서 근접 이동/
+   겹침 판정 등 전투 로직은 이 안쪽 그림 크기와 완전히 무관하다 - 그림이 히트박스보다 넓어도 그냥
+   좌우로 넘치도록 두면 되고(전투 로직에 영향 없음), 히트박스 안에 다 들어갈 필요가 없다. */
 .battle-unit-img {
     --flip-x: 1;
-    width: clamp(108px, 8.5vw, 150px);
+    width: auto;
     height: clamp(136px, 10.5vw, 178px);
-    object-fit: contain;
-    object-position: bottom center;
     transform: scaleX(var(--flip-x));
     filter: drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4));
 }
@@ -1275,6 +1304,11 @@ body {
     text-shadow: 0 0 9px rgba(0, 0, 0, 0.55);
 }
 
+.battle-draw {
+    color: #9aa3ad;
+    text-shadow: 0 0 9px rgba(0, 0, 0, 0.55);
+}
+
 .battle-result-gold {
     font-size: 20px;
     font-weight: 900;
@@ -1362,8 +1396,12 @@ body {
         height: 52px;
     }
 
-    .battle-unit-img {
+    .battle-unit {
         width: 88px;
+    }
+
+    .battle-unit-img {
+        width: auto;
         height: 112px;
     }
 }
