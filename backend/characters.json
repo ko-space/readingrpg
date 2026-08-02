@@ -233,8 +233,8 @@
         "2": null,
         "3": null,
         "4": null,
-        "5": "방임: 학생 타입 아군이 존재하는 동안 자신 기절, 받는 피해량 75% 감소",
-        "6": "방임: 학생 타입 아군이 존재하는 동안 자신 기절, 받는 피해량 90% 감소, 2초마다 무작위 물감 1개 획득"
+        "5": "방임: 아군 학생 타입 보유 인물이 존재하는 동안(공격/방어 상관없이) 자신 기절, 받는 피해량 50% 감소",
+        "6": "방임: 아군 학생 타입 보유 인물이 존재하는 동안(공격/방어 상관없이) 자신 기절, 받는 피해량 75% 감소, 2초마다 무작위 물감 1개 획득"
       },
       "star_mechanics": {
         "effect_type": "gain_paint_on_active_use",
@@ -281,12 +281,12 @@
         "effect_type": "conditional_stun_dr_ally_type",
         "params": {
           "5": {
-            "ally_attack_type": "Student",
-            "dr_percent": 75
+            "ally_type": "Student",
+            "dr_percent": 50
           },
           "6": {
-            "ally_attack_type": "Student",
-            "dr_percent": 90,
+            "ally_type": "Student",
+            "dr_percent": 75,
             "paint_interval_seconds": 2
           }
         }

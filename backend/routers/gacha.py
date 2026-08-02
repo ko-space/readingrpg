@@ -22,22 +22,8 @@ RARITY_START_STAR = {"신화": 5, "전설": 4, "영웅": 3, "희귀": 2, "일반
 ADMIN_USER_ID = 1  # ranking.py/pvp.py와 동일한 관리자 계정 - is_hidden 캐릭터(예: 이의진)도 테스트로 뽑을 수 있는 예외
 KST = timezone(timedelta(hours=9))
 
-# 등급별 확률(각 등급의 몫, 합이 1). pull_character의 실제 등급 추첨과 확률 안내 모달(/gacha/rates)이
-# 이 상수 하나만 보고 계산하게 해서, 둘이 서로 다른 숫자를 보여주는 일이 없게 한다.
 RARITY_TIER_PROBABILITY = {"신화": 0.005, "전설": 0.01, "영웅": 0.09, "희귀": 0.30, "일반": 0.595}
 
-# 픽업 일정(한국시간). 각 항목의 start_at이 되면 자동으로 그 픽업으로 전환된다 - 별도 스케줄러 없이,
-# 그 시각이 지난 뒤 아무 유저나 가챠 관련 요청을 처음 보낼 때(_sync_pickup_banner) 반영된다. 새 픽업을
-# 예약하려면 이 리스트 끝에 항목을 하나 추가하고 푸시 + 서버 재시작하면 된다 - 재시작 시점이 전환
-# 시점이 아니라, 그 항목의 start_at이 전환 시점이다(재시작은 그냥 새 일정을 서버에 알려주는 것뿐).
-# 전환되는 순간 배너 이름/이미지/픽업 캐릭터 목록이 통째로 교체되고(이전 픽업은 제거, 누적 아님),
-# 모든 유저의 모집 포인트가 골드로 1:1 전환되어 0으로 초기화된다.
-#
-# characters의 각 항목에 "rate_up"(0~1, 그 등급이 걸렸을 때 이 캐릭터로 확정될 확률 - 생략하면 DB
-# 컬럼 기본값 0.5)을 같이 넣어두면 그 값이 DB(gacha_banner_pickups.rate_up)에 반영된다. DB에서
-# 직접 rate_up을 조정할 수도 있지만, 그러면 다음 픽업 전환 때 행이 통째로 교체되면서 초기화되므로
-# 특정 픽업의 확률을 계속 유지하고 싶으면 여기(코드)에 넣어두는 편이 안전하다. rate_up만 바뀌고
-# 캐릭터 구성 자체는 그대로면 "새 픽업 시작"으로 취급하지 않는다(포인트 골드 전환 없이 값만 갱신).
 PICKUP_SCHEDULE = [
     {
         "start_at": datetime(2025, 1, 1, 0, 0, tzinfo=KST),  # 과거 날짜 = 이미 활성화된 최초 픽업
@@ -52,11 +38,12 @@ PICKUP_SCHEDULE = [
         "characters": [{"character_name": "이의진", "point_cost": 30, "rate_up": 0.99}], 
     },
     {
-        "start_at": datetime(2026, 8, 3, 21, 20, tzinfo=KST),
+        "start_at": datetime(2026, 8, 4, 21, 20, tzinfo=KST),
         "banner_name": "픽업모집",
-        "image_file": "pickup-banner.png",
-        "characters": [{"character_name": "송주헌", "point_cost": 20, "rate_up": 0.99}],  
-    },    
+        "image_file": "pickup-banner-new2.png",
+        "characters": [{"character_name": "방임석", "point_cost": 50, "rate_up": 0.99}], 
+    },
+  
 ]
 
 
