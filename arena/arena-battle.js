@@ -390,7 +390,10 @@
         const imgEl = document.querySelector(`[data-unit="${key}"] .battle-unit-img`);
         if (!unit || !imgEl) return;
 
-        appendLog(`${unit.name} 사망!`, null);
+        // renderUnit()이 호출되는 시점(피해 반영 콜백 안)에는 아직 그 콜백 뒤쪽의 "피해" appendLog가
+        // 실행되지 않은 경우가 많아, 여기서 즉시 로그를 남기면 "사망"이 "피해"보다 먼저 뜬다. 매크로태스크로
+        // 한 틱 미뤄서, 같은 콜백 안에서 이어지는(동기) 피해 로그가 먼저 찍히고 그 다음에 사망 로그가 오게 한다.
+        setTimeout(() => appendLog(`${unit.name} 사망!`, null), 0);
 
         imgEl.classList.remove("death-fallback-filter");
         imgEl.onerror = () => {
@@ -1477,6 +1480,10 @@
     // startPreparation()이 첫 playNext() 호출 직전에 채운다.
     let playbackOriginWallMs = 0;
     let playbackOriginEventTime = 0;
+    // 마지막으로 처리를 시작한 이벤트의 행동 주체 - 이벤트 목록을 다 돌았을 때(showResult 직전) 이
+    // 유닛이 아직 공격/시전 애니메이션 중이거나(근거리) 목표에 도착 전이면, 그 연출/피해·사망 로그가
+    // 뜨기도 전에 "전투 종료!" 로그가 먼저 떠버리는 걸 막기 위해 참조한다.
+    let lastEventActorKey = null;
 
     function eventTargetKey(event) {
         const targetSide =
@@ -1989,12 +1996,24 @@
 
     function playNext() {
         if (eventIndex >= data.events.length) {
+            // 마지막 이벤트의 행동 주체가 아직 공격/시전 애니메이션 중이거나(근거리 유닛이면) 목표에
+            // 도착하지 못했으면, 그 히트/사망 처리와 로그가 실제로는 아직 안 끝난 것이다 - 조금 더
+            // 기다렸다가 다시 확인한다(cast_start/skill_resolve 재시도와 같은 패턴).
+            if (
+                lastEventActorKey &&
+                (attackAnimActive[lastEventActorKey] ||
+                    (units[lastEventActorKey]?.isMelee && meleeArrived[lastEventActorKey] === false))
+            ) {
+                setTimeout(playNext, 30);
+                return;
+            }
             showResult();
             return;
         }
 
         const event = data.events[eventIndex];
         const eventType = event.event_type || "basic_attack";
+        lastEventActorKey = eventActorKey(event) || lastEventActorKey;
 
         if (eventType === "cast_start") {
             // 3번째 기본공격 직후 곧바로 자신의 시전으로 넘어가는 경우, 서버 기록상 두 이벤트가 같은
@@ -2527,7 +2546,11 @@
             const targetWallMs = playbackOriginWallMs + (nextEvent.time - playbackOriginEventTime) * 1000 * PLAYBACK_SPEED;
             delayMs = Math.max(16, targetWallMs - performance.now());
         } else {
-            delayMs = 500;
+            // 마지막 이벤트 뒤에는 다음 이벤트가 없어 절대 시각 스케줄을 쓸 수 없다 - 원거리 공격은
+            // 애니메이션 플래그(attackAnimActive)가 꺼진 뒤에도 투사체가 한동안 더 날아가는 중일 수
+            // 있으므로(EFFECT_LAUNCH_DELAY_MS + 투사체 비행 시간), 그 시간을 넉넉히 덮는 값을 우선
+            // 기다린다. 그래도 부족하면(근거리 도착 지연 등) 위쪽의 재시도 체크가 추가로 기다려준다.
+            delayMs = EFFECT_LAUNCH_DELAY_MS + PROJECTILE_TRAVEL_MS * 2;
         }
 
         setTimeout(playNext, delayMs);
