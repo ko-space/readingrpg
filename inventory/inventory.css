@@ -384,6 +384,7 @@
 
 .inventory-detail-left.entering {
     animation: inventory-left-enter .55s cubic-bezier(.15,.72,.22,1) both;
+    will-change: transform, opacity;
 }
 
 @keyframes inventory-left-enter {
@@ -504,6 +505,7 @@
 
 .inventory-detail-right.entering {
     animation: inventory-drop-bounce .68s cubic-bezier(.2,.82,.3,1) both;
+    will-change: transform, opacity;
 }
 
 @keyframes inventory-drop-bounce {

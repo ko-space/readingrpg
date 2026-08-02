@@ -135,6 +135,7 @@ body, html {
     box-shadow: var(--gold-glow);
     background: #fff;
     flex-shrink: 0;
+    cursor: pointer; /* 클릭하면 인벤토리 인물 목록으로 이동(inventory.js) */
 }
 
 .avatar-box img {
@@ -369,6 +370,7 @@ body, html {
     max-height: 95%;
     object-fit: contain;
     filter: drop-shadow(0 8px 6px rgba(0, 0, 0, 0.25));
+    cursor: pointer; /* 클릭하면 인벤토리 인물 목록으로 이동(inventory.js) */
 }
 
 .ground-shadow {
