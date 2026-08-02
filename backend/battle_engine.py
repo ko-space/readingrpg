@@ -546,7 +546,7 @@ def _trait_death_heal_ally(caster, team, enemy_team, params, events, side):
 
 
 def _trait_conditional_stun_dr_ally_type(caster, team, enemy_team, params, events, side):
-    # 방임석(방임): 지금은 설정만 해둔다 - 실제 판정(영구 기절 + 받는 피해 감소)은 조건(학생 타입 아군의
+    # 방임석(방임): 지금은 설정만 해둔다 - 실제 판정(지속 기절 + 받는 피해 감소)은 조건(학생 타입 아군의
     # 생존 여부)이 전투 중 바뀔 수 있어서 매 틱 _apply_neglect_status가 다시 확인한다. 김어진(교권 보호)과
     # 동일하게 공격/방어 타입 둘 중 하나만 일치해도 "그 타입을 보유"한 것으로 취급한다.
     caster["neglect_config"] = {
