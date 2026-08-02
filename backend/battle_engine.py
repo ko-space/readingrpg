@@ -547,9 +547,10 @@ def _trait_death_heal_ally(caster, team, enemy_team, params, events, side):
 
 def _trait_conditional_stun_dr_ally_type(caster, team, enemy_team, params, events, side):
     # 방임석(방임): 지금은 설정만 해둔다 - 실제 판정(영구 기절 + 받는 피해 감소)은 조건(학생 타입 아군의
-    # 생존 여부)이 전투 중 바뀔 수 있어서 매 틱 _apply_neglect_status가 다시 확인한다.
+    # 생존 여부)이 전투 중 바뀔 수 있어서 매 틱 _apply_neglect_status가 다시 확인한다. 김어진(교권 보호)과
+    # 동일하게 공격/방어 타입 둘 중 하나만 일치해도 "그 타입을 보유"한 것으로 취급한다.
     caster["neglect_config"] = {
-        "ally_attack_type": params["ally_attack_type"],
+        "ally_type": params["ally_type"],
         "dr_percent": params["dr_percent"],
         "paint_interval_seconds": params.get("paint_interval_seconds"),
     }
@@ -1223,9 +1224,11 @@ def _apply_neglect_status(team, side, events, time_elapsed):
         config = unit.get("neglect_config")
         if not config:
             continue
-        ally_type = config["ally_attack_type"]
+        ally_type = config["ally_type"]
+        # 김어진(team_teacher_hp_buff)과 동일한 규칙 - 공격/방어 타입 중 하나만 일치해도 그 타입을 "보유"한
+        # 것으로 취급한다.
         has_qualifying_ally = any(
-            other is not unit and other.get("attack_type") == ally_type
+            other is not unit and (other.get("attack_type") == ally_type or other.get("defense_type") == ally_type)
             for other in _alive_units(team)
         )
         was_active = unit.get("neglect_active", False)
@@ -1305,6 +1308,20 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
     while _team_alive(attacker_team) and _team_alive(defender_team):
         time_elapsed = round(time_elapsed + TICK, 2)
 
+        # 각 팀의 "이번 틱 시작 시점 마지막 생존자"를 미리 표시해둔다. 원래는 공격자 팀을 전부 처리한
+        # 뒤에야 방어자 팀 차례가 와서, 공격자가 방어자의 마지막 생존자를 죽이면 방어자는 반격할 기회조차
+        # 없이 그 즉시 행동이 막혔다(그래서 동시 전멸=무승부가 구조적으로 불가능했다). 이제 "이번 틱을
+        # 살아서 시작한 마지막 생존자"만은 같은 틱 안에서 상대보다 먼저 죽더라도(상대 쪽이 처리 순서상
+        # 먼저라 이미 죽였더라도) 자신의 행동은 그대로 진행한다 - 그래야 서로가 서로의 마지막 생존자를
+        # 같은 틱에 함께 쓰러뜨리는 진짜 동시 전멸이 원칙적으로 가능해진다. 이 유예는 죽는 바로 그 틱
+        # 한 번만 적용된다(다음 틱엔 이미 죽어 있어 애초에 이 집합에 안 들어감 - 좀비처럼 계속 행동하는
+        # 일은 없다). 팀에 다른 생존자가 남아있는 일반적인 죽음은 기존과 동일하게 그 즉시 행동을 멈춘다.
+        last_survivor_ids = set()
+        for team in (attacker_team, defender_team):
+            alive = [u for u in _all_slots(team) if u and u["hp"] > 0]
+            if len(alive) == 1:
+                last_survivor_ids.add(id(alive[0]))
+
         _apply_death_triggers(attacker_team, "attacker", events, time_elapsed)
         _apply_death_triggers(defender_team, "defender", events, time_elapsed)
         _apply_neglect_status(attacker_team, "attacker", events, time_elapsed)
@@ -1316,7 +1333,9 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
         ):
             for slot in ("front", "back", "summon_front", "summon_back"):
                 unit = own_team[slot]
-                if unit is None or unit["hp"] <= 0:
+                if unit is None:
+                    continue
+                if unit["hp"] <= 0 and id(unit) not in last_survivor_ids:
                     continue
 
                 status = unit["status"]
