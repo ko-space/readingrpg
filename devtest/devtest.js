@@ -261,7 +261,9 @@
         const imgEl = document.querySelector(`[data-unit="${slot}"] .battle-unit-img`);
         if (!unit || !imgEl) return;
 
-        log(`${unit.name} 사망!`);
+        // arena-battle.js의 playDeathSequence와 동일한 이유로 한 틱 미룬다 - 같은 콜백 안에서 이어지는
+        // 피해 로그가 먼저 찍히고 그 다음에 사망 로그가 오게 하기 위함.
+        setTimeout(() => log(`${unit.name} 사망!`), 0);
 
         imgEl.classList.remove("death-fallback-filter");
         imgEl.onerror = () => {
@@ -2124,9 +2126,20 @@
     // onBattlePosted(또는 재생을 시작하는 지점)이 첫 playEvents() 호출 직전에 채운다.
     let playbackOriginWallMs = 0;
     let playbackOriginEventTime = 0;
+    // arena-battle.js의 lastEventActorKey와 동일한 이유 - 마지막 이벤트의 행동 주체가 아직
+    // 공격/시전 애니메이션 중이거나 목표에 도착 전이면 "전투 종료" 로그가 그보다 먼저 뜨는 걸 막는다.
+    let lastEventActorSlot = null;
 
     function playEvents(events, index) {
         if (index >= events.length) {
+            if (
+                lastEventActorSlot &&
+                (attackAnimActive[lastEventActorSlot] ||
+                    (units[lastEventActorSlot]?.isMelee && meleeArrived[lastEventActorSlot] === false))
+            ) {
+                setTimeout(() => playEvents(events, index), 30);
+                return;
+            }
             log("=== 전투 종료 ===");
             walkerRunning = false;
             return;
@@ -2136,6 +2149,7 @@
         const actorSide = event.side;
         const targetSide = actorSide === "attacker" ? "defender" : "attacker";
         const actorSlot = event.actor ? findSlotByName(actorSide, event.actor) : null;
+        lastEventActorSlot = actorSlot || lastEventActorSlot;
 
         if (event.event_type === "cast_start" && actorSlot && attackAnimActive[actorSlot]) {
             // 3번째 기본공격 직후 곧바로 자신의 시전으로 넘어가는 경우, 그 공격의 윈드업/프레임
@@ -2568,7 +2582,9 @@
             const targetWallMs = playbackOriginWallMs + (nextEvent.time - playbackOriginEventTime) * 1000 * PLAYBACK_SPEED;
             delayMs = Math.max(16, targetWallMs - performance.now());
         } else {
-            delayMs = 400;
+            // arena-battle.js와 동일한 이유(원거리 공격은 attackAnimActive가 꺼진 뒤에도 투사체가
+            // 한동안 더 날아가는 중일 수 있다) - 그 시간을 넉넉히 덮는 값을 기다린다.
+            delayMs = EFFECT_LAUNCH_DELAY_MS + PROJECTILE_TRAVEL_MS * 2;
         }
 
         setTimeout(() => playEvents(events, index + 1), delayMs);
