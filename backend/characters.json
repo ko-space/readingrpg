@@ -21,10 +21,7 @@
         "5": 2.8,
         "6": 15
       },
-      "exp_subjects": [
-        "수학",
-        "기타"
-      ],
+      "exp_subjects": ["수학", "기타"],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -69,6 +66,7 @@
           }
         }
       },
+      "skill_categories": ["yellow"],
       "trait_mechanics": {
         "effect_type": "ally_synergy_remove_absorb",
         "partner_name": "윤영준",
@@ -120,10 +118,7 @@
         "5": 2.8,
         "6": 15
       },
-      "exp_subjects": [
-        "국어",
-        "영어"
-      ],
+      "exp_subjects": ["국어", "영어"],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -165,6 +160,7 @@
           }
         }
       },
+      "skill_categories": ["blue"],
       "trait_mechanics": {
         "effect_type": "ally_synergy_atk_buff",
         "partner_name": "강 희",
@@ -194,6 +190,107 @@
           }
         }
       }
+    },
+    {
+      "name": "방임석",
+      "job_class": "화백",
+      "gender": "남",
+      "is_hidden": true,
+      "outfits": {
+        "기본": "artist/basic"
+      },
+      "description": "그는 학생의 자율성을 존중했을 뿐. 방치한 것이 아닙니다.",
+      "range": "원거리",
+      "attack_type": "Parent",
+      "defense_type": "Teacher",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": 0,
+        "4": 0,
+        "5": 2.8,
+        "6": 15
+      },
+      "exp_subjects": ["탐구", "기타"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "예술가의 혼: 자신을 제외한 전장 내 인물이 [Active] 스킬을 발동할 때마다, 그 스킬이 가진 효과 종류에 따라 물감을 각각 1개씩 획득(효과가 여러 개면 물감도 여러 개). 피해: 빨간 물감 / 회복,특수: 파란 물감 / 강화,약화,CC: 노란 물감",
+        "4": "예술가의 혼: 자신을 제외한 전장 내 인물이 [Active] 스킬을 발동할 때마다, 그 스킬이 가진 효과 종류에 따라 물감을 각각 1개씩 획득(효과가 여러 개면 물감도 여러 개). 피해: 빨간 물감 / 회복,특수: 파란 물감 / 강화,약화,CC: 노란 물감",
+        "5": "예술가의 혼: 자신을 제외한 전장 내 인물이 [Active] 스킬을 발동할 때마다, 그 스킬이 가진 효과 종류에 따라 물감을 각각 1개씩 획득(효과가 여러 개면 물감도 여러 개). 피해: 빨간 물감 / 회복,특수: 파란 물감 / 강화,약화,CC: 노란 물감",
+        "6": "예술가의 혼: 자신을 제외한 전장 내 인물이 [Active] 스킬을 발동할 때마다, 그 스킬이 가진 효과 종류에 따라 물감을 각각 2개씩 획득(효과가 여러 개면 물감도 여러 개). 피해: 빨간 물감 / 회복,특수: 파란 물감 / 강화,약화,CC: 노란 물감"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": "제목은 관객이 정하세요: 보유한 물감을 전부 소모하여 작품을 완성하고, 물감의 종류에 따라 다음 효과 발동. 빨간 물감 1개당: 공격 대상에게 공격력의 80% 피해 / 파란 물감 1개당: 체력이 가장 낮은 아군의 최대 체력 5% 회복 / 노란 물감 1개당: 적 전체를 0.5초 기절. 보유한 물감이 없는 경우 공격 대상에게 공격력의 150%만큼 피해",
+        "5": "제목은 관객이 정하세요: 보유한 물감을 전부 소모하여 작품을 완성하고, 물감의 종류에 따라 다음 효과 발동. 빨간 물감 1개당: 공격 대상에게 공격력의 80% 피해 / 파란 물감 1개당: 체력이 가장 낮은 아군의 최대 체력 5% 회복 / 노란 물감 1개당: 적 전체를 0.5초 기절. 보유한 물감이 없는 경우 공격 대상에게 공격력의 150%만큼 피해",
+        "6": "제목은 관객이 정하세요: 보유한 물감을 전부 소모하여 작품을 완성하고, 물감의 종류에 따라 다음 효과 발동. 빨간 물감 1개당: 공격 대상에게 공격력의 150% 피해 / 파란 물감 1개당: 체력이 가장 낮은 아군의 최대 체력 15% 회복 / 노란 물감 1개당: 적 전체를 1초 기절. 보유한 물감이 없는 경우 공격 대상에게 공격력의 300%만큼 피해"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "방임: 학생 타입 아군이 존재하는 동안 자신 기절, 받는 피해량 75% 감소",
+        "6": "방임: 학생 타입 아군이 존재하는 동안 자신 기절, 받는 피해량 90% 감소, 2초마다 무작위 물감 1개 획득"
+      },
+      "star_mechanics": {
+        "effect_type": "gain_paint_on_active_use",
+        "params": {
+          "3": {
+            "amount_per_use": 1
+          },
+          "4": {
+            "amount_per_use": 1
+          },
+          "5": {
+            "amount_per_use": 1
+          },
+          "6": {
+            "amount_per_use": 2
+          }
+        }
+      },
+      "skill_mechanics": {
+        "effect_type": "consume_paint_multi_effect",
+        "params": {
+          "4": {
+            "red_percent_per_paint": 80,
+            "blue_percent_per_paint": 5,
+            "yellow_seconds_per_paint": 0.5,
+            "no_paint_multiplier": 150
+          },
+          "5": {
+            "red_percent_per_paint": 80,
+            "blue_percent_per_paint": 5,
+            "yellow_seconds_per_paint": 0.5,
+            "no_paint_multiplier": 150
+          },
+          "6": {
+            "red_percent_per_paint": 150,
+            "blue_percent_per_paint": 15,
+            "yellow_seconds_per_paint": 1,
+            "no_paint_multiplier": 300
+          }
+        }
+      },
+      "skill_categories": ["yellow"],
+      "trait_mechanics": {
+        "effect_type": "conditional_stun_dr_ally_type",
+        "params": {
+          "5": {
+            "ally_attack_type": "Student",
+            "dr_percent": 75
+          },
+          "6": {
+            "ally_attack_type": "Student",
+            "dr_percent": 90,
+            "paint_interval_seconds": 2
+          }
+        }
+      }
     }
   ],
   "전설": [
@@ -218,11 +315,7 @@
         "5": 2.7,
         "6": 14.5
       },
-      "exp_subjects": [
-        "수학",
-        "탐구",
-        "기타"
-      ],
+      "exp_subjects": ["수학", "탐구", "기타"],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -270,6 +363,7 @@
           }
         }
       },
+      "skill_categories": ["yellow"],
       "star_mechanics": {
         "effect_type": "self_stat_percent",
         "params": {
@@ -322,9 +416,7 @@
         "5": 2.6,
         "6": 14
       },
-      "exp_subjects": [
-        "국어"
-      ],
+      "exp_subjects": ["국어"],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -366,6 +458,7 @@
           }
         }
       },
+      "skill_categories": ["red"],
       "star_mechanics": {
         "effect_type": "ally_team_stat_percent",
         "params": {
@@ -421,9 +514,7 @@
         "5": 2.8,
         "6": 15
       },
-      "exp_subjects": [
-        "수학"
-      ],
+      "exp_subjects": ["수학"],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -446,7 +537,7 @@
         "3": null,
         "4": null,
         "5": "유일한 대마법사: 임소정, 이종복 대상으로 공격력 40% 증가",
-        "6": "유일한 대마법사: \"임소정\",\"이종복\" 캐릭터 대상으로 공격력 100% 증가"
+        "6": "유일한 대마법사: \"임소정\",\"이종복\" 인물 대상으로 공격력 100% 증가"
       },
       "skill_mechanics": {
         "effect_type": "debuff_atk_and_damage",
@@ -468,6 +559,7 @@
           }
         }
       },
+      "skill_categories": ["yellow", "red"],
       "star_mechanics": {
         "effect_type": "ally_team_stat_percent",
         "params": {
@@ -525,16 +617,14 @@
         "5": 2.5,
         "6": 13
       },
-      "exp_subjects": [
-        "수학"
-      ],
+      "exp_subjects": ["수학"],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
-        "3": "수면 부족: 자신을 제외한 모든 캐릭터 공격력 25% 감소",
-        "4": "수면 부족: 자신을 제외한 모든 캐릭터 공격력 25% 감소",
-        "5": "수면 부족: 자신을 제외한 모든 캐릭터 공격력 25% 감소",
-        "6": "수면 부족: 자신을 제외한 모든 캐릭터의 공격력 50% 감소"
+        "3": "수면 부족: 자신을 제외한 모든 인물의 공격력 25% 감소",
+        "4": "수면 부족: 자신을 제외한 모든 인물의 공격력 25% 감소",
+        "5": "수면 부족: 자신을 제외한 모든 인물의 공격력 25% 감소",
+        "6": "수면 부족: 자신을 제외한 모든 인물의 공격력 50% 감소"
       },
       "skill_effects": {
         "1": null,
@@ -566,6 +656,7 @@
           }
         }
       },
+      "skill_categories": ["blue"],
       "star_mechanics": {
         "effect_type": "debuff_all_others_atk",
         "params": {
@@ -616,9 +707,7 @@
         "5": 2.5,
         "6": 13
       },
-      "exp_subjects": [
-        "탐구"
-      ],
+      "exp_subjects": ["탐구"],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -631,17 +720,17 @@
         "1": null,
         "2": null,
         "3": null,
-        "4": "불빠따: 자신을 제외한 모든 캐릭터에게 공격력의 150%만큼 피해",
-        "5": "불빠따: 자신을 제외한 모든 캐릭터에게 공격력의 150%만큼 피해",
-        "6": "불빠따: 자신을 제외한 모든 캐릭터에게 공격력의 300%만큼 피해"
+        "4": "불빠따: 자신을 제외한 모든 인물에게 공격력의 150%만큼 피해",
+        "5": "불빠따: 자신을 제외한 모든 인물에게 공격력의 150%만큼 피해",
+        "6": "불빠따: 자신을 제외한 모든 인물에게 공격력의 300%만큼 피해"
       },
       "trait_effects": {
         "1": null,
         "2": null,
         "3": null,
         "4": null,
-        "5": "교권 보호: 팀 내 교사 타입 보유 캐릭터에게 (공격/방어 상관없이) 최대 체력 40% 증가",
-        "6": "교권 보호: 팀 내 교사 타입 보유 캐릭터에게 (공격/방어 상관없이) 최대 체력 100% 증가"
+        "5": "교권 보호: 아군 교사 타입 보유 인물에게 (공격/방어 상관없이) 최대 체력 40% 증가",
+        "6": "교권 보호: 아군 교사 타입 보유 인물에게 (공격/방어 상관없이) 최대 체력 100% 증가"
       },
       "skill_mechanics": {
         "effect_type": "aoe_all_others_damage",
@@ -657,6 +746,7 @@
           }
         }
       },
+      "skill_categories": ["red"],
       "star_mechanics": {
         "effect_type": "damage_to_gender_bonus",
         "params": {
@@ -694,7 +784,6 @@
       "name": "이의진",
       "job_class": "동남아 유학생",
       "gender": "남",
-      "is_hidden": true,
       "outfits": {
         "기본": "international/basic"
       },
@@ -710,9 +799,7 @@
         "5": 2.5,
         "6": 13
       },
-      "exp_subjects": [
-        "탐구"
-      ],
+      "exp_subjects": ["탐구"],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -754,6 +841,7 @@
           }
         }
       },
+      "skill_categories": ["blue"],
       "star_mechanics": {
         "effect_type": "self_crit_multiplier",
         "params": {
@@ -809,9 +897,7 @@
         "5": 2.4,
         "6": 12
       },
-      "exp_subjects": [
-        "영어"
-      ],
+      "exp_subjects": ["영어"],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -853,6 +939,7 @@
           }
         }
       },
+      "skill_categories": ["red"],
       "star_mechanics": {
         "effect_type": "ally_gender_stat_percent",
         "params": {
@@ -911,9 +998,7 @@
         "5": 2.4,
         "6": 12
       },
-      "exp_subjects": [
-        "수학"
-      ],
+      "exp_subjects": ["수학"],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -955,6 +1040,7 @@
           }
         }
       },
+      "skill_categories": ["red"],
       "star_mechanics": {
         "effect_type": "self_stat_percent",
         "params": {
@@ -1013,9 +1099,7 @@
         "5": 2.5,
         "6": 13
       },
-      "exp_subjects": [
-        "독서"
-      ],
+      "exp_subjects": ["독서"],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -1057,6 +1141,7 @@
           }
         }
       },
+      "skill_categories": ["yellow", "red"],
       "star_mechanics": {
         "effect_type": "teammate_stat_percent",
         "params": {
@@ -1115,16 +1200,14 @@
         "5": 2.2,
         "6": 11
       },
-      "exp_subjects": [
-        "영어"
-      ],
+      "exp_subjects": ["영어"],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
-        "3": "어쌔신: 후방 적 우선 공격",
-        "4": "어쌔신: 후방 적 우선 공격",
-        "5": "어쌔신: 후방 적 우선 공격",
-        "6": "어쌔신: 후방 적 우선 공격, 후방 적 생존 시 공격력 25% 증가"
+        "3": "설교와 수정: 후방 적 우선 공격",
+        "4": "설교와 수정: 후방 적 우선 공격",
+        "5": "설교와 수정: 후방 적 우선 공격",
+        "6": "설교와 수정: 후방 적 우선 공격, 후방 적 생존 시 공격력 25% 증가"
       },
       "skill_effects": {
         "1": null,
@@ -1156,6 +1239,7 @@
           }
         }
       },
+      "skill_categories": ["blue"],
       "star_mechanics": {
         "effect_type": "self_rear_priority",
         "params": {
@@ -1208,9 +1292,7 @@
         "5": 2.5,
         "6": 1.0
       },
-      "exp_subjects": [
-        "독서"
-      ],
+      "exp_subjects": ["독서"],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -1249,6 +1331,7 @@
           }
         }
       },
+      "skill_categories": ["red", "yellow"],
       "star_mechanics": {
         "effect_type": "self_stat_percent",
         "params": {
@@ -1302,9 +1385,7 @@
         "5": 2.2,
         "6": 11
       },
-      "exp_subjects": [
-        "국어"
-      ],
+      "exp_subjects": ["국어"],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -1343,6 +1424,7 @@
           }
         }
       },
+      "skill_categories": ["red"],
       "star_mechanics": {
         "effect_type": "self_stat_percent",
         "params": {
