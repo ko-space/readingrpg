@@ -161,7 +161,7 @@
             card.style.animationDelay = `${Math.min(index, 15) * 35}ms`;
             card.innerHTML = `
                 <div class="inventory-card-portrait">
-                    <img alt="${escapeHtml(group.name)}">
+                    <img alt="${escapeHtml(group.name)}" loading="lazy" decoding="async">
                     ${group.is_equipped ? '<span class="inventory-card-equipped">장착 중</span>' : ""}
                     <div class="inventory-card-star-overlay">${stars(group.star)}</div>
                 </div>
@@ -223,7 +223,7 @@
             row.style.animationDelay = `${Math.min(index, 15) * 35}ms`;
             row.innerHTML = `
                 <div class="inventory-item-row-portrait">
-                    <img alt="${escapeHtml(item.name)}">
+                    <img alt="${escapeHtml(item.name)}" loading="lazy" decoding="async">
                     <span class="inventory-item-row-quantity">×${item.quantity}</span>
                 </div>
                 <div class="inventory-item-row-body">
@@ -490,4 +490,14 @@
         resetToMenu();
     });
     modal?.querySelector("[data-modal-close]")?.addEventListener("click", resetToMenu);
+
+    // 로비 상단바의 작은 프로필 사진(avatar-img)과 로비 중앙의 큰 캐릭터 일러스트(avatar-img-large)를
+    // 누르면, 메뉴를 거치지 않고 곧바로 인벤토리의 "인물" 목록으로 이동한다.
+    async function openToCharacterList() {
+        if (typeof openModal === "function") openModal("modal-character");
+        await ensureLoaded();
+        openList("characters");
+    }
+    document.getElementById("avatar-img")?.addEventListener("click", openToCharacterList);
+    document.getElementById("avatar-img-large")?.addEventListener("click", openToCharacterList);
 })();
