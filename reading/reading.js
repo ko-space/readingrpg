@@ -103,6 +103,9 @@
             const res = await fetch(`${API_BASE_URL}/users/me`, { headers: authHeaders() });
             if (!res.ok) throw new Error(`${res.status}`);
             const data = await res.json();
+            // settings.js가 표시 설정 스위치를 그리기 전에 이 캐시부터 확인한다 - 그러면 설정창을 여는
+            // 순간 스위치가 "꺼짐"으로 잠깐 보였다가 저장된 값으로 바뀌는 깜빡임 없이 바로 정확하게 뜬다.
+            window.__latestUserProfile = data;
             const outfit = data.character_info ? data.character_info.outfit : null;
             const imgEl = document.getElementById("reading-character-img");
             applyRegionCharacterVisibility(data.user_info?.hide_region_character);
