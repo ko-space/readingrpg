@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
 from database import get_db
 from models import User, Region, Item, UserItem
-from schemas import NicknameUpdateRequest
+from schemas import NicknameUpdateRequest, DisplaySettingsUpdateRequest
 from security import get_current_user
 from achievements import get_equipped_title_info
 from routers.story import STORY_TICKET_ITEM_NAME
@@ -71,7 +71,9 @@ def _build_profile(user: User, db: Session):
             "arena_ticket_count": _arena_ticket_count(user, db),
             "daily_reading_minutes": user.daily_reading_minutes,
             "equipped_title": equipped_title,
-            "equipped_title_is_hidden": equipped_title_is_hidden
+            "equipped_title_is_hidden": equipped_title_is_hidden,
+            "hide_region_character": user.hide_region_character,
+            "hide_lobby_character": user.hide_lobby_character
         },
         "character_info": {
             "job_class": equipped.job_class,
@@ -125,6 +127,26 @@ def update_nickname(
     db.commit()
 
     return {"message": "닉네임을 변경했습니다.", "nickname": user.nickname}
+
+
+@router.post("/display-settings")
+def update_display_settings(
+    req: DisplaySettingsUpdateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """설정 화면의 "지역/로비에서 인물 숨기기" 스위치. localStorage 대신 계정에 저장해서
+    기기·브라우저를 옮기거나 저장소가 초기화돼도(예: 사파리) 값이 유지되게 한다."""
+    if req.hide_region_character is not None:
+        user.hide_region_character = req.hide_region_character
+    if req.hide_lobby_character is not None:
+        user.hide_lobby_character = req.hide_lobby_character
+    db.commit()
+
+    return {
+        "hide_region_character": user.hide_region_character,
+        "hide_lobby_character": user.hide_lobby_character,
+    }
 
 
 @router.get("/{nickname}")

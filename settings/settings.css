@@ -1,6 +1,6 @@
 /* 설정 전용 UI - 게임 콘텐츠 화면들과 구분되는 차분한 슬레이트 톤 */
 #modal-settings .settings-modal-box {
-    width: min(94vw, 420px);
+    width: min(94vw, 720px);
     max-width: none;
     max-height: 86vh;
     padding: 0;
@@ -11,6 +11,32 @@
     border-radius: 14px;
     background: linear-gradient(160deg, #f4f6f8 0%, #e4e8ec 100%);
     box-shadow: 0 16px 50px rgba(20, 25, 35, .35), 0 0 0 1px rgba(255,255,255,.7) inset;
+}
+
+/* 왼쪽: 닉네임/표시설정/로그아웃, 오른쪽: 칭호 목록 - 칭호가 늘어날수록 세로로 한없이 길어지던
+   기존 1단 구성 대신, 가로로 넓혀서 칭호 칸을 독립된 스크롤 영역으로 분리했다. */
+.settings-columns {
+    display: flex;
+    align-items: stretch;
+}
+
+.settings-col-left {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-col-right {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid rgba(120, 130, 145, .25);
+}
+
+.settings-col-right .settings-title-list {
+    max-height: none;
 }
 
 #modal-settings .modal-close {
@@ -250,5 +276,20 @@
 @media (max-width: 650px) {
     #modal-settings .settings-modal-box {
         width: 92vw;
+    }
+
+    /* 좁은 화면에서는 옆으로 나눌 자리가 없으니 원래대로 위아래로 쌓는다 */
+    .settings-columns {
+        flex-direction: column;
+    }
+
+    .settings-col-right {
+        border-left: none;
+        border-top: 1px solid rgba(120, 130, 145, .25);
+    }
+
+    .settings-col-right .settings-title-list {
+        max-height: 220px;
+        overflow-y: auto;
     }
 }

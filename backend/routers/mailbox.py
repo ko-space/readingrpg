@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
@@ -9,6 +9,20 @@ from security import get_current_user
 from achievements import check_and_grant_achievements
 
 router = APIRouter(prefix="/mail", tags=["mail"])
+
+MAIL_AUTO_DELETE_DAYS = 7
+
+
+def _purge_expired_mail(db: Session, user_id: int) -> None:
+    """보상을 수령(claimed_at)한 지 7일이 지난 우편은 우편함을 열 때마다 조용히 정리한다.
+    별도 스케줄러 없이도 다음 조회 시점에 자연스럽게 없어지게 하는 방식."""
+    cutoff = datetime.utcnow() - timedelta(days=MAIL_AUTO_DELETE_DAYS)
+    db.query(Mail).filter(
+        Mail.user_id == user_id,
+        Mail.claimed_at.isnot(None),
+        Mail.claimed_at < cutoff,
+    ).delete(synchronize_session=False)
+    db.commit()
 
 
 def _serialize(mail: Mail) -> dict:
@@ -24,6 +38,7 @@ def _serialize(mail: Mail) -> dict:
 
 @router.get("/")
 def list_mail(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    _purge_expired_mail(db, user.id)
     mails = db.query(Mail).filter(Mail.user_id == user.id).order_by(Mail.created_at.desc(), Mail.id.desc()).all()
     return [_serialize(m) for m in mails]
 

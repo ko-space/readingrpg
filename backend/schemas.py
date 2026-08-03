@@ -115,6 +115,12 @@ class NicknameUpdateRequest(BaseModel):
         return _validate_nickname(v)
 
 
+class DisplaySettingsUpdateRequest(BaseModel):
+    """설정 화면의 표시용 스위치들 - 준 값만 반영하고, 안 준 필드는 그대로 둔다."""
+    hide_region_character: bool | None = None
+    hide_lobby_character: bool | None = None
+
+
 class DevTestUnitConfig(BaseModel):
     """개발자 테스트 창 전용 - 실제 보유 캐릭터가 아니라 임의의 이름/성급/수치로 유닛을 구성한다."""
     character_name: str

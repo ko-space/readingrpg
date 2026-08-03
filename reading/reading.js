@@ -74,10 +74,12 @@
 
     // 설정의 "지역에서 인물 숨기기" 스위치 - settings.js가 이 페이지에도 로드되지만 reading.js는
     // IIFE로 감싸여 있어 그냥 함수로 두면 안 보이므로 window에 직접 노출한다(loadProfile과 같은 방식).
-    window.applyRegionCharacterVisibility = function () {
+    // 계정(DB)에 저장된 값이라 페이지 로드 시엔 loadCharacterIllustration이 /users/me 응답으로
+    // 바로 반영하고, 설정창에서 스위치를 켜고 끌 때만 이 함수로 즉시 반영한다.
+    window.applyRegionCharacterVisibility = function (hide) {
         const imgEl = document.getElementById("reading-character-img");
         if (!imgEl) return;
-        imgEl.hidden = localStorage.getItem("settings_hide_region_character") === "1";
+        imgEl.hidden = Boolean(hide);
     };
 
     // ── 캐릭터: 장착 중인 의상의 '독서 자세' 일러스트 ──
@@ -90,6 +92,7 @@
             const data = await res.json();
             const outfit = data.character_info ? data.character_info.outfit : null;
             const imgEl = document.getElementById("reading-character-img");
+            applyRegionCharacterVisibility(data.user_info?.hide_region_character);
             if (!outfit) return;
 
             imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/reading.png`;
@@ -593,7 +596,6 @@
             clearInterval(dotTimer);
             if (overlay) overlay.hidden = true;
         });
-        applyRegionCharacterVisibility();
     }
 
     function init() {

@@ -10,14 +10,37 @@
     let loaded = false;
     let loading = false;
 
-    // 순수 표시용 취향 설정이라 서버에 저장하지 않고 브라우저별로 localStorage에 둔다
-    // (인연 스토리의 '티켓 자동 사용' 토글과 같은 방식).
-    const HIDE_REGION_CHARACTER_KEY = "settings_hide_region_character";
+    // 지역/로비 인물 숨기기 스위치 - 예전엔 브라우저 localStorage에 뒀지만, 기기/브라우저에 따라
+    // (특히 태블릿 사파리) 저장이 유지되지 않는 문제가 있어 닉네임처럼 계정(DB)에 저장하도록 옮겼다.
+    // /users/me 응답을 그대로 써서 두 스위치 상태를 채운다.
+    async function loadDisplaySettingsToggles() {
+        const regionToggle = document.getElementById("settings-hide-region-character-toggle");
+        const lobbyToggle = document.getElementById("settings-hide-lobby-character-toggle");
+        if (!regionToggle && !lobbyToggle) return;
 
-    function loadHideRegionCharacterToggle() {
-        const toggle = document.getElementById("settings-hide-region-character-toggle");
-        if (!toggle) return;
-        toggle.checked = localStorage.getItem(HIDE_REGION_CHARACTER_KEY) === "1";
+        try {
+            const res = await fetch(`${API_BASE_URL}/users/me`, { headers: authHeaders() });
+            if (!res.ok) return;
+            const data = await res.json();
+            const user = data.user_info || {};
+            if (regionToggle) regionToggle.checked = Boolean(user.hide_region_character);
+            if (lobbyToggle) lobbyToggle.checked = Boolean(user.hide_lobby_character);
+        } catch (err) {
+            console.error("표시 설정을 불러오지 못했어요.", err);
+        }
+    }
+
+    async function saveDisplaySetting(key, value) {
+        try {
+            const res = await fetch(`${API_BASE_URL}/users/display-settings`, {
+                method: "POST",
+                headers: authHeaders(true),
+                body: JSON.stringify({ [key]: value }),
+            });
+            if (!res.ok) throw new Error(`${res.status}`);
+        } catch (err) {
+            console.error("표시 설정을 저장하지 못했어요.", err);
+        }
     }
 
     function authHeaders(json = false) {
@@ -52,7 +75,7 @@
             loaded = true;
             await loadCurrentNickname();
             await loadTitleList();
-            loadHideRegionCharacterToggle();
+            await loadDisplaySettingsToggles();
         } catch (error) {
             content.innerHTML =
                 `<p class="screen-placeholder">설정을 불러오지 못했습니다. (${escapeHtml(error.message)})</p>`;
@@ -185,9 +208,14 @@
         });
         document.getElementById("settings-logout-btn")?.addEventListener("click", handleLogout);
         document.getElementById("settings-hide-region-character-toggle")?.addEventListener("change", (e) => {
-            localStorage.setItem(HIDE_REGION_CHARACTER_KEY, e.target.checked ? "1" : "0");
+            saveDisplaySetting("hide_region_character", e.target.checked);
             // reading.js가 로드된 페이지(reading.html)에서만 존재 - 지금 화면에 바로 반영한다.
-            if (typeof applyRegionCharacterVisibility === "function") applyRegionCharacterVisibility();
+            if (typeof applyRegionCharacterVisibility === "function") applyRegionCharacterVisibility(e.target.checked);
+        });
+        document.getElementById("settings-hide-lobby-character-toggle")?.addEventListener("change", (e) => {
+            saveDisplaySetting("hide_lobby_character", e.target.checked);
+            // home.js가 로드된 페이지(home.html)에서만 존재 - 지금 화면에 바로 반영한다.
+            if (typeof applyLobbyCharacterVisibility === "function") applyLobbyCharacterVisibility(e.target.checked);
         });
     }
 
@@ -197,7 +225,7 @@
             if (loaded) {
                 await loadCurrentNickname();
                 await loadTitleList();
-                loadHideRegionCharacterToggle();
+                await loadDisplaySettingsToggles();
             }
         });
     });
