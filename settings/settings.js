@@ -10,13 +10,14 @@
     let loaded = false;
     let loading = false;
 
-    // 지역/로비 인물 숨기기 스위치 - 예전엔 브라우저 localStorage에 뒀지만, 기기/브라우저에 따라
-    // (특히 태블릿 사파리) 저장이 유지되지 않는 문제가 있어 닉네임처럼 계정(DB)에 저장하도록 옮겼다.
-    // /users/me 응답을 그대로 써서 두 스위치 상태를 채운다.
+    // 지역/로비 인물 숨기기, 지역 효과 숨기기 스위치 - 예전엔 브라우저 localStorage에 뒀지만,
+    // 기기/브라우저에 따라(특히 태블릿 사파리) 저장이 유지되지 않는 문제가 있어 닉네임처럼
+    // 계정(DB)에 저장하도록 옮겼다. /users/me 응답을 그대로 써서 스위치 상태를 채운다.
     async function loadDisplaySettingsToggles() {
         const regionToggle = document.getElementById("settings-hide-region-character-toggle");
         const lobbyToggle = document.getElementById("settings-hide-lobby-character-toggle");
-        if (!regionToggle && !lobbyToggle) return;
+        const effectsToggle = document.getElementById("settings-hide-region-effects-toggle");
+        if (!regionToggle && !lobbyToggle && !effectsToggle) return;
 
         try {
             const res = await fetch(`${API_BASE_URL}/users/me`, { headers: authHeaders() });
@@ -25,6 +26,7 @@
             const user = data.user_info || {};
             if (regionToggle) regionToggle.checked = Boolean(user.hide_region_character);
             if (lobbyToggle) lobbyToggle.checked = Boolean(user.hide_lobby_character);
+            if (effectsToggle) effectsToggle.checked = Boolean(user.hide_region_effects);
         } catch (err) {
             console.error("표시 설정을 불러오지 못했어요.", err);
         }
@@ -242,6 +244,11 @@
             saveDisplaySetting("hide_lobby_character", e.target.checked);
             // home.js가 로드된 페이지(home.html)에서만 존재 - 지금 화면에 바로 반영한다.
             if (typeof applyLobbyCharacterVisibility === "function") applyLobbyCharacterVisibility(e.target.checked);
+        });
+        document.getElementById("settings-hide-region-effects-toggle")?.addEventListener("change", (e) => {
+            saveDisplaySetting("hide_region_effects", e.target.checked);
+            // reading.js가 로드된 페이지(reading.html)에서만 존재 - 지금 화면에 바로 반영한다.
+            if (typeof applyRegionEffectsVisibility === "function") applyRegionEffectsVisibility(e.target.checked);
         });
     }
 

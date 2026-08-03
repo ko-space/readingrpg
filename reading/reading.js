@@ -82,6 +82,19 @@
         imgEl.hidden = Boolean(hide);
     };
 
+    // 설정의 "지역에서 효과 숨기기" 스위치 - 반딧불이 이펙트를 껐다 켰다 한다. 위와 같은 이유로
+    // window에 노출한다. 끄면 이미 떠 있는 반딧불이를 지우고, 켜면(아직 하나도 없을 때만) 새로 띄운다
+    // - 스위치를 여러 번 눌러도 반딧불이가 계속 쌓이지 않게.
+    window.applyRegionEffectsVisibility = function (hide) {
+        const layer = document.getElementById("firefly-layer");
+        if (!layer) return;
+        if (hide) {
+            layer.innerHTML = "";
+        } else if (layer.children.length === 0) {
+            spawnFireflies();
+        }
+    };
+
     // ── 캐릭터: 장착 중인 의상의 '독서 자세' 일러스트 ──
     // outfit은 이제 폴더 경로(예: songjuheon/basic)라, 그 안의 reading.png를 먼저 시도하고
     // 없으면(404) idle.png(기본 서있는 자세)로 자동 대체된다.
@@ -93,6 +106,7 @@
             const outfit = data.character_info ? data.character_info.outfit : null;
             const imgEl = document.getElementById("reading-character-img");
             applyRegionCharacterVisibility(data.user_info?.hide_region_character);
+            applyRegionEffectsVisibility(data.user_info?.hide_region_effects);
             if (!outfit) return;
 
             imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/reading.png`;
@@ -600,7 +614,8 @@
 
     function init() {
         showRegionEntrance();
-        spawnFireflies();
+        // 반딧불이는 loadCharacterIllustration()이 /users/me 응답(hide_region_effects)을 받은 뒤에
+        // applyRegionEffectsVisibility로 띄운다 - 여기서 무조건 먼저 띄우면 설정과 상관없이 항상 보인다.
         setupModeLabel();
         setupEndButton();
         setupPauseButton();
