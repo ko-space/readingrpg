@@ -50,6 +50,31 @@
         return headers;
     }
 
+    // 오른쪽 칭호 칸의 높이를 왼쪽 칸(닉네임/표시설정/로그아웃)의 실제 렌더링 높이에 맞춰서, 칭호가
+    // 아무리 많아져도 설정창 전체가 늘어나지 않고 칭호 목록만 그 안에서 스크롤되게 한다.
+    // CSS만으로(overflow:hidden + min-height:0으로 auto 높이 flex 줄의 계산에서 빼기) 시도했었는데
+    // 실제로는 오른쪽 칸의 내용(칭호 개수)이 여전히 줄 높이 자체를 밀어 올려서 안 먹혔다 - flex 줄이
+    // auto 높이일 때는 두 칸 중 더 큰 쪽에 맞춰지는 게 기본 동작이라, 결국 자바스크립트로 직접
+    // 왼쪽 칸 높이를 측정해서 오른쪽 칸에 강제로 지정하는 방식으로 바꿨다.
+    function syncTitleColumnHeight() {
+        const left = document.querySelector(".settings-col-left");
+        const right = document.querySelector(".settings-col-right");
+        if (!left || !right) return;
+
+        // 좁은 화면(650px 이하)에서는 CSS가 위아래로 쌓는 구조로 바뀌므로 높이를 맞출 필요가 없다 -
+        // 오히려 여기서 강제로 높이를 지정하면 그 레이아웃을 방해한다.
+        if (window.matchMedia("(max-width: 650px)").matches) {
+            right.style.height = "";
+            return;
+        }
+
+        right.style.height = `${left.offsetHeight}px`;
+    }
+
+    window.addEventListener("resize", () => {
+        if (loaded) syncTitleColumnHeight();
+    });
+
     function escapeHtml(value) {
         return String(value ?? "")
             .replaceAll("&", "&amp;")
@@ -76,6 +101,7 @@
             await loadCurrentNickname();
             await loadTitleList();
             await loadDisplaySettingsToggles();
+            syncTitleColumnHeight();
         } catch (error) {
             content.innerHTML =
                 `<p class="screen-placeholder">설정을 불러오지 못했습니다. (${escapeHtml(error.message)})</p>`;
@@ -226,6 +252,7 @@
                 await loadCurrentNickname();
                 await loadTitleList();
                 await loadDisplaySettingsToggles();
+                syncTitleColumnHeight();
             }
         });
     });
