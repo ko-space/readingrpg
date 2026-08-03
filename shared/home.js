@@ -28,6 +28,14 @@ const DEFAULT_AVATAR =
 window.onload = loadProfile;
 setupModals();
 
+// 설정의 "로비에서 인물 숨기기" 스위치 - settings.js가 로드/토글 시 부른다(reading.js의
+// applyRegionCharacterVisibility와 같은 방식). 인물 그림과 발밑 그림자를 통째로 감춰서
+// world-area의 던전 카드들이 그만큼 자리를 넓게 쓰게 한다.
+window.applyLobbyCharacterVisibility = function (hide) {
+    const displayEl = document.querySelector('.character-display');
+    if (displayEl) displayEl.style.display = hide ? 'none' : '';
+};
+
 let currentOpenModal = null;
 
 function setupModals() {
@@ -185,6 +193,8 @@ function renderProfile(data) {
 
     avatarImgLarge.src = avatarSrc;
     avatarImgLarge.onerror = () => { avatarImgLarge.src = DEFAULT_AVATAR; };
+
+    applyLobbyCharacterVisibility(user.hide_lobby_character);
 
     if (region) {
         regionName.textContent = region.name;

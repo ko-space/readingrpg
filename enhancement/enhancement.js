@@ -588,6 +588,20 @@
         renderItemList();
     }
 
+    // 아직 선택 안 된 아이템이 지금 상태에서 새로 선택 가능한지 - 백엔드 enhance_character의 검증
+    // (item_ids 최대 3개, 마법 영약은 단독으로만)과 동일한 규칙을 미리 화면에서 걸러 보여준다.
+    // 이미 선택된 아이템은 항상 true(취소는 언제든 가능해야 함).
+    function isItemSelectable(item) {
+        if (selectedItemIds.includes(item.item_id)) return true;
+        if (selectedItemIds.length >= 3) return false;
+
+        const selectedDefs = getSelectedItemDefs();
+        if (selectedDefs.some((sel) => sel.effect_type === "dust_convert")) return false;
+        if (item.effect_type === "dust_convert" && selectedItemIds.length > 0) return false;
+
+        return true;
+    }
+
     function renderItemList() {
         const listEl = document.getElementById("enhancement-item-list");
         const emptyEl = document.getElementById("enhancement-item-empty");
@@ -603,8 +617,13 @@
         myEnhancementItems.forEach((item) => {
             const row = document.createElement("button");
             row.type = "button";
+            const isSelected = selectedItemIds.includes(item.item_id);
+            const selectable = isItemSelectable(item);
+
             row.className = "enhancement-item-row";
-            row.classList.toggle("selected", selectedItemIds.includes(item.item_id));
+            row.classList.toggle("selected", isSelected);
+            row.classList.toggle("unavailable", !selectable);
+            row.disabled = !selectable;
             row.innerHTML = `
                 <div class="enhancement-item-row-icon">
                     <img alt="${escapeHtml(item.name)}">

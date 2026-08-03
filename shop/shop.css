@@ -349,6 +349,15 @@
     cursor: pointer;
 }
 
+.shop-qty-minmax-btn {
+    width: auto;
+    height: 26px;
+    padding: 0 8px;
+    border-radius: 13px;
+    font-size: 10.5px;
+    letter-spacing: .3px;
+}
+
 .shop-qty-value {
     min-width: 28px;
     font-size: 17px;

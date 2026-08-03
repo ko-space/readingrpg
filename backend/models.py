@@ -37,6 +37,11 @@ class User(Base):
     # "지금 쓰고 있는 탭"으로 인정한다. 다른 탭이 먼저 하트비트를 보내고 있으면 나중 탭은 차단된다.
     active_tab_id = Column(String, nullable=True)
 
+    # 순수 표시용 취향 설정. 예전엔 localStorage에 뒀지만 기기/브라우저에 따라 저장이 안 유지되는
+    # 경우가 있어(태블릿 사파리 등) 계정(DB)에 저장하는 방식으로 옮겼다 - 닉네임과 동일한 이유.
+    hide_region_character = Column(Boolean, nullable=False, default=False)  # 지역 화면에서 캐릭터 그림 숨기기
+    hide_lobby_character = Column(Boolean, nullable=False, default=False)   # 로비 화면에서 캐릭터 그림 숨기기
+
     logs = relationship("ReadingLog", back_populates="owner")
     characters = relationship("Character", back_populates="owner", foreign_keys="Character.user_id")
     items = relationship("UserItem", back_populates="owner")

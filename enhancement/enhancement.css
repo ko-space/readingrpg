@@ -551,6 +551,12 @@
     box-shadow: 0 0 0 2px rgba(255, 222, 94, .5);
 }
 
+.enhancement-item-row.unavailable {
+    cursor: not-allowed;
+    filter: grayscale(1);
+    opacity: .45;
+}
+
 .enhancement-item-row-icon {
     width: 44px;
     height: 44px;

@@ -1,34 +1,49 @@
 <h2 class="screen-title">설정</h2>
 
-<section class="settings-section">
-    <h3 class="settings-section-label">닉네임</h3>
-    <div class="settings-nickname-row">
-        <input type="text" id="settings-nickname-input" class="settings-input" maxlength="16" placeholder="닉네임">
-        <button class="settings-action-btn" id="settings-nickname-save-btn" type="button">변경</button>
-    </div>
-    <p class="settings-hint" id="settings-nickname-msg"></p>
-</section>
+<div class="settings-columns">
+    <div class="settings-col-left">
+        <section class="settings-section">
+            <h3 class="settings-section-label">닉네임</h3>
+            <div class="settings-nickname-row">
+                <input type="text" id="settings-nickname-input" class="settings-input" maxlength="16" placeholder="닉네임">
+                <button class="settings-action-btn" id="settings-nickname-save-btn" type="button">변경</button>
+            </div>
+            <p class="settings-hint" id="settings-nickname-msg"></p>
+        </section>
 
-<section class="settings-section">
-    <h3 class="settings-section-label">표시 설정</h3>
-    <div class="settings-switch-row">
-        <span class="settings-switch-label">지역에서 인물 숨기기</span>
-        <label class="settings-switch">
-            <input type="checkbox" id="settings-hide-region-character-toggle">
-            <span class="settings-switch-track"></span>
-        </label>
-    </div>
-    <p class="settings-hint">켜두면 독서 화면의 지역 배경에서 캐릭터 그림이 보이지 않습니다.</p>
-</section>
+        <section class="settings-section">
+            <h3 class="settings-section-label">표시 설정</h3>
+            <div class="settings-switch-row">
+                <span class="settings-switch-label">지역에서 인물 숨기기</span>
+                <label class="settings-switch">
+                    <input type="checkbox" id="settings-hide-region-character-toggle">
+                    <span class="settings-switch-track"></span>
+                </label>
+            </div>
+            <p class="settings-hint">켜두면 독서 화면의 지역 배경에서 캐릭터 그림이 보이지 않습니다.</p>
 
-<section class="settings-section">
-    <h3 class="settings-section-label">칭호</h3>
-    <p class="settings-hint">달성한 업적 중 하나를 칭호로 장착할 수 있어요.</p>
-    <div class="settings-title-list" id="settings-title-list">
-        <p class="screen-placeholder">불러오는 중...</p>
-    </div>
-</section>
+            <div class="settings-switch-row">
+                <span class="settings-switch-label">로비에서 인물 숨기기</span>
+                <label class="settings-switch">
+                    <input type="checkbox" id="settings-hide-lobby-character-toggle">
+                    <span class="settings-switch-track"></span>
+                </label>
+            </div>
+            <p class="settings-hint">켜두면 로비 화면에서 캐릭터 그림이 보이지 않습니다.</p>
+        </section>
 
-<section class="settings-section">
-    <button class="settings-logout-btn" id="settings-logout-btn" type="button">로그아웃</button>
-</section>
+        <section class="settings-section">
+            <button class="settings-logout-btn" id="settings-logout-btn" type="button">로그아웃</button>
+        </section>
+    </div>
+
+    <div class="settings-col-right">
+        <section class="settings-section">
+            <h3 class="settings-section-label">칭호</h3>
+            <p class="settings-hint">달성한 업적 중 하나를 칭호로 장착할 수 있어요.</p>
+            <div class="settings-title-list" id="settings-title-list">
+                <p class="screen-placeholder">불러오는 중...</p>
+            </div>
+        </section>
+    </div>
+</div>

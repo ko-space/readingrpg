@@ -145,6 +145,15 @@
             selectedQty += 1;
             updateQtyDisplay();
         });
+        document.getElementById("shop-qty-min")?.addEventListener("click", () => {
+            selectedQty = 1;
+            updateQtyDisplay();
+        });
+        document.getElementById("shop-qty-max")?.addEventListener("click", () => {
+            if (!selectedItem) return;
+            selectedQty = Math.max(1, computeMaxQty(selectedItem));
+            updateQtyDisplay();
+        });
 
         document.getElementById("shop-confirm-buy")?.addEventListener("click", purchaseSelected);
 
@@ -317,6 +326,23 @@
             parts.push(`하루 ${item.daily_purchase_limit}개 한정 (오늘 ${item.daily_purchased_count || 0}/${item.daily_purchase_limit})`);
         }
         return parts.join(" · ");
+    }
+
+    // MAX 버튼이 점프할 개수 - 골드/구매 한도/일일 한도 중 가장 빡빡한 제약을 따른다.
+    // updateBuyAvailability()가 selectedQty 하나에 대해 사유를 나열하는 것과 달리, 여기서는
+    // "지금 살 수 있는 가장 많은 개수"를 직접 계산해야 한다.
+    function computeMaxQty(item) {
+        let max = Infinity;
+        if (item.purchase_limit != null) {
+            max = Math.min(max, item.purchase_limit - (item.purchased_count || 0));
+        }
+        if (item.daily_purchase_limit != null) {
+            max = Math.min(max, item.daily_purchase_limit - (item.daily_purchased_count || 0));
+        }
+        if (item.price > 0) {
+            max = Math.min(max, Math.floor(myGold / item.price));
+        }
+        return Number.isFinite(max) ? Math.max(0, max) : 99;
     }
 
     // 지금 상태로 구매 가능한지 확인해서, 불가능하면 사유를 보여주고 버튼 자체를 눌러도 반응하지
