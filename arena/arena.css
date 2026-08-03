@@ -688,6 +688,11 @@
     font-weight: 900;
 }
 
+.pvp-history-draw {
+    color: #8a8f98;
+    font-weight: 900;
+}
+
 .pvp-history-role {
     font-weight: 800;
     font-size: 11.5px;

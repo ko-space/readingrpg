@@ -56,6 +56,21 @@ body {
     box-sizing: border-box;
 }
 
+/* 전투 경과 시간(mm:ss) - battle-layout보다 먼저 오는 flex 자식이라 자연스럽게 화면 맨 위 중앙에 온다.
+   회복형 조합 등으로 전투가 길어질 때(백엔드 MAX_BATTLE_DURATION=3분) 시간이 흐르고 있다는 걸 보여준다. */
+.battle-timer {
+    flex-shrink: 0;
+    padding: 4px 18px;
+    border: 2px solid rgba(232, 184, 75, 0.55);
+    border-radius: 999px;
+    background: rgba(15, 20, 36, 0.55);
+    color: #f0dfa0;
+    font-size: 15px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    font-variant-numeric: tabular-nums;
+}
+
 /* ===== 3열 배치 ===== */
 .battle-layout {
     width: 100%;

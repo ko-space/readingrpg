@@ -424,7 +424,9 @@
             }
             listEl.innerHTML = logs.map((log) => {
                 const when = formatKst(log.created_at);
-                const resultClass = log.result === "승리" ? "pvp-history-win" : "pvp-history-lose";
+                const resultClass = log.result === "승리" ? "pvp-history-win"
+                    : log.result === "무승부" ? "pvp-history-draw"
+                    : "pvp-history-lose";
                 const roleClass = log.role === "attack" ? "pvp-history-role-attack" : "pvp-history-role-defense";
                 const roleLabel = log.role === "attack" ? "공격" : "방어";
                 return `

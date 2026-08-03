@@ -85,6 +85,19 @@
     // 좌측(나) 패널 안의 스크롤 로그 패널. 박스/테두리 없이 배경 위에 색 텍스트만 쌓인다.
     const logPanelEl = document.getElementById("battle-log-panel");
 
+    // 화면 맨 위의 전투 경과 시간 표시. 백엔드의 게임 내 시간(event.time, 초 단위)을 그대로 mm:ss로
+    // 보여준다 - 실제 기기 시계가 아니라 이벤트가 재생되는 시점의 전투 자체 시간이라, battle_engine.py의
+    // MAX_BATTLE_DURATION(회복형 조합 등으로 전투가 안 끝날 때의 강제 종료 상한)과 그대로 대응된다.
+    const battleTimerEl = document.getElementById("battle-timer");
+
+    function updateBattleTimer(seconds) {
+        if (!battleTimerEl || typeof seconds !== "number") return;
+        const total = Math.max(0, Math.floor(seconds));
+        const mm = String(Math.floor(total / 60)).padStart(2, "0");
+        const ss = String(total % 60).padStart(2, "0");
+        battleTimerEl.textContent = `${mm}:${ss}`;
+    }
+
     function sleep(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms));
     }
@@ -2014,6 +2027,7 @@
         const event = data.events[eventIndex];
         const eventType = event.event_type || "basic_attack";
         lastEventActorKey = eventActorKey(event) || lastEventActorKey;
+        updateBattleTimer(event.time);
 
         if (eventType === "cast_start") {
             // 3번째 기본공격 직후 곧바로 자신의 시전으로 넘어가는 경우, 서버 기록상 두 이벤트가 같은
