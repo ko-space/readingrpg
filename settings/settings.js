@@ -254,8 +254,13 @@
 
     document.querySelectorAll('[data-modal-target="modal-settings"]').forEach((btn) => {
         btn.addEventListener("click", async () => {
+            // ensureLoaded()가 "처음 여는 것"이면 그 안에서 이미 닉네임/칭호/표시설정을 전부 불러온다 -
+            // 그 직후 여기서 또 한 번 불러오면(예전 코드) 칭호 목록이 "불러오는 중..."으로 잠깐
+            // 리셋됐다가 다시 채워지는 깜빡임이 생긴다. 그러니 "이미 로드돼 있던 상태에서 다시 연
+            // 경우"(재진입)에만 새로고침하고, 방금 처음 로드된 경우는 건너뛴다.
+            const wasAlreadyLoaded = loaded;
             await ensureLoaded();
-            if (loaded) {
+            if (wasAlreadyLoaded) {
                 await loadCurrentNickname();
                 await loadTitleList();
                 await loadDisplaySettingsToggles();
