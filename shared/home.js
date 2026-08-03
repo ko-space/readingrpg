@@ -149,6 +149,9 @@ async function loadProfile() {
         }
 
         const data = await res.json();
+        // settings.js가 표시 설정 스위치를 그리기 전에 이 캐시부터 확인한다 - 그러면 설정창을 여는
+        // 순간 스위치가 "꺼짐"으로 잠깐 보였다가 저장된 값으로 바뀌는 깜빡임 없이 바로 정확하게 뜬다.
+        window.__latestUserProfile = data;
         renderProfile(data);
     } catch (error) {
         console.error("서버 통신 에러:", error);

@@ -13,26 +13,46 @@
     // 지역/로비 인물 숨기기, 지역 효과 숨기기 스위치 - 예전엔 브라우저 localStorage에 뒀지만,
     // 기기/브라우저에 따라(특히 태블릿 사파리) 저장이 유지되지 않는 문제가 있어 닉네임처럼
     // 계정(DB)에 저장하도록 옮겼다. /users/me 응답을 그대로 써서 스위치 상태를 채운다.
-    async function loadDisplaySettingsToggles() {
+    function applyDisplaySettingsFromProfile(data) {
         const regionToggle = document.getElementById("settings-hide-region-character-toggle");
         const lobbyToggle = document.getElementById("settings-hide-lobby-character-toggle");
         const effectsToggle = document.getElementById("settings-hide-region-effects-toggle");
-        if (!regionToggle && !lobbyToggle && !effectsToggle) return;
+        const user = data?.user_info || {};
+        if (regionToggle) regionToggle.checked = Boolean(user.hide_region_character);
+        if (lobbyToggle) lobbyToggle.checked = Boolean(user.hide_lobby_character);
+        if (effectsToggle) effectsToggle.checked = Boolean(user.hide_region_effects);
+    }
+
+    async function loadDisplaySettingsToggles() {
+        const anyToggle =
+            document.getElementById("settings-hide-region-character-toggle") ||
+            document.getElementById("settings-hide-lobby-character-toggle") ||
+            document.getElementById("settings-hide-region-effects-toggle");
+        if (!anyToggle) return;
+
+        // 홈/지역 화면이 자기 목적으로 이미 /users/me를 불러와 캐시해둔 게 있으면 그 값으로 스위치를
+        // 네트워크 왕복 없이 즉시 정확하게 채운다 - 그래야 설정창을 여는 순간 스위치가 "꺼짐"으로
+        // 잠깐 보였다가 저장된 값으로 바뀌는 깜빡임이 없다. 그래도 다른 기기/탭에서 방금 바꿨을 수
+        // 있으니 최신값은 아래에서 다시 확인해서 덮어쓴다.
+        if (window.__latestUserProfile) applyDisplaySettingsFromProfile(window.__latestUserProfile);
 
         try {
             const res = await fetch(`${API_BASE_URL}/users/me`, { headers: authHeaders() });
             if (!res.ok) return;
             const data = await res.json();
-            const user = data.user_info || {};
-            if (regionToggle) regionToggle.checked = Boolean(user.hide_region_character);
-            if (lobbyToggle) lobbyToggle.checked = Boolean(user.hide_lobby_character);
-            if (effectsToggle) effectsToggle.checked = Boolean(user.hide_region_effects);
+            window.__latestUserProfile = data;
+            applyDisplaySettingsFromProfile(data);
         } catch (err) {
             console.error("표시 설정을 불러오지 못했어요.", err);
         }
     }
 
     async function saveDisplaySetting(key, value) {
+        // 캐시도 같이 갱신 - 안 하면 이 스위치를 바꾼 뒤 설정창을 닫았다 다시 열 때, 새 네트워크
+        // 응답이 오기 전까지 잠깐 방금 바꾸기 "전" 값이 캐시로부터 다시 보이는 역깜빡임이 생긴다.
+        if (window.__latestUserProfile?.user_info) {
+            window.__latestUserProfile.user_info[key] = value;
+        }
         try {
             const res = await fetch(`${API_BASE_URL}/users/display-settings`, {
                 method: "POST",
