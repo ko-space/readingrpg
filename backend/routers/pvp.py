@@ -400,7 +400,7 @@ def get_history(db: Session = Depends(get_db), user: User = Depends(get_current_
             "id": log.id,
             "role": "attack" if is_attacker else "defense",
             "opponent_nickname": opponent.nickname,
-            "result": "승리" if log.winner_id == user.id else "패배",
+            "result": "승리" if log.winner_id == user.id else ("무승부" if log.winner_id is None else "패배"),
             "rank_changed": log.rank_changed,
             "created_at": log.created_at,
         })

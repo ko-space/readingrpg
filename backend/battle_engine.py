@@ -79,6 +79,12 @@ TICK = 0.05
 SKILL_TRIGGER_ATTACK_COUNT = 3   # 기본공격 몇 회마다 스킬을 시전하는지
 SKILL_CAST_INTERVAL_MULTIPLIER = 0.7  # 시전 시간 = 기본공격 주기 * 이 값
 
+# 전투 시간(게임 내 초) 상한 - 회복형 캐릭터가 양쪽/한쪽에 몰리면(예: 회복 스킬을 쓰는 유닛이 여럿) 입히는
+# 피해보다 회복량이 더 커져서 어느 쪽도 전멸하지 않는 채로 전투가 사실상 끝나지 않을 수 있다. 정상적인
+# 전투는 대부분 이 안에서 끝나므로(넉넉하게 여유를 둠), 이 시간을 넘기면 그 시점 HP 비율이 더 높은 쪽을
+# 승자로 강제 종료한다.
+MAX_BATTLE_DURATION = 180.0
+
 
 def _new_status():
     return {
@@ -228,8 +234,13 @@ def _tag_target_sides(detail, side_name, own_team, enemy_team):
 
     # "hits"는 모든 단일/다중 대상 피해 스킬이 쓰는 표준 목록. "stunned"는 방임석의 "제목은 관객이
     # 정하세요"(노란 물감)처럼 피해 없이 대상만 기절시키는 경우 전용 - 같은 방식으로 태깅한다.
+    # _skill_conditional_target_debuff처럼 "stunned"를 리스트가 아니라 단순 성공 여부(bool)로 쓰는
+    # 더 오래된 핸들러도 있어서, 리스트일 때만 순회한다(아니면 'bool' object is not iterable로 죽음).
     for key in ("hits", "stunned"):
-        for hit in detail.get(key) or []:
+        values = detail.get(key)
+        if not isinstance(values, list):
+            continue
+        for hit in values:
             ref = hit.pop("_target_ref", None)
             if ref is not None:
                 hit["target_side"] = resolve(ref)
@@ -930,7 +941,16 @@ def _skill_aoe_gendered_damage(caster, own_team, enemy_team, params, time_elapse
 
 def _skill_copy_target_skill(caster, own_team, enemy_team, params, time_elapsed):
     target = _alive_target(enemy_team)
-    if target and target.get("skill_effect_type") and not target.get("is_clone"):
+    # 상대도 강승유(또는 미래의 다른 copy_target_skill 캐릭터)라서 대상의 스킬이 "복제" 그 자체면
+    # 복제하지 않는다 - 그대로 두면 이 핸들러가 자기 자신을 상태 변화 없이 계속 호출해서(own_team/
+    # enemy_team/target이 안 바뀐 채 재귀) RecursionError로 죽는다. 복제를 복제하는 것도 설정상 이상하니
+    # 그냥 "복제할 스킬이 없는" 경우와 같이 취급해 기본 피해로 대체한다.
+    if (
+        target
+        and target.get("skill_effect_type")
+        and target.get("skill_effect_type") != "copy_target_skill"
+        and not target.get("is_clone")
+    ):
         effect_type = target["skill_effect_type"]
         handler = SKILL_EFFECT_HANDLERS.get(effect_type)
         if handler:
@@ -1305,7 +1325,7 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
     _apply_battle_start_traits(defender_team, attacker_team, events, "defender")
     _apply_battle_start_star_effects(attacker_team, defender_team, events)
 
-    while _team_alive(attacker_team) and _team_alive(defender_team):
+    while _team_alive(attacker_team) and _team_alive(defender_team) and time_elapsed < MAX_BATTLE_DURATION:
         time_elapsed = round(time_elapsed + TICK, 2)
 
         # 각 팀의 "이번 틱 시작 시점 마지막 생존자"를 미리 표시해둔다. 원래는 공격자 팀을 전부 처리한
@@ -1316,10 +1336,16 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
         # 같은 틱에 함께 쓰러뜨리는 진짜 동시 전멸이 원칙적으로 가능해진다. 이 유예는 죽는 바로 그 틱
         # 한 번만 적용된다(다음 틱엔 이미 죽어 있어 애초에 이 집합에 안 들어감 - 좀비처럼 계속 행동하는
         # 일은 없다). 팀에 다른 생존자가 남아있는 일반적인 죽음은 기존과 동일하게 그 즉시 행동을 멈춘다.
+        #
+        # 단, 이 유예는 근접 유닛에게만 준다 - 근접은 서로 칼을 맞대고 있는 셈이라 같은 틱에 동시에
+        # 서로를 벨 수 있다는 감각이 자연스럽지만, 원거리는 화살/투사체가 날아가는 데 시간이 걸리므로
+        # 이미 맞아 죽은 원거리 유닛이 그 뒤에도 마지막 한 발을 쏘아 상대를 같이 죽이는 건 어색하다.
+        # 그래서 원거리 마지막 생존자는 같은 틱에 먼저 맞으면(공격자 팀이 방어자 팀보다 먼저 처리되므로
+        # 처리 순서상 먼저 맞은 쪽) 그대로 죽고, 상대는 반격 없이 승리한다.
         last_survivor_ids = set()
         for team in (attacker_team, defender_team):
             alive = [u for u in _all_slots(team) if u and u["hp"] > 0]
-            if len(alive) == 1:
+            if len(alive) == 1 and alive[0]["is_melee"]:
                 last_survivor_ids.add(id(alive[0]))
 
         _apply_death_triggers(attacker_team, "attacker", events, time_elapsed)
@@ -1404,8 +1430,9 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
         # 호출부(routers/pvp.py)에서 승패 어느 쪽에도 해당하는 보상/순위 변동을 주지 않는다.
         attacker_won = None
     else:
-        # 이 분기는 현재 while 루프가 "둘 다 생존"인 동안에만 반복되는 구조상 실제로는 도달하지 않는다
-        # (배틀에 시간 제한이 없다) - 혹시 모를 안전망으로만 남겨둔다.
+        # 둘 다 아직 살아있는 채로 루프가 끝난 경우 - MAX_BATTLE_DURATION(시간 제한)에 걸린 것이다.
+        # 회복형 캐릭터가 몰려서(예: 이영웅 다수 조합) 입히는 피해보다 회복량이 더 커 어느 쪽도 전멸하지
+        # 않는 전투를 여기서 강제 종료하고, 그 시점 HP 비율이 더 높은 쪽을 승자로 판정한다.
         def _hp_ratio(team):
             alive = [u for u in _all_slots(team) if u]
             total_hp = sum(u["hp"] for u in alive)
