@@ -14,7 +14,12 @@
 }
 
 /* 왼쪽: 닉네임/표시설정/로그아웃, 오른쪽: 칭호 목록 - 칭호가 늘어날수록 세로로 한없이 길어지던
-   기존 1단 구성 대신, 가로로 넓혀서 칭호 칸을 독립된 스크롤 영역으로 분리했다. */
+   기존 1단 구성 대신, 가로로 넓혀서 칭호 칸을 독립된 스크롤 영역으로 분리했다.
+   박스 전체 높이는 왼쪽 칸(자연스러운 콘텐츠 높이)이 정하고, 오른쪽 칸은 그 높이에 맞춰지되
+   자기 내용이 넘치면 "칭호" 제목/안내문은 그대로 두고 목록 부분만 스크롤된다.
+   핵심은 .settings-col-right에 준 overflow:hidden - flex/grid 아이템은 기본적으로 자기 내용
+   전체 높이만큼은 최소한 확보하려 드는데(자동 최소 크기), overflow가 visible이 아니면 그 계산에서
+   빠져서 형제(왼쪽 칸)가 정한 줄 높이보다 작게 눌릴 수 있게 된다 - 그래야 내부 스크롤이 의미가 생김. */
 .settings-columns {
     display: flex;
     align-items: stretch;
@@ -30,13 +35,25 @@
 .settings-col-right {
     flex: 1;
     min-width: 0;
+    min-height: 0;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     border-left: 1px solid rgba(120, 130, 145, .25);
 }
 
+.settings-col-right .settings-section {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
 .settings-col-right .settings-title-list {
+    flex: 1;
+    min-height: 0;
     max-height: none;
+    overflow-y: auto;
 }
 
 #modal-settings .modal-close {
