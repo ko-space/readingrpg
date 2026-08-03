@@ -41,6 +41,7 @@ class User(Base):
     # 경우가 있어(태블릿 사파리 등) 계정(DB)에 저장하는 방식으로 옮겼다 - 닉네임과 동일한 이유.
     hide_region_character = Column(Boolean, nullable=False, default=False)  # 지역 화면에서 캐릭터 그림 숨기기
     hide_lobby_character = Column(Boolean, nullable=False, default=False)   # 로비 화면에서 캐릭터 그림 숨기기
+    hide_region_effects = Column(Boolean, nullable=False, default=False)    # 지역 화면에서 반딧불이 등 이펙트 숨기기
 
     logs = relationship("ReadingLog", back_populates="owner")
     characters = relationship("Character", back_populates="owner", foreign_keys="Character.user_id")

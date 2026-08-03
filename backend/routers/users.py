@@ -73,7 +73,8 @@ def _build_profile(user: User, db: Session):
             "equipped_title": equipped_title,
             "equipped_title_is_hidden": equipped_title_is_hidden,
             "hide_region_character": user.hide_region_character,
-            "hide_lobby_character": user.hide_lobby_character
+            "hide_lobby_character": user.hide_lobby_character,
+            "hide_region_effects": user.hide_region_effects
         },
         "character_info": {
             "job_class": equipped.job_class,
@@ -141,11 +142,14 @@ def update_display_settings(
         user.hide_region_character = req.hide_region_character
     if req.hide_lobby_character is not None:
         user.hide_lobby_character = req.hide_lobby_character
+    if req.hide_region_effects is not None:
+        user.hide_region_effects = req.hide_region_effects
     db.commit()
 
     return {
         "hide_region_character": user.hide_region_character,
         "hide_lobby_character": user.hide_lobby_character,
+        "hide_region_effects": user.hide_region_effects,
     }
 
 
