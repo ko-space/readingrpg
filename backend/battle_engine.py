@@ -102,7 +102,7 @@ KNOCKBACK_POSITION_DISTANCE = AXIS_DEFENDER_BACK - AXIS_DEFENDER_FRONT  # 1.0
 # 이 시간만큼 계속 1순위를 유지해야 비로소 확정한다(뜸들이기) - 근소한 차이로 순위가 잠깐씩 오락가락할
 # 때마다 시선이 휙휙 바뀌는 게 부자연스러워서다. 단, 이미 정한 대상이 하나도 없거나(첫 타겟 선정) 그
 # 대상이 죽었을 때는 망설임 없이 즉시 확정한다 - _resolve_basic_attack_target 참고.
-TARGET_SWITCH_HESITATION_SECONDS = 0.5
+TARGET_SWITCH_HESITATION_SECONDS = 0.51
 
 SKILL_TRIGGER_ATTACK_COUNT = 3   # 기본공격 몇 회마다 스킬을 시전하는지
 SKILL_CAST_INTERVAL_MULTIPLIER = 0.7  # 시전 시간 = 기본공격 주기 * 이 값

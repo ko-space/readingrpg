@@ -195,7 +195,6 @@
       "name": "방임석",
       "job_class": "화백",
       "gender": "남",
-      "is_hidden": true,
       "outfits": {
         "기본": "artist/basic"
       },
