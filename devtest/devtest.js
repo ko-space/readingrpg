@@ -2503,7 +2503,15 @@
                 // 시작하기 직전 토큰이 그대로인지 다시 확인해서, 다르면(그 사이 취소됨) casting 자세를
                 // 아예 시작하지 않는다 - 안 그러면 백엔드가 이미 취소해서 skill_resolve를 절대 안 보낼
                 // 시전인데도 재생을 시작해버려서, 마지막 캐스트 프레임에 영구히 멈추는 버그가 있었다.
-                const castDispatchToken = (attackAnimTokens[actorSlot] = (attackAnimTokens[actorSlot] || 0) + 1);
+                //
+                // 반드시 "읽기"만 한다(직접 증가시키지 않음, arena-battle.js와 동일한 이유) - 이 시점에
+                // 막 끝나가는 3번째 기본공격의 playAttackFrames가 자기 토큰을 쥔 채 프레임 개수 비동기
+                // 조회를 기다리고 있을 수 있는데, 여기서 토큰을 올리면 그 호출이 "다른 곳이 이미 새
+                // 토큰을 발급했다"고 오인해 애니메이션을 재생하지도 못하고 attackAnimActive를 true로
+                // 남긴 채 조용히 중단된다 - 그러면 waitForAnimIdle이 1.5초 워치독에 걸릴 때까지 멈추고,
+                // 워치독 자신의 토큰 증가 때문에 이 castDispatchToken 검사도 실패해 캐스팅 애니메이션까지
+                // 스킵되는 연쇄 버그("2번 공격 후 시전" + "시전 애니메이션 미재생")로 이어졌었다.
+                const castDispatchToken = attackAnimTokens[actorSlot] || 0;
                 // 시전 자세/애니메이션은 이 배우 전용 체인에 매달아둔다(arena-battle.js와 동일) - 다른
                 // 배우의 이벤트 처리는 전혀 막지 않는다.
                 chainActorAnim(actorSlot, async () => {
