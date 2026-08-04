@@ -1884,6 +1884,16 @@
 
         attackAnimActive[key] = true;
 
+        // 프레임 스케줄의 기준 시각은 반드시 "시전이 시작된 지금" 찍어야 한다 - skill_resolve(투사체
+        // 발사 등 실제 스킬 발동)의 타이밍도 이 시전이 시작된 시점 + 시전 시간(durationMs)으로 백엔드
+        // 기준 계산되기 때문이다. 프레임 개수 조회(getSkillFrameCount/getAttackFrameCount) 뒤로 기준
+        // 시각을 늦게 찍으면, 이 캐릭터가 전투에서 "처음" 시전하는 순간처럼 이미지 파일 존재 여부를
+        // 실제로 하나씩 로드해봐야 하는 경우(캐시 미스) 그 조회 시간만큼 스킬 발동(투사체 발사 등)이
+        // 시전 애니메이션의 마지막 프레임보다 먼저 일어나는 것처럼 보이는 어긋남이 생긴다 - 기준을
+        // 조회 "전"에 찍어두면, 조회에 시간이 걸려도 아래 절대 시각 스케줄(remainingMs)이 자연히
+        // 따라잡아서 마지막 프레임은 항상 "시전 시작 + durationMs"에 정확히 표시된다.
+        const castStartMs = performance.now();
+
         const skillFrameCount = await getSkillFrameCount(outfit, variant);
         const usingSkillFrames = skillFrameCount > 0;
         const frameCount = usingSkillFrames ? skillFrameCount : await getAttackFrameCount(outfit, variant);
@@ -1907,8 +1917,6 @@
         // 있다가, 뒤이은 기본공격 시점과 맞물려 복귀(return) 애니메이션이 다 재생되기도 전에
         // 잘리는 문제로 이어졌다. playNext의 절대 시각 스케줄과 같은 방식으로, "시전 시작 시점 +
         // 누적 프레임 시간"이라는 절대 목표 시각까지 남은 시간만 sleep해서 오차가 쌓이지 않게 한다.
-        const castStartMs = performance.now();
-
         for (let i = 1; i <= frameCount; i += 1) {
             if (attackAnimTokens[key] !== myToken) return; // 다른 호출이 이미 새 토큰을 발급함 - 그쪽 상태를 건드리지 않는다
 
@@ -2268,6 +2276,19 @@
         });
     }
 
+    // 투사체/캔버스 연출(운석, 가스 숨결, 땅불, 물감 등)이 실제로 대상에 "도착"하는 순간까지 화면
+    // 반영(렌더/피격 이펙트)을 늦추는 스킬들 전용 - HP 자체는 이 함수로 이벤트 처리 시점에 곧바로
+    // (지연 없이) 반영해서 다른 이벤트와의 순서가 절대 꼬이지 않게 하고, 그 직전에 이미 죽어있었는지도
+    // 함께 캡처해서 반환한다. 도착 콜백은 이 반환값이 true면 렌더/이펙트를 건너뛰어야 한다 - 안 그러면
+    // 그 사이 다른(더 빠른) 이벤트가 같은 대상을 먼저 죽였을 때, 뒤늦게 도착한 이 연출이 죽기 전의
+    // 과거 HP 값으로 덮어써서 이미 쓰러진 캐릭터가 되살아나 보이는 버그가 생긴다.
+    function captureAndApplyHp(targetKey, newHp) {
+        if (!targetKey || !units[targetKey]) return true;
+        const wasAlreadyDead = units[targetKey].hp <= 0;
+        units[targetKey].hp = newHp;
+        return wasAlreadyDead;
+    }
+
     function playNext() {
         if (eventIndex >= data.events.length) {
             // 어느 유닛이든 아직 애니메이션/도착/투사체 처리가 안 끝났으면, 그 연출·피해·사망 로그가
@@ -2345,11 +2366,20 @@
         } else if (eventType === "cast_start") {
             const actorKey = eventActorKey(event);
             if (actorKey) {
+                // 이 시전을 지금(디스패치 시점) 토큰으로 못박아둔다 - interruptCasting은 배우 체인을
+                // 거치지 않고 즉시(동기적으로) 실행되므로, 이 클로저가 체인에서 자기 차례를 기다리는
+                // 동안 다른 배우의 CC가 이 배우를 기절시켜 시전이 취소될 수 있다. 그때 interruptCasting이
+                // attackAnimTokens[actorKey]를 미리 올려두므로, 아래에서 실제로 시작하기 직전 토큰이
+                // 그대로인지 다시 확인해서 다르면(그 사이 취소됨) casting 자세를 아예 시작하지 않는다 -
+                // 안 그러면 백엔드가 이미 취소해서 skill_resolve를 절대 안 보낼 시전인데도 재생을
+                // 시작해버려서, 그 캐릭터가 마지막 캐스트 프레임에 영구히 멈춰버리는 버그가 있었다.
+                const castDispatchToken = (attackAnimTokens[actorKey] = (attackAnimTokens[actorKey] || 0) + 1);
                 // 시전 자세/애니메이션은 이 배우 전용 체인에 매달아둔다 - waitForAnimIdle이 이 배우 자신의
                 // 직전 애니메이션(예: 방금 3번째 기본공격 윈드업)이 끝날 때까지만 기다리고, 다른 배우의
                 // 이벤트 처리는 전혀 막지 않는다(전역 커서는 이 체인을 기다리지 않고 곧바로 다음 이벤트로).
                 chainActorAnim(actorKey, async () => {
                     await waitForAnimIdle(actorKey);
+                    if (attackAnimTokens[actorKey] !== castDispatchToken) return;
                     const castStartImgEl = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);
                     castStartImgEl?.classList.add("casting");
                     // 강승유 전용: 시전 중에는 금빛 펄스 대신 무지개빛으로 물든다.
@@ -2467,7 +2497,16 @@
                             });
                         }
                     }
+                    // 이전 점유자가 이 슬롯에서 애니메이션 도중(시전/공격 등)에 교체됐을 수 있으므로,
+                    // 그 잔여 루프/체인/대기 상태를 전부 정리한다 - 안 그러면 이전 점유자의 진행 중이던
+                    // 애니메이션 클로저가 나중에 실행되며 units[cloneKey](이미 새 복제체로 바뀜)를
+                    // 잘못 건드리거나, 새 복제체가 이전 점유자의 밀려있던 체인 뒤에서 최대 수백ms 동안
+                    // 멈춰 보일 수 있다.
+                    attackAnimTokens[cloneKey] = (attackAnimTokens[cloneKey] || 0) + 1;
                     attackAnimActive[cloneKey] = false;
+                    rangedResolvePending[cloneKey] = false;
+                    delete actorAnimChain[cloneKey];
+                    delete walkerSuspended[cloneKey];
                     getAttackFrameCount(units[cloneKey].outfit);
                     ensureSummonRosterRow(cloneKey, units[cloneKey]);
                     deathHandled[cloneKey] = false;
@@ -2530,8 +2569,9 @@
                 const hit = event.detail.hits[0];
                 const targetKey = findHitKey(hit.target, hit.target_side);
                 if (targetKey) {
+                    const wasAlreadyDead = captureAndApplyHp(targetKey, hit.target_hp_after);
                     spawnMeteorProjectile(actorKey, targetKey, () => {
-                        units[targetKey].hp = hit.target_hp_after;
+                        if (wasAlreadyDead) return;
                         renderUnit(targetKey);
                         flashHit(targetKey, hit.is_crit, hit.type_multiplier);
                         appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail.hits)}`, event.side);
@@ -2582,13 +2622,30 @@
             } else if (dispatchEffectType === "aoe_enemy_damage" && actorKey) {
                 // 가스 숨결이 화면을 가로질러 실제로 닿는 순간(onArrive)에 맞춰 피해/HP/피격 이펙트를 반영한다 -
                 // 예전엔 스킬 발동 즉시 피해가 반영돼서 투사체가 아직 날아가는 중인데 이미 맞은 것처럼 보였다.
-                spawnGasBreathStream(actorKey, () => applySkillHits(event));
+                // HP는 지금(이벤트 처리 시점) 즉시 반영하고(죽음 여부도 함께 캡처), 가스가 도착하는
+                // 시점엔 화면(렌더/이펙트)만 갱신한다 - captureAndApplyHp 참고.
+                const gasHits = event.detail?.hits || [];
+                const gasDeadFlags = gasHits.map((hit) => captureAndApplyHp(findHitKey(hit.target, hit.target_side), hit.target_hp_after));
+                spawnGasBreathStream(actorKey, () => {
+                    gasHits.forEach((hit, i) => {
+                        if (gasDeadFlags[i]) return;
+                        const hitKey = findHitKey(hit.target, hit.target_side);
+                        if (!hitKey) return;
+                        renderUnit(hitKey);
+                        flashHit(hitKey, hit.is_crit, hit.type_multiplier);
+                    });
+                });
                 appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail?.hits)}`, event.side);
             } else if (dispatchEffectType === "heal_ally_percent_max_hp" && event.detail?.healed) {
                 const healTargetKey = findHitKey(event.detail.target, event.detail.target_side);
                 if (healTargetKey) {
+                    // 회복도 같은 이유(captureAndApplyHp 참고)로 HP는 지금 즉시 반영한다 - 안 그러면 그
+                    // 사이 대상이 다른 이벤트로 먼저 죽었을 때, 뒤늦게 도착한 회복 연출이 죽기 전 HP에
+                    // 회복량을 더해 이미 쓰러진 캐릭터를 되살릴 수 있다.
+                    const newHp = Math.min(units[healTargetKey].maxHp, units[healTargetKey].hp + event.detail.amount);
+                    const wasAlreadyDead = captureAndApplyHp(healTargetKey, newHp);
                     spawnHealingHeart(healTargetKey, () => {
-                        units[healTargetKey].hp = Math.min(units[healTargetKey].maxHp, units[healTargetKey].hp + event.detail.amount);
+                        if (wasAlreadyDead) return;
                         renderUnit(healTargetKey);
                         // 회복 = 연두색 오라 + 회복 아이콘(회복되는 순간 생겼다가 사라짐)
                         flashEffectAura(healTargetKey, "heal");
@@ -2614,10 +2671,14 @@
             } else if (dispatchEffectType === "aoe_all_others_damage" && actorKey && event.detail?.hits?.length) {
                 // 불빠따 김어진 "불빠따" - 발밑에서 좌우로 땅불이 번져나가며, 자신을 제외한 아군 1명 +
                 // 적 전체를 때린다. 각 대상은 불이 실제로 그 위치까지 번져야(거리 비례) 피해가 반영된다.
+                // HP는 지금 즉시 반영(죽음 여부도 함께 캡처)하고, 불이 도착하는 시점엔 화면만 갱신한다.
+                event.detail.hits.forEach((hit) => {
+                    hit.__wasAlreadyDead = captureAndApplyHp(findHitKey(hit.target, hit.target_side), hit.target_hp_after);
+                });
                 spawnGroundFireCanvas(actorKey, event.detail.hits, (hit) => {
+                    if (hit.__wasAlreadyDead) return;
                     const hitKey = findHitKey(hit.target, hit.target_side);
                     if (!hitKey) return;
-                    units[hitKey].hp = hit.target_hp_after;
                     renderUnit(hitKey);
                     flashHit(hitKey, hit.is_crit, hit.type_multiplier);
                 });
@@ -2630,12 +2691,15 @@
                 const hasAnyPaint = d.red || d.blue || d.yellow;
                 const logParts = [];
 
+                // 물감 계열도 전부 같은 이유(captureAndApplyHp 참고)로 HP는 지금 즉시 반영하고, 투사체
+                // 도착 콜백은 화면 갱신만 하도록 죽음 여부를 미리 캡처해둔다.
                 if (!hasAnyPaint && d.hits?.length) {
                     const hit = d.hits[0];
                     const targetKey = findHitKey(hit.target, hit.target_side);
                     if (targetKey) {
+                        const wasAlreadyDead = captureAndApplyHp(targetKey, hit.target_hp_after);
                         spawnPaintSkillProjectile(actorKey, targetKey, "paint-white", () => {
-                            units[targetKey].hp = hit.target_hp_after;
+                            if (wasAlreadyDead) return;
                             renderUnit(targetKey);
                             flashHit(targetKey, hit.is_crit, hit.type_multiplier);
                         });
@@ -2646,8 +2710,9 @@
                         const hit = d.hits[0];
                         const targetKey = findHitKey(hit.target, hit.target_side);
                         if (targetKey) {
+                            const wasAlreadyDead = captureAndApplyHp(targetKey, hit.target_hp_after);
                             spawnPaintSkillProjectile(actorKey, targetKey, "paint-red", () => {
-                                units[targetKey].hp = hit.target_hp_after;
+                                if (wasAlreadyDead) return;
                                 renderUnit(targetKey);
                                 flashHit(targetKey, hit.is_crit, hit.type_multiplier);
                             });
@@ -2660,8 +2725,9 @@
                         // 회복은 항상 시전자와 같은 편(아군) 대상이라 event.side로 바로 찾는다(_target_ref 없음).
                         const healTargetKey = findHitKey(heal.target, event.side);
                         if (healTargetKey) {
+                            const wasAlreadyDead = captureAndApplyHp(healTargetKey, heal.target_hp_after);
                             spawnPaintSkillProjectile(actorKey, healTargetKey, "paint-blue", () => {
-                                units[healTargetKey].hp = heal.target_hp_after;
+                                if (wasAlreadyDead) return;
                                 renderUnit(healTargetKey);
                                 flashEffectAura(healTargetKey, "heal");
                                 setStatusIcon(healTargetKey, "heal", { source: `${event.actor}:paint_heal`, durationMs: MOMENT_ICON_MS });
@@ -2676,7 +2742,9 @@
                         const applyAllStuns = () => {
                             d.stunned.forEach((s) => {
                                 const sKey = findHitKey(s.target, s.target_side);
-                                if (!sKey) return;
+                                // 기절은 HP를 쓰지 않아 되살아나는 위험은 없지만, 그 사이 이미 죽은
+                                // 대상에게 기절 아이콘/오라가 뜨는 건 여전히 어색하므로 함께 막는다.
+                                if (!sKey || units[sKey].hp <= 0) return;
                                 flashEffectAura(sKey, "cc");
                                 setStatusIcon(sKey, "stun", {
                                     source: `${event.actor}:stun`,
@@ -2831,6 +2899,10 @@
                 setTimeout(() => {
                     playRangedAttack(actorKey, targetKey, () => {
                         rangedResolvePending[actorKey] = false;
+                        // 근접 분기(waitForMeleeArrival)와 동일한 가드 - 투사체가 날아가는 동안 대상이
+                        // 다른 이벤트로 먼저 죽었다면, 이미 쓰러진 캐릭터에게 피격 이펙트/피해 로그를
+                        // 한 번 더 띄우지 않는다(HP는 이미 위에서 즉시 반영돼 있으므로 안전).
+                        if (targetWasAlreadyDead) return;
                         applyHitVisual();
                     });
                 }, EFFECT_LAUNCH_DELAY_MS);
