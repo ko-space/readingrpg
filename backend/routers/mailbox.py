@@ -43,13 +43,23 @@ def list_mail(db: Session = Depends(get_db), user: User = Depends(get_current_us
     return [_serialize(m) for m in mails]
 
 
-def _claim_one(mail: Mail, user: User) -> None:
-    if mail.claimed_at:
-        raise HTTPException(status_code=400, detail=f"'{mail.title}' 보상은 이미 받았습니다.")
-    mail.claimed_at = datetime.utcnow()
+def _claim_one(db: Session, mail: Mail, user: User) -> bool:
+    """이 우편을 원자적으로 수령 처리한다. claimed_at이 아직 비어있을 때만 실제로 UPDATE가 걸리는
+    조건부 UPDATE라, 같은 우편에 대한 두 요청이 거의 동시에 들어와도(더블클릭, 중복 요청 등)
+    DB 레벨에서 한쪽만 실제로 수령 처리된다 - 먼저 커밋된 쪽이 행을 잠그고, 나중 요청은 그 커밋
+    이후에야 WHERE 조건을 다시 평가해서 0건으로 실패한다(골드 중복 지급 방지). 실제로 수령
+    처리됐는지(= 보상을 지급해야 하는지) 반환한다."""
+    updated = (
+        db.query(Mail)
+        .filter(Mail.id == mail.id, Mail.claimed_at.is_(None))
+        .update({Mail.claimed_at: datetime.utcnow()}, synchronize_session=False)
+    )
+    if not updated:
+        return False
     if mail.gold_amount:
         user.gold += mail.gold_amount
         user.lifetime_gold += mail.gold_amount
+    return True
 
 
 @router.post("/{mail_id}/claim")
@@ -58,7 +68,8 @@ def claim_mail(mail_id: int, db: Session = Depends(get_db), user: User = Depends
     if not mail:
         raise HTTPException(status_code=404, detail="존재하지 않는 우편입니다.")
 
-    _claim_one(mail, user)
+    if not _claim_one(db, mail, user):
+        raise HTTPException(status_code=400, detail=f"'{mail.title}' 보상은 이미 받았습니다.")
     db.commit()
     db.refresh(user)
     new_achievements, new_characters = check_and_grant_achievements(db, user)
@@ -73,14 +84,13 @@ def claim_mail(mail_id: int, db: Session = Depends(get_db), user: User = Depends
 @router.post("/claim-all")
 def claim_all_mail(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     mails = db.query(Mail).filter(Mail.user_id == user.id, Mail.claimed_at.is_(None)).all()
-    for mail in mails:
-        _claim_one(mail, user)
+    claimed_mails = [m for m in mails if _claim_one(db, m, user)]
     db.commit()
     db.refresh(user)
     new_achievements, new_characters = check_and_grant_achievements(db, user)
     return {
-        "message": f"우편 보상 {len(mails)}개를 받았습니다." if mails else "지금 받을 수 있는 보상이 없습니다.",
-        "claimed_count": len(mails),
+        "message": f"우편 보상 {len(claimed_mails)}개를 받았습니다." if claimed_mails else "지금 받을 수 있는 보상이 없습니다.",
+        "claimed_count": len(claimed_mails),
         "gold": user.gold,
         "new_achievements": new_achievements,
         "new_characters": new_characters,

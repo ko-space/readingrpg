@@ -310,6 +310,45 @@ def compute_progress(db: Session, user, ach: Achievement) -> dict:
                 UserItemPurchase.item_id == item_row.id,
             ).first()
             current = record.total_purchased if record else 0
+    elif ctype == "gendered_team_pvp_wins":
+        # combo_pvp_wins와 동일한 스냅샷(attacker_front_name/back_name)을 쓰되, 정확한 조합이 아니라
+        # "편성 전원이 지정 성별"인지를 characters.json 성별로 판정한다.
+        gender = params.get("gender", "여")
+        wins = db.query(PvpBattleLog).filter(
+            PvpBattleLog.attacker_id == user.id,
+            PvpBattleLog.winner_id == user.id,
+        ).all()
+        current = sum(
+            1 for log in wins
+            if all(
+                _CHARACTER_BY_NAME.get(name, {}).get("gender") == gender
+                for name in (log.attacker_front_name, log.attacker_back_name)
+                if name
+            )
+        )
+    elif ctype == "subject_exp":
+        # 특정 과목으로 누적 획득한 EXP(subject_minutes와 동일한 필터, earned_exp를 합산).
+        subjects = tuple(params.get("subjects", []))
+        rows = db.query(ReadingLog).filter(
+            ReadingLog.user_id == user.id,
+            ReadingLog.session_type.in_(["subject", "mock_exam"]),
+        ).all()
+        current = sum(
+            row.earned_exp or 0 for row in rows
+            if row.difficulty and row.difficulty.startswith(subjects)
+        )
+    elif ctype == "item_types_and_gold":
+        # "N종류 아이템 보유 AND M골드 이상 보유"를 진행도 바 하나로 합쳐서 표시한다.
+        # 각 조건의 기여도를 그 조건의 목표치에서 상한(cap)을 둔 채로 더하므로,
+        # current가 정확히 target(=item_types+gold, 예: 7+5000=5007)에 도달하려면 두 조건이 동시에
+        # 전부 만족돼야 한다 - 한쪽만 넘치게 채워도 다른 쪽 상한 때문에 목표를 넘어설 수 없다.
+        item_type_target = params.get("item_types", 7)
+        gold_target = params.get("gold", 5000)
+        target = item_type_target + gold_target
+        owned_item_types = db.query(UserItem).filter(
+            UserItem.user_id == user.id, UserItem.quantity > 0,
+        ).count()
+        current = min(owned_item_types, item_type_target) + min(user.gold, gold_target)
 
     return {"current": max(0, min(current, target)), "target": target}
 

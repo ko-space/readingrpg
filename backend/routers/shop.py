@@ -111,6 +111,12 @@ def purchase_item(
     if req.quantity < 1:
         raise HTTPException(status_code=400, detail="구매 수량은 1개 이상이어야 합니다.")
 
+    # 골드/구매 한도 체크와 차감 사이에 경합이 없도록, 이 요청이 끝날 때까지 이 유저 행을 잠근다 -
+    # 안 그러면(예: 같은 아이템을 두 탭에서 거의 동시에 구매) 두 요청이 서로의 커밋을 못 본 채 각자
+    # "잔액 충분/한도 안 넘음"으로 통과해서, 실제로는 감당 못 할 만큼 이중 차감되거나 구매 한도를
+    # 넘겨서 살 수 있게 된다.
+    user = db.query(User).filter(User.id == user.id).with_for_update().first()
+
     item = db.query(Item).filter(Item.id == req.item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="아이템을 찾을 수 없습니다.")

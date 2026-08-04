@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from database import get_db
-from models import User, Character, GachaBanner, GachaBannerPickup, ActivityLog
+from models import User, Character, GachaBanner, GachaBannerPickup, ActivityLog, Mail
 from schemas import GachaSelectRequest
 from security import get_current_user
 from achievements import check_and_grant_achievements, resolve_character_reveal_info
@@ -100,8 +100,15 @@ def _sync_pickup_banner(db: Session):
             db.add(GachaBannerPickup(**kwargs))
         db.commit()
 
+        # 남은 모집 포인트를 골드로 즉시 지급하는 대신, 우편함으로 보낸다 - 신규 가입 축하금(auth.py)과
+        # 동일한 패턴. 포인트가 0인 유저는 빈 우편이 쌓이지 않도록 건너뛴다.
         for u in db.query(User).all():
-            u.gold += u.gacha_points
+            if u.gacha_points > 0:
+                db.add(Mail(
+                    user_id=u.id,
+                    title="모집 포인트가 골드로 전환되었습니다.",
+                    gold_amount=u.gacha_points,
+                ))
             u.gacha_points = 0
         db.commit()
     else:
@@ -166,6 +173,10 @@ def pull_character(
     user: User = Depends(get_current_user),
 ):
     _sync_pickup_banner(db)
+
+    # 골드 체크와 차감 사이 경합 방지(shop.py의 purchase_item과 동일한 이유) - 연타/다중 탭으로
+    # 거의 동시에 두 번 뽑아도 한쪽만 통과하도록 이 유저 행을 요청이 끝날 때까지 잠근다.
+    user = db.query(User).filter(User.id == user.id).with_for_update().first()
 
     if user.gold < GACHA_COST:
         raise HTTPException(status_code=400, detail="골드가 부족합니다.")
@@ -367,6 +378,9 @@ def select_pickup_character(
     pickup = db.query(GachaBannerPickup).filter(GachaBannerPickup.id == req.pickup_id).first()
     if not pickup:
         raise HTTPException(status_code=404, detail="존재하지 않는 픽업 항목입니다.")
+
+    # pull_character와 동일한 이유로 포인트 체크/차감 사이 경합을 막는다.
+    user = db.query(User).filter(User.id == user.id).with_for_update().first()
 
     if user.gacha_points < pickup.point_cost:
         raise HTTPException(
