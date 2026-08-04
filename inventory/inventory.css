@@ -216,9 +216,30 @@
     overflow: hidden;
     border: 3px solid #6fa3bd;
     border-radius: 8px;
-    background: linear-gradient(145deg, #d7eff8, #95c9df);
     box-shadow: 0 5px 10px rgba(27, 77, 105, .22), 0 0 0 2px rgba(255,255,255,.72) inset;
 }
+
+/* 가챠 등장 연출(gacha-reveal.css)과 동일한 희귀도별 배경 - 이미지가 우선 보이고, 없으면 그라데이션이
+   대신 보인다(레이어링). 인물 스프라이트(실제 img 자식)가 투명 배경 PNG라 이 배경이 그대로 비쳐 보인다.
+   배경만 살짝 블러 처리하기 위해 실제 배경은 img보다 먼저 그려지는 ::before 레이어에 둔다 - 카드에
+   직접 filter:blur를 걸면 그 안의 인물 그림/글자까지 같이 흐려지므로 분리해야 한다. inset을 살짝
+   음수로 넉넉하게 잡아 블러로 생기는 가장자리가 카드 밖으로 밀려나게 하고, overflow:hidden(위)이
+   그 여백을 카드 모양대로 잘라낸다. */
+.inventory-card-portrait::before {
+    content: "";
+    position: absolute;
+    inset: -8%;
+    background: linear-gradient(145deg, #d7eff8, #95c9df); /* rarity-* 클래스가 없을 때의 대체 배경 */
+    background-size: cover;
+    background-position: center;
+    filter: blur(1.5px);
+}
+
+.inventory-card-portrait.rarity-신화::before { background-image: url('../assets/gacha/bg-신화.png'), linear-gradient(160deg, #ff8a4c 0%, #ff3c6a 35%, #7a1fa2 70%, #180530 100%); }
+.inventory-card-portrait.rarity-전설::before { background-image: url('../assets/gacha/bg-전설.png'), linear-gradient(160deg, #fff2c0 0%, #ffcf5c 35%, #ff8f2c 70%, #7a3c00 100%); }
+.inventory-card-portrait.rarity-영웅::before { background-image: url('../assets/gacha/bg-영웅.png'), linear-gradient(160deg, #e2c8ff 0%, #b06af0 35%, #6a2ea8 70%, #1f0f38 100%); }
+.inventory-card-portrait.rarity-희귀::before { background-image: url('../assets/gacha/bg-희귀.png'), linear-gradient(160deg, #cfe8ff 0%, #7ab0f0 35%, #3c6ab8 70%, #0f2748 100%); }
+.inventory-card-portrait.rarity-일반::before { background-image: url('../assets/gacha/bg-일반.png'), linear-gradient(160deg, #e6f0df 0%, #a8c49a 35%, #6a8060 70%, #1f281c 100%); }
 
 .inventory-card-portrait img {
     width: 100%;
@@ -270,6 +291,57 @@
     color: #698294;
     font-size: 12px;
     font-weight: 700;
+}
+
+/* "----- 미보유 -----" 구분선. 순수 HTML/CSS만으로 그린다 - 양옆 선은 ::before/::after의
+   border-top이고, 텍스트는 가운데 그대로 흐른다(별도 이미지/SVG/JS 없음). 그리드 한 줄을 통째로
+   차지하도록 grid-column을 끝까지 늘린다. */
+.inventory-unowned-divider {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 6px 0 2px;
+    color: #7b8f99;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: .04em;
+}
+
+.inventory-unowned-divider::before,
+.inventory-unowned-divider::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid #b9c6cc;
+}
+
+/* 미보유 카드: 전체적으로 어둡고(회색조 배경) 인물 스프라이트는 검은 실루엣(밝기 최저)으로 표시. */
+.inventory-character-card.is-unowned {
+    color: #7c8a92;
+}
+
+.inventory-character-card.is-unowned .inventory-card-portrait {
+    border-color: #5c6870;
+    /* 희귀도 배경은 그대로 두고 밝기만 살짝 낮춘다 - 인물 스프라이트(자식 img)는 이미 brightness(0)로
+       완전히 검은색이라 이 필터가 더해져도(0 * 0.78 = 0) 변화가 없다. */
+    filter: brightness(0.78);
+}
+
+.inventory-character-card.is-unowned .inventory-card-portrait img {
+    filter: brightness(0);
+}
+
+.inventory-character-card.is-unowned .inventory-card-star-overlay {
+    color: #aab4b9;
+    text-shadow: none;
+}
+
+.inventory-character-card.is-unowned .inventory-card-name {
+    color: #8a969d;
+}
+
+.inventory-character-card.is-unowned .inventory-card-meta {
+    color: #6b767c;
 }
 
 .inventory-empty {
@@ -359,10 +431,42 @@
     display: grid;
     grid-template-columns: minmax(360px, 43%) 1fr;
     overflow: hidden;
-    background:
+}
+
+/* 가챠 등장 연출(gacha-reveal.css)/인벤토리 목록 카드와 동일한 희귀도별 배경 - 왼쪽(캐릭터 무대)과
+   오른쪽(정보창)을 나누지 않고 전체 상세창(inventory-detail-view) 하나에 입혀서, 두 구역 사이에
+   배경이 끊기지 않고 그대로 이어지게 한다. 오른쪽 정보창 자체는 반투명 카드(.inventory-detail-right)라
+   이 배경이 은은하게 비쳐 보인다.
+
+   배경만 살짝 블러 처리하기 위해(카드 목록과 동일한 이유 - .inventory-detail-view 자체에 filter를 걸면
+   캐릭터 그림/정보창 글자까지 같이 흐려짐) 실제 배경은 이 앞쪽에 깔리는 ::before 레이어에 둔다.
+   inset을 넉넉히 음수로 잡아 블러 가장자리를 바깥으로 밀어내고, overflow:hidden(위)이 상세창 모양대로
+   잘라낸다. 미보유 인물의 어두운 톤(반투명 검은 막)도 별도 레이어를 추가하는 대신 같은 ::before 안에
+   배경 이미지보다 앞쪽 레이어로 겹쳐 그린다(단색 레이어는 블러를 함께 걸어도 시각적으로 차이가 없다). */
+.inventory-detail-view::before {
+    content: "";
+    position: absolute;
+    inset: -4%;
+    background-size: cover;
+    background-position: center;
+    background-image:
         linear-gradient(90deg, rgba(134,209,234,.30), transparent 45%),
         linear-gradient(145deg, #d8f2fb 0%, #f7fbfc 58%, #d8edf5 100%);
+    filter: blur(3px);
+    pointer-events: none;
 }
+
+.inventory-detail-view.rarity-신화::before { background-image: url('../assets/gacha/bg-신화.png'), linear-gradient(160deg, #ff8a4c 0%, #ff3c6a 35%, #7a1fa2 70%, #180530 100%); }
+.inventory-detail-view.rarity-전설::before { background-image: url('../assets/gacha/bg-전설.png'), linear-gradient(160deg, #fff2c0 0%, #ffcf5c 35%, #ff8f2c 70%, #7a3c00 100%); }
+.inventory-detail-view.rarity-영웅::before { background-image: url('../assets/gacha/bg-영웅.png'), linear-gradient(160deg, #e2c8ff 0%, #b06af0 35%, #6a2ea8 70%, #1f0f38 100%); }
+.inventory-detail-view.rarity-희귀::before { background-image: url('../assets/gacha/bg-희귀.png'), linear-gradient(160deg, #cfe8ff 0%, #7ab0f0 35%, #3c6ab8 70%, #0f2748 100%); }
+.inventory-detail-view.rarity-일반::before { background-image: url('../assets/gacha/bg-일반.png'), linear-gradient(160deg, #e6f0df 0%, #a8c49a 35%, #6a8060 70%, #1f281c 100%); }
+
+.inventory-detail-view.is-unowned.rarity-신화::before { background-image: linear-gradient(rgba(18,24,28,.32), rgba(18,24,28,.32)), url('../assets/gacha/bg-신화.png'), linear-gradient(160deg, #ff8a4c 0%, #ff3c6a 35%, #7a1fa2 70%, #180530 100%); }
+.inventory-detail-view.is-unowned.rarity-전설::before { background-image: linear-gradient(rgba(18,24,28,.32), rgba(18,24,28,.32)), url('../assets/gacha/bg-전설.png'), linear-gradient(160deg, #fff2c0 0%, #ffcf5c 35%, #ff8f2c 70%, #7a3c00 100%); }
+.inventory-detail-view.is-unowned.rarity-영웅::before { background-image: linear-gradient(rgba(18,24,28,.32), rgba(18,24,28,.32)), url('../assets/gacha/bg-영웅.png'), linear-gradient(160deg, #e2c8ff 0%, #b06af0 35%, #6a2ea8 70%, #1f0f38 100%); }
+.inventory-detail-view.is-unowned.rarity-희귀::before { background-image: linear-gradient(rgba(18,24,28,.32), rgba(18,24,28,.32)), url('../assets/gacha/bg-희귀.png'), linear-gradient(160deg, #cfe8ff 0%, #7ab0f0 35%, #3c6ab8 70%, #0f2748 100%); }
+.inventory-detail-view.is-unowned.rarity-일반::before { background-image: linear-gradient(rgba(18,24,28,.32), rgba(18,24,28,.32)), url('../assets/gacha/bg-일반.png'), linear-gradient(160deg, #e6f0df 0%, #a8c49a 35%, #6a8060 70%, #1f281c 100%); }
 
 .inventory-detail-back {
     position: absolute;
@@ -421,6 +525,11 @@
     object-fit: contain;
     object-position: bottom center;
     filter: drop-shadow(0 18px 20px rgba(35, 73, 91, .34));
+}
+
+/* 미보유 인물 상세: 스프라이트를 검은 실루엣(밝기 최저)으로 표시 - 그림자 자체는 그대로 유지. */
+.inventory-standing-image.is-unowned-silhouette {
+    filter: brightness(0) drop-shadow(0 18px 20px rgba(35, 73, 91, .34));
 }
 
 .inventory-nameplate {
