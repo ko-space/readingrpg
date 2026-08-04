@@ -25,8 +25,8 @@
 
 .help-image {
     display: block;
-    max-width: min(80vw, 640px);
-    max-height: 74vh;
+    max-width: min(88vw, 760px);
+    max-height: 82vh;
     width: auto;
     height: auto;
     border-radius: 8px;
@@ -66,7 +66,7 @@
 
 @media (max-width: 650px) {
     .help-image {
-        max-width: 68vw;
+        max-width: 74vw;
     }
     .help-arrow {
         width: 34px;

@@ -42,26 +42,29 @@
     color: #a34a1f;
 }
 
-/* ── 가로 스크롤 영역: 의상 섹션 -> 아이템 섹션 ── */
+/* ── 의상 페이지 -> 아이템/재화 페이지, 옆으로 하나로 이어진 가로 스크롤. 각 섹션은 자기
+   내용(카드를 전부 한 줄로 나열한 너비)만큼만 폭을 차지하고, 스크롤 자체는 이 바깥 컨테이너
+   하나에서만 일어난다(안에 있는 아이템/재화 줄이 따로 스크롤되지 않음). 하단 탭을 누르면
+   scrollToSection()이 해당 섹션의 왼쪽 끝을 이 컨테이너의 왼쪽 끝에 맞춰 스크롤한다. */
 .shop-scroll-outer {
     flex: 1;
     min-height: 0;
     display: flex;
+    align-items: flex-start;
     overflow-x: auto;
     overflow-y: hidden;
-    scroll-snap-type: x proximity;
     scrollbar-width: thin;
 }
 
 .shop-section {
-    flex: 0 0 100%;
-    width: 100%;
-    min-width: 100%;
-    scroll-snap-align: start;
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
     padding: 4px 22px 20px;
-    overflow-y: auto;
+}
+
+.shop-section-item {
+    min-width: 100%; /* 탭으로 이동했을 때 최소한 모달 폭만큼은 채우도록 */
 }
 
 .shop-section-label {
@@ -69,6 +72,10 @@
     font-size: 15px;
     font-weight: 900;
     color: #8a3131;
+}
+
+.shop-section-label-currency {
+    margin-top: 22px;
 }
 
 .shop-empty-inline {
@@ -104,14 +111,11 @@
     background: rgba(196, 110, 110, .12);
 }
 
-/* ── 의상: 세로로 긴 카드(스탠딩 이미지) ──
-   이전엔 3칸 고정 grid(1fr)라서 아이템이 2~3개뿐일 때 카드가 과하게 커져서(카드 높이가 폭에 비례),
-   섹션 세로 공간을 넘쳐 오른쪽에 세로 스크롤바가 뜨는 문제가 있었다. 카드 최대 폭을 캡(150px)해서
-   아이템 개수와 무관하게 카드 크기가 늘 일정 이하로 유지되게 한다 - 아이템이 늘어나면 열이 늘어날 뿐
-   카드 자체는 커지지 않는다. */
+/* ── 의상: 세로로 긴 카드(스탠딩 이미지). 전부 한 줄로 나열하고(줄바꿈 없음), 넘치는 만큼은
+   .shop-scroll-outer의 가로 스크롤로 이어진다. */
 .shop-outfit-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(110px, 150px));
+    display: flex;
+    flex-wrap: nowrap;
     gap: 14px;
 }
 
@@ -121,7 +125,8 @@
 }
 
 .shop-outfit-card {
-    min-width: 0;
+    flex: 0 0 150px;
+    width: 150px;
     border: 0;
     padding: 0;
     background: transparent;
@@ -171,10 +176,13 @@
     font-weight: 800;
 }
 
-/* ── 아이템: 작은 정사각형 카드 ── */
+/* ── 아이템/재화: 작은 정사각형 카드. 한 줄에 최대 8개 정도가 들어가는 너비(84~100px)로 나열하고
+   줄바꿈은 없다 - 8개를 넘으면 이 줄(그리고 이 줄을 담은 섹션 전체)이 그만큼 넓어지고, 그 초과분은
+   따로 스크롤되는 게 아니라 .shop-scroll-outer 하나의 가로 스크롤에 자연스럽게 이어진다. */
 .shop-item-row {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(84px, 100px);
     gap: 12px;
 }
 
@@ -445,8 +453,5 @@ body.shop-modal-open #gold-chip {
     #modal-shop .shop-modal-box {
         width: 96vw;
         height: 88vh;
-    }
-    .shop-item-row {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 }

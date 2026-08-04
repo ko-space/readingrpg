@@ -75,9 +75,12 @@
     // 오른쪽 칭호 칸의 높이를 왼쪽 칸(닉네임/표시설정/로그아웃)의 실제 렌더링 높이에 맞춰서, 칭호가
     // 아무리 많아져도 설정창 전체가 늘어나지 않고 칭호 목록만 그 안에서 스크롤되게 한다.
     // CSS만으로(overflow:hidden + min-height:0으로 auto 높이 flex 줄의 계산에서 빼기) 시도했었는데
-    // 실제로는 오른쪽 칸의 내용(칭호 개수)이 여전히 줄 높이 자체를 밀어 올려서 안 먹혔다 - flex 줄이
-    // auto 높이일 때는 두 칸 중 더 큰 쪽에 맞춰지는 게 기본 동작이라, 결국 자바스크립트로 직접
-    // 왼쪽 칸 높이를 측정해서 오른쪽 칸에 강제로 지정하는 방식으로 바꿨다.
+    // 실제로는 오른쪽 칸의 내용(칭호 개수)이 여전히 줄 높이 자체를 밀어 올려서 안 먹혔다.
+    // 처음엔 "닉네임/칭호/표시설정을 다 불러온 딱 그 시점"에 한 번만 측정해서 지정했는데, 그 이후에
+    // 왼쪽 칸 높이가 바뀌는 경우(예: 닉네임 저장 성공/실패 메시지가 나타나면서 왼쪽 칸이 한 줄
+    // 늘어나는 경우)엔 오른쪽 칸이 그 변화를 놓쳐서 다시 안 맞는 것처럼 보일 수 있었다("가끔 길어짐").
+    // 그래서 왼쪽 칸을 ResizeObserver로 계속 지켜보다가, 실제로 크기가 바뀔 때마다 매번 다시
+    // 맞추는 방식으로 바꿨다 - 특정 시점에 한 번 재는 게 아니라 항상 최신 상태를 따라간다.
     function syncTitleColumnHeight() {
         const left = document.querySelector(".settings-col-left");
         const right = document.querySelector(".settings-col-right");
@@ -93,9 +96,16 @@
         right.style.height = `${left.offsetHeight}px`;
     }
 
-    window.addEventListener("resize", () => {
-        if (loaded) syncTitleColumnHeight();
-    });
+    let titleColumnResizeObserver = null;
+
+    function watchTitleColumnHeight() {
+        const left = document.querySelector(".settings-col-left");
+        if (!left) return;
+        if (titleColumnResizeObserver) titleColumnResizeObserver.disconnect();
+        titleColumnResizeObserver = new ResizeObserver(() => syncTitleColumnHeight());
+        titleColumnResizeObserver.observe(left);
+        syncTitleColumnHeight();
+    }
 
     function escapeHtml(value) {
         return String(value ?? "")
@@ -122,8 +132,8 @@
             loaded = true;
             await loadCurrentNickname();
             await loadTitleList();
+            watchTitleColumnHeight();
             await loadDisplaySettingsToggles();
-            syncTitleColumnHeight();
         } catch (error) {
             content.innerHTML =
                 `<p class="screen-placeholder">설정을 불러오지 못했습니다. (${escapeHtml(error.message)})</p>`;
@@ -283,8 +293,8 @@
             if (wasAlreadyLoaded) {
                 await loadCurrentNickname();
                 await loadTitleList();
-                await loadDisplaySettingsToggles();
                 syncTitleColumnHeight();
+                await loadDisplaySettingsToggles();
             }
         });
     });
