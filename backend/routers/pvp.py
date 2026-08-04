@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from database import get_db
-from models import User, Character, PvpBattleLog, Item, UserItem, Mail
+from models import User, Character, PvpBattleLog, Item, UserItem, Mail, ActivityLog
 from schemas import PvpDefenseRequest, PvpBattleRequest
 from security import get_current_user
 from battle_engine import compute_unit_stats, build_team, simulate_battle
@@ -21,8 +21,115 @@ ATTACK_WIN_GOLD = 5
 DEFENSE_WIN_GOLD = 5
 
 
+def _count_batter_ally_kills(events: list, side: str) -> int:
+    """불빠따 김어진(정확히 이 이름의 실제 시전자, 강승유가
+    복제한 경우는 제외 - event["actor"]는 항상 진짜 시전자)의 aoe_all_others_damage가 자기 편(side)
+    아군을 그 즉시 죽인(target_hp_after == 0) 횟수를 센다. _skill_aoe_all_others_damage는 매 시전마다
+    _alive_units(own_team)에서 그 순간 살아있던 아군만 골라 정확히 한 번씩만 때리므로, 이 값이 0이 된
+    히트는 반드시 "이 히트가 죽였다"는 뜻이다(이미 죽어있던 대상을 또 때릴 수 없는 구조)."""
+    count = 0
+    for event in events:
+        if event.get("event_type") != "skill_resolve" or event.get("side") != side:
+            continue
+        if event.get("actor") != "불빠따 김어진":
+            continue
+        detail = event.get("detail") or {}
+        effect = detail.get("copied_effect_type") or event.get("effect_type")
+        if effect != "aoe_all_others_damage":
+            continue
+        for hit in detail.get("hits", []) or []:
+            if hit.get("target_side") == side and hit.get("target_hp_after") == 0:
+                count += 1
+    return count
+
+
+# 방임석의 물감(paint)은 소모 자원이지 "상태"가 아니므로 집계하지 않는다.
+def _collect_ally_status_categories(events: list, side: str) -> dict:
+    """이 편(side)의 아군 유닛 이름별로, 이번 전투에서 발현된 서로 다른 "상태 종류" 집합을 모아
+    돌려준다({유닛명: {"stun", "atk_up", ...}}). 실제로 몇 종류나 겹쳤는지는 호출부가 len()으로 판정."""
+    categories: dict[str, set] = {}
+
+    def add(name, category):
+        if name:
+            categories.setdefault(name, set()).add(category)
+
+    for event in events:
+        etype = event.get("event_type")
+        detail = event.get("detail") or {}
+        actor = event.get("actor")
+        actor_side = event.get("side")
+
+        if etype == "skill_resolve":
+            effect = detail.get("copied_effect_type") or event.get("effect_type")
+
+            if effect == "stun_target" and detail.get("hit") and detail.get("target_side") == side:
+                add(detail.get("target"), "stun")
+            elif effect == "conditional_target_debuff":
+                if detail.get("stunned") and detail.get("target_side") == side:
+                    add(detail.get("target"), "stun")
+                if actor_side == side:
+                    add(actor, "atk_speed_up")
+            elif effect == "consume_paint_multi_effect":
+                for s in detail.get("stunned", []) or []:
+                    if s.get("target_side") == side:
+                        add(s.get("target"), "stun")
+                if actor_side == side:
+                    for h in detail.get("heals", []) or []:
+                        add(h.get("target"), "heal")
+            elif effect == "debuff_atk_and_damage":
+                for hit in detail.get("hits", []) or []:
+                    if hit.get("target_side") == side:
+                        add(hit.get("target"), "atk_down")
+            elif effect == "self_stack_buff" and actor_side == side:
+                add(actor, "atk_up")
+            elif effect == "self_shield_duration" and actor_side == side:
+                add(actor, "immune")
+            elif effect == "bonus_damage_knockback":
+                for hit in detail.get("hits", []) or []:
+                    if hit.get("target_side") == side:
+                        add(hit.get("target"), "knockback")
+            elif effect == "heal_ally_percent_max_hp" and detail.get("healed") and detail.get("target_side") == side:
+                add(detail.get("target"), "heal")
+            elif effect == "self_type_swap_heal" and actor_side == side and detail.get("healed_amount"):
+                add(actor, "heal")
+
+        elif etype == "basic_attack" and event.get("target_stunned"):
+            target_side = "defender" if actor_side == "attacker" else "attacker"
+            if target_side == side:
+                add(event.get("target"), "stun")
+
+        elif etype == "star_effect_resolve":
+            for change in detail.get("changes", []) or []:
+                if change.get("target_side") != side:
+                    continue
+                name = change.get("target")
+                if change.get("atk", 0) > 0: add(name, "atk_up")
+                if change.get("atk", 0) < 0: add(name, "atk_down")
+                if change.get("hp", 0) > 0: add(name, "maxhp_up")
+                if change.get("hp", 0) < 0: add(name, "maxhp_down")
+                if change.get("crit", 0) > 0: add(name, "crit_up")
+                if change.get("crit_chance", 0) > 0: add(name, "crit_chance_up")
+                if change.get("rear_priority", 0) > 0: add(name, "rear_priority")
+
+        elif etype == "neglect_status_resolve" and actor_side == side and detail.get("active"):
+            add(actor, "damage_reduction")
+
+        elif etype == "death_trigger_resolve" and actor_side == side:
+            for h in detail.get("heals", []) or []:
+                add(h.get("target"), "heal")
+
+    return categories
+
+
+def _max_ally_status_category_count(events: list, side: str) -> int:
+    categories = _collect_ally_status_categories(events, side)
+    return max((len(v) for v in categories.values()), default=0)
+
+
 def _consume_arena_ticket(user: User, db: Session) -> None:
-    """전투 시도 1회당 투기장모드 티켓 1장을 소모한다. 부족하면 400."""
+    """전투 시도 1회당 투기장모드 티켓 1장을 소모한다. 부족하면 400. 조건부 UPDATE(quantity >= 1일
+    때만 실제로 깎임)로 처리해서, 같은 유저가 거의 동시에 여러 전투를 시작해도 보유 수량 이상으로
+    소모되지 않는다(shop.py/gacha.py의 골드 차감 경합과 같은 이유)."""
     ticket_item = db.query(Item).filter(Item.name == ARENA_TICKET_ITEM_NAME).first()
     user_item = (
         db.query(UserItem)
@@ -30,9 +137,16 @@ def _consume_arena_ticket(user: User, db: Session) -> None:
         .first()
         if ticket_item else None
     )
-    if not user_item or user_item.quantity <= 0:
+    if not user_item:
         raise HTTPException(status_code=400, detail="투기장모드 티켓이 부족합니다.")
-    user_item.quantity -= 1
+    updated = (
+        db.query(UserItem)
+        .filter(UserItem.id == user_item.id, UserItem.quantity >= 1)
+        .update({UserItem.quantity: UserItem.quantity - 1}, synchronize_session=False)
+    )
+    if not updated:
+        raise HTTPException(status_code=400, detail="투기장모드 티켓이 부족합니다.")
+    db.refresh(user_item)
     if user_item.quantity <= 0:
         db.delete(user_item)
 
@@ -316,6 +430,13 @@ def run_battle(
         battle_log=json.dumps(result["events"], ensure_ascii=False),
     )
     db.add(log)
+
+    for _ in range(_count_batter_ally_kills(result["events"], "attacker")):
+        db.add(ActivityLog(user_id=user.id, activity_type="pvp_evt_01"))
+
+    if _max_ally_status_category_count(result["events"], "attacker") >= 6:
+        db.add(ActivityLog(user_id=user.id, activity_type="ally_status_diversity_6plus"))
+
     db.commit()
     db.refresh(log)
 

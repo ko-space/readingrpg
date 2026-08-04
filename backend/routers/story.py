@@ -123,10 +123,19 @@ def consume_ticket(
         ).first()
         if ticket_item else None
     )
-    if not owned or owned.quantity <= 0:
+    if not owned:
         raise HTTPException(status_code=400, detail="티켓이 부족합니다")
 
-    owned.quantity -= 1
+    # 조건부 UPDATE로 원자적으로 소모한다(pvp.py의 투기장 티켓과 동일한 이유) - 동시에 여러 요청이
+    # 소모해도 보유 수량 이상으로 깎이지 않는다.
+    updated = (
+        db.query(UserItem)
+        .filter(UserItem.id == owned.id, UserItem.quantity >= 1)
+        .update({UserItem.quantity: UserItem.quantity - 1}, synchronize_session=False)
+    )
+    if not updated:
+        raise HTTPException(status_code=400, detail="티켓이 부족합니다")
+    db.refresh(owned)
     if owned.quantity <= 0:
         db.delete(owned)
 

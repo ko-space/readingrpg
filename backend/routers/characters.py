@@ -151,13 +151,36 @@ def get_character_inventory(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """인벤토리용 그룹 데이터."""
+    """인벤토리용 그룹 데이터. 보유 인물(characters)과 별개로, 도감에는 있지만 아직 한 장도 없는
+    인물 목록(unowned_characters)도 함께 내려준다 - 인벤토리 화면 하단 "미보유" 구역에서 실루엣으로
+    보여주는 용도. 이름/인물 수/스킬 설명(잠금 해제 여부와 무관하게 항상 잠김)은 화면에서 가리지만,
+    성별/사거리/공수 타입/스킬 이름은 그대로 보여줄 수 있게 필요한 필드를 전부 함께 내려준다
+    (star_effects/skill_effects/trait_effects는 findCanonicalAbilityName이 "정식 이름"만 뽑아 쓰고,
+    설명 본문은 화면이 항상 잠금 처리해서 노출하지 않는다)."""
+    rows = _build_inventory_rows(user)
+    owned_names = {row["name"] for row in rows}
+    unowned = [
+        {
+            "name": entry["name"],
+            "rarity": entry["rarity"],
+            "star": entry["start_star"],  # 미보유 상태에선 성급이 아니라 모집 시 기본 별의 개수로 표시
+            "job_class": entry.get("job_class"),
+            "gender": entry.get("gender"),
+            "range": entry.get("range"),
+            "attack_type": entry.get("attack_type"),
+            "defense_type": entry.get("defense_type"),
+            "outfit": (entry.get("outfits") or {}).get("기본"),
+            "star_effects": entry.get("star_effects", {}),
+            "skill_effects": entry.get("skill_effects", {}),
+            "trait_effects": entry.get("trait_effects", {}),
+        }
+        for entry in CATALOG
+        if entry["name"] not in owned_names and not is_hidden_override(entry["name"], entry.get("is_hidden", False))
+    ]
+    unowned.sort(key=lambda row: (-RARITY_RANK.get(row["rarity"], 0), row["name"]))
     return {
-        "characters": _build_inventory_rows(user),
-        "catalog_order": [
-            entry["name"] for entry in CATALOG
-            if not is_hidden_override(entry["name"], entry.get("is_hidden", False))
-        ],
+        "characters": rows,
+        "unowned_characters": unowned,
     }
 
 
@@ -673,6 +696,11 @@ def enhance_character(
     # 마법 영약의 dust_success/dust_fail은 기존 성공/파괴와 성격이 달라 이 집계에는 포함하지 않는다.
     if outcome in ("success", "super_success"):
         db.add(ActivityLog(user_id=locked_user.id, activity_type="character_enhance_success"))
+        # 확률표(아이템 효과 반영 후) 기준 "성공" 계열(일반+슈퍼) 확률 합이 90% 이상이었던 성공 1회를
+        # 기록한다. dust_convert(마법 영약)는 확률표 자체가 다른 성격이라 여기(else 분기 안)에서는
+        # 애초에 해당 안 됨.
+        if (rule.get("success", 0) + rule.get("super_success", 0)) >= 90:
+            db.add(ActivityLog(user_id=locked_user.id, activity_type="enh_evt_03"))
     elif outcome == "destroy":
         db.add(ActivityLog(user_id=locked_user.id, activity_type="character_enhance_destroy"))
     if selected_user_items:

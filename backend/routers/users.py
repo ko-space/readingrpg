@@ -89,11 +89,6 @@ def _build_profile(user: User, db: Session):
     }
 
 
-@router.get("/")
-def get_users(db: Session = Depends(get_db)):
-    return db.query(User).all()
-
-
 @router.get("/me")
 def get_my_profile(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """토큰으로 인증된 '나'의 정보. 예전의 login_user 역할을 대체한다."""

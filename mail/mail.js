@@ -97,7 +97,11 @@
         }
     }
 
-    async function claimMail(mailId) {
+    async function claimMail(mailId, btn) {
+        // 요청이 끝나기 전까지 버튼을 바로 비활성화한다 - 서버도 원자적으로 중복 수령을 막지만
+        // (mailbox.py의 조건부 UPDATE), 연타 시 두 번째 요청이 굳이 나갔다가 에러로 튕기는 것보다
+        // 애초에 버튼 단계에서 막는 게 자연스럽다.
+        if (btn) btn.disabled = true;
         try {
             const res = await fetch(`${API_BASE_URL}/mail/${mailId}/claim`, {
                 method: "POST",
@@ -112,10 +116,15 @@
             }
         } catch (error) {
             alert(error.message);
+            if (btn) btn.disabled = false;
         }
     }
 
     async function claimAll() {
+        const claimAllBtn = document.getElementById("mail-claim-all-btn");
+        const claimBtns = Array.from(document.querySelectorAll(".mail-claim-btn:not(.is-claimed)"));
+        if (claimAllBtn) claimAllBtn.disabled = true;
+        claimBtns.forEach((b) => { b.disabled = true; });
         try {
             const res = await fetch(`${API_BASE_URL}/mail/claim-all`, {
                 method: "POST",
@@ -130,6 +139,8 @@
             }
         } catch (error) {
             alert(error.message);
+            if (claimAllBtn) claimAllBtn.disabled = false;
+            claimBtns.forEach((b) => { b.disabled = false; });
         }
     }
 
@@ -157,7 +168,7 @@
         document.getElementById("mail-list")?.addEventListener("click", (event) => {
             const btn = event.target.closest(".mail-claim-btn");
             if (!btn || btn.disabled) return;
-            claimMail(btn.dataset.mailId);
+            claimMail(btn.dataset.mailId, btn);
         });
 
         document.getElementById("mail-claim-all-btn")?.addEventListener("click", claimAll);
