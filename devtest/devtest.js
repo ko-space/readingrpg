@@ -873,7 +873,7 @@
         // 캐릭터가 전투에서 처음 시전해서 getSkillFrameCount/getAttackFrameCount가 캐시 없이 이미지를
         // 실제로 로드해봐야 하는 경우 그 조회 시간만큼 기준이 늦게 찍히면, 스킬 발동이 마지막 시전
         // 프레임보다 먼저 일어나는 것처럼 보이는 어긋남이 생긴다.
-        const castStartMs = performance.now();
+        let castStartMs = performance.now();
 
         const skillFrameCount = await getSkillFrameCount(unit.outfit, variant);
         const usingSkillFrames = skillFrameCount > 0;
@@ -881,6 +881,13 @@
         const framePrefix = usingSkillFrames ? "skill" : "attack";
 
         if (attackAnimTokens[slot] !== myToken) return; // 다른 호출이 이미 새 토큰을 발급함 - 그쪽 상태를 건드리지 않는다
+
+        // 조회가 시전 시간을 전부 잡아먹었으면(캐시 미스) 아래 루프의 모든 sleep이 건너뛰어져 프레임이
+        // 렌더링될 틈도 없이 마지막 프레임으로 순간이동해버린다(=애니메이션이 재생 안 된 것처럼 보임) -
+        // arena-battle.js와 동일하게, 이 드문 경우엔 지금부터 다시 durationMs를 온전히 확보한다.
+        if (performance.now() - castStartMs >= durationMs) {
+            castStartMs = performance.now();
+        }
 
         if (frameCount === 0) {
             // 스킬/공격 프레임 이미지가 아예 없는 캐릭터는 기존처럼 펄스 글로우만으로 시전 표시.

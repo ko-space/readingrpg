@@ -1892,7 +1892,7 @@
         // 시전 애니메이션의 마지막 프레임보다 먼저 일어나는 것처럼 보이는 어긋남이 생긴다 - 기준을
         // 조회 "전"에 찍어두면, 조회에 시간이 걸려도 아래 절대 시각 스케줄(remainingMs)이 자연히
         // 따라잡아서 마지막 프레임은 항상 "시전 시작 + durationMs"에 정확히 표시된다.
-        const castStartMs = performance.now();
+        let castStartMs = performance.now();
 
         const skillFrameCount = await getSkillFrameCount(outfit, variant);
         const usingSkillFrames = skillFrameCount > 0;
@@ -1900,6 +1900,17 @@
         const framePrefix = usingSkillFrames ? "skill" : "attack";
 
         if (attackAnimTokens[key] !== myToken) return; // 다른 호출이 이미 새 토큰을 발급함 - 그쪽 상태를 건드리지 않는다
+
+        // 프레임 개수 조회(캐시 미스 시 이미지를 실제로 하나씩 로드해봐야 해서 느릴 수 있음)가 시전
+        // 시간 전체를 이미 다 잡아먹었으면, 아래 루프의 매 프레임 remainingMs가 전부 0 이하로 계산돼
+        // sleep이 전부 건너뛰어진다 - 그러면 프레임들이 렌더링될 틈도 없이(브라우저에 한 번도 양보하지
+        // 않고) 연속으로 src만 바뀌어, 화면엔 마지막 프레임으로 순간이동한 것처럼(=시전 애니메이션이
+        // 아예 재생 안 된 것처럼) 보인다. 이 드문 경우(주로 그 캐릭터의 첫 시전)엔 skill_resolve와의
+        // 정밀 동기화를 포기하고, 지금 이 순간부터 다시 durationMs를 온전히 확보해 최소한 애니메이션
+        // 자체는 눈에 보이게 한다.
+        if (performance.now() - castStartMs >= durationMs) {
+            castStartMs = performance.now();
+        }
 
         if (frameCount === 0) {
             // 스킬/공격 프레임 이미지가 아예 없는 캐릭터는 기존처럼 펄스 글로우만으로 시전 표시.
