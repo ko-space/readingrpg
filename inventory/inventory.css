@@ -773,6 +773,7 @@
     color: #314f60;
     line-height: 1.6;
     font-weight: 700;
+    white-space: pre-line; /* characters.json 설명 텍스트에 든 \n을 실제 줄바꿈으로 표시 */
 }
 
 .subinfo-number {
