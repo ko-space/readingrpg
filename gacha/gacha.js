@@ -14,6 +14,11 @@
     let banners = [];
     let currentBannerId = null;
     let pickupButtons = []; // { btn, pickupId, cost, purchased }
+    // 모집 포인트를 화면(DOM) 텍스트에서 다시 읽지 않고 별도 변수로 들고 있는다 - loadBanners()와
+    // loadPoints()가 병렬로 진행되는 동안 배너가 먼저 응답해서 renderPickupList가 아직 포인트를 모르는
+    // 채로(placeholder "-") 버튼 활성화 여부를 판정해버리는 경합을 막기 위해서다. null이면 "아직 모름" -
+    // 이 상태에선 버튼을 비활성 상태로 두고, loadPoints가 끝나 실제 값을 알게 되면 그때 다시 판정한다.
+    let currentPoints = null;
 
     function authHeaders() {
         const token = localStorage.getItem("access_token");
@@ -42,6 +47,11 @@
         setupPullButton();
         setupCharacterSelectNav();
         setupRateInfoModal();
+    }
+
+    // 배너/포인트는 파셜 HTML과 달리 매번 최신 상태여야 한다(모집 후 포인트 변화, 배너 교체 등) -
+    // 모달을 열 때마다(최초 1회에 그치지 않고) 항상 새로 불러온다.
+    async function refreshGachaData() {
         await Promise.all([loadBanners(), loadPoints()]);
     }
 
@@ -127,7 +137,7 @@
             const res = await fetch(`${API_BASE_URL}/users/me`, { headers: authHeaders() });
             if (!res.ok) throw new Error(`${res.status}`);
             const data = await res.json();
-            pointValueEl.textContent = data.user_info.gacha_points;
+            setPoints(data.user_info.gacha_points);
         } catch (err) {
             pointValueEl.textContent = "?";
         }
@@ -135,6 +145,7 @@
 
     function setPoints(value) {
         const pointValueEl = contentEl.querySelector("#gacha-point-value");
+        currentPoints = value;
         pointValueEl.textContent = value;
         refreshPickupButtons(value);
     }
@@ -324,8 +335,9 @@
             listEl.appendChild(card);
         });
 
-        const currentPoints = Number(contentEl.querySelector("#gacha-point-value").textContent) || 0;
-        refreshPickupButtons(currentPoints);
+        // 포인트를 아직 모르는 상태(loadBanners가 loadPoints보다 먼저 끝난 경우)라면 일단 비활성으로
+        // 두고, loadPoints가 끝나 setPoints가 호출될 때 refreshPickupButtons가 다시 정확히 판정한다.
+        refreshPickupButtons(currentPoints ?? 0);
     }
 
     async function selectPickupCharacter(entry, characterName) {
@@ -381,8 +393,14 @@
         });
     }
 
-    // 가챠 모달을 여는 모든 버튼에, 처음 눌렸을 때만 파셜을 불러오는 리스너를 건다.
+    // 가챠 모달을 여는 모든 버튼: 파셜 HTML은 최초 1회만 불러오지만(loadGachaPartial 내부 가드),
+    // 배너/포인트 데이터는 다른 모달들(상점/퀘스트/우편함)과 동일하게 열 때마다 항상 새로 불러온다 -
+    // 안 그러면 가챠 모달을 한 번 연 뒤로는 다른 화면에서 포인트가 바뀌어도(퀘스트 보상 등) 페이지를
+    // 새로고침하기 전까지 계속 예전 값으로 남아있는다.
     document.querySelectorAll('[data-modal-target="modal-gacha"]').forEach((btn) => {
-        btn.addEventListener("click", loadGachaPartial);
+        btn.addEventListener("click", async () => {
+            await loadGachaPartial();
+            if (loaded) await refreshGachaData();
+        });
     });
 })();
