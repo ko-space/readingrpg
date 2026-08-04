@@ -187,8 +187,17 @@
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || "보상을 받지 못했습니다.");
             if (typeof loadProfile === "function") await loadProfile();
-            if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
-                showAchievementToast(data.new_achievements);
+            // gacha.js와 동일한 패턴 - 캐릭터 보상이 있으면(퀘스트 자체 보상 또는 이 수령으로 새로 달성한
+            // 업적의 보상) 가챠 등장 연출부터 재생하고, 업적 알림은 그 연출이 닫힌 뒤에 뜨도록 넘긴다.
+            const notifyAchievements = () => {
+                if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
+                    showAchievementToast(data.new_achievements);
+                }
+            };
+            if (typeof showCharacterReveal === "function" && data.new_characters?.length) {
+                showCharacterReveal(data.new_characters, notifyAchievements);
+            } else {
+                notifyAchievements();
             }
         } catch (error) {
             quest.claimed = false;
@@ -217,6 +226,11 @@
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || "보상을 받지 못했습니다.");
             if (typeof loadProfile === "function") await loadProfile();
+            // 도전과제 보상은 업적 알림을 유발하지 않지만(백엔드가 new_achievements를 안 줌), 보상
+            // 캐릭터는 줄 수 있으므로 gacha.js와 동일하게 등장 연출을 재생한다.
+            if (typeof showCharacterReveal === "function" && data.new_characters?.length) {
+                showCharacterReveal(data.new_characters);
+            }
         } catch (error) {
             challenge.claimed = false;
             challenge.claimable = true;
@@ -248,8 +262,17 @@
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || "보상을 받지 못했습니다.");
             if (typeof loadProfile === "function") await loadProfile();
-            if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
-                showAchievementToast(data.new_achievements);
+            // 퀘스트/도전과제 일괄 수령도 캐릭터 보상이 있으면 등장 연출부터 재생한다(gacha.js와 동일한
+            // 패턴). 도전과제 탭은 new_achievements가 아예 안 오므로 optional chaining으로 자연스럽게 스킵.
+            const notifyAchievements = () => {
+                if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
+                    showAchievementToast(data.new_achievements);
+                }
+            };
+            if (typeof showCharacterReveal === "function" && data.new_characters?.length) {
+                showCharacterReveal(data.new_characters, notifyAchievements);
+            } else {
+                notifyAchievements();
             }
         } catch (error) {
             claimableIds.forEach((id) => {

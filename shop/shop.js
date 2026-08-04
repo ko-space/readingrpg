@@ -163,6 +163,9 @@
         });
     }
 
+    // 탭을 누르면 해당 섹션의 왼쪽 끝이 가로 스크롤 컨테이너의 왼쪽 끝(=상점 모달의 왼쪽 끝)에
+    // 오도록 스크롤한다. 의상/아이템·재화가 옆으로 나란히 이어진 하나의 가로 스크롤 영역이라,
+    // "아이템/재화" 탭을 누르면 의상 부분이 왼쪽으로 스크롤되어 화면 밖으로 밀려난다.
     function scrollToSection(btn) {
         const targetEl = document.getElementById(btn.dataset.section);
         const scrollOuter = document.getElementById("shop-scroll-outer");

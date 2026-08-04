@@ -28,6 +28,12 @@
 .settings-col-left {
     flex: 1;
     min-width: 0;
+    /* align-items:stretch(기본값)를 끄는 게 핵심 - 안 끄면 오른쪽 칸(칭호)의 내용이 많아서 줄 자체가
+       커질 때 이 왼쪽 칸도 같이 늘어나 버리고, 그러면 자바스크립트가 "왼쪽 칸 높이"를 잴 때 이미
+       늘어난(원래 필요한 높이가 아닌) 값을 재게 된다 - 그 잘못된 값을 오른쪽 칸에 다시 강제로
+       지정하니 결국 계속 길어진 채로 고정되는 문제였다. flex-start로 고정해서 왼쪽 칸은 언제나
+       자기 콘텐츠만큼의 "진짜" 높이를 유지하게 한다. */
+    align-self: flex-start;
     display: flex;
     flex-direction: column;
 }

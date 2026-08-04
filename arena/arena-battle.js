@@ -29,7 +29,9 @@
     const MAX_ATTACK_FRAMES = 6;
     const MAX_SKILL_FRAMES = 9; // 스킬 시전 전용 사진은 캐릭터당 총 9장까지 넣기로 확정됨
     const MAX_RETURN_FRAMES = 9; // 시전 종료 후 원래 모습으로 복귀하는 전용 사진(return_N.png), 최대 9장
+    const MAX_WALK_FRAMES = 6; // 걷기 전용 사진(walk_N.png), attack_N.png와 같은 최대 장수
     const ATTACK_FRAME_DURATION_MS = 60;
+    const WALK_FRAME_DURATION_MS = 220;
     const RETURN_FRAME_DURATION_MS = 60; // 복귀 프레임은 서버가 시간을 안 주므로(시전 시간과 무관) 공격 프레임과 같은 고정 속도로 재생
     const EFFECT_LAUNCH_DELAY_MS = ATTACK_FRAME_DURATION_MS * 3; // 원거리 공격: 애니메이션 3프레임쯤 재생된 뒤 이펙트 발사
 
@@ -79,20 +81,35 @@
     const frameCountCache = {};
     const skillFrameCountCache = {};
     const returnFrameCountCache = {};
+    const walkFrameCountCache = {};
     const attackAnimActive = {};
     const attackAnimTokens = {};
+    // key -> 그 배우의 애니메이션 단계(윈드업 -> 시전 -> 복귀)가 순서대로만 실행되도록 이어붙인
+    // Promise 체인(chainActorAnim/waitForAnimIdle 참고). 전역 이벤트 커서(eventIndex)는 이 체인을
+    // 절대 기다리지 않는다 - 체인은 오직 "같은 배우 자신의 이전 단계가 끝난 뒤 다음 단계가 시작"만
+    // 그 배우 자신에게 보장하고, 다른 배우의 이벤트 처리는 전혀 막지 않는다.
+    const actorAnimChain = {};
+    // key -> 그 유닛이 쏜 원거리 공격의 투사체/이펙트가 아직 목표에 도달하지 않았는지(playRangedAttack의
+    // onArrive 콜백이 아직 안 불렸는지). attackAnimActive는 윈드업 프레임이 끝나면 곧바로 꺼지는데,
+    // 실제 피해 반영(HP바 갱신 + 사망 로그)은 투사체가 도착해야 일어나므로 별도로 추적한다 - 마지막
+    // 이벤트가 원거리 공격일 때, 투사체가 아직 날아가는 중인데 "전투 종료!"가 먼저 떠버리는 걸 막는다.
+    const rangedResolvePending = {};
+    const walkAnimTokens = {};
+    const walkAnimActive = {}; // key -> 지금 playWalkFrames 루프가 이미 돌고 있는지(매 tick마다 중복으로 새로 시작하지 않기 위함)
 
     // 좌측(나) 패널 안의 스크롤 로그 패널. 박스/테두리 없이 배경 위에 색 텍스트만 쌓인다.
     const logPanelEl = document.getElementById("battle-log-panel");
 
-    // 화면 맨 위의 전투 경과 시간 표시. 백엔드의 게임 내 시간(event.time, 초 단위)을 그대로 mm:ss로
-    // 보여준다 - 실제 기기 시계가 아니라 이벤트가 재생되는 시점의 전투 자체 시간이라, battle_engine.py의
-    // MAX_BATTLE_DURATION(회복형 조합 등으로 전투가 안 끝날 때의 강제 종료 상한)과 그대로 대응된다.
+    // 화면 맨 위의 전투 제한시간 카운트다운. battle_engine.py의 MAX_BATTLE_DURATION(회복형 조합 등으로
+    // 전투가 안 끝날 때의 강제 종료 상한)과 그대로 대응된다 - 경과 시간이 아니라 "이 시간이 다 되면
+    // 강제로 끝난다"는 남은 시간을 mm:ss로 보여준다. 값 자체는 여전히 백엔드의 게임 내 시간(event.time,
+    // 초 단위)을 그대로 쓴다 - 실제 기기 시계가 아니라 이벤트가 재생되는 시점의 전투 자체 시간 기준.
     const battleTimerEl = document.getElementById("battle-timer");
+    const MAX_BATTLE_DURATION_SECONDS = 180; // backend/battle_engine.py의 MAX_BATTLE_DURATION과 동일하게 유지할 것
 
     function updateBattleTimer(seconds) {
         if (!battleTimerEl || typeof seconds !== "number") return;
-        const total = Math.max(0, Math.floor(seconds));
+        const total = Math.max(0, Math.floor(MAX_BATTLE_DURATION_SECONDS - seconds));
         const mm = String(Math.floor(total / 60)).padStart(2, "0");
         const ss = String(total % 60).padStart(2, "0");
         battleTimerEl.textContent = `${mm}:${ss}`;
@@ -176,6 +193,30 @@
         }
 
         returnFrameCountCache[cacheKey] = count;
+        return count;
+    }
+
+    // 걷는 동안 재생되는 전용 프레임(walk_N.png)이 있는지 확인 - attack_N.png와 같은 규칙. 근거리
+    // 캐릭터 전용(원거리는 애초에 걷지 않음). 없는 캐릭터는 0이 캐시되고, 그러면 기존처럼 걷기 중에도
+    // 사진은 그대로 두고 CSS bob 애니메이션(walking 클래스)만 적용된다(호출부의 폴백).
+    async function getWalkFrameCount(outfit, variant = "") {
+        const cacheKey = `${outfit}${variant}`;
+        if (walkFrameCountCache[cacheKey] !== undefined) {
+            return walkFrameCountCache[cacheKey];
+        }
+
+        let count = 0;
+
+        for (let i = 1; i <= MAX_WALK_FRAMES; i += 1) {
+            const exists = await checkImageExists(
+                `${OUTFIT_IMAGE_BASE}${outfit}/walk${variant}_${i}.png`
+            );
+
+            if (!exists) break;
+            count = i;
+        }
+
+        walkFrameCountCache[cacheKey] = count;
         return count;
     }
 
@@ -382,7 +423,11 @@
     function setFacing(key, flipped) {
         if (facingFlipped[key] === flipped) return;
         facingFlipped[key] = flipped;
-        document.querySelector(`[data-unit="${key}"] .battle-unit-img`)?.classList.toggle("flipped", flipped);
+        const battleEl = document.querySelector(`[data-unit="${key}"]`);
+        battleEl?.querySelector(".battle-unit-img")?.classList.toggle("flipped", flipped);
+        // 방향이 바뀌면 그림이 넘치는 방향도 반대가 되므로, 히트박스 정렬(왼쪽/오른쪽 끝에 맞춤)도
+        // 같이 뒤집어서 항상 "지금 보고 있는 방향 쪽"으로만 넘치게 한다(반대쪽=화면 바깥쪽 넘침 방지).
+        battleEl?.classList.toggle("hitbox-flipped", flipped);
     }
 
     // 대상이 자신의 왼쪽에 있으면 왼쪽을(반전), 오른쪽에 있으면 오른쪽을 바라본다.
@@ -450,6 +495,10 @@
         const imgEl = battleEl.querySelector(".battle-unit-img");
         if (!imgEl) return;
 
+        // 히트박스(.battle-unit) 정렬도 현재 바라보는 방향을 따라간다 - setFacing에서도 갱신되지만,
+        // 여기서도 매번 동기화해두면 어떤 경로로 렌더링되든 항상 최신 방향과 일치한다.
+        battleEl.classList.toggle("hitbox-flipped", isFacingFlipped(key));
+
         if (isDead) {
             if (!deathHandled[key]) {
                 deathHandled[key] = true;
@@ -488,16 +537,33 @@
     // 타임라인은 그대로 흘러가서, 탐색이 끝나기도 전에 다음 이벤트(skill_resolve 등)가 같은 유닛의
     // 애니메이션 토큰을 갈아치워버리고, 결과적으로 "모든 캐릭터의 첫 스킬 사용"만 애니메이션이 끝까지
     // 재생되지 못하고 중간에 잘리는 버그로 이어졌다. 두 번째 사용부터는 캐시가 이미 있어서 즉시
-    // 반환되므로 이 문제가 없었다 - 그래서 아예 전투 시작 시점에 한꺼번에 미리 채워둔다. 이의진처럼
-    // type2 변형이 있는 캐릭터가 아니면 "_type2" 프레임은 존재하지 않아 0으로만 캐시되고 끝난다(손해 없음).
+    // 반환되므로 이 문제가 없었다 - 그래서 아예 전투 시작 시점에 한꺼번에 미리 채워둔다.
+    //
+    // 이 probe들은 fire-and-forget(await 안 함)이었는데, 그러면 준비 시간(1.3초) 동안 probe가 다
+    // 안 끝났을 때(캐릭터 수가 많거나 네트워크가 느릴 때) 전투 첫 스킬이 그 즉시 발동돼버려서, 결국
+    // playCastFrames가 캐시 미스로 자기만의 느린 probe를 처음부터 다시 돌리는 - 애초에 이 프리캐시가
+    // 막으려던 바로 그 문제가 그대로 재현되는 경우가 있었다(특히 전투 첫 스킬에서 두드러짐). 모든
+    // probe의 Promise를 모아뒀다가, 아래에서 전투 시작을 이 전부가 끝날 때까지 실제로 기다리게 한다.
+    const framePrecachePromises = [];
     Object.values(units).forEach((unit) => {
-        getAttackFrameCount(unit.outfit);
-        getSkillFrameCount(unit.outfit);
-        getReturnFrameCount(unit.outfit);
-        getAttackFrameCount(unit.outfit, "_type2");
-        getSkillFrameCount(unit.outfit, "_type2");
-        getReturnFrameCount(unit.outfit, "_type2");
+        framePrecachePromises.push(getAttackFrameCount(unit.outfit));
+        framePrecachePromises.push(getSkillFrameCount(unit.outfit));
+        framePrecachePromises.push(getReturnFrameCount(unit.outfit));
+        if (unit.isMelee) {
+            framePrecachePromises.push(getWalkFrameCount(unit.outfit));
+        }
+        // _type2 변형은 이의진(염색체 변환) 본인만 실제로 쓴다 - 다른 캐릭터에게까지 존재하지도 않는
+        // type2 프레임을 미리 찾아보게 하면 콘솔에 불필요한 404만 남는다.
+        if (unit.name === "이의진") {
+            framePrecachePromises.push(getAttackFrameCount(unit.outfit, "_type2"));
+            framePrecachePromises.push(getSkillFrameCount(unit.outfit, "_type2"));
+            framePrecachePromises.push(getReturnFrameCount(unit.outfit, "_type2"));
+            if (unit.isMelee) {
+                framePrecachePromises.push(getWalkFrameCount(unit.outfit, "_type2"));
+            }
+        }
     });
+    const framePrecacheReady = Promise.all(framePrecachePromises);
 
     // ===== 근거리 이동: 매 프레임마다 실제 위치를 재서 조금씩 다가가는 방식 =====
     // (예전엔 거리/시간을 미리 계산해서 CSS 트랜지션 하나로 재생했는데, 여러 유닛이 동시에 움직이거나
@@ -505,6 +571,14 @@
     // 계속 "지금 실제 위치 기준으로 조금만 더 가자"를 반복해서, 상대가 같이 움직여도 항상 정확하다.)
     const MOVE_STEP_PX = 3;        // 한 프레임(약 16ms)마다 이동하는 픽셀
     const ARRIVE_THRESHOLD_PX = 2;
+    // 이미 도착한(meleeArrived=true) 상태에서 상대가 자기 목표를 향해 계속 걷느라 화면상 위치가 계속
+    // 조금씩 흔들리면, ARRIVE_THRESHOLD_PX(2px)는 너무 좁아서 매 프레임 "도착"과 "미도착"을 오간다 -
+    // 그때마다 meleeArrived가 false로 풀리는데, 그 순간 마침 큐에 밀려있던 basic_attack 이벤트의
+    // waitForMeleeArrival이 도착을 기다리게 되면서, 실제로는 백엔드가 계속 공격을 기록하고 있는데도
+    // 화면에는 한동안 아무 공격도 안 일어나는 것처럼 밀렸다가 상대가 완전히 멈춰서야 몰아서 재생되는
+    // 버그가 있었다. 한 번 도착하면, 확실히 멀어지기 전까지(이 값을 넘기 전까지)는 다시 "미도착"으로
+    // 되돌리지 않는 여유 구간(히스테리시스)을 둔다.
+    const LOSE_CONTACT_THRESHOLD_PX = 48;
 
     const meleeTargetKey = {};              // key -> 지금 다가가야 하는 적 슬롯
     const meleeArrived = {};                // key -> 그 타겟에 이미 도착했는지
@@ -557,11 +631,13 @@
     // 끝나면 자동으로 깨어나 원래 목표를 향해 평소처럼 다시 걸어간다(별도의 "복귀" 연출 불필요).
     // 청년의 기존 적 대상 넉백은 대체로 원거리(비근접) 대상이라 이 문제가 잘 안 드러나서 기본은 꺼둔다.
     function applyKnockback(targetKey, options = {}) {
-        const { distance = 170, durationMs = 220, suspendSelfWalker = false } = options;
+        const { distance = 170, durationMs = 220, suspendSelfWalker = false, knockDir: knockDirOverride } = options;
         const el = document.querySelector(`[data-unit="${targetKey}"]`);
         if (!el) return;
 
-        const knockDir = targetKey.startsWith("attacker") ? -1 : 1; // 자기 진영 뒤쪽으로
+        // 기본은 자기 진영 뒤쪽으로(팀 기준 고정 방향). knockDir을 명시적으로 넘기면(예: 윤영준의
+        // 복제체 생성 넉백 - 지금 보고 있는 방향의 반대로) 그 값을 그대로 쓴다.
+        const knockDir = knockDirOverride ?? (targetKey.startsWith("attacker") ? -1 : 1);
         const startX = getCurrentTranslateX(el);
         let endX = startX + knockDir * distance;
 
@@ -622,10 +698,27 @@
                 const imgEl = el.querySelector(".battle-unit-img");
                 const gap = getGapToTarget(key, targetKey);
 
+                // 이미 도착한 상태면, 상대가 자기 목표를 향해 계속 걷느라 화면 위치가 살짝씩 흔들려도
+                // (LOSE_CONTACT_THRESHOLD_PX 이내) 다시 걷지 않고 그대로 붙어서 싸운다 - ARRIVE_THRESHOLD_PX
+                // 만으로 판정하면 매 프레임 도착/미도착이 갈려서 공격 연출이 밀리는 문제가 있었다.
+                if (meleeArrived[key] && Math.abs(gap) <= LOSE_CONTACT_THRESHOLD_PX) {
+                    return;
+                }
+
                 if (Math.abs(gap) <= ARRIVE_THRESHOLD_PX) {
                     if (!meleeArrived[key]) {
                         meleeArrived[key] = true;
                         if (imgEl) imgEl.classList.remove("walking");
+                        stopWalkFrames(key);
+                        if (imgEl) {
+                            const outfit = units[key].outfit;
+                            const variant = spriteVariantSuffix(key);
+                            imgEl.onerror = () => {
+                                imgEl.onerror = null;
+                                imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.png`;
+                            };
+                            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/battle_idle${variant}.png`;
+                        }
                         faceToward(key, targetKey); // 도착하면 대상 쪽을 확실히 바라본다(등 뒤 대상 포함)
                         (pendingArrivalResolvers[key] || []).forEach((resolve) => resolve());
                         pendingArrivalResolvers[key] = [];
@@ -635,6 +728,12 @@
 
                 meleeArrived[key] = false;
                 if (imgEl) imgEl.classList.add("walking");
+                // 걷기 전용 사진(walk_N.png)이 있으면 그 프레임을 순환 재생 - 없는 캐릭터는 위의 walking
+                // 클래스(bob 애니메이션)만 적용된 채로 원래처럼 걷는다(playWalkFrames 내부 폴백).
+                if (!walkAnimActive[key]) {
+                    walkAnimActive[key] = true;
+                    playWalkFrames(key);
+                }
 
                 // 대상이 등 뒤에 있어도 그 방향으로 걸어간다(진행 방향 고정 없음). 이동 방향을 바라보게 반전.
                 const step = Math.sign(gap) * Math.min(MOVE_STEP_PX, Math.abs(gap));
@@ -1493,10 +1592,123 @@
     // startPreparation()이 첫 playNext() 호출 직전에 채운다.
     let playbackOriginWallMs = 0;
     let playbackOriginEventTime = 0;
-    // 마지막으로 처리를 시작한 이벤트의 행동 주체 - 이벤트 목록을 다 돌았을 때(showResult 직전) 이
-    // 유닛이 아직 공격/시전 애니메이션 중이거나(근거리) 목표에 도착 전이면, 그 연출/피해·사망 로그가
-    // 뜨기도 전에 "전투 종료!" 로그가 먼저 떠버리는 걸 막기 위해 참조한다.
-    let lastEventActorKey = null;
+    // 이벤트 목록을 다 돌았을 때(showResult 직전) 어느 유닛이든 아직 공격/시전 애니메이션 중이거나
+    // (근거리) 목표에 도착 전이거나 원거리 투사체가 아직 안 도착했으면, 그 연출/피해·사망 로그가
+    // 뜨기도 전에 "전투 종료!" 로그가 먼저 떠버리는 걸 막는다 - 배우별 애니메이션 체인(actorAnimChain)
+    // 덕분에 이제 여러 배우가 동시에 진행 중일 수 있으므로, "이벤트상 마지막 배우" 한 명만 보던
+    // 예전 방식(lastEventActorKey) 대신 전체 유닛을 순회해서 확인한다.
+    function anyActorStillFinishing() {
+        return Object.keys(units).some((key) => {
+            if (!units[key]) return false;
+            return attackAnimActive[key] ||
+                (units[key].isMelee && meleeArrived[key] === false) ||
+                rangedResolvePending[key];
+        });
+    }
+
+    // 상단 전투 타이머: 예전엔 이벤트를 하나 처리할 때마다 그 이벤트의 백엔드 시각을 그대로 표시했는데,
+    // 이벤트 처리 자체가 애니메이션 대기 등으로 들쭉날쭉하게 지연되면(스킬 발동 지연 등) 그 지연이 그대로
+    // 시계에도 나타나서 - 잠깐 멈췄다가 갑자기 몇 초씩 확 뛰는 것처럼 보였다. 재생 진행과 분리된 자기만의
+    // 루프로, "마지막으로 원점을 다시 잡은 시각(playbackOriginWallMs/-EventTime) + 그 이후 실제로 흐른
+    // 벽시계 시간"을 매 프레임 계산해서 표시한다.
+    //
+    // playbackOriginWallMs/-EventTime은 playNext이 "지연 누적 방지"를 위해 이벤트를 처리할 때마다 계속
+    // 다시 잡는데(위쪽 주석 참고), 그 순간 이 원점에서 곧바로 계산한 값이 방금까지 화면에 표시하고 있던
+    // 값보다 작을 수 있다(대기 중에도 시계는 계속 앞으로 흘러갔는데, 원점은 "그 이벤트 자체의" 다소
+    // 이른 시각으로 다시 잡히므로) - 그대로 표시하면 시계가 순간적으로 뒤로 갔다가 다시 따라잡느라
+    // 훅 빨라지는 것처럼 보인다(첫 기본공격/첫 스킬에서 특히 눈에 띔). displayedBattleTimeSeconds에
+    // "지금까지 화면에 보여준 값"을 따로 기억해두고 절대 그보다 작은 값으로는 되돌아가지 않게 하면,
+    // 원점이 뒤로 다시 잡혀도 시계는 그 순간만 잠깐 멈춰있다가(따라잡을 때까지) 다시 자연스럽게
+    // 흐른다 - 역행도 없고 갑자기 빨라지는 것도 없다.
+    let battleTimerRunning = false;
+    let displayedBattleTimeSeconds = 0;
+
+    function tickBattleTimer() {
+        if (!battleTimerRunning) return;
+        const elapsedSeconds = ((performance.now() - playbackOriginWallMs) / 1000) * PLAYBACK_SPEED;
+        const candidateSeconds = playbackOriginEventTime + Math.max(0, elapsedSeconds);
+        displayedBattleTimeSeconds = Math.max(displayedBattleTimeSeconds, candidateSeconds);
+        updateBattleTimer(displayedBattleTimeSeconds);
+        requestAnimationFrame(tickBattleTimer);
+    }
+
+    function startBattleTimer() {
+        if (battleTimerRunning) return;
+        battleTimerRunning = true;
+        displayedBattleTimeSeconds = 0;
+        requestAnimationFrame(tickBattleTimer);
+    }
+
+    function stopBattleTimer() {
+        battleTimerRunning = false;
+    }
+
+    // 안전장치: cast_start/skill_resolve/"마지막 이벤트" 대기 게이트가 아직 원인을 다 못 찾은 어떤
+    // 이유로든 절대 안 풀리면, 재생 전체가 그 자리에서 영원히 멈춘다(가장 나쁜 결과) - 같은 대상으로
+    // ANIM_WAIT_TIMEOUT_MS 이상 계속 대기 중이면, 그 유닛의 애니메이션 상태를 강제로 idle로 정리하고
+    // 그냥 진행한다. 정상적인 경우엔 항상 그 전에 자연스럽게 풀리므로 이 타임아웃에 걸릴 일이 없다.
+    const animWaitStartedAt = {};
+    const ANIM_WAIT_TIMEOUT_MS = 1500;
+
+    function shouldForceProceedPast(waitKey) {
+        const now = performance.now();
+        if (!animWaitStartedAt[waitKey]) {
+            animWaitStartedAt[waitKey] = now;
+            return false;
+        }
+        return now - animWaitStartedAt[waitKey] > ANIM_WAIT_TIMEOUT_MS;
+    }
+
+    function clearAnimWait(waitKey) {
+        delete animWaitStartedAt[waitKey];
+    }
+
+    function forceClearAnim(key) {
+        if (!key) return;
+        attackAnimTokens[key] = (attackAnimTokens[key] || 0) + 1;
+        attackAnimActive[key] = false;
+        const imgEl = document.querySelector(`[data-unit="${key}"] .battle-unit-img`);
+        if (imgEl && units[key]) {
+            imgEl.classList.remove("casting", "casting-rainbow", "attacking");
+            imgEl.onerror = null;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${units[key].outfit}/battle_idle${spriteVariantSuffix(key)}.png`;
+        }
+    }
+
+    // key(배우)별로 애니메이션 단계가 순서대로만 실행되도록 이어붙인다 - 전역 이벤트 커서는 이 반환값을
+    // 절대 기다리지 않는다(fire-and-forget). workFn에서 예외가 나도 체인이 영구히 끊겨서 이 배우의
+    // 이후 모든 애니메이션이 조용히 멈춰버리는 일이 없도록 흡수한다.
+    function chainActorAnim(key, workFn) {
+        const prev = actorAnimChain[key] || Promise.resolve();
+        const next = prev.then(workFn).catch(() => {});
+        actorAnimChain[key] = next;
+        return next;
+    }
+
+    // 다음 애니메이션 단계(예: 시전 자세)로 넘어가기 전에, 이 배우 자신의 직전 애니메이션(예: 방금
+    // 끝낸 기본공격 윈드업)이 화면에서 실제로 끝났는지(attackAnimActive)를 기다린다. 이 대기는 이
+    // 배우의 체인 안에서만 일어나므로 다른 배우의 이벤트 처리를 막지 않는다. 원인을 못 찾아도
+    // ANIM_WAIT_TIMEOUT_MS 안에 안 풀리면 강제로 idle 처리하고 진행한다(기존 워치독 재사용 - 예전엔
+    // playNext를 직접 막던 위치에 있었지만, 이제 이 배우 전용 체인 안으로 옮겨졌을 뿐 로직은 동일하다).
+    function waitForAnimIdle(key) {
+        return new Promise((resolve) => {
+            function poll() {
+                if (!attackAnimActive[key]) {
+                    clearAnimWait(key);
+                    resolve();
+                    return;
+                }
+                if (shouldForceProceedPast(key)) {
+                    forceClearAnim(key);
+                    clearAnimWait(key);
+                    resolve();
+                    return;
+                }
+                requestAnimationFrame(poll);
+            }
+            poll();
+        });
+    }
 
     function eventTargetKey(event) {
         const targetSide =
@@ -1567,6 +1779,41 @@
         setTimeout(() => {
             imgEl.classList.remove("hit-flash");
         }, 250);
+    }
+
+    // 근거리 유닛이 걷는 동안(startMeleeWalker의 tick) 반복 재생되는 걷기 프레임 애니메이션.
+    // playAttackFrames와 달리 "한 번" 재생하고 끝나는 게 아니라 도착할 때까지 프레임을 계속 순환한다.
+    // 토큰 방식은 동일 - stopWalkFrames가 토큰을 갈아치우면 다음 프레임 체크에서 루프가 스스로 멈춘다.
+    async function playWalkFrames(key) {
+        const el = document.querySelector(`[data-unit="${key}"]`);
+        if (!el) return;
+
+        const imgEl = el.querySelector(".battle-unit-img");
+        if (!imgEl) return;
+
+        const outfit = units[key].outfit;
+        const variant = spriteVariantSuffix(key);
+        const myToken = (walkAnimTokens[key] = (walkAnimTokens[key] || 0) + 1);
+
+        const frameCount = await getWalkFrameCount(outfit, variant);
+        if (walkAnimTokens[key] !== myToken) return;
+
+        // 걷기 전용 사진이 없는 캐릭터 - 사진은 그대로 두고(원래처럼) CSS bob 애니메이션만 적용된 채로 걷는다.
+        if (frameCount === 0) return;
+
+        let frameIndex = 1;
+        while (walkAnimTokens[key] === myToken) {
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/walk${variant}_${frameIndex}.png`;
+            await sleep(WALK_FRAME_DURATION_MS);
+            frameIndex = (frameIndex % frameCount) + 1;
+        }
+    }
+
+    // 도착하거나(더 이상 걷지 않음) 다른 애니메이션으로 넘어갈 때 호출 - 토큰만 갈아치우면 진행 중이던
+    // playWalkFrames의 while 루프가 다음 프레임 대기 후 스스로 종료된다(별도 취소 신호 불필요).
+    function stopWalkFrames(key) {
+        walkAnimTokens[key] = (walkAnimTokens[key] || 0) + 1;
+        walkAnimActive[key] = false;
     }
 
     async function playAttackFrames(key) {
@@ -1642,29 +1889,43 @@
         const frameCount = usingSkillFrames ? skillFrameCount : await getAttackFrameCount(outfit, variant);
         const framePrefix = usingSkillFrames ? "skill" : "attack";
 
-        if (attackAnimTokens[key] !== myToken) return;
+        if (attackAnimTokens[key] !== myToken) return; // 다른 호출이 이미 새 토큰을 발급함 - 그쪽 상태를 건드리지 않는다
 
         if (frameCount === 0) {
             // 스킬/공격 프레임 이미지가 아예 없는 캐릭터는 기존처럼 펄스 글로우만으로 시전 표시.
+            // attackAnimActive는 꺼둬야 한다 - skill_resolve 처리 시작부의 "아직 애니메이션 중이면
+            // 대기" 게이트가 이 값을 보고 재시도하는데, 여기서 안 꺼두면 그 게이트를 영영 통과 못 해서
+            // 첫 스킬 발동에서 재생이 완전히 멈춘다(실제로 발생했던 회귀).
+            attackAnimActive[key] = false;
             return;
         }
 
         const perFrameMs = durationMs / frameCount;
+        // 프레임마다 매번 perFrameMs만큼 sleep을 새로 걸면(상대 시간 방식), setTimeout 자체의 오차가
+        // 프레임 수만큼 누적된다 - 스킬 프레임이 많을수록 실제 재생이 서버가 계산한 시전 시간보다
+        // 점점 더 길어지고, 그만큼 skill_resolve 처리가 늦어져서 화면이 마지막 프레임에 오래 멈춰
+        // 있다가, 뒤이은 기본공격 시점과 맞물려 복귀(return) 애니메이션이 다 재생되기도 전에
+        // 잘리는 문제로 이어졌다. playNext의 절대 시각 스케줄과 같은 방식으로, "시전 시작 시점 +
+        // 누적 프레임 시간"이라는 절대 목표 시각까지 남은 시간만 sleep해서 오차가 쌓이지 않게 한다.
+        const castStartMs = performance.now();
 
         for (let i = 1; i <= frameCount; i += 1) {
-            if (attackAnimTokens[key] !== myToken) return;
+            if (attackAnimTokens[key] !== myToken) return; // 다른 호출이 이미 새 토큰을 발급함 - 그쪽 상태를 건드리지 않는다
 
             imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/${framePrefix}${variant}_${i}.png`;
-            await sleep(perFrameMs);
+            const remainingMs = castStartMs + perFrameMs * i - performance.now();
+            if (remainingMs > 0) await sleep(remainingMs);
         }
 
+        // 시전 프레임 루프가 다 끝났으니 skill_resolve 처리를 막고 있던 게이트는 풀어준다(안 그러면
+        // 위와 같은 이유로 재생이 멈춘다) - 다만 화면(스프라이트)은 마지막 프레임에 그대로 멈춰 둔다.
+        // 여기서 곧바로 idle로 스냅하면, 이 루프 자체의 타이머(매 프레임 sleep 누적)와 실제
+        // skill_resolve가 처리되는 시점(playNext의 절대 시각 스케줄)이 아주 살짝만 어긋나도 - 캐스팅
+        // 자세가 먼저 idle로 풀렸다가, 뒤늦게 skill_resolve가 처리되며 playReturnFrames가 다시 한번
+        // idle로의 복귀 연출을 재생하는(사실상 두 번 풀리는) 버그가 있었다. idle로의 실제 시각적
+        // 전환은 오직 skill_resolve 쪽 playReturnFrames(또는 기절 등으로 취소됐을 때 interruptCasting)만
+        // 담당한다.
         if (attackAnimTokens[key] === myToken) {
-            imgEl.onerror = () => {
-                imgEl.onerror = null;
-                imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.png`;
-            };
-
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/battle_idle${variant}.png`;
             attackAnimActive[key] = false;
         }
     }
@@ -2009,51 +2270,23 @@
 
     function playNext() {
         if (eventIndex >= data.events.length) {
-            // 마지막 이벤트의 행동 주체가 아직 공격/시전 애니메이션 중이거나(근거리 유닛이면) 목표에
-            // 도착하지 못했으면, 그 히트/사망 처리와 로그가 실제로는 아직 안 끝난 것이다 - 조금 더
-            // 기다렸다가 다시 확인한다(cast_start/skill_resolve 재시도와 같은 패턴).
-            if (
-                lastEventActorKey &&
-                (attackAnimActive[lastEventActorKey] ||
-                    (units[lastEventActorKey]?.isMelee && meleeArrived[lastEventActorKey] === false))
-            ) {
-                setTimeout(playNext, 30);
-                return;
+            // 어느 유닛이든 아직 애니메이션/도착/투사체 처리가 안 끝났으면, 그 연출·피해·사망 로그가
+            // 실제로는 아직 안 끝난 것이다 - 조금 더 기다렸다가 다시 확인한다.
+            if (anyActorStillFinishing()) {
+                if (!shouldForceProceedPast("lastEvent")) {
+                    requestAnimationFrame(playNext);
+                    return;
+                }
+                // 안전장치 발동 - 위 조건 중 뭐가 됐든 원인을 못 찾아도 결과 화면은 반드시 뜬다.
+                // forceIdleAllUnits(showResult 안에서 호출됨)가 애니메이션 정리는 알아서 해준다.
             }
+            clearAnimWait("lastEvent");
             showResult();
             return;
         }
 
         const event = data.events[eventIndex];
         const eventType = event.event_type || "basic_attack";
-        lastEventActorKey = eventActorKey(event) || lastEventActorKey;
-        updateBattleTimer(event.time);
-
-        if (eventType === "cast_start") {
-            // 3번째 기본공격 직후 곧바로 자신의 시전으로 넘어가는 경우, 서버 기록상 두 이벤트가 같은
-            // 시각이라 원래는 거의 지연이 없다 - 하지만 화면에서는 그 공격의 윈드업/프레임 애니메이션이
-            // 아직 재생 중일 수 있으므로(attackAnimActive), 그게 끝날 때까지 eventIndex를 그대로 두고
-            // 짧은 간격으로 재시도한다. 실제 시각 기준 flag라서 다른 유닛 이벤트가 사이에 끼어들어도 정확하다.
-            const castActorKey = eventActorKey(event);
-            if (castActorKey && attackAnimActive[castActorKey]) {
-                setTimeout(playNext, 20);
-                return;
-            }
-        }
-
-        if (eventType === "skill_resolve") {
-            // skill_resolve가 처리되면 곧바로 playReturnFrames를 불러 시전 애니메이션의 토큰을 갈아치우는데
-            // (아래), cast_start 때 시작한 playCastFrames가 아직 프레임 루프를 다 못 돌았으면 그 시전
-            // 애니메이션이 중간에 잘려버린다. duration만큼 지나면 skill_resolve가 오도록 서버가 이미
-            // 맞춰뒀지만, 프레임 개수 확인(getSkillFrameCount 등 - 캐시 없으면 순차 이미지 probe)이나 브라우저
-            // 타이머 오차 때문에 실제 애니메이션 종료가 아주 살짝 늦어질 수 있다 - 그래서 cast_start와 똑같이
-            // "정말 끝났는지"(attackAnimActive)를 직접 확인하고, 아직이면 짧은 간격으로 재시도한다.
-            const resolveActorKey = eventActorKey(event);
-            if (resolveActorKey && attackAnimActive[resolveActorKey]) {
-                setTimeout(playNext, 20);
-                return;
-            }
-        }
 
         if (eventType === "star_effect_resolve") {
             // 성급별 효과(전투 시작 시 1회) - 스탯이 오르내린 대상마다 해당 상태 아이콘을 켠다.
@@ -2112,12 +2345,20 @@
         } else if (eventType === "cast_start") {
             const actorKey = eventActorKey(event);
             if (actorKey) {
-                const castStartImgEl = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);
-                castStartImgEl?.classList.add("casting");
-                // 강승유 전용: 시전 중에는 금빛 펄스 대신 무지개빛으로 물든다.
-                if (event.actor === "강승유") castStartImgEl?.classList.add("casting-rainbow");
-                playCastFrames(actorKey, event.duration * 1000 * PLAYBACK_SPEED);
+                // 시전 자세/애니메이션은 이 배우 전용 체인에 매달아둔다 - waitForAnimIdle이 이 배우 자신의
+                // 직전 애니메이션(예: 방금 3번째 기본공격 윈드업)이 끝날 때까지만 기다리고, 다른 배우의
+                // 이벤트 처리는 전혀 막지 않는다(전역 커서는 이 체인을 기다리지 않고 곧바로 다음 이벤트로).
+                chainActorAnim(actorKey, async () => {
+                    await waitForAnimIdle(actorKey);
+                    const castStartImgEl = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);
+                    castStartImgEl?.classList.add("casting");
+                    // 강승유 전용: 시전 중에는 금빛 펄스 대신 무지개빛으로 물든다.
+                    if (event.actor === "강승유") castStartImgEl?.classList.add("casting-rainbow");
+                    await playCastFrames(actorKey, event.duration * 1000 * PLAYBACK_SPEED);
+                });
             }
+            // 로그는 체인 밖에서 즉시 남긴다 - 안 그러면 이 배우의 체인이 밀려있는 동안 다른 배우의
+            // 나중 이벤트 로그가 먼저 찍혀서 시간 순서가 뒤바뀐다.
             appendLog(`${event.actor}, [Active] 시전 중...`, event.side);
         } else if (eventType === "skill_resolve") {
             const actorKey = eventActorKey(event);
@@ -2134,13 +2375,20 @@
             }
 
             if (actorKey) {
-                const castImgEl = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);
-                castImgEl?.classList.remove("casting", "casting-rainbow");
-                // 시전 프레임 루프가 아직 돌고 있으면(또는 이전 복귀 애니메이션이 아직 돌고 있으면) 즉시 멈추고,
-                // 복귀 전용 프레임(return_N.png)이 있으면 그걸 재생하며 평상시 자세로 돌아간다 - 없는 캐릭터는
-                // playReturnFrames 내부에서 프레임 0장으로 판정되어 곧바로 battle_idle.png로 스냅한다(기존과 동일).
+                // "시전 자세 풀기 + 복귀 애니메이션"만 이 배우 전용 체인에 매달아둔다(순수 스프라이트
+                // 연출이라 데이터 의존이 없다) - 상태 아이콘/오라 등 나머지는 지금처럼 즉시 반영한다.
+                // 안 그러고 이 skill_resolve 전체를 체인에 매달면, 이 배우의 체인이 밀려있는 동안
+                // 무관한 다른 배우가 같은 대상을 먼저/나중에 때리는 이벤트가 끼어들 때 체력이 과거
+                // 값으로 되돌아가는 회귀가 생길 수 있다. cast_start 때 이미 같은 체인에 playCastFrames가
+                // 매달려 있으므로, 체인 순서 자체가 "그게 끝나야 복귀 애니메이션 시작"을 보장한다 -
+                // 복귀 전용 프레임(return_N.png)이 있으면 그걸 재생하고, 없는 캐릭터는 playReturnFrames
+                // 내부에서 프레임 0장으로 판정되어 곧바로 battle_idle.png로 스냅한다(기존과 동일).
                 if (units[actorKey]) {
-                    playReturnFrames(actorKey);
+                    chainActorAnim(actorKey, async () => {
+                        const castImgEl = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);
+                        castImgEl?.classList.remove("casting", "casting-rainbow");
+                        await playReturnFrames(actorKey);
+                    });
                 }
                 // 시전자 몸이 카테고리 색으로 번쩍이던 예전 연출은 제거 - 오라는 이제 효과를 "받은"
                 // 대상에게만 나왔다가 사라진다(flashEffectAura). 자기 자신에게 거는 효과(버프/실드)는
@@ -2200,14 +2448,23 @@
                             const currentCloneX = getCurrentTranslateX(cloneEl);
                             cloneEl.style.transform = `translateX(${currentCloneX + (casterRect.left - cloneRect.left)}px)`;
 
-                            // 시전자는 복제체가 자기 자리를 차지한 만큼, 복제체 너비만큼 뒤로 밀려난다(서로
-                            // 겹치지 않게) - 청년의 넉백(applyKnockback)과 완전히 같은 방식: CSS 트랜지션으로
-                            // 부드럽게 밀려나고(한 번 점프시키고 손을 뗀다), 넉백(CC기) 오라/아이콘도 동일하게 뜬다.
+                            // 시전자는 복제체가 자기 자리를 차지한 만큼, 자기 자신의 스프라이트 너비만큼 뒤로
+                            // 밀려난다(서로 겹치지 않게) - 청년의 넉백(applyKnockback)과 완전히 같은 방식: CSS
+                            // 트랜지션으로 부드럽게 밀려나고(한 번 점프시키고 손을 뗀다), 넉백(CC기) 오라/아이콘도 동일하게 뜬다.
                             // 밀려난 뒤 되돌아오는 별도 연출은 없다 - suspendSelfWalker 덕분에 트랜지션이
                             // 끝나자마자 walker가 깨어나 원래 근접 거리를 목표로 자연스럽게 다시 걸어온다.
                             flashEffectAura(actorKey, "cc");
                             setStatusIcon(actorKey, "knockback", { source: `${actorKey}:knockback`, durationMs: MOMENT_ICON_MS });
-                            applyKnockback(actorKey, { distance: cloneRect.width, durationMs: 380, suspendSelfWalker: true });
+                            // 복제체 생성 넉백은 팀 기준 고정 방향이 아니라, 지금 보고 있는 방향의 반대로
+                            // 밀려난다(등 뒤로 물러나는 느낌) - isFacingFlipped(false=오른쪽을 봄 -> 왼쪽으로
+                            // 넉백, true=왼쪽을 봄 -> 오른쪽으로 넉백).
+                            const summonKnockDir = isFacingFlipped(actorKey) ? 1 : -1;
+                            applyKnockback(actorKey, {
+                                distance: casterRect.width,
+                                durationMs: 380,
+                                suspendSelfWalker: true,
+                                knockDir: summonKnockDir,
+                            });
                         }
                     }
                     attackAnimActive[cloneKey] = false;
@@ -2311,7 +2568,11 @@
                 const hit = event.detail.hits[0];
                 const targetKey = findHitKey(hit.target, hit.target_side);
                 if (targetKey) {
-                    applyKnockback(targetKey);
+                    // distance를 크게 잡고 applyKnockback 내부의 맵 경계 클램프에 맡긴다 - "맵을 벗어나지
+                    // 않는 선에서 최대한 많이" 밀려나게 하려는 의도. suspendSelfWalker: 대상이 근접 유닛이라
+                    // walker가 걷는 중이면 그 tick()이 매 프레임 transform을 덮어써서 넉백이 아예 안 보이는
+                    // 문제가 있었다 - 트랜지션이 끝날 때까지 그 유닛의 walker만 잠깐 재워서 고친다.
+                    applyKnockback(targetKey, { distance: 9999, suspendSelfWalker: true });
                     // 넉백(CC기) = 보라색 오라 + 넉백 아이콘(순간 표시 후 사라짐)
                     flashEffectAura(targetKey, "cc");
                     setStatusIcon(targetKey, "knockback", { source: `${event.actor}:knockback`, durationMs: MOMENT_ICON_MS });
@@ -2493,19 +2754,41 @@
                     appendLog(`${event.actor}의 방임 상태 해제!`, "trait");
                 }
             }
+        } else if (eventType === "target_lock_resolve") {
+            // 백엔드가 새 기본공격 대상을 "확정"한 시점(실제 명중보다 먼저 온다) - 근접 유닛은 이 신호를
+            // 받는 즉시 새 목표를 향해 걷기 시작한다. 예전엔 이 정보가 따로 없어서 실제로 명중한
+            // basic_attack 이벤트로만 목표 변경을 알 수 있었는데, 근접 유닛이 걸어가서 명중시키기까지는
+            // 시간이 걸리므로(특히 최재혁처럼 먼 후방을 쫓을 때) 그 사이 화면에서는 여전히 옛 목표
+            // 옆에 서있다가, 뒤늦게 밀려있던 공격들이 한꺼번에 재생되는 것처럼 보이는 버그가 있었다.
+            const lockActorKey = eventActorKey(event);
+            const lockTargetKey = eventTargetKey(event);
+            if (
+                lockActorKey && lockTargetKey &&
+                units[lockActorKey]?.isMelee &&
+                meleeTargetKey[lockActorKey] !== lockTargetKey
+            ) {
+                meleeTargetKey[lockActorKey] = lockTargetKey;
+                meleeArrived[lockActorKey] = false;
+            }
         } else {
             // basic_attack (기존 로직 + 원거리 5명 전용 연출)
             const actorKey = eventActorKey(event);
             const targetKey = eventTargetKey(event);
             const actorIsMelee = actorKey && units[actorKey] && units[actorKey].isMelee;
+            // 이 이벤트가 적용되기 "전"에 이미 죽어있었는지(=다른 이벤트가 먼저 죽인 상태) 여기서 미리
+            // 캡처해둔다 - 아래에서 hp를 곧바로 덮어쓰고 나면, 이 공격 자체가 킬(target_hp_after=0)인
+            // 정상적인 경우와 "이미 죽은 대상을 뒤늦게 또 때린" 경우를 더 이상 hp만 보고는 구분할 수 없다.
+            const targetWasAlreadyDead = targetKey && units[targetKey] && units[targetKey].hp <= 0;
 
             // 데이터(HP)는 이벤트 순서 그대로, 그 어떤 지연도 없이 여기서 곧바로 반영한다.
             if (targetKey) {
                 units[targetKey].hp = event.target_hp_after;
             }
-            if (actorIsMelee && targetKey) {
-                meleeTargetKey[actorKey] = targetKey;
-            }
+            // meleeTargetKey는 여기서 직접 건드리지 않는다 - 아래 waitForMeleeArrival이 target이
+            // 바뀌었는지 스스로 비교해서 바뀐 경우에만 meleeArrived를 다시 false로 리셋한다. 여기서
+            // 미리 값을 같게 만들어버리면 그 비교가 항상 "안 바뀜"으로 나와서, 예전 타겟이 죽어 새
+            // 전방으로 타겟이 바뀌어도 이미 meleeArrived=true인 채로 남아 걸어가지 않는 버그가 있었다
+            // (예: 전방이 죽어 후방이 새 전방이 됐는데, 상대 근접 유닛이 원래 타겟 자리에 멈춰있음).
 
             function applyHitVisual() {
                 if (targetKey) {
@@ -2528,6 +2811,14 @@
 
             if (actorIsMelee) {
                 waitForMeleeArrival(actorKey, targetKey).then(() => {
+                    // 이 공격은 백엔드에서 대상이 살아있던 시점에 정당하게 발생했지만(HP는 이미 위에서
+                    // 즉시 반영됨), 근거리 유닛이 화면상 실제로 도착하기까지는 시간이 걸린다 - 그 사이에
+                    // 대상이 다른 이벤트로 먼저 죽어 화면에서 이미 쓰러진 상태였다면, 지금 와서 스윙/피격
+                    // 연출을 재생하면 "이미 죽은 캐릭터를 한 번 더 때리는" 것처럼 보인다. targetWasAlreadyDead는
+                    // 이 이벤트가 적용되기 전 상태를 미리 캡처해둔 값이라, 이 공격 자체가 정상적인 킬(방금
+                    // hp가 0이 됨)인 경우까지 건너뛰지 않는다 - 그걸 건너뛰면 renderUnit이 호출되지 않아
+                    // 체력바가 옛 값에 멈춰있고 사망 로그도 안 뜬 채로 전투만 끝나버리는 버그가 있었다.
+                    if (targetWasAlreadyDead) return;
                     if (actorKey) playAttackFrames(actorKey);
                     applyHitVisual();
                 });
@@ -2536,8 +2827,12 @@
                 // 대상이 등 뒤(자기 원거리 자리까지 파고든 적 등)에 있으면 사진을 반전시켜 그쪽으로 발사한다.
                 faceToward(actorKey, targetKey);
                 if (actorKey) playAttackFrames(actorKey);
+                rangedResolvePending[actorKey] = true;
                 setTimeout(() => {
-                    playRangedAttack(actorKey, targetKey, applyHitVisual);
+                    playRangedAttack(actorKey, targetKey, () => {
+                        rangedResolvePending[actorKey] = false;
+                        applyHitVisual();
+                    });
                 }, EFFECT_LAUNCH_DELAY_MS);
             } else {
                 if (actorKey) playAttackFrames(actorKey);
@@ -2547,18 +2842,29 @@
 
         eventIndex += 1;
 
+        // 이 이벤트를 실제로 "지금" 처리했다는 걸 기준점으로 다시 잡는다 - cast_start/skill_resolve의
+        // "아직 애니메이션 중이면 대기" 재시도 게이트 등으로 이 이벤트 자체가 원래 스케줄보다 늦게
+        // 처리됐을 수 있는데, 기준점을 안 갱신하면 그 지연이 보상되지 않고 그대로 다음 이벤트들에
+        // 누적돼서 밀린다 - 특히 시전 애니메이션이 늦게 시작되면(직전 기본공격 윈드업이 아직 재생
+        // 중이라 cast_start 자체가 밀리는 경우가 흔함) skill_resolve까지 통째로 밀리고, 그 뒤를 잇는
+        // 복귀(return) 애니메이션이 재생될 시간도 없이 다음 기본공격이 끼어들어 잘리는 버그가 있었다.
+        // 매번 "방금 처리한 이 이벤트 시각 = 지금"으로 원점을 다시 잡으면, 이번 지연은 여기서 끝나고
+        // 다음 이벤트는 다시 정상적인(밀리지 않은) 상대 시간만큼만 기다리게 된다.
+        playbackOriginWallMs = performance.now();
+        playbackOriginEventTime = event.time;
+
         const nextEvent = data.events[eventIndex];
-        // 재생 시작 시점(playbackOriginWallMs/-EventTime) 기준 "절대 목표 시각"으로 다음 이벤트를
-        // 스케줄한다 - 이전엔 매 이벤트 쌍마다 Math.max(50, 직전 이벤트와의 시간차)를 누적하는
-        // 상대 지연 방식이었는데, 백엔드 tick에 여러 이벤트가 같은 시각으로 몰리면(흔한 일 - 여러
-        // 유닛이 같은 틱에 동시에 행동함) 그 바닥값(50ms)이 이벤트 개수만큼 반복 누적돼서, 시전
-        // 애니메이션(playCastFrames)은 정확한 시간에 끝나는데 그 뒤에 올 skill_resolve만 계속
-        // 밀려 "모션 끝나고 한참 뜸 들이다 발동"하는 버그가 있었다. 절대 시각 기준이면 한 스텝의
-        // 바닥값이 다음 스텝에서 자동으로 상쇄되어 누적되지 않는다.
         let delayMs;
         if (nextEvent) {
             const targetWallMs = playbackOriginWallMs + (nextEvent.time - playbackOriginEventTime) * 1000 * PLAYBACK_SPEED;
-            delayMs = Math.max(16, targetWallMs - performance.now());
+            // target_lock_resolve는 화면에 아무 것도 그리지 않는 조용한 상태 갱신용 이벤트라 최소 16ms
+            // 대기(다른 이벤트들이 눈에 보이는 연출 한 프레임만큼은 걸리도록 두는 바닥값)를 적용할
+            // 이유가 없다 - 넉백처럼 한 틱에 여러 유닛의 타겟이 한꺼번에 재계산되면 target_lock_resolve가
+            // 무더기로 쌓이는데, 매번 16ms씩 걸리면 그게 다 더해져서 그 뒤에 나오는 실제 공격/스킬
+            // 이벤트들까지 통째로 밀리고, 청년이 편성돼 넉백을 자주 쓸수록 전장의 모든 캐릭터가
+            // 다같이 느려지는 것처럼 보였다.
+            const minDelayMs = eventType === "target_lock_resolve" ? 0 : 16;
+            delayMs = Math.max(minDelayMs, targetWallMs - performance.now());
         } else {
             // 마지막 이벤트 뒤에는 다음 이벤트가 없어 절대 시각 스케줄을 쓸 수 없다 - 원거리 공격은
             // 애니메이션 플래그(attackAnimActive)가 꺼진 뒤에도 투사체가 한동안 더 날아가는 중일 수
@@ -2570,8 +2876,21 @@
         setTimeout(playNext, delayMs);
     }
 
+    // 전투가 끝나는 순간까지도 시전/공격 애니메이션이 안 풀린 유닛이 있을 수 있다 - 예를 들어 마지막
+    // 틱에 막 시전을 시작했는데 그 직후 상대 팀이 전멸해서 백엔드가 그 시전의 skill_resolve를 아예
+    // 안 만드는 경우(전투가 끝나버려서), 그 유닛은 skill_resolve도 interruptCasting도 못 받아 화면에
+    // 영원히 마지막 캐스팅 프레임에 멈춰 있게 된다("상대 원거리가 마지막 스킬 애니메이션에서 멈춰있는"
+    // 버그). 결과 화면을 띄우기 직전에 아직 애니메이션 중으로 표시된 유닛을 전부 강제로 idle로 정리한다.
+    function forceIdleAllUnits() {
+        Object.keys(units).forEach((key) => {
+            if (attackAnimActive[key]) forceClearAnim(key);
+        });
+    }
+
     function showResult() {
         walkerRunning = false;
+        stopBattleTimer();
+        forceIdleAllUnits();
         if (rosterOrderTimer) { clearInterval(rosterOrderTimer); rosterOrderTimer = null; }
 
         // attacker_won: true(승리)/false(패배)/null(무승부, 양팀 동시 전멸 시).
@@ -2627,16 +2946,24 @@
      * (매 프레임 새 줄을 추가하면 로그가 수십~수백 줄로 순식간에 도배되기 때문)
      */
     function startPreparation() {
+        // 준비 시간 타이머와는 별개로, 위에서 시작해둔 프레임 프리캐시(framePrecacheReady)가 진짜로
+        // 다 끝나야만 재생을 시작한다 - 캐릭터가 많거나 네트워크가 느려서 준비 시간(1.3초) 안에 probe가
+        // 안 끝나면, 타이머만 보고 시작했을 때 첫 스킬에서 캐시 미스가 나는 문제가 있었다(위 주석 참고).
+        // 보통은 프리캐시가 훨씬 먼저 끝나므로 실제 체감 대기시간에는 차이가 없다.
+        function beginPlayback() {
+            startMeleeWalker();
+            startRosterOrderWatcher();
+            playbackOriginWallMs = performance.now();
+            playbackOriginEventTime = data.events[0]?.time ?? 0;
+            startBattleTimer();
+            playNext();
+        }
+
         const prepEntry = appendLog("전투 준비 중...", null);
 
         if (!prepEntry) {
-            setTimeout(() => {
-                startMeleeWalker();
-                startRosterOrderWatcher();
-                playbackOriginWallMs = performance.now();
-                playbackOriginEventTime = data.events[0]?.time ?? 0;
-                playNext();
-            }, PREP_MS);
+            const prepTimer = new Promise((resolve) => setTimeout(resolve, PREP_MS));
+            Promise.all([framePrecacheReady, prepTimer]).then(beginPlayback);
             return;
         }
 
@@ -2659,15 +2986,11 @@
 
         requestAnimationFrame(updatePreparation);
 
-        setTimeout(() => {
+        const prepTimer = new Promise((resolve) => setTimeout(resolve, PREP_MS));
+        Promise.all([framePrecacheReady, prepTimer]).then(() => {
             prepEntry.textContent = "전투 시작!";
-
-            startMeleeWalker();
-            startRosterOrderWatcher();
-            playbackOriginWallMs = performance.now();
-            playbackOriginEventTime = data.events[0]?.time ?? 0;
-            playNext();
-        }, PREP_MS);
+            beginPlayback();
+        });
     }
 
     // "입장하는 중..."(점 애니메이션 + 랜덤 팁)은 로비(home.html)에서 이 페이지로 넘어오기 전에

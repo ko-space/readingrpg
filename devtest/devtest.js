@@ -11,10 +11,16 @@
     const PROJECTILE_TRAVEL_MS = 220;
     const MAX_ATTACK_FRAMES = 6;
     const MAX_SKILL_FRAMES = 9; // 스킬 시전 전용 사진은 캐릭터당 총 9장까지 넣기로 확정됨(arena-battle.js와 동일)
+    const MAX_WALK_FRAMES = 6; // 걷기 전용 사진(walk_N.png), attack_N.png와 같은 최대 장수(arena-battle.js와 동일)
     const ATTACK_FRAME_DURATION_MS = 60;
+    const WALK_FRAME_DURATION_MS = 220;
     const EFFECT_LAUNCH_DELAY_MS = ATTACK_FRAME_DURATION_MS * 3; // 원거리 공격: 애니메이션 3프레임쯤 재생된 뒤 이펙트 발사
     const MOVE_STEP_PX = 4;
     const ARRIVE_THRESHOLD_PX = 2;
+    // 이미 도착한 상태에서 상대가 계속 걷느라 화면 위치가 살짝씩 흔들리면 매 프레임 도착/미도착이
+    // 갈려서 공격 연출이 밀리는 문제가 있었다(arena-battle.js와 동일) - 확실히 멀어지기 전까지는
+    // 다시 "미도착"으로 되돌리지 않는 여유 구간(히스테리시스).
+    const LOSE_CONTACT_THRESHOLD_PX = 48;
     const CRIT_CHANCE = 0.10;      // battle_engine.py의 CRIT_CHANCE와 동일 - 수동 버튼도 서버와 같은 확률로 흉내낸다
     const CRIT_MULTIPLIER = 1.5;
 
@@ -69,8 +75,16 @@
     let activeSlot = null;
     const attackAnimActive = {};
     const attackAnimTokens = {};
+    // slot -> 그 배우의 애니메이션 단계가 순서대로만 실행되도록 이어붙인 Promise 체인(arena-battle.js와
+    // 동일 - chainActorAnim/waitForAnimIdle 참고). 전역 이벤트 커서는 이 체인을 절대 기다리지 않는다.
+    const actorAnimChain = {};
+    // slot -> 그 유닛이 쏜 원거리 공격의 투사체/이펙트가 아직 목표에 도달하지 않았는지(arena-battle.js와 동일).
+    const rangedResolvePending = {};
     const frameCountCache = {};
     const skillFrameCountCache = {};
+    const walkFrameCountCache = {};
+    const walkAnimTokens = {};
+    const walkAnimActive = {}; // slot -> 지금 playWalkFrames 루프가 이미 돌고 있는지(arena-battle.js와 동일)
     const meleeTargetKey = {};
     const meleeArrived = {};
     const pendingArrivalResolvers = {};
@@ -87,7 +101,10 @@
     function setFacing(slot, flipped) {
         if (facingFlipped[slot] === flipped) return;
         facingFlipped[slot] = flipped;
-        document.querySelector(`[data-unit="${slot}"] .battle-unit-img`)?.classList.toggle("flipped", flipped);
+        const battleEl = document.querySelector(`[data-unit="${slot}"]`);
+        battleEl?.querySelector(".battle-unit-img")?.classList.toggle("flipped", flipped);
+        // 히트박스 정렬도 방향을 따라간다(arena-battle.js와 동일 이유).
+        battleEl?.classList.toggle("hitbox-flipped", flipped);
     }
     function faceToward(slot, targetSlot) {
         const el = document.querySelector(`[data-unit="${slot}"]`);
@@ -243,8 +260,18 @@
         // 그동안 캐스팅 타이머는 그대로 흘러서 애니메이션이 끝까지 재생되지 못하고 잘리는 버그가 있었다.
         getAttackFrameCount(outfit);
         getSkillFrameCount(outfit);
-        getAttackFrameCount(outfit, "_type2");
-        getSkillFrameCount(outfit, "_type2");
+        if (isMelee) {
+            getWalkFrameCount(outfit);
+        }
+        // _type2 변형은 이의진(염색체 변환) 본인만 실제로 쓴다(arena-battle.js와 동일) - 다른
+        // 캐릭터에게까지 존재하지도 않는 type2 프레임을 미리 찾아보게 하면 콘솔에 불필요한 404만 남는다.
+        if (name === "이의진") {
+            getAttackFrameCount(outfit, "_type2");
+            getSkillFrameCount(outfit, "_type2");
+            if (isMelee) {
+                getWalkFrameCount(outfit, "_type2");
+            }
+        }
 
         renderUnit(slot);
     }
@@ -283,6 +310,9 @@
 
         const isDead = unit.hp <= 0;
         const imgEl = el.querySelector(".battle-unit-img");
+
+        // 히트박스(.battle-unit) 정렬도 현재 방향을 따라간다(arena-battle.js와 동일).
+        el.classList.toggle("hitbox-flipped", isFacingFlipped(slot));
 
         if (isDead) {
             if (imgEl && !deathHandled[slot]) {
@@ -468,13 +498,21 @@
                     const currentCloneX = getCurrentTranslateX(cloneEl);
                     cloneEl.style.transform = `translateX(${currentCloneX + (casterRect.left - cloneRect.left)}px)`;
 
-                    // 캐스터는 복제체가 자기 자리를 차지한 만큼, 복제체 너비만큼 뒤로 밀려난다(서로 겹치지
-                    // 않게) - 청년의 넉백(applyKnockback)과 완전히 같은 방식(부드러운 CSS 트랜지션 + 넉백(CC기)
-                    // 오라/아이콘, arena-battle.js와 동일). suspendSelfWalker 덕분에 트랜지션이 끝나자마자
-                    // walker가 깨어나 원래 근접 거리를 목표로 자연스럽게 다시 걸어오므로 별도의 "복귀" 연출은 필요 없다.
+                    // 캐스터는 복제체가 자기 자리를 차지한 만큼, 자기 자신의 스프라이트 너비만큼 뒤로
+                    // 밀려난다(서로 겹치지 않게) - 청년의 넉백(applyKnockback)과 완전히 같은 방식(부드러운 CSS
+                    // 트랜지션 + 넉백(CC기) 오라/아이콘, arena-battle.js와 동일). suspendSelfWalker 덕분에
+                    // 트랜지션이 끝나자마자 walker가 깨어나 원래 근접 거리를 목표로 자연스럽게 다시 걸어오므로
+                    // 별도의 "복귀" 연출은 필요 없다.
                     flashEffectAura(casterSlot, "cc");
                     setStatusIcon(casterSlot, "knockback", { source: `${casterSlot}:knockback`, durationMs: MOMENT_ICON_MS });
-                    applyKnockback(casterSlot, { distance: cloneRect.width, durationMs: 380, suspendSelfWalker: true });
+                    // 팀 기준 고정 방향이 아니라 지금 보고 있는 방향의 반대로 밀려난다(arena-battle.js와 동일).
+                    const summonKnockDir = isFacingFlipped(casterSlot) ? 1 : -1;
+                    applyKnockback(casterSlot, {
+                        distance: casterRect.width,
+                        durationMs: 380,
+                        suspendSelfWalker: true,
+                        knockDir: summonKnockDir,
+                    });
                 }
             }
             attackAnimActive[cloneSlot] = false;
@@ -728,6 +766,48 @@
         return count;
     }
 
+    // 걷기 전용 프레임(walk_N.png)이 있는지 확인 - attack_N.png와 같은 규칙(arena-battle.js와 동일).
+    async function getWalkFrameCount(outfit, variant = "") {
+        const cacheKey = `${outfit}${variant}`;
+        if (walkFrameCountCache[cacheKey] !== undefined) return walkFrameCountCache[cacheKey];
+        let count = 0;
+        for (let i = 1; i <= MAX_WALK_FRAMES; i += 1) {
+            const exists = await checkImageExists(`${OUTFIT_IMAGE_BASE}${outfit}/walk${variant}_${i}.png`);
+            if (!exists) break;
+            count = i;
+        }
+        walkFrameCountCache[cacheKey] = count;
+        return count;
+    }
+
+    // 근거리 유닛이 걷는 동안(startMeleeWalker의 tick) 반복 재생되는 걷기 프레임 애니메이션(arena-battle.js와 동일).
+    async function playWalkFrames(slot) {
+        const el = document.querySelector(`[data-unit="${slot}"]`);
+        const imgEl = el?.querySelector(".battle-unit-img");
+        const unit = units[slot];
+        if (!el || !imgEl || !unit) return;
+
+        const variant = spriteVariantSuffix(slot);
+        const myToken = (walkAnimTokens[slot] = (walkAnimTokens[slot] || 0) + 1);
+        const frameCount = await getWalkFrameCount(unit.outfit, variant);
+        if (walkAnimTokens[slot] !== myToken) return;
+
+        // 걷기 전용 사진이 없는 캐릭터 - 사진은 그대로 두고 CSS bob 애니메이션(walking 클래스)만 적용된 채로 걷는다.
+        if (frameCount === 0) return;
+
+        let frameIndex = 1;
+        while (walkAnimTokens[slot] === myToken) {
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/walk${variant}_${frameIndex}.png`;
+            await sleep(WALK_FRAME_DURATION_MS);
+            frameIndex = (frameIndex % frameCount) + 1;
+        }
+    }
+
+    function stopWalkFrames(slot) {
+        walkAnimTokens[slot] = (walkAnimTokens[slot] || 0) + 1;
+        walkAnimActive[slot] = false;
+    }
+
     async function playAttackFrames(slot) {
         const el = document.querySelector(`[data-unit="${slot}"]`);
         const imgEl = el?.querySelector(".battle-unit-img");
@@ -783,23 +863,34 @@
         const frameCount = usingSkillFrames ? skillFrameCount : await getAttackFrameCount(unit.outfit, variant);
         const framePrefix = usingSkillFrames ? "skill" : "attack";
 
-        if (attackAnimTokens[slot] !== myToken) return;
+        if (attackAnimTokens[slot] !== myToken) return; // 다른 호출이 이미 새 토큰을 발급함 - 그쪽 상태를 건드리지 않는다
 
         if (frameCount === 0) {
             // 스킬/공격 프레임 이미지가 아예 없는 캐릭터는 기존처럼 펄스 글로우만으로 시전 표시.
+            // attackAnimActive는 꺼둬야 한다 - skill_resolve 처리 시작부의 대기 게이트가 이 값을 보고
+            // 재시도하는데, 여기서 안 꺼두면 그 게이트를 영영 통과 못 해서 재생이 완전히 멈춘다.
+            attackAnimActive[slot] = false;
             return;
         }
 
         const perFrameMs = durationMs / frameCount;
+        // 절대 시각 기준으로 스케줄한다(arena-battle.js와 동일한 이유) - 프레임마다 상대 시간으로
+        // sleep을 걸면 setTimeout 오차가 프레임 수만큼 누적돼서, 프레임이 많을수록 실제 재생이 서버
+        // 시전 시간보다 점점 길어지고 skill_resolve 처리가 늦어진다.
+        const castStartMs = performance.now();
 
         for (let i = 1; i <= frameCount; i += 1) {
-            if (attackAnimTokens[slot] !== myToken) return;
+            if (attackAnimTokens[slot] !== myToken) return; // 다른 호출이 이미 새 토큰을 발급함 - 그쪽 상태를 건드리지 않는다
             imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/${framePrefix}${variant}_${i}.png`;
-            await sleep(perFrameMs);
+            const remainingMs = castStartMs + perFrameMs * i - performance.now();
+            if (remainingMs > 0) await sleep(remainingMs);
         }
 
+        // 시전 프레임 루프가 끝났으니 skill_resolve 처리를 막던 게이트는 풀어준다(안 그러면 위와
+        // 같은 이유로 멈춘다) - 다만 화면(스프라이트)은 마지막 프레임에 그대로 멈춰 둔다. 여기서
+        // 곧바로 idle로 스냅하면 이 루프의 타이머와 실제 skill_resolve 처리 시점이 살짝만 어긋나도
+        // idle로 풀렸다가 skill_resolve가 다시 풀어주는 이중 전환이 생긴다(arena-battle.js와 동일한 이유).
         if (attackAnimTokens[slot] === myToken) {
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.png`;
             attackAnimActive[slot] = false;
         }
     }
@@ -1002,11 +1093,12 @@
     // 다시 걸어간다(별도의 "복귀" 연출 불필요). 청년의 기존 적 대상 넉백은 대체로 원거리(비근접)
     // 대상이라 이 문제가 잘 안 드러나서 기본은 꺼둔다(arena-battle.js와 동일).
     function applyKnockback(targetSlot, options = {}) {
-        const { distance = 170, durationMs = 220, suspendSelfWalker = false } = options;
+        const { distance = 170, durationMs = 220, suspendSelfWalker = false, knockDir: knockDirOverride } = options;
         const el = document.querySelector(`[data-unit="${targetSlot}"]`);
         if (!el) return;
 
-        const knockDir = targetSlot.startsWith("attacker") ? -1 : 1;
+        // knockDir을 명시적으로 넘기면(윤영준의 복제체 생성 넉백 등, arena-battle.js와 동일) 그 값을 우선한다.
+        const knockDir = knockDirOverride ?? (targetSlot.startsWith("attacker") ? -1 : 1);
         const startX = getCurrentTranslateX(el);
         let endX = startX + knockDir * distance;
 
@@ -1059,10 +1151,20 @@
                 const imgEl = el?.querySelector(".battle-unit-img");
                 const gap = getGapToTarget(slot, targetKey);
 
+                if (meleeArrived[slot] && Math.abs(gap) <= LOSE_CONTACT_THRESHOLD_PX) {
+                    return;
+                }
+
                 if (Math.abs(gap) <= ARRIVE_THRESHOLD_PX) {
                     if (!meleeArrived[slot]) {
                         meleeArrived[slot] = true;
                         imgEl?.classList.remove("walking");
+                        stopWalkFrames(slot);
+                        if (imgEl) {
+                            const unit = units[slot];
+                            const variant = spriteVariantSuffix(slot);
+                            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.png`;
+                        }
                         faceToward(slot, targetKey);
                         (pendingArrivalResolvers[slot] || []).forEach((resolve) => resolve());
                         pendingArrivalResolvers[slot] = [];
@@ -1071,6 +1173,11 @@
                 }
                 meleeArrived[slot] = false;
                 imgEl?.classList.add("walking");
+                // 걷기 전용 사진(walk_N.png)이 있으면 그 프레임을 순환 재생(arena-battle.js와 동일).
+                if (!walkAnimActive[slot]) {
+                    walkAnimActive[slot] = true;
+                    playWalkFrames(slot);
+                }
                 const step = Math.sign(gap) * Math.min(MOVE_STEP_PX, Math.abs(gap));
                 setFacing(slot, step < 0);
                 const currentX = getCurrentTranslateX(el);
@@ -1982,7 +2089,7 @@
                     flashEffectAura(result.targetSlot, "debuff");
                     setStatusIcon(result.targetSlot, "atk_down", { source: `${actorSlot}:atk_down`, durationMs: params.debuff_seconds * 1000 });
                 } else if (dispatchEffectType === "bonus_damage_knockback" && result.targetSlot) {
-                    applyKnockback(result.targetSlot);
+                    applyKnockback(result.targetSlot, { distance: 9999, suspendSelfWalker: true });
                     flashEffectAura(result.targetSlot, "cc");
                     setStatusIcon(result.targetSlot, "knockback", { source: `${actorSlot}:knockback`, durationMs: MOMENT_ICON_MS });
                 } else if (dispatchEffectType === "aoe_enemy_damage") {
@@ -2034,6 +2141,9 @@
         walkerRunning = false;
         SLOTS.forEach((slot) => clearAllStatusIcons(slot)); // 서버가 새로 보내는 이벤트로만 상태가 갱신되게, 수동으로 쌓아둔 건 초기화
         Object.keys(walkerSuspended).forEach((slot) => delete walkerSuspended[slot]);
+        // 이전 전투에서 남은 배우별 애니메이션 체인도 정리한다 - 이미 완료된(resolved) 체인이라 새
+        // 체인이 이어붙어도 기능상 무해하지만, 세션 내 재실행이 잦은 devtest 특성상 위생적으로 비워둔다.
+        Object.keys(actorAnimChain).forEach((slot) => delete actorAnimChain[slot]);
 
         // 이전 전투에서 남아있던 복제체(summon)는 새 전투 시작 전에 완전히 지운다.
         ["attacker-summon-front", "attacker-summon-back", "defender-summon-front", "defender-summon-back"].forEach((slot) => {
@@ -2075,6 +2185,7 @@
         const winnerText = data.attacker_won === true ? "공격" : data.attacker_won === false ? "수비" : "무승부";
         log(`전투 결과 수신 - 이벤트 ${data.events.length}개, 승자: ${winnerText}`);
 
+        const framePrecachePromises = [];
         SLOTS.forEach((slot) => {
             const side = slot.startsWith("attacker") ? "attacker" : "defender";
             const part = slot.endsWith("front") ? "front" : "back";
@@ -2087,13 +2198,27 @@
             const el = document.querySelector(`[data-unit="${slot}"]`);
             el.style.transform = "translateX(0)";
             el.querySelector(".battle-unit-img")?.classList.remove("is-clone"); // 이전 전투에서 생긴 복제체 색감 초기화
-            // 공격/스킬 프레임 개수 미리 확인(onUnitConfigChange와 동일한 이유) - 캐시돼 있으면 그냥 넘어간다.
-            getAttackFrameCount(units[slot].outfit);
-            getSkillFrameCount(units[slot].outfit);
-            getAttackFrameCount(units[slot].outfit, "_type2");
-            getSkillFrameCount(units[slot].outfit, "_type2");
+            // 공격/스킬/걷기 프레임 개수 미리 확인(onUnitConfigChange와 동일한 이유) - 캐시돼 있으면 그냥 넘어간다.
+            // arena-battle.js와 동일한 이유로 Promise를 모아뒀다가 아래에서 실제로 기다린다 - 안 그러면
+            // (특히 devtest는 arena의 1.3초 준비 시간 같은 완충 구간도 없이 곧바로 재생을 시작해서) 첫
+            // 스킬에서 캐시 미스가 나 playCastFrames가 자기만의 느린 probe를 다시 돌리는 문제가 있었다.
+            framePrecachePromises.push(getAttackFrameCount(units[slot].outfit));
+            framePrecachePromises.push(getSkillFrameCount(units[slot].outfit));
+            if (units[slot].isMelee) {
+                framePrecachePromises.push(getWalkFrameCount(units[slot].outfit));
+            }
+            // _type2 변형은 이의진 본인만 실제로 쓴다(arena-battle.js와 동일) - 다른 캐릭터에게까지
+            // 존재하지도 않는 type2 프레임을 미리 찾아보게 하면 콘솔에 불필요한 404만 남는다.
+            if (units[slot].name === "이의진") {
+                framePrecachePromises.push(getAttackFrameCount(units[slot].outfit, "_type2"));
+                framePrecachePromises.push(getSkillFrameCount(units[slot].outfit, "_type2"));
+                if (units[slot].isMelee) {
+                    framePrecachePromises.push(getWalkFrameCount(units[slot].outfit, "_type2"));
+                }
+            }
         });
         renderAll();
+        await Promise.all(framePrecachePromises);
         startMeleeWalker();
         playbackOriginWallMs = performance.now();
         playbackOriginEventTime = data.events[0]?.time ?? 0;
@@ -2126,20 +2251,103 @@
     // onBattlePosted(또는 재생을 시작하는 지점)이 첫 playEvents() 호출 직전에 채운다.
     let playbackOriginWallMs = 0;
     let playbackOriginEventTime = 0;
-    // arena-battle.js의 lastEventActorKey와 동일한 이유 - 마지막 이벤트의 행동 주체가 아직
-    // 공격/시전 애니메이션 중이거나 목표에 도착 전이면 "전투 종료" 로그가 그보다 먼저 뜨는 걸 막는다.
-    let lastEventActorSlot = null;
+
+    // 안전장치(arena-battle.js와 동일한 이유): cast_start/skill_resolve/"마지막 이벤트" 대기 게이트가
+    // 어떤 이유로든 절대 안 풀리면 재생 전체가 영원히 멈춘다 - 같은 대상으로 ANIM_WAIT_TIMEOUT_MS 이상
+    // 계속 대기 중이면 그 유닛의 애니메이션 상태를 강제로 idle로 정리하고 진행한다.
+    const animWaitStartedAt = {};
+    const ANIM_WAIT_TIMEOUT_MS = 1500;
+
+    function shouldForceProceedPast(waitKey) {
+        const now = performance.now();
+        if (!animWaitStartedAt[waitKey]) {
+            animWaitStartedAt[waitKey] = now;
+            return false;
+        }
+        return now - animWaitStartedAt[waitKey] > ANIM_WAIT_TIMEOUT_MS;
+    }
+
+    function clearAnimWait(waitKey) {
+        delete animWaitStartedAt[waitKey];
+    }
+
+    function forceClearAnim(slot) {
+        if (!slot) return;
+        attackAnimTokens[slot] = (attackAnimTokens[slot] || 0) + 1;
+        attackAnimActive[slot] = false;
+        const imgEl = document.querySelector(`[data-unit="${slot}"] .battle-unit-img`);
+        if (imgEl && units[slot]) {
+            imgEl.classList.remove("casting", "casting-rainbow", "attacking");
+            imgEl.onerror = null;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${units[slot].outfit}/battle_idle${spriteVariantSuffix(slot)}.png`;
+        }
+    }
+
+    // slot(배우)별로 애니메이션 단계가 순서대로만 실행되도록 이어붙인다(arena-battle.js와 동일) - 전역
+    // 이벤트 커서는 이 반환값을 절대 기다리지 않는다(fire-and-forget). workFn 예외로 체인이 영구히
+    // 끊기지 않도록 흡수한다.
+    function chainActorAnim(slot, workFn) {
+        const prev = actorAnimChain[slot] || Promise.resolve();
+        const next = prev.then(workFn).catch(() => {});
+        actorAnimChain[slot] = next;
+        return next;
+    }
+
+    // 다음 애니메이션 단계로 넘어가기 전에 이 배우 자신의 직전 애니메이션이 화면에서 실제로 끝났는지
+    // (attackAnimActive)를 기다린다(arena-battle.js와 동일) - 이 배우의 체인 안에서만 대기하므로 다른
+    // 배우의 이벤트 처리를 막지 않는다. 기존 워치독을 재사용해 원인을 못 찾아도 무한 대기하지 않는다.
+    function waitForAnimIdle(slot) {
+        return new Promise((resolve) => {
+            function poll() {
+                if (!attackAnimActive[slot]) {
+                    clearAnimWait(slot);
+                    resolve();
+                    return;
+                }
+                if (shouldForceProceedPast(slot)) {
+                    forceClearAnim(slot);
+                    clearAnimWait(slot);
+                    resolve();
+                    return;
+                }
+                requestAnimationFrame(poll);
+            }
+            poll();
+        });
+    }
+
+    // 전투가 끝나는 순간까지도 시전/공격 애니메이션이 안 풀린 유닛이 있을 수 있다(arena-battle.js와
+    // 동일한 이유) - 결과를 확정하기 직전에 아직 애니메이션 중으로 표시된 유닛을 전부 강제로 idle로 정리한다.
+    function forceIdleAllUnits() {
+        Object.keys(units).forEach((slot) => {
+            if (attackAnimActive[slot]) forceClearAnim(slot);
+        });
+    }
+
+    // 어느 유닛이든 아직 애니메이션/도착/투사체 처리가 안 끝났으면 "전투 종료" 로그가 먼저 뜨는 걸
+    // 막는다(arena-battle.js와 동일) - 배우별 애니메이션 체인(actorAnimChain) 덕분에 여러 배우가 동시에
+    // 진행 중일 수 있으므로, "마지막 배우" 한 명만 보던 예전 방식(lastEventActorSlot) 대신 전체 유닛을
+    // 순회해서 확인한다.
+    function anyActorStillFinishing() {
+        return Object.keys(units).some((slot) => {
+            if (!units[slot]) return false;
+            return attackAnimActive[slot] ||
+                (units[slot].isMelee && meleeArrived[slot] === false) ||
+                rangedResolvePending[slot];
+        });
+    }
 
     function playEvents(events, index) {
         if (index >= events.length) {
-            if (
-                lastEventActorSlot &&
-                (attackAnimActive[lastEventActorSlot] ||
-                    (units[lastEventActorSlot]?.isMelee && meleeArrived[lastEventActorSlot] === false))
-            ) {
-                setTimeout(() => playEvents(events, index), 30);
-                return;
+            if (anyActorStillFinishing()) {
+                if (!shouldForceProceedPast("lastEvent")) {
+                    requestAnimationFrame(() => playEvents(events, index));
+                    return;
+                }
+                // 안전장치 발동 - forceIdleAllUnits(아래)가 애니메이션 정리는 알아서 해준다.
             }
+            clearAnimWait("lastEvent");
+            forceIdleAllUnits();
             log("=== 전투 종료 ===");
             walkerRunning = false;
             return;
@@ -2149,23 +2357,6 @@
         const actorSide = event.side;
         const targetSide = actorSide === "attacker" ? "defender" : "attacker";
         const actorSlot = event.actor ? findSlotByName(actorSide, event.actor) : null;
-        lastEventActorSlot = actorSlot || lastEventActorSlot;
-
-        if (event.event_type === "cast_start" && actorSlot && attackAnimActive[actorSlot]) {
-            // 3번째 기본공격 직후 곧바로 자신의 시전으로 넘어가는 경우, 그 공격의 윈드업/프레임
-            // 애니메이션이 아직 재생 중일 수 있다(attackAnimActive) - 그게 끝날 때까지 index를
-            // 그대로 두고 짧은 간격으로 재시도한다.
-            setTimeout(() => playEvents(events, index), 20);
-            return;
-        }
-
-        if (event.event_type === "skill_resolve" && actorSlot && attackAnimActive[actorSlot]) {
-            // skill_resolve가 처리되면 곧바로 playReturnFrames가 시전 애니메이션의 토큰을 갈아치우는데,
-            // cast_start 때 시작한 playCastFrames가 아직 프레임 루프를 다 못 돌았으면 시전 애니메이션이
-            // 중간에 잘린다(arena-battle.js와 동일한 이유) - "정말 끝났는지" 직접 확인하고 재시도한다.
-            setTimeout(() => playEvents(events, index), 20);
-            return;
-        }
 
         if (event.event_type === "star_effect_resolve") {
             // 성급별 효과(전투 시작 시 1회) - 스탯이 오르내린 대상마다 해당 상태 아이콘을 켠다.
@@ -2243,12 +2434,29 @@
                 }
             }
             log(`[특성] ${event.actor}의 방임 상태 ${event.detail?.active ? "활성화" : "해제"}`);
+        } else if (event.event_type === "target_lock_resolve") {
+            // 백엔드가 새 기본공격 대상을 "확정"한 시점(실제 명중보다 먼저 온다, arena-battle.js와 동일) -
+            // 근접 유닛은 이 신호를 받는 즉시 새 목표를 향해 걷기 시작한다.
+            const lockTargetSlot = findSlotByName(targetSide, event.target);
+            if (
+                actorSlot && lockTargetSlot &&
+                units[actorSlot]?.isMelee &&
+                meleeTargetKey[actorSlot] !== lockTargetSlot
+            ) {
+                meleeTargetKey[actorSlot] = lockTargetSlot;
+                meleeArrived[actorSlot] = false;
+            }
         } else if (event.event_type === "cast_start") {
             if (actorSlot) {
-                const castImgEl = document.querySelector(`[data-unit="${actorSlot}"] .battle-unit-img`);
-                castImgEl?.classList.add("casting");
-                if (event.actor === "강승유") castImgEl?.classList.add("casting-rainbow");
-                playCastFrames(actorSlot, event.duration * 1000 * PLAYBACK_SPEED);
+                // 시전 자세/애니메이션은 이 배우 전용 체인에 매달아둔다(arena-battle.js와 동일) - 다른
+                // 배우의 이벤트 처리는 전혀 막지 않는다.
+                chainActorAnim(actorSlot, async () => {
+                    await waitForAnimIdle(actorSlot);
+                    const castImgEl = document.querySelector(`[data-unit="${actorSlot}"] .battle-unit-img`);
+                    castImgEl?.classList.add("casting");
+                    if (event.actor === "강승유") castImgEl?.classList.add("casting-rainbow");
+                    await playCastFrames(actorSlot, event.duration * 1000 * PLAYBACK_SPEED);
+                });
             }
             log(`[캐스팅] ${event.actor} -> ${event.effect_type} (${event.duration.toFixed(2)}초)`);
         } else if (event.event_type === "skill_resolve") {
@@ -2264,13 +2472,21 @@
             }
 
             if (actorSlot) {
-                const imgEl = document.querySelector(`[data-unit="${actorSlot}"] .battle-unit-img`);
-                imgEl?.classList.remove("casting", "casting-rainbow");
-                // 시전 프레임 루프가 아직 돌고 있으면 즉시 멈추고 평상시 자세로 되돌린다(타이밍이 살짝 어긋나도 안전).
-                attackAnimTokens[actorSlot] = (attackAnimTokens[actorSlot] || 0) + 1;
-                attackAnimActive[actorSlot] = false;
-                if (imgEl && units[actorSlot]) {
-                    imgEl.src = `${OUTFIT_IMAGE_BASE}${units[actorSlot].outfit}/battle_idle${spriteVariantSuffix(actorSlot)}.png`;
+                // "시전 자세 풀기 + idle 스냅"만 이 배우 전용 체인에 매달아둔다(arena-battle.js와 동일한
+                // 이유 - 데이터/상태 아이콘/오라 등 나머지는 지금처럼 즉시 반영해서, 이 배우의 체인이
+                // 밀려있는 동안 무관한 다른 배우의 이벤트가 이 대상의 체력을 과거 값으로 되돌리는 회귀를
+                // 막는다). cast_start 때 이미 같은 체인에 playCastFrames가 매달려 있으므로, 체인 순서
+                // 자체가 "그게 끝나야 idle로 풀림"을 보장한다.
+                if (units[actorSlot]) {
+                    chainActorAnim(actorSlot, () => {
+                        const imgEl = document.querySelector(`[data-unit="${actorSlot}"] .battle-unit-img`);
+                        imgEl?.classList.remove("casting", "casting-rainbow");
+                        attackAnimTokens[actorSlot] = (attackAnimTokens[actorSlot] || 0) + 1;
+                        attackAnimActive[actorSlot] = false;
+                        if (imgEl && units[actorSlot]) {
+                            imgEl.src = `${OUTFIT_IMAGE_BASE}${units[actorSlot].outfit}/battle_idle${spriteVariantSuffix(actorSlot)}.png`;
+                        }
+                    });
                 }
                 // 시전자 몸이 카테고리 색으로 번쩍이던 예전 연출은 제거 - 오라는 효과를 "받은" 대상에게만
                 // 나왔다가 사라진다(arena-battle.js와 동일).
@@ -2324,11 +2540,19 @@
                         const currentCloneX = getCurrentTranslateX(cloneEl);
                         cloneEl.style.transform = `translateX(${currentCloneX + (casterRect.left - cloneRect.left)}px)`;
 
-                        // 시전자는 복제체가 자기 자리를 차지한 만큼, 복제체 너비만큼 뒤로 밀려난다 - 부드러운
-                        // CSS 트랜지션 + 넉백(CC기) 오라/아이콘까지 청년의 넉백과 동일하다(arena-battle.js와 동일).
+                        // 시전자는 복제체가 자기 자리를 차지한 만큼, 자기 자신의 스프라이트 너비만큼 뒤로
+                        // 밀려난다 - 부드러운 CSS 트랜지션 + 넉백(CC기) 오라/아이콘까지 청년의 넉백과
+                        // 동일하다(arena-battle.js와 동일).
                         flashEffectAura(actorSlot, "cc");
                         setStatusIcon(actorSlot, "knockback", { source: `${actorSlot}:knockback`, durationMs: MOMENT_ICON_MS });
-                        applyKnockback(actorSlot, { distance: cloneRect.width, durationMs: 380, suspendSelfWalker: true });
+                        // 팀 기준 고정 방향이 아니라 지금 보고 있는 방향의 반대로 밀려난다(arena-battle.js와 동일).
+                        const summonKnockDir = isFacingFlipped(actorSlot) ? 1 : -1;
+                        applyKnockback(actorSlot, {
+                            distance: casterRect.width,
+                            durationMs: 380,
+                            suspendSelfWalker: true,
+                            knockDir: summonKnockDir,
+                        });
                     }
                 }
                 attackAnimActive[cloneSlot] = false;
@@ -2422,7 +2646,7 @@
                     units[hitSlot].hp = hit.target_hp_after;
                     renderUnit(hitSlot);
                     flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
-                    applyKnockback(hitSlot);
+                    applyKnockback(hitSlot, { distance: 9999, suspendSelfWalker: true });
                     flashEffectAura(hitSlot, "cc");
                     setStatusIcon(hitSlot, "knockback", { source: `${event.actor}:knockback`, durationMs: MOMENT_ICON_MS });
                     if (event.detail?.interrupted_cast) interruptCasting(hitSlot);
@@ -2535,6 +2759,10 @@
             log(`[스킬 발동] ${event.actor} (${event.effect_type}) ${JSON.stringify(event.detail)}`);
         } else if (event.event_type === "basic_attack") {
             const targetSlot = findSlotByName(targetSide, event.target);
+            // 이 이벤트가 적용되기 "전"에 이미 죽어있었는지 미리 캡처해둔다 - 아래에서 hp를 곧바로
+            // 덮어쓰고 나면, 이 공격 자체가 킬(target_hp_after=0)인 정상적인 경우와 "이미 죽은 대상을
+            // 뒤늦게 또 때린" 경우를 더 이상 hp만 보고는 구분할 수 없다(arena-battle.js와 동일).
+            const targetWasAlreadyDead = targetSlot && units[targetSlot] && units[targetSlot].hp <= 0;
             if (targetSlot) units[targetSlot].hp = event.target_hp_after;
 
             function applyHitVisual() {
@@ -2556,6 +2784,12 @@
 
             if (actorSlot && units[actorSlot]?.isMelee) {
                 waitForMeleeArrival(actorSlot, targetSlot).then(() => {
+                    // 대상이 살아있던 시점에 정당하게 발생한 공격이지만(HP는 이미 위에서 반영됨), 근거리
+                    // 유닛이 화면상 실제로 도착하기까지 시간이 걸리는 동안 대상이 다른 이벤트로 먼저 죽었을
+                    // 때만 연출을 건너뛴다 - targetWasAlreadyDead는 이 이벤트 적용 전 상태라, 이 공격 자체가
+                    // 정상적인 킬인 경우까지 건너뛰지 않는다(그러면 체력바가 안 갱신되고 사망 로그도 없이
+                    // 전투만 끝나버리는 버그가 생긴다 - arena-battle.js와 동일).
+                    if (targetWasAlreadyDead) return;
                     playAttackFrames(actorSlot);
                     applyHitVisual();
                 });
@@ -2564,8 +2798,12 @@
                 // 대상이 등 뒤(허공 공격 버그의 원인이던 케이스)에 있으면 사진을 반전시켜 그쪽으로 발사한다.
                 faceToward(actorSlot, targetSlot);
                 playAttackFrames(actorSlot);
+                rangedResolvePending[actorSlot] = true;
                 setTimeout(() => {
-                    playRangedAttack(actorSlot, targetSlot, applyHitVisual);
+                    playRangedAttack(actorSlot, targetSlot, () => {
+                        rangedResolvePending[actorSlot] = false;
+                        applyHitVisual();
+                    });
                 }, EFFECT_LAUNCH_DELAY_MS);
             } else {
                 if (actorSlot) playAttackFrames(actorSlot);
@@ -2573,14 +2811,24 @@
             }
         }
 
+        // 이 이벤트를 실제로 "지금" 처리했다는 걸 기준점으로 다시 잡는다(arena-battle.js와 동일한
+        // 이유) - cast_start/skill_resolve의 대기 게이트 등으로 이 이벤트 자체가 원래 스케줄보다 늦게
+        // 처리됐을 수 있는데, 기준점을 안 갱신하면 그 지연이 다음 이벤트들에 그대로 누적돼서, 시전
+        // 애니메이션이 늦게 시작된 만큼 복귀(return) 애니메이션이 재생될 시간도 없이 다음 기본공격이
+        // 끼어들어 잘리는 버그가 있었다.
+        playbackOriginWallMs = performance.now();
+        playbackOriginEventTime = event.time;
+
         const nextEvent = events[index + 1];
-        // 재생 시작 시점 기준 절대 목표 시각으로 스케줄한다 - arena-battle.js와 동일한 이유(상대 지연을
-        // 누적하면 같은 tick에 여러 이벤트가 몰릴 때 Math.max(50,...) 바닥값이 반복 누적돼 시전
-        // 애니메이션은 제때 끝나는데 skill_resolve만 계속 밀리는 버그가 있었다).
         let delayMs;
         if (nextEvent) {
             const targetWallMs = playbackOriginWallMs + (nextEvent.time - playbackOriginEventTime) * 1000 * PLAYBACK_SPEED;
-            delayMs = Math.max(16, targetWallMs - performance.now());
+            // target_lock_resolve는 화면에 아무 것도 그리지 않는 조용한 상태 갱신 이벤트라 최소 16ms
+            // 바닥값을 적용할 이유가 없다(arena-battle.js와 동일한 이유) - 넉백처럼 한 틱에 여러 유닛의
+            // 타겟이 한꺼번에 재계산되면 이 이벤트가 무더기로 쌓여서, 매번 16ms씩 누적되면 그 뒤의
+            // 실제 이벤트들까지 통째로 밀린다.
+            const minDelayMs = event.event_type === "target_lock_resolve" ? 0 : 16;
+            delayMs = Math.max(minDelayMs, targetWallMs - performance.now());
         } else {
             // arena-battle.js와 동일한 이유(원거리 공격은 attackAnimActive가 꺼진 뒤에도 투사체가
             // 한동안 더 날아가는 중일 수 있다) - 그 시간을 넉넉히 덮는 값을 기다린다.
@@ -2603,6 +2851,7 @@
             clearAllStatusIcons(slot);
             delete facingFlipped[slot];
             delete walkerSuspended[slot];
+            delete actorAnimChain[slot];
         });
         ["attacker-summon-front", "attacker-summon-back", "defender-summon-front", "defender-summon-back"].forEach((slot) => {
             delete units[slot];

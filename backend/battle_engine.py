@@ -69,12 +69,40 @@ def get_type_multiplier(attacker_type: str, defender_type: str) -> float:
     return TYPE_DISADVANTAGE_MULT
 
 
-MELEE_MOVE_TIME_FRONT = 2.0  # 전방 근거리 유닛이 적에게 다가가는 시간(초)
-MELEE_MOVE_TIME_BACK = 3.6   # 후방 근거리 유닛은 더 멀리서 오니까 더 오래 걸림
-KNOCKBACK_REAPPROACH_TIME = 2.0  # 넉백 후 재접근 시간 - 넉백 거리가 줄면서(맵 밖 밀림 방지) 후방까지 가는 시간(3.6)보다 짧아짐
+MELEE_MOVE_TIME_FRONT = 2.0  # 전방 근거리 유닛이 적에게 다가가는 시간(초) - MELEE_SPEED_FRONT 계산에 쓰임
+MELEE_MOVE_TIME_BACK = 3.6   # 후방 근거리 유닛은 더 멀리서 오니까 더 오래 걸림 - MELEE_SPEED_BACK 계산에 쓰임
 MELEE_ATTACK_INTERVAL = 1.2   # 근거리 공격 주기(초)
 RANGED_ATTACK_INTERVAL = 1.5  # 원거리 공격 주기(초)
 TICK = 0.05
+
+# ── 위치(공유 좌표축) 기반 전방/후방 판정 ──
+# 근접 유닛의 실제 이동을 이 하나의 축 위에서 시뮬레이션한다: 공격자 후방(0) -> 공격자 전방(1) ->
+# 방어자 전방(2) -> 방어자 후방(3) 순으로 일직선에 놓여있다고 본다. 원거리 유닛은 이 좌표에 고정된 채
+# 평생 움직이지 않는다. "전방/후방"은 더 이상 고정 슬롯이 아니라 이 좌표 기준 "누가 더 전진(노출)했는지"로
+# 매 순간 다시 판정된다(_alive_units 참고) - 근접 유닛이 슬롯상 후방이어도 충분히 걸어나가면 슬롯상
+# 전방보다 먼저 타겟이 될 수 있고, 넉백으로 밀려나면 반대로 우선순위를 잃을 수도 있다.
+AXIS_ATTACKER_BACK = 0.0
+AXIS_ATTACKER_FRONT = 1.0
+AXIS_DEFENDER_FRONT = 2.0
+AXIS_DEFENDER_BACK = 3.0
+
+# 슬롯별 이동 속도(좌표/초) - "자기 홈 좌표 -> 적 전방(가장 가까운 상대 슬롯) 도달 시간"이 기존
+# MELEE_MOVE_TIME_FRONT/BACK과 정확히 같아지도록 역산한 값. 이 속도로 상대 후방까지 더 걸어가면(거리가
+# 더 머니까) 자연히 더 오래 걸린다 - 별도 매직 넘버 없이 기존 두 상수만으로 모든 거리를 커버한다.
+MELEE_SPEED_FRONT = (AXIS_DEFENDER_FRONT - AXIS_ATTACKER_FRONT) / MELEE_MOVE_TIME_FRONT  # 0.5
+MELEE_SPEED_BACK = (AXIS_DEFENDER_FRONT - AXIS_ATTACKER_BACK) / MELEE_MOVE_TIME_BACK      # ≈0.5556
+
+ARRIVAL_EPSILON = 0.01  # 목표와의 좌표 차이가 이 이하면 "도착"으로 취급(부동소수 오차 대비 여유)
+
+# 넉백으로 밀려나는 거리(좌표축 기준) - 인접한 슬롯 하나 폭(예: 상대 전방->상대 후방)과 같은 값이라
+# "슬롯 하나만큼 뒤로 밀려난다"는 감각이다. 자기 팀 홈 back 좌표를 넘어서까지 밀리지는 않는다(클램프).
+KNOCKBACK_POSITION_DISTANCE = AXIS_DEFENDER_BACK - AXIS_DEFENDER_FRONT  # 1.0
+
+# 노출도 순위가 바뀌어서 기본공격 대상이 "달라질 후보"가 나타나도, 곧바로 갈아타지 않고 그 후보가
+# 이 시간만큼 계속 1순위를 유지해야 비로소 확정한다(뜸들이기) - 근소한 차이로 순위가 잠깐씩 오락가락할
+# 때마다 시선이 휙휙 바뀌는 게 부자연스러워서다. 단, 이미 정한 대상이 하나도 없거나(첫 타겟 선정) 그
+# 대상이 죽었을 때는 망설임 없이 즉시 확정한다 - _resolve_basic_attack_target 참고.
+TARGET_SWITCH_HESITATION_SECONDS = 0.5
 
 SKILL_TRIGGER_ATTACK_COUNT = 3   # 기본공격 몇 회마다 스킬을 시전하는지
 SKILL_CAST_INTERVAL_MULTIPLIER = 0.7  # 시전 시간 = 기본공격 주기 * 이 값
@@ -117,12 +145,14 @@ def compute_unit_stats(character_name, star, owner_level, slot="front", override
         hp = round(ranged_hp * RANGE_STAT_MULTIPLIER)  # 근거리 체력 = 원거리 체력의 1.5배(맷집형)
         atk = melee_atk
         attack_interval = MELEE_ATTACK_INTERVAL
-        first_attack_delay = MELEE_MOVE_TIME_BACK if slot == "back" else MELEE_MOVE_TIME_FRONT
+        # 첫 공격까지의 "걸어가는 시간"은 더 이상 고정 지연이 아니라, position이 실제로 목표에 도착해야
+        # 하는 조건으로 대체된다(simulate_battle의 메인 루프 참고) - 그 도착 속도만 슬롯별로 여기서 정한다.
+        melee_speed = MELEE_SPEED_BACK if slot == "back" else MELEE_SPEED_FRONT
     else:
         hp = ranged_hp
         atk = round(melee_atk * RANGE_STAT_MULTIPLIER)  # 원거리 공격력 = 근거리 공격력의 1.5배(화력형)
         attack_interval = RANGED_ATTACK_INTERVAL
-        first_attack_delay = 0.0
+        melee_speed = None  # 원거리는 걷지 않음 - position이 홈 좌표에 고정된 채 평생 안 바뀜
 
     if "hp" in overrides:
         hp = overrides["hp"]
@@ -173,7 +203,7 @@ def compute_unit_stats(character_name, star, owner_level, slot="front", override
         "attack_type": ATTACK_TYPE.get(character_name, "Student"),
         "defense_type": DEFENSE_TYPE.get(character_name, "Student"),
         "attack_interval": attack_interval,
-        "next_attack_time": attack_interval + first_attack_delay,
+        "next_attack_time": attack_interval,
         "attack_count": 0,
         "is_casting": False,
         "cast_end_time": None,
@@ -187,6 +217,11 @@ def compute_unit_stats(character_name, star, owner_level, slot="front", override
         "gendered_damage_bonus": None,  # damage_to_gender_bonus 성급 효과가 있으면 배틀 시작 때 채워짐
         "status": _new_status(),
         "is_clone": False,
+        "melee_speed": melee_speed,
+        # position/is_attacker_team은 아직 모른다(이 시점엔 이 유닛이 공격자 팀인지 방어자 팀인지도
+        # 정해지지 않음) - simulate_battle 시작 시 실제 값으로 채워진다.
+        "position": None,
+        "is_attacker_team": None,
     }
 
 
@@ -202,12 +237,25 @@ def _all_slots(team):
     return (team["front"], team["back"], team.get("summon_front"), team.get("summon_back"))
 
 
+def _exposure(unit):
+    """유닛의 "노출도" - 값이 클수록 더 전진해서(공격받기 쉬운 상태로) 나가있다는 뜻이다. position은
+    공유 좌표축 절대값이라 팀마다 "전진 방향"이 반대라서(공격자는 좌표가 커질수록, 방어자는 작아질수록
+    전진), is_attacker_team으로 부호를 정규화해서 두 팀 모두 "이 값이 클수록 더 전진"으로 통일한다."""
+    return unit["position"] if unit["is_attacker_team"] else -unit["position"]
+
+
 def _alive_units(team):
-    """생존 유닛을 우선순위 순서로 반환한다. front, back, summon_front, summon_back 순서 그대로 -
-    복제체(클론)라고 해서 특별히 최우선 타겟이 되지 않는다. 기본 규칙은 항상 "전방이 먼저"이고,
-    전방이 죽으면 그다음(후방)이 새 전방이 되는 식으로 자연히 앞당겨진다 - 복제체는 그 뒤에 붙는
-    추가 유닛일 뿐이라, 전방/후방이 모두 죽어야 비로소 공격 대상이 된다."""
-    units = [u for u in _all_slots(team) if u and u["hp"] > 0]
+    """생존 유닛을 "더 전진(노출)한 순서"로 반환한다. 예전엔 항상 front->back 고정 슬롯 순서였지만,
+    이제 실제 시뮬레이션된 물리적 position 기준으로 매 순간 다시 정렬된다 - 근접 유닛이 슬롯상
+    후방이어도 걸어서 슬롯상 전방보다 더 앞서 나가면(또는 넉백으로 전방이 뒤로 밀려나면) 그 쪽이
+    실제로 first가 된다. 전투 시작 시점엔 모두 홈 좌표에 있어 front가 항상 back보다 노출도가 높으므로,
+    아직 아무도 움직이지 않았다면 기존과 동일하게 front가 먼저 나온다.
+    복제체(클론)도 front/back과 완전히 동일하게 이 노출도 순서에 함께 정렬된다 - "전방/후방이 모두
+    죽어야 비로소 대상이 됨"이라는 예전 고정 규칙은 폐지됐다. 클론은 시전자의 그 순간 position을
+    물려받아 시작하고(_skill_summon_clone), 근접이면 이후에도 다른 유닛과 동일하게 자기 target을
+    쫓아 계속 움직이므로, 노출도 계산에 그대로 섞여 들어가도 값이 항상 유효하다."""
+    units = [u for u in (team["front"], team["back"], team.get("summon_front"), team.get("summon_back")) if u and u["hp"] > 0]
+    units.sort(key=_exposure, reverse=True)
     return units
 
 
@@ -265,25 +313,82 @@ def _teammate(team, unit):
 
 
 def _select_basic_attack_target(unit, enemy_team):
-    """기본공격 대상 선정. 전방/후방은 고정 슬롯이 아니라 "살아있는 유닛의 순서"로 매번 다시 정해진다:
-    _alive_units가 전방 -> 후방 -> summon_front -> summon_back 순으로 돌려주므로, 전방이 죽으면
-    그다음 유닛(원래 후방)이 자연히 새 전방(첫 타겟)이 된다. 복제체는 전방/후방과 무관한 별도 슬롯이라
-    특별 취급 없이 이 순서 그대로 맨 뒤에 붙는다(전방/후방이 모두 죽어야 비로소 대상이 됨).
+    """기본공격 대상 선정. 전방/후방은 고정 슬롯이 아니라 "실제 위치(노출도)"로 매번 다시 정해진다:
+    _alive_units가 노출도(_exposure) 내림차순으로 돌려주므로, 근접 유닛이 걸어서 자기 팀의 다른
+    슬롯보다 더 앞서 나가면(또는 넉백으로 앞서있던 쪽이 뒤로 밀려나면) 실제로 더 전진한 쪽이 자연히
+    첫 타겟이 된다 - 슬롯 자체가 "전방/후방"이라는 이름표를 갖는 게 아니라, 매 순간 누가 더 노출돼
+    있는지로 판정된다. 복제체도 front/back과 동일하게 이 노출도 순서에 섞여서 정렬된다(더 이상
+    "전방/후방이 모두 죽어야만 대상이 됨"이 아니다) - 캐스터가 소환 시점 위치를 그대로 물려받고,
+    근접이면 이후 계속 움직이므로 위치가 항상 유효하다.
 
-    - 기본: 현재 전방(목록의 맨 앞)을 때린다.
+    - 기본: 지금 가장 전진(노출)한 유닛(목록의 맨 앞)을 때린다.
     - rear_priority 플래그가 있는 유닛(최재혁 ★3부터, 또는 "마법사 아카데미"로 그 효과를 받은 아군
-      마법사)만 예외: "무조건" 현재 후방(전방/후방 중 뒤쪽)을 먼저 때린다 - 복제체가 살아있어도 무시하고
-      후방을 노린다(복제체는 전방도 후방도 아니라서 이 규칙 밖). 전방/후방 중 살아있는 게 1명뿐이면
-      그가 곧 유일한 대상이다."""
+      마법사)만 예외: "무조건" 가장 덜 전진한(실질적으로 가장 뒤쪽인, 복제체 포함) 유닛을 먼저 때린다.
+      살아있는 게 1명뿐이면 그가 곧 유일한 대상이다.
+
+    - rear_priority의 동률 예외: 서로 다른 아군 근접 유닛들이 같은 상대를 쫓다 보면(예: 최재혁을
+      추격하는 적 전방/후방이 둘 다 최재혁 위치까지 따라붙음) 노출도가 완전히 같은 좌표로 수렴하는
+      경우가 실제로 생긴다. 이때 매번 안정적으로 "뒤 슬롯"으로 계산되긴 하지만, 방금 전까지 확정
+      대상이던 유닛과 다르면 아무 실질적 위치 차이도 없는데 갑자기 상대를 놓아버린 것처럼 보인다
+      (뜸들이기로도 못 막는다 - 새 후보 자체가 매 순간 진짜로 동률이라 조건을 그대로 통과함). 노출도가
+      완전히 같을 땐 지금 이미 확정된 대상이 그 동률 후보 중 하나면 그대로 유지한다."""
     units = _alive_units(enemy_team)
     if not units:
         return None
 
     if unit.get("rear_priority"):
-        front_back_units = [u for u in units if not u.get("is_clone")]
-        return front_back_units[-1] if len(front_back_units) >= 2 else units[0]
+        if len(units) < 2:
+            return units[0]
+        least_exposed = units[-1]
+        if _exposure(least_exposed) == _exposure(units[0]):
+            locked = unit.get("locked_target_ref")
+            if locked is not None and any(locked is u for u in units):
+                return locked
+        return least_exposed
 
     return units[0]
+
+
+def _resolve_basic_attack_target(unit, enemy_team, time_elapsed):
+    """_select_basic_attack_target이 매 순간 계산해주는 "지금 이 순간 가장 우선순위 높은 대상"을 그대로
+    쓰지 않고, 지금 확정된 대상(locked_target_ref)이 TARGET_SWITCH_HESITATION_SECONDS 동안 계속
+    1순위 자리를 뺏긴 채로 있어야 그제서야 갈아탄다(뜸들이기). unit["target_lost_since"]는 "확정된
+    대상이 1순위가 아니게 된 게 언제부터인지"를 추적한다 - 그 사이에 1순위가 후보 A -> B -> A처럼 여러
+    번 바뀌어도(다른 아군들이 함께 움직이는 실제 전투에서 흔함) 상관없이, "원래 확정된 대상이 아직도
+    1순위를 못 되찾고 있다"는 사실만 계속 유지되면 시간이 그대로 쌓인다 - 그래야 뜸들이는 시간이
+    TARGET_SWITCH_HESITATION_SECONDS를 넘겨서 늘어지지 않는다(예전엔 후보가 바뀔 때마다 타이머가
+    처음부터 다시 시작해서, 후보들끼리 잠깐씩 엎치락뒤치락하면 실제 체감 지연이 훨씬 길어지는 문제가 있었다).
+    확정될 때는 "그 순간의" 후보(반드시 처음 밀어냈던 후보일 필요는 없음)로 확정한다.
+
+    - 아직 확정된 대상이 없거나(전투 시작 직후 첫 선정 - 예: 최재혁이 처음부터 후방을 겨냥하는 것도
+      이 경로라 망설임 없음), 확정된 대상이 죽었으면: 새 후보로 즉시 확정한다(공격 못 하는 공백 방지).
+    - 후보가 지금 확정된 대상과 같으면: 그대로 유지, 밀려나 있던 시간도 리셋된다.
+    - 후보가 다르면: 확정된 대상이 1순위 자리를 처음 뺏긴 시점부터 시간을 재고, 기준 시간을 넘기면
+      그 순간의 후보로 확정한다."""
+    candidate = _select_basic_attack_target(unit, enemy_team)
+    locked = unit.get("locked_target_ref")
+
+    if candidate is None:
+        return locked if locked is not None and locked["hp"] > 0 else None
+
+    if locked is None or locked["hp"] <= 0:
+        unit["locked_target_ref"] = candidate
+        unit["target_lost_since"] = None
+        return candidate
+
+    if candidate is locked:
+        unit["target_lost_since"] = None
+        return locked
+
+    if unit.get("target_lost_since") is None:
+        unit["target_lost_since"] = time_elapsed
+
+    if time_elapsed - unit["target_lost_since"] >= TARGET_SWITCH_HESITATION_SECONDS:
+        unit["locked_target_ref"] = candidate
+        unit["target_lost_since"] = None
+        return candidate
+
+    return locked
 
 
 def _effective_atk(unit, time_elapsed):
@@ -314,11 +419,43 @@ def _apply_damage(target, amount, time_elapsed):
     return amount
 
 
-def _interrupt_cast_if_casting(target):
+# CC(기절/넉백 등)가 "이미 이번 틱에 발동 예정이던" 상대의 시전을 얼마나 강하게 끊을 수 있는지의
+# 우선순위. 숫자가 클수록 강하다 - 자신보다 "엄격히 더 높은" 우선순위의 CC만 이 보호를 뚫고 취소할 수
+# 있고, 동급 이하는 못 끊는다(동급끼리는 서로 취소 못 함 - 예: 넉백 스킬끼리 정확히 같은 틱에 맞부딪히면
+# 원래 의도대로 둘 다 발동한다). CC의 핵심은 "상대 스킬을 확실히 취소하는 것"이라는 설계 의도에 따라
+# 넉백(청년의 bonus_damage_knockback) > 기절류(스턴/디버프 기절 등) > 그 외(방임 같은 CC 아닌 상태
+# 트리거) 순으로 매긴다.
+CC_PRIORITY_KNOCKBACK = 2
+CC_PRIORITY_STUN = 1
+CC_PRIORITY_DEFAULT = 0
+
+
+def _cc_priority_of_skill(effect_type):
+    """어떤 스킬 효과 타입이 "대상"으로서 얼마나 강하게 보호받는지(CC_PRIORITY_*) 반환한다 - 이 값보다
+    엄격히 더 높은 우선순위의 CC만 "이미 이번 틱에 발동 예정"인 이 스킬을 취소할 수 있다."""
+    if effect_type == "bonus_damage_knockback":
+        return CC_PRIORITY_KNOCKBACK
+    if effect_type in ("stun_target", "conditional_target_debuff", "consume_paint_multi_effect"):
+        return CC_PRIORITY_STUN
+    return CC_PRIORITY_DEFAULT
+
+
+def _interrupt_cast_if_casting(target, time_elapsed, priority=CC_PRIORITY_DEFAULT):
     """대상이 마침 스킬을 시전 중이었다면 취소한다 - 기절/넉백 등 CC기 공통 처리. 재개되지 않고, 다음
     행동은 곧장 기본공격으로 넘어간다(attack_count를 0으로 되돌려서, 성공적으로 시전을 마쳤을 때와
     동일하게 다시 기본공격 3회를 쌓아야 재시전할 수 있다). 반환값은 실제로 시전을 끊었는지 여부(프론트에
-    "시전 취소" 연출을 보여주기 위한 것)."""
+    "시전 취소" 연출을 보여주기 위한 것).
+
+    단, 대상의 시전이 이미 "이번 틱"에 발동될 예정이었다면(cast_end_time <= time_elapsed), 이 CC의
+    priority가 대상 스킬의 우선순위(_cc_priority_of_skill)보다 "엄격히 더 높을 때"만 취소한다 - 동급
+    이하(넉백끼리, 스턴끼리, 또는 더 약한 CC가 더 강한 스킬을 노리는 경우)는 소급 취소하지 않는다.
+    예전엔 이 보호가 전부 동일했는데(우선순위 구분 없음), 그러면 양 팀에 같은 CC 스킬을 쓰는 캐릭터가
+    정확히 같은 틱에 부딪힐 때 팀 처리 순서상 아주 살짝 먼저 처리된 쪽만 일방적으로 상대를 끊어버리는
+    버그가 있었다 - 우선순위 구분을 두어, 더 강한 CC(넉백)는 동급 이하를 확실히 뚫고 지나가되, 동급
+    CC끼리는 서로 못 끊게(원래 의도대로 둘 다 발동) 만들었다."""
+    if target.get("is_casting") and target.get("cast_end_time") is not None and target["cast_end_time"] <= time_elapsed:
+        if priority <= _cc_priority_of_skill(target.get("skill_effect_type")):
+            return False
     interrupted = bool(target.get("is_casting"))
     if interrupted:
         target["is_casting"] = False
@@ -327,11 +464,12 @@ def _interrupt_cast_if_casting(target):
     return interrupted
 
 
-def _apply_stun(target, stun_until):
+def _apply_stun(target, stun_until, time_elapsed, priority=CC_PRIORITY_STUN):
     """대상에게 기절을 건다(+ 시전 중이었다면 취소). 기절 자체는 취소되지 않으므로 stun_until까지는
-    그대로 무행동. 반환값은 시전 취소 여부."""
+    그대로 무행동. 반환값은 시전 취소 여부. priority 기본값은 "기절류" 등급(CC_PRIORITY_STUN) - 이
+    함수를 쓰는 스킬은 전부 기절 계열이라 호출부에서 따로 넘길 필요가 없다."""
     target["status"]["stun_until"] = stun_until
-    return _interrupt_cast_if_casting(target)
+    return _interrupt_cast_if_casting(target, time_elapsed, priority)
 
 
 # ───────────────────────── 치명타 - 기본공격/스킬 모두 공통 ─────────────────────────
@@ -832,8 +970,24 @@ def _skill_summon_clone(caster, own_team, enemy_team, params, time_elapsed):
         "skill_effect_type": None, "skill_params": None,
         "trait_effect_type": None, "trait_params": None, "trait_partner_name": None,
         "status": _new_status(), "is_clone": True,
+        # 복제체는 시전자가 원래 서 있던 바로 그 자리에 나타난다(caster의 "지금" 위치를 그대로 물려받음 -
+        # 아래에서 caster 본인의 position을 바꾸기 전에 미리 읽어두는 것). melee_speed도 caster가 이미
+        # 자기 슬롯에 맞게 캘리브레이션된 값을 그대로 복사한다(원거리면 None).
+        "melee_speed": caster.get("melee_speed"),
+        "position": caster["position"],
+        "is_attacker_team": caster["is_attacker_team"],
     }
     own_team[target_key] = clone
+
+    # 넉백을 "당하는" 건 복제체가 아니라 caster 자신이다 - 복제체가 자기 자리를 차지한 만큼, caster
+    # 본인이 자기 진영 뒤쪽으로 한 칸(KNOCKBACK_POSITION_DISTANCE) 물러난다(프론트엔드의 applyKnockback도
+    # caster 본인을 밀어낸다 - arena-battle.js 참고). 이걸 안 해주면 caster의 position이 복제체와 완전히
+    # 같은 채로 남아, 노출도 기반 타겟팅에서 caster가 실제로는 전혀 물러나지 않은 것으로 계산된다.
+    if caster["is_attacker_team"]:
+        caster["position"] = max(AXIS_ATTACKER_BACK, caster["position"] - KNOCKBACK_POSITION_DISTANCE)
+    else:
+        caster["position"] = min(AXIS_DEFENDER_BACK, caster["position"] + KNOCKBACK_POSITION_DISTANCE)
+
     return {
         "summoned": True, "clone_name": clone["name"], "clone_hp": clone_max_hp, "clone_atk": clone_atk,
         "clone_slot": target_key.replace("_", "-"), "replaced": replaced["name"] if replaced else None,
@@ -852,7 +1006,7 @@ def _skill_conditional_target_debuff(caster, own_team, enemy_team, params, time_
     condition_met = params["condition"] != "target_gender_female" or _effective_gender(target) == "여"
     interrupted_cast = False
     if condition_met:
-        interrupted_cast = _apply_stun(target, time_elapsed + params["stun_seconds"])
+        interrupted_cast = _apply_stun(target, time_elapsed + params["stun_seconds"], time_elapsed)
 
     return {
         "hit": True, "target": target["name"], "_target_ref": target, "stunned": condition_met,
@@ -908,16 +1062,23 @@ def _skill_bonus_damage_knockback(caster, own_team, enemy_team, params, time_ela
     damage = _apply_gendered_damage_bonus(caster, target, damage)
     dealt = _apply_damage(target, damage, time_elapsed)
     target["next_attack_time"] = max(target["next_attack_time"], time_elapsed) + 1.0  # 밀쳐내기 = 다음 행동 1초 지연
-    # 넉백도 CC기라 대상이 시전 중이었다면 취소한다(_interrupt_cast_if_casting - 기절과 동일 처리).
-    interrupted_cast = _interrupt_cast_if_casting(target)
+    # 넉백도 CC기라 대상이 시전 중이었다면 취소한다 - CC 중 최우선순위(CC_PRIORITY_KNOCKBACK)라
+    # "이번 틱 발동 예정" 보호(_interrupt_cast_if_casting 참고)를 뚫고 스턴/그 외 스킬은 확실히 끊되,
+    # 넉백끼리 정확히 같은 틱에 맞부딪히면(동급) 서로 못 끊고 둘 다 정상 발동한다.
+    interrupted_cast = _interrupt_cast_if_casting(target, time_elapsed, CC_PRIORITY_KNOCKBACK)
 
-    # 넉백은 대상이 "뒤로 밀려난" 것으로 취급한다 - own_team 소속 근거리 유닛들(캐스터 포함)은
-    # 그 대상과 다시 접촉할 때까지 걸어가야 하고, 그동안은 공격할 수 없다(첫 접근 지연과 같은 방식).
-    # 캐스터(청년)는 넉백 직후 즉시 이동을 시작하므로, 밀려난 거리(단축됨)에 맞는 짧은 시간만 걸린다.
-    reapproach_by = time_elapsed + KNOCKBACK_REAPPROACH_TIME
-    for u in _alive_units(own_team):
-        if u.get("is_melee"):
-            u["next_attack_time"] = max(u["next_attack_time"], reapproach_by)
+    # 넉백은 대상을 실제로 자기 진영 뒤쪽(공유 좌표축 기준)으로 KNOCKBACK_POSITION_DISTANCE만큼 밀어낸다
+    # - 자기 팀 홈 back 좌표를 넘어서까지는 안 밀린다(클램프). 근접/원거리 구분 없이 적용한다(원거리도
+    # 전방 슬롯이면 넉백으로 노출도가 줄 수 있어야 일관적이다). 전방이 밀려나 후방보다 덜 노출된 상태가
+    # 되면, _alive_units의 노출도 정렬이 다음 순간부터 바로 그걸 반영해서 우리 팀의 다음 타겟 선정이
+    # 자동으로 최신 위치를 따라간다(전/후방이 뒤바뀌면 타겟도 같이 바뀜).
+    # own_team 근접 유닛 전원을 수동으로 지연시키던 예전 로직은 제거했다 - 대상이 실제로 더 멀어졌으니,
+    # 그 대상을 쫓아가던 근접 유닛은 위치 기반 도착 게이트가 늘어난 거리만큼 자연히 더 오래 걸리게
+    # 만든다(가짜 지연을 얹지 않아도 정확하고, 이 대상과 무관한 다른 아군까지 덩달아 지연되지 않는다).
+    if target["is_attacker_team"]:
+        target["position"] = max(AXIS_ATTACKER_BACK, target["position"] - KNOCKBACK_POSITION_DISTANCE)
+    else:
+        target["position"] = min(AXIS_DEFENDER_BACK, target["position"] + KNOCKBACK_POSITION_DISTANCE)
 
     return {
         "hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
@@ -974,7 +1135,7 @@ def _skill_stun_target(caster, own_team, enemy_team, params, time_elapsed):
     target = _alive_target(enemy_team)
     if target is None:
         return {"hit": False}
-    interrupted_cast = _apply_stun(target, time_elapsed + params["seconds"])
+    interrupted_cast = _apply_stun(target, time_elapsed + params["seconds"], time_elapsed)
     result = {
         "hit": True, "target": target["name"], "_target_ref": target, "stun_seconds": params["seconds"],
         "interrupted_cast": interrupted_cast,
@@ -1118,7 +1279,7 @@ def _skill_consume_paint_multi_effect(caster, own_team, enemy_team, params, time
         stun_seconds = params["yellow_seconds_per_paint"] * yellow
         stunned = []
         for enemy in _alive_units(enemy_team):
-            interrupted = _apply_stun(enemy, time_elapsed + stun_seconds)
+            interrupted = _apply_stun(enemy, time_elapsed + stun_seconds, time_elapsed)
             stunned.append({"target": enemy["name"], "_target_ref": enemy, "interrupted_cast": interrupted})
         detail["stunned"] = stunned
         detail["stun_seconds"] = stun_seconds
@@ -1152,15 +1313,20 @@ def _apply_type2_stun_if_active(unit, target, time_elapsed):
     상태 아이콘 지속시간/시전 취소 연출을 정확히 맞출 수 있도록 이벤트에 그대로 실려 나간다(_do_basic_attack)."""
     stun_seconds = unit.get("type2_stun_seconds")
     if stun_seconds and _effective_gender(target) == "남":
-        interrupted_cast = _apply_stun(target, time_elapsed + stun_seconds)
+        interrupted_cast = _apply_stun(target, time_elapsed + stun_seconds, time_elapsed)
         return stun_seconds, interrupted_cast
     return 0, False
 
 
-def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events):
+def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events, resolved_target=None):
     """기본공격 처리. 김남옥만 예외적으로(★4부터, star_effects 문구 기준) 적 2인 모두를 타격한다
     (주 대상 100%, 나머지 25%) - 기존 star_effects 문구("주 대상 100%, 다른 적 25%")와 확정된 공격
-    연출(다트가 적 2인에게 명중)이 일치해서 이 캐릭터만 기본공격 자체가 다중 타격으로 구현돼 있다."""
+    연출(다트가 적 2인에게 명중)이 일치해서 이 캐릭터만 기본공격 자체가 다중 타격으로 구현돼 있다.
+
+    resolved_target: 메인 루프가 _resolve_basic_attack_target(뜸들이기 포함)으로 미리 계산해둔 대상.
+    넘겨받으면(일반적인 실제 호출 경로) 그대로 쓰고, 안 넘어오면(과거 호출 방식과의 호환) 여기서
+    직접 _select_basic_attack_target을 불러 즉시 확정한다 - 김남옥의 다중 타격은 뜸들이기 대상이
+    아니라서(order만 매 순간 그대로 반영) resolved_target을 안 쓰고 항상 새로 계산한다."""
     targets = _alive_units(enemy_team)
     if not targets:
         return
@@ -1181,7 +1347,7 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events):
                 "interrupted_cast": interrupted_cast,
             })
     else:
-        target = _select_basic_attack_target(unit, enemy_team)
+        target = resolved_target if resolved_target is not None else _select_basic_attack_target(unit, enemy_team)
         if target is None:
             return
         type_mult = get_type_multiplier(unit["attack_type"], target["defense_type"])
@@ -1256,7 +1422,7 @@ def _apply_neglect_status(team, side, events, time_elapsed):
 
         if has_qualifying_ally and not was_active:
             unit["_neglect_last_paint_time"] = time_elapsed
-            interrupted = _interrupt_cast_if_casting(unit)
+            interrupted = _interrupt_cast_if_casting(unit, time_elapsed)
             events.append({
                 "time": time_elapsed, "event_type": "neglect_status_resolve", "side": side,
                 "actor": unit["name"], "detail": {"active": True, "interrupted_cast": interrupted},
@@ -1311,22 +1477,65 @@ def _apply_paint_gain(caster, effect_type, attacker_team, defender_team, side_na
                 })
 
 
+def _home_position(is_attacker, slot):
+    if is_attacker:
+        return AXIS_ATTACKER_FRONT if slot == "front" else AXIS_ATTACKER_BACK
+    return AXIS_DEFENDER_FRONT if slot == "front" else AXIS_DEFENDER_BACK
+
+
+def _init_unit_positions(team, is_attacker):
+    """전투 시작 시점에 홈 좌표를 부여한다 - front/back만 대상이고(복제체는 아직 없음, 소환될 때
+    _skill_summon_clone에서 caster 기준으로 채워짐), 원거리 유닛도 이 좌표를 갖되 이후 아무도
+    갱신하지 않으므로 사실상 고정값이 된다."""
+    for slot in ("front", "back"):
+        unit = team.get(slot)
+        if not unit:
+            continue
+        unit["is_attacker_team"] = is_attacker
+        unit["position"] = _home_position(is_attacker, slot)
+
+
+def _advance_melee_position(unit, target_position, tick):
+    """근접 유닛의 position을 target_position 쪽으로 최대 melee_speed*tick만큼 옮긴다. 매 틱 현재
+    position에서 다시 거리를 계산하므로(누적 오차 없음), 도착 조건을 만족하면 정확히 target_position으로
+    스냅한다 - 그래야 부동소수 오차가 여러 틱에 걸쳐 쌓이지 않는다."""
+    delta = target_position - unit["position"]
+    if abs(delta) <= ARRIVAL_EPSILON:
+        unit["position"] = target_position
+        return
+    step = unit["melee_speed"] * tick
+    if abs(delta) <= step:
+        unit["position"] = target_position
+    else:
+        unit["position"] += step if delta > 0 else -step
+
+
 def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
     """
     두 팀(전방+후방)을 받아 시간 기반으로 전투를 시뮬레이션한다.
-    전방이 살아있는 동안은 전방만 공격받고, 전방이 죽으면 후방이 대신 공격받는다(김남옥의 기본공격은 예외 - 둘 다 맞음).
+    "전방"/"후방"은 고정 슬롯이 아니라 실제 시뮬레이션된 위치(position) 기준 노출도로 매 순간 다시
+    정해진다 - 근접 유닛이 걸어서 자기 팀의 다른 슬롯보다 더 앞서 나가거나(예: 후방 우선 패시브로 적
+    후방까지 걸어가는 동안), 넉백으로 누군가 뒤로 밀려나면 실제로 타겟 우선순위가 바뀔 수 있다(자세한
+    내용은 _alive_units/_select_basic_attack_target 참고). 김남옥의 기본공격은 예외 - 항상 둘 다 맞음.
     각 유닛은 기본공격 3회마다 자신의 스킬을 시전한다(시전 시간 = 공격 주기 * 2, 시전 중엔 기본공격 안 함).
     반환값의 events는 프론트에서 순서대로 재생하는 데 쓰인다.
     """
     time_elapsed = 0.0
     events = []
 
+    # _apply_battle_start_traits/_apply_battle_start_star_effects가 내부적으로 _alive_units를 쓰므로
+    # (노출도 정렬에 position/is_attacker_team이 필요) 반드시 그 호출들보다 먼저 위치를 초기화해야 한다.
+    _init_unit_positions(attacker_team, True)
+    _init_unit_positions(defender_team, False)
+
     _apply_battle_start_traits(attacker_team, defender_team, events, "attacker")
     _apply_battle_start_traits(defender_team, attacker_team, events, "defender")
     _apply_battle_start_star_effects(attacker_team, defender_team, events)
 
+    tick_index = 0
     while _team_alive(attacker_team) and _team_alive(defender_team) and time_elapsed < MAX_BATTLE_DURATION:
         time_elapsed = round(time_elapsed + TICK, 2)
+        tick_index += 1
 
         # 각 팀의 "이번 틱 시작 시점 마지막 생존자"를 미리 표시해둔다. 원래는 공격자 팀을 전부 처리한
         # 뒤에야 방어자 팀 차례가 와서, 공격자가 방어자의 마지막 생존자를 죽이면 방어자는 반격할 기회조차
@@ -1353,10 +1562,18 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
         _apply_neglect_status(attacker_team, "attacker", events, time_elapsed)
         _apply_neglect_status(defender_team, "defender", events, time_elapsed)
 
-        for side_name, own_team, enemy_team in (
+        # 두 팀의 next_attack_time이 정확히 같은 틱에 겹치면(대칭 스탯 등), 항상 공격자 팀을 먼저 처리하는
+        # 고정 순서 때문에 그런 "동시 타이밍" 상황마다 매번 공격자만 먼저 때리는 구조적 편향이 있었다(예:
+        # 3회째 기본공격 직후 스킬 발동 타이밍이 양팀 다 같을 때). 틱 인덱스 홀짝으로 두 팀의 처리 순서를
+        # 번갈아 뒤집어서, 여러 틱에 걸쳐 보면 어느 한쪽만 계속 먼저 행동하는 일이 없게 한다.
+        team_order = (
             ("attacker", attacker_team, defender_team),
             ("defender", defender_team, attacker_team),
-        ):
+        )
+        if tick_index % 2 == 0:
+            team_order = tuple(reversed(team_order))
+
+        for side_name, own_team, enemy_team in team_order:
             for slot in ("front", "back", "summon_front", "summon_back"):
                 unit = own_team[slot]
                 if unit is None:
@@ -1395,13 +1612,43 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
                         unit["next_attack_time"] = max(unit["next_attack_time"], time_elapsed + _effective_interval(unit, time_elapsed))
                     continue
 
+                # 매 틱 "지금 기본공격 대상으로 확정된 유닛"을 구한다(뜸들이기 포함, _resolve_basic_attack_target
+                # 참고) - 근접 유닛은 이 대상 쪽으로 조금씩 걸어간다. 공격 쿨다운(next_attack_time)과
+                # 무관하게 이동은 계속 진행되고, 실제 공격은 이동이 끝나 목표와의 거리가 ARRIVAL_EPSILON
+                # 이내일 때만 허용된다(도착 게이트). 원거리 유닛은 이동만 안 할 뿐 대상 확정 자체는 동일하게
+                # 뜸들이기가 적용된다(원거리도 갑자기 조준을 홱 바꾸지 않는다).
+                locked_before = unit.get("locked_target_ref")
+                resolved_target = _resolve_basic_attack_target(unit, enemy_team, time_elapsed)
+                # 대상이 실제로 바뀐 순간(첫 확정 포함) 전용 이벤트를 별도로 남긴다 - 프론트엔드는 예전엔
+                # "이 유닛의 공격이 실제로 명중한" basic_attack 이벤트를 통해서만 새 목표를 알 수 있었다.
+                # 근접 유닛이 걸어가서 실제로 명중시키기까지는 시간이 걸리는데(특히 rear_priority처럼 먼
+                # 대상을 쫓을 때), 그동안 백엔드는 이미 몇 번이고 더 새 대상으로 갱신됐을 수 있다 - 그 사이
+                # 프론트엔드는 여전히 "예전 대상"을 향해 걷고 있어서, 상대가 한참 이동하는 동안 화면에는
+                # 아무 반응도 없다가 뒤늦게 몰아서 재생되는 것처럼 보이는 버그가 있었다. 목표가 바뀌는 그
+                # 순간 즉시 알려주면, 근접 유닛이 실제 명중보다 훨씬 먼저부터 올바른 방향으로 걸어간다.
+                if resolved_target is not None and resolved_target is not locked_before:
+                    events.append({
+                        "time": time_elapsed, "event_type": "target_lock_resolve", "side": side_name,
+                        "actor": unit["name"], "target": resolved_target["name"],
+                        "target_side": "defender" if side_name == "attacker" else "attacker",
+                    })
+                if unit.get("melee_speed") is not None and resolved_target is not None:
+                    _advance_melee_position(unit, resolved_target["position"], TICK)
+
                 if time_elapsed < unit["next_attack_time"]:
                     continue
 
                 if _alive_target(enemy_team) is None:
                     continue
 
-                _do_basic_attack(unit, side_name, own_team, enemy_team, time_elapsed, events)
+                if (
+                    unit.get("melee_speed") is not None
+                    and resolved_target is not None
+                    and abs(unit["position"] - resolved_target["position"]) > ARRIVAL_EPSILON
+                ):
+                    continue
+
+                _do_basic_attack(unit, side_name, own_team, enemy_team, time_elapsed, events, resolved_target=resolved_target)
                 unit["attack_count"] += 1
 
                 interval = _effective_interval(unit, time_elapsed)
