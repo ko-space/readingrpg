@@ -1623,11 +1623,21 @@
     let battleTimerRunning = false;
     let displayedBattleTimeSeconds = 0;
 
+    // 위 Math.max 역행 방지 클램프는 "뒤로 가는 것"만 막을 뿐, 밀려있던 이벤트가 한꺼번에 처리되며
+    // 원점(playbackOriginEventTime)이 크게 앞으로 뛰는 것까지는 못 막는다 - 그러면 candidateSeconds가
+    // 한 프레임 사이에 몇 초씩 확 뛰어올라서, 화면엔 시계가 순간적으로 "훅" 빨라지는 것처럼 보인다
+    // (예: 애니메이션이 한동안 밀렸다가 워치독 등으로 한꺼번에 풀리는 경우). 한 프레임에 실제로 앞으로
+    // 나아갈 수 있는 폭을 이 값으로 제한해서, 크게 벌어져 있어도 순간이동하지 않고 여러 프레임에 걸쳐
+    // 빠르게(하지만 매끄럽게) 따라잡게 한다 - 정상적인 진행(한 프레임당 수십 ms 수준)은 이 상한보다
+    // 훨씬 작으므로 전혀 영향을 안 받는다.
+    const MAX_TIMER_STEP_SECONDS = 0.15;
+
     function tickBattleTimer() {
         if (!battleTimerRunning) return;
         const elapsedSeconds = ((performance.now() - playbackOriginWallMs) / 1000) * PLAYBACK_SPEED;
         const candidateSeconds = playbackOriginEventTime + Math.max(0, elapsedSeconds);
-        displayedBattleTimeSeconds = Math.max(displayedBattleTimeSeconds, candidateSeconds);
+        const cappedCandidate = Math.min(candidateSeconds, displayedBattleTimeSeconds + MAX_TIMER_STEP_SECONDS);
+        displayedBattleTimeSeconds = Math.max(displayedBattleTimeSeconds, cappedCandidate);
         updateBattleTimer(displayedBattleTimeSeconds);
         requestAnimationFrame(tickBattleTimer);
     }
