@@ -19,7 +19,7 @@
 
     let loaded = false;
     let loading = false;
-    let inventoryData = { characters: [], catalog_order: [] };
+    let inventoryData = { characters: [], unowned_characters: [] };
     let itemData = [];
     let selectedGroup = null;
     let activeListTab = "characters";
@@ -148,33 +148,55 @@
         }
     }
 
+    function buildCharacterCard(group, index, isUnowned) {
+        const card = document.createElement("button");
+        card.className = "inventory-character-card" + (isUnowned ? " is-unowned" : "");
+        card.type = "button";
+        card.style.animationDelay = `${Math.min(index, 15) * 35}ms`;
+        // 미보유 카드는 이름 대신 "???"를, 인물 수 대신 "미보유"를 보여준다 - 성급(★N)은 실제 성급이
+        // 아니라 모집 시 받는 기본 성급(rarity 기준, 백엔드가 unowned_characters에 미리 계산해서 줌)이다.
+        const displayName = isUnowned ? "???" : group.name;
+        const metaText = isUnowned ? `★${group.star} · 미보유` : `★${group.star} · ${group.count}명`;
+        card.innerHTML = `
+            <div class="inventory-card-portrait rarity-${group.rarity}">
+                <img alt="${escapeHtml(displayName)}" loading="lazy" decoding="async">
+                ${!isUnowned && group.is_equipped ? '<span class="inventory-card-equipped">장착 중</span>' : ""}
+                <div class="inventory-card-star-overlay">${stars(group.star)}</div>
+            </div>
+            <div class="inventory-card-name">${escapeHtml(displayName)}</div>
+            <div class="inventory-card-meta">${escapeHtml(metaText)}</div>
+        `;
+        const img = card.querySelector("img");
+        img.src = `${OUTFIT_IMAGE_BASE}${group.outfit}/idle.png`;
+        img.onerror = () => { img.style.visibility = "hidden"; };
+        applyCrop(img, group.outfit);
+        card.addEventListener("click", () => openDetail(group, isUnowned));
+        return card;
+    }
+
     function renderCharacterGrid() {
         const grid = document.getElementById("inventory-character-grid");
         grid.innerHTML = "";
         const groups = inventoryData.characters || [];
-        showEmpty(groups.length ? "" : "보유한 인물이 없습니다.", groups.length === 0);
+        const unowned = inventoryData.unowned_characters || [];
+        showEmpty(
+            groups.length || unowned.length ? "" : "보유한 인물이 없습니다.",
+            groups.length === 0 && unowned.length === 0
+        );
 
-        groups.forEach((group, index) => {
-            const card = document.createElement("button");
-            card.className = "inventory-character-card";
-            card.type = "button";
-            card.style.animationDelay = `${Math.min(index, 15) * 35}ms`;
-            card.innerHTML = `
-                <div class="inventory-card-portrait">
-                    <img alt="${escapeHtml(group.name)}" loading="lazy" decoding="async">
-                    ${group.is_equipped ? '<span class="inventory-card-equipped">장착 중</span>' : ""}
-                    <div class="inventory-card-star-overlay">${stars(group.star)}</div>
-                </div>
-                <div class="inventory-card-name">${escapeHtml(group.name)}</div>
-                <div class="inventory-card-meta">★${group.star} · ${group.count}명</div>
-            `;
-            const img = card.querySelector("img");
-            img.src = `${OUTFIT_IMAGE_BASE}${group.outfit}/idle.png`;
-            img.onerror = () => { img.style.visibility = "hidden"; };
-            applyCrop(img, group.outfit);
-            card.addEventListener("click", () => openDetail(group));
-            grid.appendChild(card);
-        });
+        groups.forEach((group, index) => grid.appendChild(buildCharacterCard(group, index, false)));
+
+        if (unowned.length) {
+            // 구분선은 순수 HTML/CSS만으로 그린다(양옆 선은 ::before/::after의 border) - 그리드 안에서
+            // 카드들과 같은 줄 흐름을 타지 않도록 전체 폭을 차지하게 한다.
+            const divider = document.createElement("div");
+            divider.className = "inventory-unowned-divider";
+            divider.textContent = "미보유";
+            grid.appendChild(divider);
+
+            // 백엔드가 이미 희귀도순으로 정렬해서 내려준다.
+            unowned.forEach((group, index) => grid.appendChild(buildCharacterCard(group, index, true)));
+        }
     }
 
     const OUTCOME_LABELS = { success: "성공", maintain: "유지", destroy: "파괴", super_success: "슈퍼 성공" };
@@ -242,8 +264,8 @@
         });
     }
 
-    function openDetail(group) {
-        selectedGroup = { ...group };
+    function openDetail(group, isUnowned = false) {
+        selectedGroup = { ...group, _unowned: Boolean(isUnowned) };
         setMode("detail");
         renderDetail();
         restartDetailAnimations();
@@ -262,31 +284,54 @@
     function renderDetail() {
         const g = selectedGroup;
         if (!g) return;
+        const unowned = Boolean(g._unowned);
+
+        // 목록 카드와 동일한 희귀도 배경(rarity-*)을 상세 패널 전체(inventory-detail-view)에 입힌다 -
+        // 왼쪽(캐릭터 무대)과 오른쪽(정보창) 사이에 배경이 끊기지 않고 하나로 이어지게.
+        const detailView = document.getElementById("inventory-detail-view");
+        if (detailView) {
+            [...detailView.classList].filter((c) => c.startsWith("rarity-")).forEach((c) => detailView.classList.remove(c));
+            detailView.classList.add(`rarity-${g.rarity}`);
+            detailView.classList.toggle("is-unowned", unowned);
+        }
 
         const standing = document.getElementById("inventory-standing-image");
         standing.src = `${OUTFIT_IMAGE_BASE}${g.outfit}/idle.png`;
-        standing.alt = g.name;
+        standing.alt = unowned ? "???" : g.name;
         standing.onerror = () => { standing.style.visibility = "hidden"; };
         standing.style.visibility = "visible";
+        // 미보유 인물은 스프라이트를 검은색 실루엣으로(밝기 최저) 보여준다.
+        standing.classList.toggle("is-unowned-silhouette", unowned);
 
-        document.getElementById("inventory-detail-rarity").textContent = `${g.rarity} · ${g.job_class}`;
-        document.getElementById("inventory-detail-name").textContent = g.name;
+        document.getElementById("inventory-detail-rarity").textContent = `${g.rarity} · ${g.job_class || "?"}`;
+        document.getElementById("inventory-detail-name").textContent = unowned ? "???" : g.name;
         document.getElementById("inventory-detail-stars").textContent = stars(g.star);
-        document.getElementById("inventory-detail-count").textContent = `${g.count}명 보유`;
+        document.getElementById("inventory-detail-count").textContent = unowned ? "미보유" : `${g.count}명 보유`;
         document.getElementById("inventory-info-rarity").textContent = g.rarity;
-        document.getElementById("inventory-info-job").textContent = g.job_class;
+        document.getElementById("inventory-info-job").textContent = g.job_class || "-";
+        // 성별/사거리/공수 타입은 미보유여도 그대로 보여준다(이름/스킬 설명만 가림).
         document.getElementById("inventory-info-gender").textContent = g.gender || "-";
-        document.getElementById("inventory-info-range").textContent = g.range;
-        document.getElementById("inventory-info-attack").textContent = TYPE_LABELS[g.attack_type] || g.attack_type;
-        document.getElementById("inventory-info-defense").textContent = TYPE_LABELS[g.defense_type] || g.defense_type;
-        document.getElementById("inventory-description").textContent = g.description || "설명이 없습니다.";
+        document.getElementById("inventory-info-range").textContent = g.range || "-";
+        document.getElementById("inventory-info-attack").textContent = TYPE_LABELS[g.attack_type] || g.attack_type || "-";
+        document.getElementById("inventory-info-defense").textContent = TYPE_LABELS[g.defense_type] || g.defense_type || "-";
+        document.getElementById("inventory-description").textContent = unowned
+            ? "아직 보유하지 않은 인물입니다."
+            : (g.description || "설명이 없습니다.");
 
         const equipButton = document.getElementById("inventory-equip-button");
-        equipButton.disabled = Boolean(g.is_equipped);
-        equipButton.textContent = g.is_equipped ? "현재 로비에 장착 중" : "로비에 장착하기";
+        equipButton.disabled = unowned || Boolean(g.is_equipped);
+        equipButton.textContent = unowned ? "미보유 인물입니다" : (g.is_equipped ? "현재 로비에 장착 중" : "로비에 장착하기");
 
+        // 의상 변경은 보유 인물 전용 기능이라 미보유일 땐 버튼 자체를 숨긴다.
+        const outfitButton = document.getElementById("inventory-outfit-button");
+        if (outfitButton) outfitButton.hidden = unowned;
+
+        // renderAbilities는 g.star_effects/skill_effects/trait_effects가 없으면(unowned_characters
+        // 응답엔 애초에 이 필드들이 없음) 각 능력을 자동으로 "잠김"으로 그린다(isAbilityAvailable이
+        // undefined를 false로 판정) - 미보유 인물의 스킬을 전부 잠긴 채로 보여주려는 의도와 정확히
+        // 맞아떨어져서 별도 분기가 필요 없다.
         renderAbilities();
-        renderOutfitChoices();
+        if (!unowned) renderOutfitChoices();
         document.getElementById("inventory-outfit-panel").hidden = true;
         closeAbilityModal();
     }
@@ -342,6 +387,7 @@
     function renderAbilities() {
         const g = selectedGroup;
         const key = String(g.star);
+        const unowned = Boolean(g._unowned);
 
         const expMultiplier = g.exp_multiplier?.[key];
         const expSubjects = g.exp_subjects || [];
@@ -350,17 +396,19 @@
 
         Object.entries(ABILITY_META).forEach(([kind, meta]) => {
             const effectsByStar = g[meta.field] || {};
-            renderAbilityGroup(kind, meta, effectsByStar[key], findCanonicalAbilityName(effectsByStar));
+            // 미보유 인물은 스킬 "이름"은 보여주되(findCanonicalAbilityName), 실제로 해금됐는지와
+            // 무관하게 항상 잠금 상태로 그린다(forceLocked) - 설명은 절대 클릭해서 못 보게 한다.
+            renderAbilityGroup(kind, meta, effectsByStar[key], findCanonicalAbilityName(effectsByStar), unowned);
         });
     }
 
-    function renderAbilityGroup(kind, meta, text, canonicalName) {
+    function renderAbilityGroup(kind, meta, text, canonicalName, forceLocked = false) {
         const holder = document.getElementById(`inventory-ability-${kind}`);
         if (!holder) return;
         holder.innerHTML = "";
 
         const { desc } = splitAbilityText(text);
-        const available = isAbilityAvailable(text);
+        const available = !forceLocked && isAbilityAvailable(text);
         const label = canonicalName || meta.fallbackName;
 
         const button = document.createElement("button");
