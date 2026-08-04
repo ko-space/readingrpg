@@ -515,7 +515,12 @@
                     });
                 }
             }
+            // 이전 점유자의 잔여 루프/체인/대기 상태를 전부 정리한다(arena-battle.js와 동일한 이유).
+            attackAnimTokens[cloneSlot] = (attackAnimTokens[cloneSlot] || 0) + 1;
             attackAnimActive[cloneSlot] = false;
+            rangedResolvePending[cloneSlot] = false;
+            delete actorAnimChain[cloneSlot];
+            delete walkerSuspended[cloneSlot];
             getAttackFrameCount(units[cloneSlot].outfit);
             renderUnit(cloneSlot);
             document.querySelector(`[data-unit="${cloneSlot}"] .battle-unit-img`)?.classList.add("is-clone");
@@ -836,6 +841,11 @@
         }
 
         if (attackAnimTokens[slot] === myToken) {
+            // battle_idle 파일이 없는 캐릭터/의상 조합이면 idle.png로 대체한다(arena-battle.js와 동일).
+            imgEl.onerror = () => {
+                imgEl.onerror = null;
+                imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.png`;
+            };
             imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.png`;
             attackAnimActive[slot] = false;
         }
@@ -858,6 +868,13 @@
         const myToken = (attackAnimTokens[slot] = (attackAnimTokens[slot] || 0) + 1);
         attackAnimActive[slot] = true;
 
+        // 프레임 스케줄의 기준 시각은 프레임 개수 조회 "전"에 찍는다(arena-battle.js와 동일한 이유) -
+        // skill_resolve(실제 스킬 발동) 타이밍은 시전이 시작된 시점 + 시전 시간으로 계산되는데, 이
+        // 캐릭터가 전투에서 처음 시전해서 getSkillFrameCount/getAttackFrameCount가 캐시 없이 이미지를
+        // 실제로 로드해봐야 하는 경우 그 조회 시간만큼 기준이 늦게 찍히면, 스킬 발동이 마지막 시전
+        // 프레임보다 먼저 일어나는 것처럼 보이는 어긋남이 생긴다.
+        const castStartMs = performance.now();
+
         const skillFrameCount = await getSkillFrameCount(unit.outfit, variant);
         const usingSkillFrames = skillFrameCount > 0;
         const frameCount = usingSkillFrames ? skillFrameCount : await getAttackFrameCount(unit.outfit, variant);
@@ -877,8 +894,6 @@
         // 절대 시각 기준으로 스케줄한다(arena-battle.js와 동일한 이유) - 프레임마다 상대 시간으로
         // sleep을 걸면 setTimeout 오차가 프레임 수만큼 누적돼서, 프레임이 많을수록 실제 재생이 서버
         // 시전 시간보다 점점 길어지고 skill_resolve 처리가 늦어진다.
-        const castStartMs = performance.now();
-
         for (let i = 1; i <= frameCount; i += 1) {
             if (attackAnimTokens[slot] !== myToken) return; // 다른 호출이 이미 새 토큰을 발급함 - 그쪽 상태를 건드리지 않는다
             imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/${framePrefix}${variant}_${i}.png`;
@@ -909,6 +924,18 @@
         }
         flashEffectAura(slot, "cc");
         log(`[특성] ${units[slot].name}의 시전이 기절로 취소됐다!`);
+    }
+
+    // 투사체/캔버스 연출이 실제로 대상에 "도착"하는 순간까지 화면 반영을 늦추는 스킬 전용
+    // (arena-battle.js와 동일) - HP는 이 함수로 이벤트 처리 시점에 곧바로 반영하고, 그 직전에 이미
+    // 죽어있었는지도 함께 캡처해서 반환한다. 도착 콜백은 이 반환값이 true면 렌더/이펙트를 건너뛰어야
+    // 한다 - 안 그러면 그 사이 다른(더 빠른) 이벤트가 같은 대상을 먼저 죽였을 때, 뒤늦게 도착한 연출이
+    // 죽기 전의 과거 HP로 덮어써서 이미 쓰러진 캐릭터가 되살아나 보이는 버그가 생긴다.
+    function captureAndApplyHp(slot, newHp) {
+        if (!slot || !units[slot]) return true;
+        const wasAlreadyDead = units[slot].hp <= 0;
+        units[slot].hp = newHp;
+        return wasAlreadyDead;
     }
 
     // 치명타 시 대상 머리 위에 "치명타!" 글자가 튀어오르듯 잠깐 떴다 사라진다.
@@ -1163,6 +1190,11 @@
                         if (imgEl) {
                             const unit = units[slot];
                             const variant = spriteVariantSuffix(slot);
+                            // battle_idle 파일이 없는 캐릭터/의상 조합이면 idle.png로 대체한다(arena-battle.js와 동일).
+                            imgEl.onerror = () => {
+                                imgEl.onerror = null;
+                                imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.png`;
+                            };
                             imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.png`;
                         }
                         faceToward(slot, targetKey);
@@ -1796,7 +1828,7 @@
     // 임소정 전기의 발사 시작점(손/지팡이 위치 근사치) - arena-battle.js와 동일. 기본공격/스킬이 서로
     // 다른 지점에서 나가야 해서 따로 둔다.
     const ELECTRIC_ORIGIN_BASIC = { fx: 0.9, fy: 0.27 };
-    const ELECTRIC_ORIGIN_SKILL = { fx: 1.3, fy: 0.28 };
+    const ELECTRIC_ORIGIN_SKILL = { fx: 0.9, fy: 0.28 };
 
     // 임소정 전용: 캐스터-대상을 잠깐 잇는 전기(이동하는 점이 아니라, 두 위치 사이를 잇는 막대를 회전시켜 만든다).
     // 기본공격은 얇고 푸른색(electric-blue), 스킬은 더 두껍고 노란색(electric-yellow)으로 호출한다.
@@ -2144,6 +2176,16 @@
         // 이전 전투에서 남은 배우별 애니메이션 체인도 정리한다 - 이미 완료된(resolved) 체인이라 새
         // 체인이 이어붙어도 기능상 무해하지만, 세션 내 재실행이 잦은 devtest 특성상 위생적으로 비워둔다.
         Object.keys(actorAnimChain).forEach((slot) => delete actorAnimChain[slot]);
+        // resetAll과 동일한 이유로 진행 중이던 시전/공격/이동 루프의 토큰도 무효화한다 - 이전 전투가
+        // 애니메이션 도중(시전/공격/걷기 중)에 끝나고 곧바로 재시작하면, 그 루프가 여전히 유효하다고
+        // 판단해서 새 전투의 화면 위에 이전 전투 캐릭터의 프레임을 계속 덮어쓸 수 있다.
+        SLOTS.forEach((slot) => {
+            attackAnimTokens[slot] = (attackAnimTokens[slot] || 0) + 1;
+            walkAnimTokens[slot] = (walkAnimTokens[slot] || 0) + 1;
+            attackAnimActive[slot] = false;
+            walkAnimActive[slot] = false;
+            rangedResolvePending[slot] = false;
+        });
 
         // 이전 전투에서 남아있던 복제체(summon)는 새 전투 시작 전에 완전히 지운다.
         ["attacker-summon-front", "attacker-summon-back", "defender-summon-front", "defender-summon-back"].forEach((slot) => {
@@ -2448,10 +2490,18 @@
             }
         } else if (event.event_type === "cast_start") {
             if (actorSlot) {
+                // 이 시전을 지금(디스패치 시점) 토큰으로 못박아둔다(arena-battle.js와 동일한 이유) -
+                // interruptCasting은 배우 체인을 거치지 않고 즉시 실행되므로, 이 클로저가 체인에서 자기
+                // 차례를 기다리는 동안 다른 배우의 CC가 이 배우를 기절시켜 시전이 취소될 수 있다. 실제로
+                // 시작하기 직전 토큰이 그대로인지 다시 확인해서, 다르면(그 사이 취소됨) casting 자세를
+                // 아예 시작하지 않는다 - 안 그러면 백엔드가 이미 취소해서 skill_resolve를 절대 안 보낼
+                // 시전인데도 재생을 시작해버려서, 마지막 캐스트 프레임에 영구히 멈추는 버그가 있었다.
+                const castDispatchToken = (attackAnimTokens[actorSlot] = (attackAnimTokens[actorSlot] || 0) + 1);
                 // 시전 자세/애니메이션은 이 배우 전용 체인에 매달아둔다(arena-battle.js와 동일) - 다른
                 // 배우의 이벤트 처리는 전혀 막지 않는다.
                 chainActorAnim(actorSlot, async () => {
                     await waitForAnimIdle(actorSlot);
+                    if (attackAnimTokens[actorSlot] !== castDispatchToken) return;
                     const castImgEl = document.querySelector(`[data-unit="${actorSlot}"] .battle-unit-img`);
                     castImgEl?.classList.add("casting");
                     if (event.actor === "강승유") castImgEl?.classList.add("casting-rainbow");
@@ -2555,7 +2605,12 @@
                         });
                     }
                 }
+                // 이전 점유자의 잔여 루프/체인/대기 상태를 전부 정리한다(arena-battle.js와 동일한 이유).
+                attackAnimTokens[cloneSlot] = (attackAnimTokens[cloneSlot] || 0) + 1;
                 attackAnimActive[cloneSlot] = false;
+                rangedResolvePending[cloneSlot] = false;
+                delete actorAnimChain[cloneSlot];
+                delete walkerSuspended[cloneSlot];
                 getAttackFrameCount(units[cloneSlot].outfit);
                 renderUnit(cloneSlot);
                 // 복제체는 원본과 구분되게 전체적으로 푸른 색감이 돌도록(3D 프린트 홀로그램 느낌)
@@ -2609,8 +2664,9 @@
                 const hit = event.detail.hits[0];
                 const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                 if (hitSlot) {
+                    const wasAlreadyDead = captureAndApplyHp(hitSlot, hit.target_hp_after);
                     spawnMeteorProjectile(actorSlot, hitSlot, () => {
-                        units[hitSlot].hp = hit.target_hp_after;
+                        if (wasAlreadyDead) return;
                         renderUnit(hitSlot);
                         flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
                     });
@@ -2652,19 +2708,27 @@
                     if (event.detail?.interrupted_cast) interruptCasting(hitSlot);
                 }
             } else if (dispatchEffectType === "aoe_enemy_damage" && actorSlot) {
-                (event.detail?.hits || []).forEach((hit) => {
-                    const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
-                    if (!hitSlot) return;
-                    units[hitSlot].hp = hit.target_hp_after;
-                    renderUnit(hitSlot);
-                    flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
+                // 가스 숨결이 실제로 닿는 순간에 맞춰 피해/HP/피격 이펙트를 반영한다(arena-battle.js와
+                // 동일 - 예전엔 여기서 즉시 반영해서 투사체가 날아가는 중인데 이미 맞은 것처럼 보였다).
+                // HP는 지금 즉시 반영(죽음 여부도 함께 캡처)하고, 가스 도착 시점엔 화면만 갱신한다.
+                const gasHits = event.detail?.hits || [];
+                const gasDeadFlags = gasHits.map((hit) => captureAndApplyHp(findHitSlot(actorSide, hit.target, hit.target_side), hit.target_hp_after));
+                spawnGasBreathStream(actorSlot, () => {
+                    gasHits.forEach((hit, i) => {
+                        if (gasDeadFlags[i]) return;
+                        const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
+                        if (!hitSlot) return;
+                        renderUnit(hitSlot);
+                        flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
+                    });
                 });
-                spawnGasBreathStream(actorSlot, () => {});
             } else if (dispatchEffectType === "heal_ally_percent_max_hp" && event.detail?.healed) {
                 const healSlot = findHitSlot(actorSide, event.detail.target, event.detail.target_side);
                 if (healSlot) {
+                    const newHp = Math.min(units[healSlot].maxHp, units[healSlot].hp + event.detail.amount);
+                    const wasAlreadyDead = captureAndApplyHp(healSlot, newHp);
                     spawnHealingHeart(healSlot, () => {
-                        units[healSlot].hp = Math.min(units[healSlot].maxHp, units[healSlot].hp + event.detail.amount);
+                        if (wasAlreadyDead) return;
                         renderUnit(healSlot);
                         flashEffectAura(healSlot, "heal");
                         setStatusIcon(healSlot, "heal", { source: `${event.actor}:heal`, durationMs: MOMENT_ICON_MS });
@@ -2681,10 +2745,14 @@
             } else if (dispatchEffectType === "aoe_all_others_damage" && actorSlot && event.detail?.hits?.length) {
                 // 불빠따 김어진 "불빠따" - 발밑에서 좌우로 땅불이 번져나가며, 자신을 제외한 아군 1명 +
                 // 적 전체를 때린다(arena-battle.js와 동일). 각 대상은 불이 실제로 닿는 시점에 맞춰 반영.
+                // HP는 지금 즉시 반영(죽음 여부도 함께 캡처)하고, 불이 도착하는 시점엔 화면만 갱신한다.
+                event.detail.hits.forEach((hit) => {
+                    hit.__wasAlreadyDead = captureAndApplyHp(findHitSlot(actorSide, hit.target, hit.target_side), hit.target_hp_after);
+                });
                 spawnGroundFireCanvas(actorSlot, event.detail.hits, (hit) => {
+                    if (hit.__wasAlreadyDead) return;
                     const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                     if (!hitSlot) return;
-                    units[hitSlot].hp = hit.target_hp_after;
                     renderUnit(hitSlot);
                     flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
                 });
@@ -2694,12 +2762,15 @@
                 const d = event.detail || {};
                 const hasAnyPaint = d.red || d.blue || d.yellow;
 
+                // 물감 계열도 전부 같은 이유(captureAndApplyHp 참고)로 HP는 지금 즉시 반영하고, 투사체
+                // 도착 콜백은 화면 갱신만 하도록 죽음 여부를 미리 캡처해둔다.
                 if (!hasAnyPaint && d.hits?.length) {
                     const hit = d.hits[0];
                     const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                     if (hitSlot) {
+                        const wasAlreadyDead = captureAndApplyHp(hitSlot, hit.target_hp_after);
                         spawnPaintSkillProjectile(actorSlot, hitSlot, "paint-white", () => {
-                            units[hitSlot].hp = hit.target_hp_after;
+                            if (wasAlreadyDead) return;
                             renderUnit(hitSlot);
                             flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
                         });
@@ -2709,8 +2780,9 @@
                         const hit = d.hits[0];
                         const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                         if (hitSlot) {
+                            const wasAlreadyDead = captureAndApplyHp(hitSlot, hit.target_hp_after);
                             spawnPaintSkillProjectile(actorSlot, hitSlot, "paint-red", () => {
-                                units[hitSlot].hp = hit.target_hp_after;
+                                if (wasAlreadyDead) return;
                                 renderUnit(hitSlot);
                                 flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
                             });
@@ -2722,8 +2794,9 @@
                         // 회복은 항상 시전자와 같은 편이라 actorSide로 바로 찾는다.
                         const healSlot = findSlotByName(actorSide, heal.target);
                         if (healSlot) {
+                            const wasAlreadyDead = captureAndApplyHp(healSlot, heal.target_hp_after);
                             spawnPaintSkillProjectile(actorSlot, healSlot, "paint-blue", () => {
-                                units[healSlot].hp = heal.target_hp_after;
+                                if (wasAlreadyDead) return;
                                 renderUnit(healSlot);
                                 flashEffectAura(healSlot, "heal");
                                 setStatusIcon(healSlot, "heal", { source: `${event.actor}:paint_heal`, durationMs: MOMENT_ICON_MS });
@@ -2736,7 +2809,7 @@
                         const applyAllStuns = () => {
                             d.stunned.forEach((s) => {
                                 const sSlot = findHitSlot(actorSide, s.target, s.target_side);
-                                if (!sSlot) return;
+                                if (!sSlot || units[sSlot].hp <= 0) return;
                                 flashEffectAura(sSlot, "cc");
                                 setStatusIcon(sSlot, "stun", { source: `${event.actor}:stun`, durationMs: (d.stun_seconds || 0) * 1000 });
                                 if (s.interrupted_cast) interruptCasting(sSlot);
@@ -2802,6 +2875,9 @@
                 setTimeout(() => {
                     playRangedAttack(actorSlot, targetSlot, () => {
                         rangedResolvePending[actorSlot] = false;
+                        // 근접 분기와 동일한 가드(arena-battle.js와 동일) - 투사체가 날아가는 동안
+                        // 대상이 다른 이벤트로 먼저 죽었다면 피격 연출/로그를 다시 띄우지 않는다.
+                        if (targetWasAlreadyDead) return;
                         applyHitVisual();
                     });
                 }, EFFECT_LAUNCH_DELAY_MS);
@@ -2852,6 +2928,15 @@
             delete facingFlipped[slot];
             delete walkerSuspended[slot];
             delete actorAnimChain[slot];
+            // 진행 중이던 시전/공격/이동 루프의 토큰을 무효화한다 - 안 그러면 "초기화" 버튼을 애니메이션
+            // 도중(시전/공격/걷기 중)에 눌러도 그 루프의 다음 프레임 체크(attackAnimTokens[slot] !== myToken
+            // 같은)가 여전히 유효하다고 판단해서, 방금 새로 설정한 캐릭터의 화면 위에 초기화 이전
+            // 캐릭터의 프레임을 계속 덮어써버린다.
+            attackAnimTokens[slot] = (attackAnimTokens[slot] || 0) + 1;
+            walkAnimTokens[slot] = (walkAnimTokens[slot] || 0) + 1;
+            attackAnimActive[slot] = false;
+            walkAnimActive[slot] = false;
+            rangedResolvePending[slot] = false;
         });
         ["attacker-summon-front", "attacker-summon-back", "defender-summon-front", "defender-summon-back"].forEach((slot) => {
             delete units[slot];
