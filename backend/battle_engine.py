@@ -116,11 +116,18 @@ MAX_BATTLE_DURATION = 180.0
 
 def _new_status():
     return {
-        "atk_percent_bonus": 0,      # 영구
-        "atk_percent_debuff": 0,     # 임시 공격력 감소
-        "temp_debuff_until": None,
-        "haste_percent": 0,          # 임시 공격 속도 증가
-        "haste_until": None,
+        "atk_percent_bonus": 0,      # 영구 공격력 증감 총합(특성/성급 효과 - 여러 영구 소스가 있어도
+                                      # 만료를 추적할 필요가 없어 그냥 이 스칼라 하나에 전부 누적한다.
+                                      # 부호로 버프/디버프를 함께 표현한다(이영웅/윤대웅 star effect의
+                                      # 영구 디버프도 이 필드를 음수로 깎는 방식).
+        "temp_atk_mods": {},         # 임시(지속시간 있는) 공격력 변화 전부 - 소스(캐릭터 인스턴스 id)별로
+                                      # 독립된 {"percent": ±X, "until": 시각} 항목을 갖는다. 같은 소스가
+                                      # 다시 걸면 그 소스의 항목만 새 값으로 갱신(교체)되고, 다른 소스가
+                                      # 걸면 별도 항목으로 추가되어 활성 상태인 동안 서로 합산된다 -
+                                      # _effective_atk가 매번 "지금 시각 기준 아직 안 끝난" 항목들을
+                                      # 전부 더해서 실효 값을 계산한다(각자 자기 시각에 독립적으로 만료됨).
+        "haste_percent": 0,          # 영구 공격속도 증가 총합(전투 시작 특성 - battlefield_presence_haste 등)
+        "temp_haste_mods": {},       # 임시 공격속도 증가 - temp_atk_mods와 동일한 소스별 독립 합산 방식
         "shield_until": None,        # 이 시간까지는 받는 피해가 0
         "stun_until": None,          # 이 시간까지는 아무 행동도 못 함
         "stack_count": 0,
@@ -392,18 +399,45 @@ def _resolve_basic_attack_target(unit, enemy_team, time_elapsed):
 
 
 def _effective_atk(unit, time_elapsed):
+    """공격력에 영향을 주는 모든 요인(영구 + 임시)을 합산한다. 영구는 스칼라 하나(atk_percent_bonus)로
+    이미 누적돼 있고, 임시는 소스별로 독립된 항목(temp_atk_mods)이라 그중 "지금 아직 안 끝난" 것만
+    골라 더한다 - 서로 다른 출처의 버프/디버프가 겹치는 동안엔 자연히 합산되고, 각자 자기 시각에
+    독립적으로 만료된다(하나가 먼저 끝나도 나머지는 그대로 유지)."""
     status = unit["status"]
-    bonus = status["atk_percent_bonus"]
-    debuff = status["atk_percent_debuff"] if (status["temp_debuff_until"] is not None and time_elapsed < status["temp_debuff_until"]) else 0
-    return round(unit["atk"] * (1 + bonus / 100 - debuff / 100))
+    total_percent = status["atk_percent_bonus"]
+    for mod in status["temp_atk_mods"].values():
+        if time_elapsed < mod["until"]:
+            total_percent += mod["percent"]
+    return round(unit["atk"] * (1 + total_percent / 100))
 
 
 def _effective_interval(unit, time_elapsed):
+    """공격 주기(속도)도 _effective_atk와 동일한 방식 - 영구(haste_percent) + 아직 안 끝난 임시
+    소스(temp_haste_mods)를 전부 합산한다."""
     status = unit["status"]
     interval = unit["attack_interval"]
-    if status["haste_until"] is not None and time_elapsed < status["haste_until"]:
-        interval = interval * (1 - status["haste_percent"] / 100)
+    total_haste = status["haste_percent"]
+    for mod in status["temp_haste_mods"].values():
+        if time_elapsed < mod["until"]:
+            total_haste += mod["percent"]
+    if total_haste:
+        interval = interval * (1 - total_haste / 100)
     return interval
+
+
+def _refresh_status_until(status, until_key, new_until, time_elapsed):
+    """상태의 "켜짐/꺼짐"만 있는(수치가 없는) 지속시간 필드(stun_until/shield_until) 전용 - 무조건
+    덮어쓰지 않고 "갱신"한다: 기존 값이 아직 유효한데(time_elapsed < 기존값) 새 값이 더 이르게
+    끝난다면, 새로 걸린(대개 더 약하거나 짧은) 효과가 기존의 더 강한 효과를 실수로 단축시키지 않도록
+    기존 값을 그대로 둔다. 기절/실드는 "얼마나 강하게"가 아니라 "지금 걸려있는가"만 의미가 있어서(수치를
+    더할 대상이 없음) 여러 소스가 동시에 걸려도 그냥 "가장 늦게 끝나는 것 하나"로 합쳐도 결과가 같다 -
+    소스별로 독립 합산해야 하는 공격력/공격속도(_effective_atk/_effective_interval의 temp_atk_mods/
+    temp_haste_mods)와는 성격이 다르다. 실제로 값을 갱신했는지 여부를 반환한다."""
+    current = status.get(until_key)
+    if current is not None and time_elapsed < current and current >= new_until:
+        return False
+    status[until_key] = new_until
+    return True
 
 
 def _apply_damage(target, amount, time_elapsed):
@@ -465,10 +499,13 @@ def _interrupt_cast_if_casting(target, time_elapsed, priority=CC_PRIORITY_DEFAUL
 
 
 def _apply_stun(target, stun_until, time_elapsed, priority=CC_PRIORITY_STUN):
-    """대상에게 기절을 건다(+ 시전 중이었다면 취소). 기절 자체는 취소되지 않으므로 stun_until까지는
-    그대로 무행동. 반환값은 시전 취소 여부. priority 기본값은 "기절류" 등급(CC_PRIORITY_STUN) - 이
-    함수를 쓰는 스킬은 전부 기절 계열이라 호출부에서 따로 넘길 필요가 없다."""
-    target["status"]["stun_until"] = stun_until
+    """대상에게 기절을 건다(+ 시전 중이었다면 취소). 기절 지속시간은 무조건 덮어쓰지 않고 "갱신"한다
+    (_refresh_status_until) - 이미 더 늦게까지 기절 중이면 그 값을 유지해서, 나중에 걸린 더 짧은 기절이
+    기존 기절을 오히려 단축시키지 않는다. 시전 취소 여부는 기절 지속시간 갱신 여부와 무관하게 항상
+    우선순위대로 판정한다(약한 CC라도 아직 발동 전인 시전은 그대로 끊을 수 있어야 하므로). 반환값은
+    시전 취소 여부. priority 기본값은 "기절류" 등급(CC_PRIORITY_STUN) - 이 함수를 쓰는 스킬은 전부
+    기절 계열이라 호출부에서 따로 넘길 필요가 없다."""
+    _refresh_status_until(target["status"], "stun_until", stun_until, time_elapsed)
     return _interrupt_cast_if_casting(target, time_elapsed, priority)
 
 
@@ -642,8 +679,7 @@ def _trait_battlefield_presence_haste(caster, team, enemy_team, params, events, 
         any(u and u["name"] == target_name for u in _all_slots(enemy_team))
     if not present:
         return
-    caster["status"]["haste_percent"] = params["haste_percent"]
-    caster["status"]["haste_until"] = float("inf")  # 전투가 끝날 때까지(사실상 영구) 유지
+    caster["status"]["haste_percent"] = params["haste_percent"]  # 영구(전투 끝까지) - 만료 시각 불필요
     events.append({
         "time": 0, "event_type": "trait_resolve", "side": side, "actor": caster["name"],
         "effect_type": "battlefield_presence_haste",
@@ -660,8 +696,7 @@ def _trait_female_count_haste(caster, team, enemy_team, params, events, side):
     if female_count <= 0:
         return
     haste_percent = female_count * params["percent_per_female"]
-    caster["status"]["haste_percent"] = haste_percent
-    caster["status"]["haste_until"] = float("inf")
+    caster["status"]["haste_percent"] = haste_percent  # 영구(전투 끝까지) - 만료 시각 불필요
     events.append({
         "time": 0, "event_type": "trait_resolve", "side": side, "actor": caster["name"],
         "effect_type": "female_count_haste",
@@ -955,6 +990,13 @@ def _skill_summon_clone(caster, own_team, enemy_team, params, time_elapsed):
     # front면 summon_front, back이면 summon_back(own_team["front"] is caster로 판정). 같은 팀에
     # summon_clone을 쓰는 캐릭터가 둘이어도 서로 다른 자리를 쓰므로 서로의 복제체를 밀어내지 않는다.
     # 단, 같은 캐릭터가 재시전(재소환)하면 자기 자리에 있던 이전 복제체만 교체한다 - 항상 캐릭터당 최대 1마리.
+    #
+    # 시전자가 이미 죽어있으면(last_survivor_ids 유예로 "죽는 바로 그 틱"에도 행동은 그대로 진행되는
+    # 경우 - simulate_battle 참고) 소환을 무효로 한다 - 안 그러면 팀의 마지막 생존자가 죽는 순간
+    # 새 복제체가 나타나서 그 팀이 실제로는 전멸했는데도 계속 "생존 중"으로 판정되어, 상대 팀도 같은
+    # 틱에 전멸했을 때 성립해야 할 진짜 동시 전멸(무승부)이 막혀버린다.
+    if caster["hp"] <= 0:
+        return {"summoned": False}
     caster_slot = "front" if own_team.get("front") is caster else "back"
     target_key = f"summon_{caster_slot}"
     replaced = own_team.get(target_key)
@@ -999,9 +1041,14 @@ def _skill_conditional_target_debuff(caster, own_team, enemy_team, params, time_
     if target is None:
         return {"hit": False}
 
-    # 공격 속도 증가는 대상 성별과 무관하게 시전할 때마다 항상 적용된다. 기절만 대상이 여성일 때 조건부로 걸린다.
-    caster["status"]["haste_percent"] = params["haste_percent"]
-    caster["status"]["haste_until"] = time_elapsed + params["haste_seconds"]
+    # 공격 속도 증가는 대상 성별과 무관하게 시전할 때마다 항상 자기 자신에게 적용된다(자기 대상이라
+    # 소스가 항상 자기 자신 하나뿐이라 재시전은 자연히 이 하나의 슬롯만 갱신됨). 전투 시작 특성으로
+    # 이미 영구(haste_percent) 공격 속도 증가를 받은 캐릭터가 이 스킬도 쓰면, 임시 슬롯이 별도로
+    # 더해질 뿐 영구 값을 덮어쓰지 않는다(_effective_interval이 영구+임시 활성 소스를 전부 합산).
+    caster["status"]["temp_haste_mods"][id(caster)] = {
+        "percent": params["haste_percent"],
+        "until": time_elapsed + params["haste_seconds"],
+    }
 
     condition_met = params["condition"] != "target_gender_female" or _effective_gender(target) == "여"
     interrupted_cast = False
@@ -1028,7 +1075,8 @@ def _skill_heal_ally_percent_max_hp(caster, own_team, enemy_team, params, time_e
 
 
 def _skill_self_shield_duration(caster, own_team, enemy_team, params, time_elapsed):
-    caster["status"]["shield_until"] = time_elapsed + params["seconds"]
+    new_shield_until = time_elapsed + params["seconds"]
+    _refresh_status_until(caster["status"], "shield_until", new_shield_until, time_elapsed)
     return {"shield_seconds": params["seconds"]}
 
 
@@ -1172,19 +1220,26 @@ def _skill_damage_hp_percent_plus_atk(caster, own_team, enemy_team, params, time
     target = _alive_target(enemy_team)
     if target is None:
         return {"hit": False}
+    type_mult = get_type_multiplier(caster["attack_type"], target["defense_type"])
     atk, is_crit = _roll_damage_atk(caster, time_elapsed)
-    damage = target["hp"] * params["hp_percent"] / 100 + atk * params["atk_percent"] / 100
+    damage = (target["hp"] * params["hp_percent"] / 100 + atk * params["atk_percent"] / 100) * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
     dealt = _apply_damage(target, damage, time_elapsed)
-    return {"hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": 1.0}]}
+    return {"hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}]}
 
 
 def _skill_debuff_atk_and_damage(caster, own_team, enemy_team, params, time_elapsed):
     target = _alive_target(enemy_team)
     if target is None:
         return {"hit": False}
-    target["status"]["atk_percent_debuff"] = params["atk_debuff_percent"]
-    target["status"]["temp_debuff_until"] = time_elapsed + params["debuff_seconds"]
+    # 이 시전자(캐스터 인스턴스) 전용 슬롯에 독립적으로 기록한다 - 같은 캐스터가 다시 걸면 이 슬롯만
+    # 새 값으로 갱신(교체)되고, 다른 캐스터(예: 미러전의 상대 팀 임소정, 또는 강승유가 복제한 경우)가
+    # 걸면 별도 슬롯이라 서로 상쇄되지 않고 대상이 살아있는 동안 각자 자기 시각까지 독립적으로
+    # 적용된다(_effective_atk가 활성 상태인 슬롯을 전부 합산).
+    target["status"]["temp_atk_mods"][id(caster)] = {
+        "percent": -params["atk_debuff_percent"],
+        "until": time_elapsed + params["debuff_seconds"],
+    }
     type_mult = get_type_multiplier(caster["attack_type"], target["defense_type"])
     atk, is_crit = _roll_damage_atk(caster, time_elapsed)
     damage = atk * params["multiplier"] / 100 * type_mult
@@ -1582,10 +1637,22 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
                     continue
 
                 status = unit["status"]
-                if status["stun_until"] is not None and time_elapsed < status["stun_until"]:
+                # CC 우선순위(_cc_priority_of_skill)로 "취소되지 않도록 보호"받은 시전은 실제로 그 틱에
+                # 발동까지 이어져야 한다 - 안 그러면 취소는 안 됐지만 이 스턴/방임 게이트에 걸려 결국
+                # 그 틱엔 아무것도 못 하고 스턴이 풀릴 때까지 미뤄지는, "취소된 것과 다를 바 없는" 상태가
+                # 되어버린다(CC 우선순위 설계 의도인 "약한 CC는 상대 스킬을 못 건드린다"가 무력화됨).
+                # is_casting이 여전히 True인 채 이미 발동 예정(cast_end_time 도달)이라는 건, 바로 이 틱에
+                # 걸린 CC가 _interrupt_cast_if_casting에서 우선순위 부족으로 보호를 통과시켰다는 뜻이므로
+                # (그렇지 않았다면 이미 취소되어 is_casting이 False였을 것), 그 발동만은 게이트를 통과시킨다.
+                cast_due_now = (
+                    unit["is_casting"]
+                    and unit["cast_end_time"] is not None
+                    and time_elapsed >= unit["cast_end_time"]
+                )
+                if status["stun_until"] is not None and time_elapsed < status["stun_until"] and not cast_due_now:
                     continue
 
-                if unit.get("neglect_active"):
+                if unit.get("neglect_active") and not cast_due_now:
                     continue
 
                 if unit["is_casting"]:
