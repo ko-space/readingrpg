@@ -186,6 +186,11 @@
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || "보상을 받지 못했습니다.");
+            // 낙관적으로 바꿔둔 quest 객체가, 응답을 기다리는 사이 모달이 닫혔다 다시 열려서 refreshData가
+            // questData 자체를 새 객체로 통째로 교체해버리면 화면에서 떨어져 나갈 수 있다(참조가
+            // 끊어짐) - 그러면 방금 수령한 게 서버에는 반영됐는데 화면엔 다시 "받기"로 보이는 어긋남이
+            // 생긴다. 성공이 확정된 지금, 서버 최신 상태를 다시 받아와 화면을 그 진실에 맞춘다.
+            await refreshData();
             if (typeof loadProfile === "function") await loadProfile();
             // gacha.js와 동일한 패턴 - 캐릭터 보상이 있으면(퀘스트 자체 보상 또는 이 수령으로 새로 달성한
             // 업적의 보상) 가챠 등장 연출부터 재생하고, 업적 알림은 그 연출이 닫힌 뒤에 뜨도록 넘긴다.
@@ -200,10 +205,9 @@
                 notifyAchievements();
             }
         } catch (error) {
-            quest.claimed = false;
-            quest.claimable = true;
-            renderList();
-            updateQuestBadge();
+            // 실패했을 때도 낙관적 mutation을 수동으로 되돌리는 대신 서버 상태를 다시 받아온다 -
+            // 같은 이유(quest 참조가 그 사이 detach됐을 수 있음)로, 수동 되돌리기보다 항상 더 정확하다.
+            await refreshData();
             alert(error.message);
         }
     }
@@ -225,6 +229,9 @@
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || "보상을 받지 못했습니다.");
+            // claimQuest와 동일한 이유 - 응답을 기다리는 사이 모달이 닫혔다 열려 challengeData가
+            // 통째로 교체됐을 수 있으므로, 성공이 확정된 지금 서버 최신 상태로 다시 맞춘다.
+            await refreshData();
             if (typeof loadProfile === "function") await loadProfile();
             // 도전과제 보상은 업적 알림을 유발하지 않지만(백엔드가 new_achievements를 안 줌), 보상
             // 캐릭터는 줄 수 있으므로 gacha.js와 동일하게 등장 연출을 재생한다.
@@ -232,10 +239,7 @@
                 showCharacterReveal(data.new_characters);
             }
         } catch (error) {
-            challenge.claimed = false;
-            challenge.claimable = true;
-            renderList();
-            updateQuestBadge();
+            await refreshData();
             alert(error.message);
         }
     }
@@ -261,6 +265,8 @@
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || "보상을 받지 못했습니다.");
+            // claimQuest/claimChallenge와 동일한 이유로, 성공이 확정된 지금 서버 최신 상태로 다시 맞춘다.
+            await refreshData();
             if (typeof loadProfile === "function") await loadProfile();
             // 퀘스트/도전과제 일괄 수령도 캐릭터 보상이 있으면 등장 연출부터 재생한다(gacha.js와 동일한
             // 패턴). 도전과제 탭은 new_achievements가 아예 안 오므로 optional chaining으로 자연스럽게 스킵.
@@ -275,12 +281,7 @@
                 notifyAchievements();
             }
         } catch (error) {
-            claimableIds.forEach((id) => {
-                const q = items.find((qq) => qq.id === id);
-                if (q) { q.claimed = false; q.claimable = true; }
-            });
-            renderList();
-            updateQuestBadge();
+            await refreshData();
             alert(error.message);
         }
     }
