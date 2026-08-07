@@ -19,6 +19,7 @@ def _start_session(user: User, db: Session) -> str:
     session_id = uuid.uuid4().hex
     user.active_session_id = session_id
     user.active_tab_id = None  # 새 로그인이므로 "어느 탭이 활성 탭인지"는 첫 하트비트가 정한다
+    user.active_load_id = None
     user.session_last_seen = datetime.utcnow()
     db.commit()
     return create_access_token(user.id, session_id)
@@ -130,7 +131,7 @@ def heartbeat(req: HeartbeatRequest, user: User = Depends(get_current_user), db:
                 User.session_last_seen < stale_cutoff,
             ),
         )
-        .values(active_tab_id=req.tab_id, session_last_seen=now)
+        .values(active_tab_id=req.tab_id, active_load_id=req.load_id, session_last_seen=now)
     )
     db.commit()
 
@@ -141,12 +142,21 @@ def heartbeat(req: HeartbeatRequest, user: User = Depends(get_current_user), db:
 
 @router.post("/release-tab")
 def release_tab(req: HeartbeatRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """탭이 닫히거나 이 사이트의 다른 페이지로 이동할 때(pagehide) 보낸다. 지금 활성 탭이 자기 자신일 때만
-    비워서, 활성 탭 자리를 SESSION_TIMEOUT_SECONDS만큼 기다리지 않고 바로 다음 탭에 넘겨줄 수 있게 한다.
-    같은 탭이 우리 사이트 안의 다른 페이지로 넘어가는 경우에도 호출되지만, 그 다음 페이지가 같은 tab_id로
-    바로 다시 활성 탭을 잡으므로(sessionStorage는 탭 단위로 페이지 이동에도 유지됨) 문제되지 않는다."""
-    if user.active_tab_id == req.tab_id:
+    """탭이 닫히거나 이 사이트의 다른 페이지로 이동할 때(pagehide) 보낸다. 지금 활성 탭 자리를 자기 자신이
+    가장 최근에 claim한 게 맞을 때만 비워서, SESSION_TIMEOUT_SECONDS만큼 기다리지 않고 바로 다음 탭에
+    넘겨줄 수 있게 한다.
+
+    active_tab_id뿐 아니라 active_load_id까지 같이 확인하는 이유: 같은 탭이 우리 사이트 안의 다른 페이지로
+    넘어가는 경우에도 pagehide가 그대로 발생하는데, keepalive 요청이라 페이지가 이미 넘어간 뒤에도 배경에서
+    살아있다가 새 페이지가 이미 정상 하트비트로 같은 tab_id 자리를 재청구한 "이후"에 뒤늦게 서버에 도달할 수
+    있다. tab_id만 보면 이 낡은 요청도 조건을 통과해서, 방금 새 페이지가 정상적으로 잡은 자리를 도로
+    비워버리는 회귀가 있었다(그래서 한동안 이 훅 자체를 아예 없앴었다). load_id는 tab_id와 달리 페이지
+    로드마다 새로 발급되고 페이지 이동 시 넘어가지 않으므로, 낡은 요청은 자신을 발급했던 옛 load_id를 실어
+    보내고 그 사이 새 페이지는 이미 자신의 새 load_id로 자리를 갱신해뒀다 - 그래서 두 값을 함께 확인하면
+    "진짜로 아직 내가 마지막 claim인 경우"에만 반납되고, 낡은 요청은 조용히 무시된다."""
+    if user.active_tab_id == req.tab_id and user.active_load_id == req.load_id:
         user.active_tab_id = None
+        user.active_load_id = None
         db.commit()
     return {"ok": True}
 
@@ -156,6 +166,7 @@ def logout(user: User = Depends(get_current_user), db: Session = Depends(get_db)
     """세션을 즉시 반납한다. 이걸 안 눌러도 하트비트가 끊기면 SESSION_TIMEOUT_SECONDS 후 자동으로 풀린다."""
     user.active_session_id = None
     user.active_tab_id = None
+    user.active_load_id = None
     user.session_last_seen = None
     db.commit()
     return {"message": "로그아웃되었습니다."}

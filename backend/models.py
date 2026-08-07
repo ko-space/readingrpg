@@ -36,6 +36,11 @@ class User(Base):
     # 같은 로그인(active_session_id)이라도 브라우저 탭이 여러 개면(같은 기기에서 새 창을 여는 경우) 그중 하나만
     # "지금 쓰고 있는 탭"으로 인정한다. 다른 탭이 먼저 하트비트를 보내고 있으면 나중 탭은 차단된다.
     active_tab_id = Column(String, nullable=True)
+    # 탭이 아니라 "페이지 로드 1회"마다 새로 발급되는 식별자(같은 탭 안에서 다른 페이지로 이동해도 새로
+    # 발급됨) - 탭 종료(pagehide) 시 자리를 즉시 반납하는 release-tab 요청이, 같은 탭이 이미 다음 페이지로
+    # 넘어가 새로 하트비트를 보낸 "이후"에 뒤늦게 도착해도 그 최신 claim을 잘못 지우지 않도록 구분하는 용도.
+    # routers/auth.py의 release_tab 참고.
+    active_load_id = Column(String, nullable=True)
 
     # 순수 표시용 취향 설정. 예전엔 localStorage에 뒀지만 기기/브라우저에 따라 저장이 안 유지되는
     # 경우가 있어(태블릿 사파리 등) 계정(DB)에 저장하는 방식으로 옮겼다 - 닉네임과 동일한 이유.

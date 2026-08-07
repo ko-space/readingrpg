@@ -32,6 +32,7 @@ class GoogleLoginRequest(BaseModel):
 
 class HeartbeatRequest(BaseModel):
     tab_id: str  # 브라우저 탭마다 하나씩 생기는 식별자(sessionStorage 보관). 같은 계정이어도 다른 탭이면 다르다.
+    load_id: str  # 페이지 로드 1회마다 새로 발급되는 식별자(탭 안에서 페이지 이동해도 새로 발급) - release-tab의 낡은 요청 판별용.
 
 
 class LogCreate(BaseModel):
