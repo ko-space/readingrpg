@@ -345,8 +345,11 @@ def compute_progress(db: Session, user, ach: Achievement) -> dict:
         item_type_target = params.get("item_types", 7)
         gold_target = params.get("gold", 5000)
         target = item_type_target + gold_target
-        owned_item_types = db.query(UserItem).filter(
-            UserItem.user_id == user.id, UserItem.quantity > 0,
+        # "아이템"은 인벤토리의 아이템 목록에 실제로 보관되는 것만 친다(item_type == "enhancement") -
+        # 의상/스킨(item_type == "outfit")과 재화(item_type == "currency", 스토리모드 티켓 등)는
+        # 인벤토리 아이템 목록에도 안 뜨므로 여기서도 아이템으로 세지 않는다.
+        owned_item_types = db.query(UserItem).join(Item, UserItem.item_id == Item.id).filter(
+            UserItem.user_id == user.id, UserItem.quantity > 0, Item.item_type == "enhancement",
         ).count()
         current = min(owned_item_types, item_type_target) + min(user.gold, gold_target)
 
