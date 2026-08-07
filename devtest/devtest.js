@@ -975,7 +975,12 @@
             if (attackAnimTokens[slot] !== myToken) return; // 다른 호출이 이미 새 토큰을 발급함 - 그쪽 상태를 건드리지 않는다
             imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/${framePrefix}${variant}_${i}.png`;
             const remainingMs = castStartMs + perFrameMs * i - performance.now();
-            if (remainingMs > 0) await sleep(remainingMs);
+            // remainingMs가 0 이하라고 await를 아예 건너뛰면 브라우저에 제어권이 한 번도 안 넘어가서
+            // (=페인트 기회 없이) 여러 프레임의 src가 연달아 덮어써진다 - 호 폭발처럼 메인 스레드가
+            // 잠깐 멈췄다 풀릴 때 시전 애니메이션이 프레임을 통째로 건너뛰며 훅 빨라진 것처럼 보이는
+            // 원인(arena-battle.js와 동일). Math.max(0, ...)로 무조건 await해 프레임마다 최소 한 번은
+            // 페인트 기회를 준다.
+            await sleep(Math.max(0, remainingMs));
         }
 
         // 시전 프레임 루프가 끝났으니 skill_resolve 처리를 막던 게이트는 풀어준다(안 그러면 위와
@@ -2097,7 +2102,17 @@
                 if (s.life > s.maxLife) smoke.splice(i, 1);
             }
 
-            ctx.clearRect(0, 0, fieldRect.width, fieldRect.height);
+            // 이번 프레임에 실제로 그려질 범위(캐릭터 중심 기준 반경)를 링 크기로부터 어림잡아, 매번
+            // 필드 전체를 clearRect하는 대신 그만큼만 지운다(arena-battle.js와 동일한 이유 - 필드 전체
+            // 크기 캔버스를 매 프레임 통째로 지우고 다시 그리는 게 렉의 두 번째 원인이었다). 파티클/
+            // 스모크/스트릭이 링보다 더 멀리 튈 수 있는 극단치까지 감안해 넉넉히(2.6배 + 여유폭) 잡아서
+            // 클리핑/잔상이 생길 일은 없게 한다.
+            const clearR = Math.max(ringR, ringR2, radius * 0.95) * 2.6 + radius * 1.5;
+            const clearX = Math.max(0, cx - clearR);
+            const clearY = Math.max(0, cy - clearR);
+            const clearW = Math.min(fieldRect.width, cx + clearR) - clearX;
+            const clearH = Math.min(fieldRect.height, cy + clearR) - clearY;
+            ctx.clearRect(clearX, clearY, clearW, clearH);
             ctx.save();
             ctx.globalCompositeOperation = "lighter";
 
@@ -2113,17 +2128,21 @@
                 ctx.fill();
             }
 
+            // 링은 shadowBlur 대신 굵고 옅은 stroke + 얇고 밝은 stroke 두 겹으로 "번지는" 느낌을
+            // 흉내낸다(arena-battle.js와 동일한 이유 - shadowBlur가 호 폭발 렉의 가장 유력한 원인이었다).
             [[ringR, ringAlpha, Math.max(2, radius * 0.07)], [ringR2, ringAlpha * 0.75, Math.max(1.5, radius * 0.04)]].forEach(([r, a, w]) => {
                 if (a <= 0 || r <= 0) return;
-                ctx.save();
+                ctx.beginPath();
+                ctx.lineWidth = w * 3.2;
+                ctx.strokeStyle = `rgba(255, 174, 54, ${a * 0.35})`;
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.stroke();
+
                 ctx.beginPath();
                 ctx.lineWidth = w;
                 ctx.strokeStyle = `rgba(255, ${180 + Math.floor(a * 40)}, 72, ${a})`;
-                ctx.shadowBlur = radius * 0.16;
-                ctx.shadowColor = `rgba(255, 174, 54, ${a * 0.8})`;
                 ctx.arc(cx, cy, r, 0, Math.PI * 2);
                 ctx.stroke();
-                ctx.restore();
             });
 
             if (exploded && streaks.length && ringAlpha > 0) {
