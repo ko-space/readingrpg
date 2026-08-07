@@ -72,7 +72,10 @@
             throw new Error(body.detail || "인물 정보를 불러오지 못했습니다.");
         }
         inventoryData = await charactersRes.json();
-        // 재화 아이템(스토리모드 티켓 등)은 상단바/스토리 화면에서만 보여주고 인벤토리 아이템 목록엔 노출하지 않는다.
+        // itemData는 재화(item_type === "currency", 스토리모드 티켓 등)만 빼고 강화 아이템/의상을 전부
+        // 담아둔다 - getOutfitChoices()가 여기서 보유 의상(outfit)을 찾아 캐릭터 상세의 의상 선택
+        // 패널을 채우기 때문에 outfit을 여기서 걸러내면 안 된다. 대신 "아이템" 탭 목록(renderItemGrid)엔
+        // 진짜 아이템(강화 아이템)만 보여주고 의상은 안 보이게, 그 쪽에서 따로 한 번 더 거른다.
         const allMyItems = itemsRes.ok ? await itemsRes.json() : [];
         itemData = allMyItems.filter((item) => item.item_type !== "currency");
     }
@@ -237,9 +240,12 @@
     function renderItemGrid() {
         const grid = document.getElementById("inventory-item-grid");
         grid.innerHTML = "";
-        showEmpty(itemData.length ? "" : "보유한 아이템이 없습니다.", itemData.length === 0);
+        // "아이템" 탭엔 진짜 아이템(강화 아이템)만 보여주고 의상/스킨은 여기 안 보이게 한다 -
+        // 의상은 캐릭터 상세의 의상 선택 패널에서 다룬다(getOutfitChoices 참고).
+        const enhancementItems = itemData.filter((item) => item.item_type === "enhancement");
+        showEmpty(enhancementItems.length ? "" : "보유한 아이템이 없습니다.", enhancementItems.length === 0);
 
-        itemData.forEach((item, index) => {
+        enhancementItems.forEach((item, index) => {
             const row = document.createElement("div");
             row.className = "inventory-item-row";
             row.style.animationDelay = `${Math.min(index, 15) * 35}ms`;
@@ -255,11 +261,8 @@
                 </div>
             `;
             const img = row.querySelector("img");
-            img.src = item.item_type === "enhancement"
-                ? (item.icon_file || "")
-                : `${OUTFIT_IMAGE_BASE}${item.outfit_file}/idle.png`;
+            img.src = item.icon_file || "";
             img.onerror = () => { img.style.visibility = "hidden"; };
-            if (item.item_type !== "enhancement") applyCrop(img, item.outfit_file);
             grid.appendChild(row);
         });
     }
