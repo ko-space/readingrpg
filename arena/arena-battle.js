@@ -22,7 +22,9 @@
     // API_BASE_URL은 shared/api-config.js가 이 스크립트보다 먼저 로드되어 전역으로 제공한다.
     const OUTFIT_IMAGE_BASE = `${API_BASE_URL}/static/outfits/`;
 
-    const PLAYBACK_SPEED = 0.8;
+    // 배속 토글 버튼(battle-speed-toggle)이 재생 도중 이 값을 바꿀 수 있어야 해서 let - applyBattleSpeedState()
+    // 참고.
+    let playbackSpeed = 0.8;
     // 방임 해제 즉시 발동(cast_start 없는 skill_resolve)에 순수 연출용으로 붙이는 시전 자세 재생
     // 시간 - 백엔드가 시간을 안 주므로(판정은 이미 즉시 끝남) 프론트가 임의로 정한 짧은 고정값.
     const NEGLECT_RELEASE_POSE_SECONDS = 0.6;
@@ -452,6 +454,11 @@
     // 직접 소멸시키므로, playDeathSequence의 기본 사망 스프라이트 전환(death.png + .dying 페이드)을
     // 건너뛴다 - 사망 로그/로스터 체력바/상태 아이콘 정리 등 나머지 사망 처리는 그대로 진행된다.
     const goldenSelfDestructActive = {};
+
+    // 임소정 전기 이펙트: playElectricBolt가 진행 중인 키는 명중 판정(onArrive) 뒤에도 스파크
+    // 잔상이 한동안 더 남아있을 수 있다 - anyActorStillFinishing 참고(잔상이 채 끝나기도 전에
+    // "전투 종료!"가 뜨는 걸 막는다).
+    const electricBoltActive = {};
 
     // ===== 바라보는 방향(스프라이트 반전) =====
     // 기본값: 아군은 오른쪽(적진), 적군은 왼쪽(아군진)을 본다. 전투 중 공격 대상이 자기 등 뒤로
@@ -1782,42 +1789,203 @@
     // 임소정 전기의 발사 시작점
     // fx(오른쪽일수록 값이 큼)/fy(아래쪽일수록 값이 큼)
     const ELECTRIC_ORIGIN_BASIC = { fx: 0.9, fy: 0.27 };
-    const ELECTRIC_ORIGIN_SKILL = { fx: 0.9, fy: 0.28 };
+    const ELECTRIC_ORIGIN_SKILL = { fx: 1.3, fy: 0.28 };
 
-    // 임소정 전용: 캐스터-대상을 잠깐 잇는 전기(이동하는 점이 아니라, 두 위치 사이를 잇는 막대를 회전시켜 만든다).
-    // 기본공격은 얇고 푸른색(electric-blue), 스킬은 더 두껍고 노란색(electric-yellow)으로 호출한다.
-    // 전기는 사실상 즉발이라 onArrive는 아주 짧게만 대기한 뒤 부른다(null이면 안 부름 - 스킬처럼 이미
-    // 피해를 즉시 반영해둔 경우).
-    function playElectricConnector(actorKey, targetKey, colorClass, radiusPx, onArrive, origin) {
+    // 임소정 전용 번개 - 참고 데모(blue_chain_and_yellow_ultimate.html)의 지그재그 번개 줄기를 캔버스에
+    // 그린다(호의 playGoldenSelfDestruct와 같은 방식: 필드 크기의 캔버스를 만들어 requestAnimationFrame으로
+    // 직접 그리다가 끝나면 제거). x1,y1->x2,y2를 여러 구간으로 쪼개고, 각 구간을 진행 방향에 수직인
+    // 방향으로 무작위로 흔들어(가운데일수록 많이 흔들리도록 sin 곡선으로 스케일) 지그재그 경로를 만든다.
+    function makeLightningPath(x1, y1, x2, y2, segments, wobble) {
+        const pts = [{ x: x1, y: y1 }];
+        for (let i = 1; i < segments; i++) {
+            const t = i / segments;
+            const x = x1 + (x2 - x1) * t;
+            const y = y1 + (y2 - y1) * t;
+            const nx = -(y2 - y1), ny = (x2 - x1);
+            const nLen = Math.hypot(nx, ny) || 1;
+            const scale = 0.45 + Math.sin(t * Math.PI) * 0.9;
+            pts.push({
+                x: x + (nx / nLen) * (Math.random() * 2 - 1) * wobble * scale,
+                y: y + (ny / nLen) * (Math.random() * 2 - 1) * wobble * scale,
+            });
+        }
+        pts.push({ x: x2, y: y2 });
+        return pts;
+    }
+
+    // 번개 줄기 한 가닥을 두 겹으로 그린다 - 바깥쪽(색이 있는 굵은 겹, 그림자 번짐)과 안쪽(거의 흰색인
+    // 얇은 코어) - 참고 데모의 drawBolt와 동일한 구성.
+    function drawLightningBolt(ctx, pts, width, alpha, isUlt) {
+        if (alpha <= 0) return;
+        ctx.save();
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.shadowBlur = isUlt ? 24 : 18;
+        ctx.shadowColor = isUlt ? `rgba(255,210,90,${0.72 * alpha})` : `rgba(120,208,255,${0.62 * alpha})`;
+        ctx.strokeStyle = isUlt ? `rgba(255,197,62,${0.92 * alpha})` : `rgba(76,165,255,${0.86 * alpha})`;
+        // 굵기(lineWidth)는 기본공격/스킬 공통 - 색/글로우(shadowBlur)만 다르게 해서 굵기 차이 없이
+        // 색으로만 구분되게 한다.
+        ctx.lineWidth = width + 3;
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) {
+            const prev = pts[i - 1], cur = pts[i];
+            const mx = (prev.x + cur.x) * 0.5, my = (prev.y + cur.y) * 0.5;
+            ctx.quadraticCurveTo(prev.x, prev.y, mx, my);
+        }
+        const last = pts[pts.length - 1];
+        ctx.lineTo(last.x, last.y);
+        ctx.stroke();
+
+        ctx.shadowBlur = isUlt ? 10 : 6;
+        ctx.strokeStyle = isUlt ? `rgba(255,252,225,${0.97 * alpha})` : `rgba(244,250,255,${0.96 * alpha})`;
+        ctx.lineWidth = Math.max(1.2, width * 0.42);
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) {
+            const prev = pts[i - 1], cur = pts[i];
+            const mx = (prev.x + cur.x) * 0.5, my = (prev.y + cur.y) * 0.5;
+            ctx.quadraticCurveTo(prev.x, prev.y, mx, my);
+        }
+        ctx.lineTo(last.x, last.y);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // 임소정 전용: 캐스터-대상을 잇는 메인 번개 줄기 + 가지 + 스파크(기본공격=isUlt false, 푸른색.
+    // 스킬=isUlt true, 노란색+가지 더 많고 스파크 더 많고 착탄 섬광까지 - 굵기는 기본공격과 동일).
+    // 충격 링은 넣었다가 뺐다 - 큰 원을 shadowBlur와 함께 매 프레임 그리는 비용이 커서 렉을 유발했다.
+    // 전기는 사실상 즉발이라 onArrive는 기존 electric-connector와 동일하게 짧게(80ms)만 대기한 뒤 부른다
+    // (null이면 안 부름 - 스킬처럼 이미 피해를 즉시 반영해둔 경우) - 그 뒤로도 스파크 잔상은
+    // electricBoltActive가 꺼질 때까지 이어진다.
+    function playElectricBolt(actorKey, targetKey, isUlt, onArrive, origin) {
         const layer = document.getElementById("projectile-layer");
+        const fieldEl = document.querySelector(".battle-field");
         const actorImg = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);
         const targetImg = document.querySelector(`[data-unit="${targetKey}"] .battle-unit-img`);
-        if (!layer || !actorImg || !targetImg) { if (onArrive) onArrive(); return; }
+        if (!layer || !fieldEl || !actorImg || !targetImg) { if (onArrive) onArrive(); return; }
 
+        const fieldRect = fieldEl.getBoundingClientRect();
         const o = origin || ELECTRIC_ORIGIN_BASIC;
         const start = imageContentPoint(actorImg, o.fx, o.fy);
         const end = fieldRelativeCenter(targetImg);
-        const distance = Math.hypot(end.x - start.x, end.y - start.y);
-        const angle = angleDeg(start, end);
 
-        // 바깥 wrap은 위치/회전/크기만 담당(정적, JS가 한 번만 설정)하고, 안쪽 beam이 지글거리는
-        // 애니메이션(scaleX/skewX/밝기)을 맡는다 - 회전(transform: rotate)과 지글거림 애니메이션이
-        // 같은 transform 속성을 두고 서로 덮어쓰지 않도록 두 요소로 분리했다.
-        const wrap = document.createElement("div");
-        wrap.className = "electric-connector-wrap";
-        wrap.style.left = `${start.x}px`;
-        wrap.style.top = `${start.y}px`;
-        wrap.style.width = `${distance}px`;
-        wrap.style.height = `${radiusPx}px`;
-        wrap.style.marginTop = `${-radiusPx / 2}px`;
-        wrap.style.transform = `rotate(${angle}deg)`;
+        electricBoltActive[actorKey] = true;
 
-        const beam = document.createElement("div");
-        beam.className = `electric-connector ${colorClass}`;
-        wrap.appendChild(beam);
-        layer.appendChild(wrap);
+        const dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+        const canvas = document.createElement("canvas");
+        canvas.className = "electric-bolt-canvas";
+        canvas.style.width = `${fieldRect.width}px`;
+        canvas.style.height = `${fieldRect.height}px`;
+        canvas.width = Math.round(fieldRect.width * dpr);
+        canvas.height = Math.round(fieldRect.height * dpr);
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        layer.appendChild(canvas);
 
-        setTimeout(() => wrap.remove(), 280);
+        // 스파크 스프라이트(참고 데모의 makeSpark) - 매 프레임 drawImage로 재사용.
+        const sparkSprite = document.createElement("canvas");
+        sparkSprite.width = sparkSprite.height = 48;
+        const sparkCtx = sparkSprite.getContext("2d");
+        const sparkGrad = sparkCtx.createRadialGradient(24, 24, 0, 24, 24, 24);
+        sparkGrad.addColorStop(0, "rgba(255,255,255,1)");
+        sparkGrad.addColorStop(0.2, isUlt ? "rgba(255,234,154,.96)" : "rgba(194,231,255,.96)");
+        sparkGrad.addColorStop(0.5, isUlt ? "rgba(255,186,42,.62)" : "rgba(102,192,255,.58)");
+        sparkGrad.addColorStop(1, "rgba(0,0,0,0)");
+        sparkCtx.fillStyle = sparkGrad;
+        sparkCtx.fillRect(0, 0, 48, 48);
+
+        const bolts = [{
+            pts: makeLightningPath(start.x, start.y, end.x, end.y, isUlt ? 13 : 11, isUlt ? 32 : 20),
+            life: 0, maxLife: isUlt ? 340 : 220, alpha: 1, width: 3.7,
+        }];
+        const branchCount = isUlt ? 4 : 2;
+        for (let i = 0; i < branchCount; i++) {
+            const main = bolts[0].pts;
+            const src = main[2 + Math.floor(Math.random() * Math.max(1, main.length - 4))];
+            const t = 0.55 + Math.random() * 0.4;
+            const spread = isUlt ? 55 : 24;
+            bolts.push({
+                pts: makeLightningPath(
+                    src.x, src.y,
+                    start.x + (end.x - start.x) * t + (Math.random() * 2 - 1) * spread,
+                    start.y + (end.y - start.y) * t + (Math.random() * 2 - 1) * spread * 0.85,
+                    isUlt ? 6 : 5, isUlt ? 20 : 12
+                ),
+                life: 0, maxLife: isUlt ? 250 : 170, alpha: isUlt ? 0.88 : 0.82, width: 2.1,
+            });
+        }
+
+        const sparks = [];
+        function spawnBoltSpark(atEnd) {
+            const baseX = atEnd ? end.x : start.x;
+            const baseY = atEnd ? end.y : start.y;
+            const a = Math.random() * Math.PI * 2 - Math.PI;
+            const speed = (0.6 + Math.random() * 2.0) * (isUlt ? 1.5 : 1);
+            sparks.push({
+                x: baseX + (Math.random() * 20 - 10), y: baseY + (Math.random() * 20 - 10),
+                vx: Math.cos(a) * speed, vy: Math.sin(a) * speed,
+                size: (isUlt ? 10 : 7) + Math.random() * (isUlt ? 9 : 8),
+                life: 0, maxLife: (isUlt ? 280 : 220) + Math.random() * (isUlt ? 240 : 200),
+            });
+        }
+        const sparkCount = isUlt ? 28 : 12;
+        for (let i = 0; i < sparkCount; i++) spawnBoltSpark(Math.random() < 0.6);
+
+        const startMs = performance.now();
+        const totalMs = isUlt ? 820 : 420;
+        const flashUntilMs = isUlt ? startMs + 220 : 0;
+
+        function frame(now) {
+            const t = now - startMs;
+            if (t >= totalMs) {
+                canvas.remove();
+                electricBoltActive[actorKey] = false;
+                return;
+            }
+            const dt = 16.67;
+
+            ctx.clearRect(0, 0, fieldRect.width, fieldRect.height);
+            ctx.save();
+            ctx.globalCompositeOperation = "lighter";
+
+            // 궁극기 착탄 섬광 - 호 자폭 연출(playGoldenSelfDestruct)의 flashAlpha와 같은 방식으로
+            // 대상 위치에 짧게 방사형 그라디언트를 반짝인 뒤 사그라뜨린다.
+            if (isUlt && now < flashUntilMs) {
+                const flashAlpha = Math.max(0, 1 - (flashUntilMs - now) / 220);
+                const g = ctx.createRadialGradient(end.x, end.y, 0, end.x, end.y, 70);
+                g.addColorStop(0, `rgba(255,250,230,${0.75 * (1 - flashAlpha)})`);
+                g.addColorStop(0.4, `rgba(255,228,116,${0.4 * (1 - flashAlpha)})`);
+                g.addColorStop(1, "rgba(255,180,0,0)");
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.arc(end.x, end.y, 70, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            for (let i = bolts.length - 1; i >= 0; i--) {
+                const b = bolts[i];
+                b.life += dt;
+                if (b.life >= b.maxLife) { bolts.splice(i, 1); continue; }
+                drawLightningBolt(ctx, b.pts, b.width, (1 - b.life / b.maxLife) * b.alpha, isUlt);
+            }
+
+            for (let i = sparks.length - 1; i >= 0; i--) {
+                const s = sparks[i];
+                s.life += dt; s.x += s.vx * dt * 0.06; s.y += s.vy * dt * 0.06; s.vx *= 0.992; s.vy *= 0.992;
+                if (s.life >= s.maxLife) { sparks.splice(i, 1); continue; }
+                const p = s.life / s.maxLife;
+                const size = s.size * (1 - p * 0.25);
+                ctx.globalAlpha = 1 - p;
+                ctx.drawImage(sparkSprite, s.x - size / 2, s.y - size / 2, size, size);
+            }
+            ctx.globalAlpha = 1;
+
+            ctx.restore();
+            requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+
         if (onArrive) setTimeout(onArrive, 80);
     }
 
@@ -1939,7 +2107,7 @@
         else if (style === "instant_flash") playInstantFlash(actorKey, targetKey, onArrive);
         else if (style === "text_particles") playTextParticles(actorKey, targetKey, onArrive);
         else if (style === "crayon") spawnCrayonProjectile(actorKey, targetKey, onArrive);
-        else if (style === "electric") playElectricConnector(actorKey, targetKey, "electric-blue", 5, onArrive, ELECTRIC_ORIGIN_BASIC);
+        else if (style === "electric") playElectricBolt(actorKey, targetKey, false, onArrive, ELECTRIC_ORIGIN_BASIC);
         else if (style === "book") spawnBookProjectile(actorKey, targetKey, onArrive);
         else if (style === "eye_laser") spawnEyeLaserBeam(actorKey, targetKey, units[actorKey]?.isType2 ? "type2" : "type1", onArrive);
         else if (style === "paint_gold") spawnPaintProjectile(actorKey, targetKey, "paint-gold", onArrive);
@@ -1967,56 +2135,85 @@
                 // 호(자폭 소환수): 명중 판정 자체는 meleeHitPending으로 이미 잡히지만, 그 뒤로도 폭발
                 // 파티클/흔들림 연출이 한동안 더 이어질 수 있다 - 이걸 빼먹으면 폭발이 채 끝나기도
                 // 전에 "전투 종료!"가 떠버린다.
-                goldenSelfDestructActive[key];
+                goldenSelfDestructActive[key] ||
+                // 임소정 번개도 같은 이유(명중 판정 뒤에도 스파크 잔상이 남는다).
+                electricBoltActive[key];
         });
     }
 
-    // 상단 전투 타이머: 예전엔 이벤트를 하나 처리할 때마다 그 이벤트의 백엔드 시각을 그대로 표시했는데,
-    // 이벤트 처리 자체가 애니메이션 대기 등으로 들쭉날쭉하게 지연되면(스킬 발동 지연 등) 그 지연이 그대로
-    // 시계에도 나타나서 - 잠깐 멈췄다가 갑자기 몇 초씩 확 뛰는 것처럼 보였다. 재생 진행과 분리된 자기만의
-    // 루프로, "마지막으로 원점을 다시 잡은 시각(playbackOriginWallMs/-EventTime) + 그 이후 실제로 흐른
-    // 벽시계 시간"을 매 프레임 계산해서 표시한다.
+    // 상단 전투 타이머: 예전엔 이벤트 재생에 쓰는 playbackOriginWallMs/-EventTime(playNext이 매 이벤트마다
+    // 다시 잡는 원점)을 시계에도 그대로 재사용했는데, 그 값엔 이미 playbackSpeed가 반영돼 있는데
+    // (재생 스케줄 자체가 playbackSpeed로 압축된 값) 시계가 거기에 playbackSpeed를 한 번 더 곱해서
+    // 실제보다 느리게 차오르다가, 이벤트가 처리될 때마다 원점이 앞으로 다시 잡히면서 그 차이를
+    // 한꺼번에 따라잡는 톱니 패턴이 됐다 - 평균적으로는 실제보다 빠르게 가는 것처럼 느껴지고, 이벤트가
+    // 몰릴 때는 눈에 띄게 훅 뛰기도 했던 원인이 이것이었다.
     //
-    // playbackOriginWallMs/-EventTime은 playNext이 "지연 누적 방지"를 위해 이벤트를 처리할 때마다 계속
-    // 다시 잡는데(위쪽 주석 참고), 그 순간 이 원점에서 곧바로 계산한 값이 방금까지 화면에 표시하고 있던
-    // 값보다 작을 수 있다(대기 중에도 시계는 계속 앞으로 흘러갔는데, 원점은 "그 이벤트 자체의" 다소
-    // 이른 시각으로 다시 잡히므로) - 그대로 표시하면 시계가 순간적으로 뒤로 갔다가 다시 따라잡느라
-    // 훅 빨라지는 것처럼 보인다(첫 기본공격/첫 스킬에서 특히 눈에 띔). displayedBattleTimeSeconds에
-    // "지금까지 화면에 보여준 값"을 따로 기억해두고 절대 그보다 작은 값으로는 되돌아가지 않게 하면,
-    // 원점이 뒤로 다시 잡혀도 시계는 그 순간만 잠깐 멈춰있다가(따라잡을 때까지) 다시 자연스럽게
-    // 흐른다 - 역행도 없고 갑자기 빨라지는 것도 없다.
+    // 이제는 재생 진행(이벤트 처리/애니메이션 대기 등)과 완전히 무관하게, "이번 구간이 시작된 실제 시각
+    // (battleTimerStartWallMs) + 그 이전 구간까지 이미 누적된 표시값(battleTimerBaseSeconds)"만 기준으로
+    // 매 프레임 계산해서 보여준다 - 재설정도, 따라잡기도, 상한 클램프도 필요 없다. 구간을 나눠둔 이유는
+    // 배속 토글 버튼(battle-speed-toggle) 때문 - 배속이 바뀌는 순간 분모(playbackSpeed)만 바뀌면 그
+    // 자리에서 표시값이 훅 튀므로, 바뀌는 순간 지금까지 값을 base에 굳혀두고 그 시점부터 새 배속으로
+    // 새 구간을 시작한다(아래 battle-speed-toggle 클릭 핸들러 참고).
     let battleTimerRunning = false;
-    let displayedBattleTimeSeconds = 0;
-
-    // 위 Math.max 역행 방지 클램프는 "뒤로 가는 것"만 막을 뿐, 밀려있던 이벤트가 한꺼번에 처리되며
-    // 원점(playbackOriginEventTime)이 크게 앞으로 뛰는 것까지는 못 막는다 - 그러면 candidateSeconds가
-    // 한 프레임 사이에 몇 초씩 확 뛰어올라서, 화면엔 시계가 순간적으로 "훅" 빨라지는 것처럼 보인다
-    // (예: 애니메이션이 한동안 밀렸다가 워치독 등으로 한꺼번에 풀리는 경우). 한 프레임에 실제로 앞으로
-    // 나아갈 수 있는 폭을 이 값으로 제한해서, 크게 벌어져 있어도 순간이동하지 않고 여러 프레임에 걸쳐
-    // 빠르게(하지만 매끄럽게) 따라잡게 한다 - 정상적인 진행(한 프레임당 수십 ms 수준)은 이 상한보다
-    // 훨씬 작으므로 전혀 영향을 안 받는다.
-    const MAX_TIMER_STEP_SECONDS = 0.15;
+    let battleTimerStartWallMs = 0;
+    let battleTimerBaseSeconds = 0;
 
     function tickBattleTimer() {
         if (!battleTimerRunning) return;
-        const elapsedSeconds = ((performance.now() - playbackOriginWallMs) / 1000) * PLAYBACK_SPEED;
-        const candidateSeconds = playbackOriginEventTime + Math.max(0, elapsedSeconds);
-        const cappedCandidate = Math.min(candidateSeconds, displayedBattleTimeSeconds + MAX_TIMER_STEP_SECONDS);
-        displayedBattleTimeSeconds = Math.max(displayedBattleTimeSeconds, cappedCandidate);
-        updateBattleTimer(displayedBattleTimeSeconds);
+        const realElapsedSeconds = (performance.now() - battleTimerStartWallMs) / 1000;
+        updateBattleTimer(battleTimerBaseSeconds + realElapsedSeconds / playbackSpeed);
         requestAnimationFrame(tickBattleTimer);
     }
 
     function startBattleTimer() {
         if (battleTimerRunning) return;
         battleTimerRunning = true;
-        displayedBattleTimeSeconds = 0;
+        battleTimerStartWallMs = performance.now();
+        battleTimerBaseSeconds = 0;
         requestAnimationFrame(tickBattleTimer);
     }
 
     function stopBattleTimer() {
         battleTimerRunning = false;
     }
+
+    // 배속 토글 버튼: 누를 때마다 화살표 2개/하늘색(0.8배) -> 3개/노란색(0.6배, 더 빠름) ->
+    // 1개/흰색(1배, 배속 없음) -> 다시 2개로 순환한다. 이벤트 재생 스케줄(playNext)과 시전/버프
+    // 지속시간 등은 전부 그때그때 playbackSpeed를 읽어 쓰므로, 바뀐 배속은 진행 중인 이벤트를 억지로
+    // 되돌리지 않고 다음 이벤트 스케줄부터 자연스럽게 반영된다.
+    const BATTLE_SPEED_STATES = [
+        { speed: 0.8, arrows: "››", className: "speed-sky" },
+        { speed: 0.6, arrows: "›››", className: "speed-yellow" },
+        { speed: 1, arrows: "›", className: "speed-white" },
+    ];
+    let battleSpeedStateIndex = 0;
+    const battleSpeedToggleEl = document.getElementById("battle-speed-toggle");
+
+    function applyBattleSpeedState() {
+        const state = BATTLE_SPEED_STATES[battleSpeedStateIndex];
+        playbackSpeed = state.speed;
+        if (battleSpeedToggleEl) {
+            battleSpeedToggleEl.textContent = state.arrows;
+            BATTLE_SPEED_STATES.forEach((s) => battleSpeedToggleEl.classList.remove(s.className));
+            battleSpeedToggleEl.classList.add(state.className);
+        }
+    }
+
+    if (battleSpeedToggleEl) {
+        battleSpeedToggleEl.addEventListener("click", () => {
+            // 시계가 지금까지 보여주던 값을 그대로 이어받도록, "배속이 바뀌기 직전" 배속 기준으로
+            // 지금까지 흐른 실제 시간을 base에 굳혀두고 원점을 다시 잡는다 - applyBattleSpeedState()가
+            // playbackSpeed를 새 값으로 바꾸기 전에 반드시 먼저 계산해야 한다.
+            if (battleTimerRunning) {
+                const realElapsedSeconds = (performance.now() - battleTimerStartWallMs) / 1000;
+                battleTimerBaseSeconds += realElapsedSeconds / playbackSpeed;
+                battleTimerStartWallMs = performance.now();
+            }
+            battleSpeedStateIndex = (battleSpeedStateIndex + 1) % BATTLE_SPEED_STATES.length;
+            applyBattleSpeedState();
+        });
+    }
+    applyBattleSpeedState();
 
     // 안전장치: cast_start/skill_resolve/"마지막 이벤트" 대기 게이트가 아직 원인을 다 못 찾은 어떤
     // 이유로든 절대 안 풀리면, 재생 전체가 그 자리에서 영원히 멈춘다(가장 나쁜 결과) - 같은 대상으로
@@ -2418,6 +2615,11 @@
         heal: "#4ee06a",     // 회복 - 연두색
         special: "#ffffff",  // 스페셜(무적 등) - 흰색
     };
+    const EFFECT_AURA_FLASH_MS = 900; // @keyframes effect-aura-flash의 실제 재생시간(0.9s)과 반드시 일치해야 한다.
+
+    // unitKey -> 마지막으로 건 트리거의 토큰 - 재트리거(다른 효과가 곧바로 겹쳐 들어옴)됐을 때, 예전
+    // 트리거의 정리 타이머가 방금 새로 켠 오라를 실수로 지우지 않게 막는다(attackAnimTokens와 동일한 패턴).
+    const auraFlashTokens = {};
 
     function flashEffectAura(unitKey, kind) {
         const imgEl = document.querySelector(`[data-unit="${unitKey}"] .battle-unit-img`);
@@ -2427,6 +2629,16 @@
         void imgEl.offsetWidth; // 강제 리플로우 - 연속으로 받아도 애니메이션이 다시 재생되게
         imgEl.style.setProperty("--effect-aura-color", color);
         imgEl.classList.add("effect-aura-flash");
+        // animationend에 의존하면 안 된다 - hit-flash/crit-flash처럼 같은 filter 속성을 쓰는 다른
+        // 애니메이션이 이후 겹치면(특히 공격을 자주 주고받는 전방 캐릭터), 이 오라 애니메이션 자체가
+        // 우선순위에서 밀려 끝까지 재생되지 못해 animationend가 영영 안 오는 경우가 실제로 있었다 -
+        // 그러면 클래스가 무한정 남아있다가, 나중에 우연히 그 경쟁이 풀리는 순간 뒤늦게 재생되며
+        // "공격할 때마다 상관없는 오라가 계속 생겼다 사라지는" 것처럼 보인다. flashHit(hit-flash/
+        // crit-flash)이 이미 쓰고 있는 것과 동일하게, 실제 CSS 지속시간에 맞춘 타이머로 무조건 지운다.
+        const myToken = (auraFlashTokens[unitKey] = (auraFlashTokens[unitKey] || 0) + 1);
+        setTimeout(() => {
+            if (auraFlashTokens[unitKey] === myToken) imgEl.classList.remove("effect-aura-flash");
+        }, EFFECT_AURA_FLASH_MS);
     }
 
     // ===== 로스터 상태 아이콘 =====
@@ -2791,7 +3003,7 @@
                     castStartImgEl?.classList.add("casting");
                     // 강승유 전용: 시전 중에는 금빛 펄스 대신 무지개빛으로 물든다.
                     if (event.actor === "강승유") castStartImgEl?.classList.add("casting-rainbow");
-                    await playCastFrames(actorKey, event.duration * 1000 * PLAYBACK_SPEED);
+                    await playCastFrames(actorKey, event.duration * 1000 * playbackSpeed);
                 });
             }
             // 로그는 체인 밖에서 즉시 남긴다 - 안 그러면 이 배우의 체인이 밀려있는 동안 다른 배우의
@@ -2828,7 +3040,7 @@
                     await waitForAnimIdle(actorKey);
                     const poseImgEl = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);
                     poseImgEl?.classList.add("casting");
-                    await playCastFrames(actorKey, NEGLECT_RELEASE_POSE_SECONDS * 1000 * PLAYBACK_SPEED);
+                    await playCastFrames(actorKey, NEGLECT_RELEASE_POSE_SECONDS * 1000 * playbackSpeed);
                     onNeglectReleasePoseDone?.();
                 });
             }
@@ -2879,7 +3091,7 @@
                 }
 
                 if (dispatchEffectType === "self_shield_duration" && event.detail?.shield_seconds) {
-                    const shieldMs = event.detail.shield_seconds * 1000 * PLAYBACK_SPEED;
+                    const shieldMs = event.detail.shield_seconds * 1000 * playbackSpeed;
                     flashEffectAura(actorKey, "special"); // 무적(실드) = 스페셜(흰색)
                     setStatusIcon(actorKey, "immune", { source: `${actorKey}:self_shield_duration`, durationMs: shieldMs });
                 }
@@ -2887,7 +3099,7 @@
                 if (dispatchEffectType === "conditional_target_debuff") {
                     // 김남옥: 공격속도 증가는 대상 성별과 무관하게 항상 자신에게 적용되는 버프.
                     // source를 자기 자신 고정으로 두어, 반복 시전은 "갱신"으로만 처리되고 중첩되지 않는다.
-                    const hasteMs = (event.detail?.haste_seconds || 0) * 1000 * PLAYBACK_SPEED;
+                    const hasteMs = (event.detail?.haste_seconds || 0) * 1000 * playbackSpeed;
                     flashEffectAura(actorKey, "buff");
                     setStatusIcon(actorKey, "atk_speed_up", { source: `${actorKey}:haste`, ...(hasteMs ? { durationMs: hasteMs } : {}) });
                 }
@@ -3021,7 +3233,7 @@
                         flashEffectAura(targetKey, "cc");
                         setStatusIcon(targetKey, "stun", {
                             source: `${event.actor}:stun`,
-                            durationMs: (event.detail.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
+                            durationMs: (event.detail.stun_seconds || 0) * 1000 * playbackSpeed,
                         });
                         if (event.detail?.interrupted_cast) interruptCasting(targetKey, event.detail.target_side);
                         appendLog(`${event.actor}의 [Active] 발동! ${hasteText}, ${event.detail.target} ${event.detail.stun_seconds}초 기절`, event.side);
@@ -3036,7 +3248,7 @@
                     flashEffectAura(stunTargetKey, "cc");
                     setStatusIcon(stunTargetKey, "stun", {
                         source: `${event.actor}:stun`,
-                        durationMs: (event.detail.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
+                        durationMs: (event.detail.stun_seconds || 0) * 1000 * playbackSpeed,
                     });
                     if (event.detail?.interrupted_cast) interruptCasting(stunTargetKey, event.detail.target_side);
                 }
@@ -3073,12 +3285,12 @@
                 const hit = event.detail.hits[0];
                 const targetKey = findHitKey(hit.target, hit.target_side);
                 if (targetKey) {
-                    playElectricConnector(actorKey, targetKey, "electric-yellow", 9, null, ELECTRIC_ORIGIN_SKILL);
+                    playElectricBolt(actorKey, targetKey, true, null, ELECTRIC_ORIGIN_SKILL);
                     // 공격력 감소(디버프) = 파란색 오라 + 공격력 감소 아이콘(지속시간 동안)
                     flashEffectAura(targetKey, "debuff");
                     setStatusIcon(targetKey, "atk_down", {
                         source: `${event.actor}:atk_down`,
-                        durationMs: (event.detail?.debuff_seconds || 0) * 1000 * PLAYBACK_SPEED,
+                        durationMs: (event.detail?.debuff_seconds || 0) * 1000 * playbackSpeed,
                     });
                 }
                 appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail.hits)}, 공격력 감소`, event.side);
@@ -3255,7 +3467,7 @@
                                 flashEffectAura(sKey, "cc");
                                 setStatusIcon(sKey, "stun", {
                                     source: `${event.actor}:stun`,
-                                    durationMs: (d.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
+                                    durationMs: (d.stun_seconds || 0) * 1000 * playbackSpeed,
                                 });
                                 if (s.interrupted_cast) interruptCasting(sKey, s.target_side);
                             });
@@ -3275,13 +3487,10 @@
             } else {
                 applySkillHits(event);
                 if (dispatchEffectType === "summon_clone" && event.detail?.summoned) {
-                    const costText = event.detail.caster_hp_after != null
-                        ? ` (체력 소모로 ${event.detail.caster_hp_after}/${event.detail.caster_max_hp})`
-                        : "";
                     appendLog(
-                        (event.detail.replaced
+                        event.detail.replaced
                             ? `${event.actor}의 [Active] 발동! ${event.detail.clone_name}이(가) 새로 소환되어 이전 소환수를 대체함!`
-                            : `${event.actor}의 [Active] 발동! ${event.detail.clone_name}이(가) 전장에 소환됨!`) + costText,
+                            : `${event.actor}의 [Active] 발동! ${event.detail.clone_name}이(가) 전장에 소환됨!`,
                         event.side
                     );
                 } else if (dispatchEffectType === "self_stack_buff" && event.detail?.stack_count) {
@@ -3408,7 +3617,7 @@
                         flashEffectAura(targetKey, "cc");
                         setStatusIcon(targetKey, "stun", {
                             source: `${event.actor}:stun`,
-                            durationMs: (event.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
+                            durationMs: (event.stun_seconds || 0) * 1000 * playbackSpeed,
                         });
                         if (event.interrupted_cast) {
                             interruptCasting(targetKey, event.side === "attacker" ? "defender" : "attacker");
@@ -3495,7 +3704,7 @@
         const nextEvent = data.events[eventIndex];
         let delayMs;
         if (nextEvent) {
-            const targetWallMs = playbackOriginWallMs + (nextEvent.time - playbackOriginEventTime) * 1000 * PLAYBACK_SPEED;
+            const targetWallMs = playbackOriginWallMs + (nextEvent.time - playbackOriginEventTime) * 1000 * playbackSpeed;
             // target_lock_resolve는 화면에 아무 것도 그리지 않는 조용한 상태 갱신용 이벤트라 최소 16ms
             // 대기(다른 이벤트들이 눈에 보이는 연출 한 프레임만큼은 걸리도록 두는 바닥값)를 적용할
             // 이유가 없다 - 넉백처럼 한 틱에 여러 유닛의 타겟이 한꺼번에 재계산되면 target_lock_resolve가
