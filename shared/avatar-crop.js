@@ -6,6 +6,7 @@ const AVATAR_CROP_OVERRIDES = {
     "mage/basic": { xPercent: 50, yPercent: 2, scale: 4.0 },
     "beginner/swimsuit": { xPercent: 50, yPercent: 0, scale: 1.5 },
     "international/basic": { xPercent: 50, yPercent: 0, scale: 3.0 },
+    "mage_2/basic": { xPercent: 47, yPercent: 20, scale: 3.5 },
 };
 const DEFAULT_AVATAR_CROP = { xPercent: 50, yPercent: 0, scale: 4.0 };
 

@@ -106,8 +106,27 @@ html, body {
     background: linear-gradient(160deg, #2a3550 0%, #1a2038 60%, #0f1424 100%);
 }
 
+/* 화면 흔들림(불빠따 김어진 "불빠따", 호 자폭 - devtest.js가 이미 이 클래스를 토글하고 있었는데
+   정작 CSS 정의가 없어서 흔들림이 전혀 재생되지 않고 있었다 - arena-battle.css와 동일하게 추가). */
+@keyframes ground-fire-shake {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    14% { transform: translate3d(-5px, 2px, 0) rotate(-.18deg); }
+    28% { transform: translate3d(6px, -3px, 0) rotate(.2deg); }
+    42% { transform: translate3d(-4px, 2px, 0) rotate(-.14deg); }
+    58% { transform: translate3d(3px, -1px, 0) rotate(.1deg); }
+    76% { transform: translate3d(-2px, 1px, 0); }
+}
+.battle-field.ground-fire-shake {
+    animation: ground-fire-shake 420ms ease-out;
+}
+
 .battle-unit {
     position: relative;
+}
+
+/* 호처럼 다른 스프라이트와 겹쳐도 항상 그 위에 그려져야 하는 유닛(arena-battle.css와 동일). */
+.battle-unit.render-on-top {
+    z-index: 50;
 }
 
 /* 히트박스(.battle-unit) 크기에 맞춘 점선 - .battle-unit-img는 이제 세로 기준으로 자유롭게

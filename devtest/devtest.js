@@ -8,6 +8,9 @@
     const OUTFIT_IMAGE_BASE = `${API_BASE_URL}/static/outfits/`;
 
     const PLAYBACK_SPEED = 0.8;
+    // 방임 해제 즉시 발동(cast_start 없는 skill_resolve)에 순수 연출용으로 붙이는 시전 자세 재생
+    // 시간(arena-battle.js와 동일한 이유 - 백엔드가 시간을 안 주므로 프론트가 임의로 정한 고정값).
+    const NEGLECT_RELEASE_POSE_SECONDS = 0.6;
     const PROJECTILE_TRAVEL_MS = 220;
     const MAX_ATTACK_FRAMES = 6;
     const MAX_SKILL_FRAMES = 9; // 스킬 시전 전용 사진은 캐릭터당 총 9장까지 넣기로 확정됨(arena-battle.js와 동일)
@@ -80,6 +83,8 @@
     const actorAnimChain = {};
     // slot -> 그 유닛이 쏜 원거리 공격의 투사체/이펙트가 아직 목표에 도달하지 않았는지(arena-battle.js와 동일).
     const rangedResolvePending = {};
+    // slot -> 그 유닛의 근접 기본공격이 스윙은 시작됐지만 아직 명중 판정이 안 났는지(arena-battle.js와 동일).
+    const meleeHitPending = {};
     const frameCountCache = {};
     const skillFrameCountCache = {};
     const walkFrameCountCache = {};
@@ -90,6 +95,10 @@
     const pendingArrivalResolvers = {};
     const walkerSuspended = {}; // slot -> 이동 루프를 잠깐 멈춰둘지(넉백 트랜지션 중 tick()과 충돌 방지, arena-battle.js와 동일)
     let walkerRunning = false;
+    // startMeleeWalker가 다시 호출될 때마다 증가(attackAnimTokens와 동일한 이유, arena-battle.js와 동일) -
+    // devtest는 같은 화면에서 전투를 재시작할 수 있어서, walkerRunning 하나만 보면 리셋 직후 아주 짧은
+    // 틈에 재시작될 때 이전 세대의 tick() 루프가 "여전히 유효함"으로 오판해 새 전투 위에 겹쳐 돌 수 있다.
+    let walkerEpoch = 0;
     let advancedSlot = {}; // slot -> bool, "이동" 버튼으로 앞으로 나간 상태인지(토글)
 
     // ===== 바라보는 방향(스프라이트 반전) - arena-battle.js와 동일한 로직 =====
@@ -164,11 +173,22 @@
         return `${event.actor}의 [Special] 발동! (${event.effect_type}) ${JSON.stringify(d)}`;
     }
 
+    // 전투 중 표시(로스터 이름표/로그)에서만 이름을 줄여 보여준다(arena-battle.js와 동일한 이유 -
+    // "윤 & 호"가 정식 이름이지만 소환수 호가 별도로 나온 뒤엔 중복돼 보인다).
+    const BATTLE_DISPLAY_NAME_OVERRIDES = { "윤 & 호": "윤" };
+    function battleDisplayText(text) {
+        let result = text;
+        for (const [full, short] of Object.entries(BATTLE_DISPLAY_NAME_OVERRIDES)) {
+            result = result.replaceAll(full, short);
+        }
+        return result;
+    }
+
     function log(text) {
         const el = document.getElementById("dt-log");
         if (!el) return;
         const line = document.createElement("div");
-        line.textContent = text;
+        line.textContent = battleDisplayText(text);
         el.appendChild(line);
         el.scrollTop = el.scrollHeight;
     }
@@ -281,8 +301,14 @@
     // slot별로 사망 연출을 이미 재생했는지 - 한 번만 재생되도록 막는다.
     const deathHandled = {};
 
-    // 사망 시: 로그 한 줄 + 사망 디폴트 사진(death.png, 아직 없으면 idle 사진을 흑백으로 임시 대체) +
-    // 투명해지면서 가로 실선 무늬로 스캔되듯 사라지는 연출. (arena-battle.js의 playDeathSequence와 동일)
+    // 호(자폭 소환수) 전용: playGoldenSelfDestruct가 진행 중인 슬롯은 자기만의 폭발 연출로 캐릭터를
+    // 직접 소멸시키므로, playDeathSequence의 기본 사망 스프라이트 전환을 건너뛴다(arena-battle.js와 동일).
+    const goldenSelfDestructActive = {};
+
+    // 사망 시: 로그 한 줄 + 사망 디폴트 사진(death${variant}.png, 아직 없으면 idle 사진을 흑백으로
+    // 임시 대체) + 투명해지면서 가로 실선 무늬로 스캔되듯 사라지는 연출. (arena-battle.js의
+    // playDeathSequence와 동일 - variant는 spriteVariantSuffix로, 윤의 "호" 같은 소환수도 전용
+    // 사망 그림을 따로 쓸 수 있다.)
     function playDeathSequence(slot) {
         const unit = units[slot];
         const imgEl = document.querySelector(`[data-unit="${slot}"] .battle-unit-img`);
@@ -292,13 +318,18 @@
         // 피해 로그가 먼저 찍히고 그 다음에 사망 로그가 오게 하기 위함.
         setTimeout(() => log(`${unit.name} 사망!`), 0);
 
+        // 호(자폭 소환수): playGoldenSelfDestruct가 이미 캐릭터 자체의 소멸을 맡고 있으므로 로그만
+        // 남기고 끝낸다(arena-battle.js와 동일).
+        if (goldenSelfDestructActive[slot]) return;
+
+        const variant = spriteVariantSuffix(slot);
         imgEl.classList.remove("death-fallback-filter");
         imgEl.onerror = () => {
             imgEl.onerror = null;
             imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.png`;
             imgEl.classList.add("death-fallback-filter");
         };
-        imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/death.png`;
+        imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/death${variant}.png`;
 
         imgEl.classList.add("dying");
     }
@@ -322,11 +353,12 @@
             }
         } else {
             deathHandled[slot] = false;
+            goldenSelfDestructActive[slot] = false;
 
             if (imgEl) {
-                // .dying은 animation-fill-mode:forwards라서 죽었다가 살아난(=슬롯이 재사용된) 유닛에게
-                // 그대로 남아있으면 새 스프라이트가 계속 투명하게 보인다 - 살아있을 땐 반드시 지운다.
-                imgEl.classList.remove("dying", "death-fallback-filter");
+                // .dying/.golden-self-destruct는 animation-fill-mode:forwards라서 죽었다가 살아난(=슬롯이
+                // 재사용된) 유닛에게 그대로 남아있으면 새 스프라이트가 계속 투명하게 보인다 - 반드시 지운다.
+                imgEl.classList.remove("dying", "death-fallback-filter", "golden-self-destruct");
 
                 if (!attackAnimActive[slot]) {
                     const variant = spriteVariantSuffix(slot);
@@ -354,8 +386,10 @@
     }
 
     // 이의진처럼 상태(type1/type2)에 따라 다른 스프라이트 파일을 쓰는 캐릭터용(arena-battle.js와 동일).
+    // 윤의 "호"처럼 소환수가 시전자와 같은 outfit 폴더를 접미사로만 구분해 쓰는 경우엔
+    // units[slot].spriteVariant(clone_sprite_variant)가 우선한다.
     function spriteVariantSuffix(slot) {
-        return units[slot]?.isType2 ? "_type2" : "";
+        return units[slot]?.spriteVariant || (units[slot]?.isType2 ? "_type2" : "");
     }
 
     // ───────────────────────── 유닛 선택(클릭) -> 활성 유닛 ─────────────────────────
@@ -370,7 +404,7 @@
                 document.querySelectorAll(".battle-unit").forEach((u) => u.classList.remove("dt-selected"));
                 el.classList.add("dt-selected");
                 activeSlot = slot;
-                document.getElementById("dt-active-unit-name").textContent = `${units[slot]?.name || slot} (${slot})`;
+                document.getElementById("dt-active-unit-name").textContent = `${battleDisplayText(units[slot]?.name || slot)} (${slot})`;
             });
         });
     }
@@ -477,10 +511,22 @@
             const cloneMaxHp = Math.round(caster.maxHp * params.hp_percent / 100);
             const cloneAtk = Math.round(caster.atk * params.atk_percent / 100);
             units[cloneSlot] = {
-                name: `${caster.name}의 복제체`, maxHp: cloneMaxHp, hp: cloneMaxHp, atk: cloneAtk,
-                isMelee: caster.isMelee, outfit: caster.outfit, style: caster.style,
+                // clone_name이 있으면(윤의 "호") 그 이름을 쓴다 - 없으면(대부분의 소환수) 기존처럼 "OO의 복제체".
+                name: params.clone_name || `${caster.name}의 복제체`,
+                maxHp: cloneMaxHp, hp: cloneMaxHp, atk: cloneAtk,
+                isMelee: caster.isMelee,
+                // clone_sprite_outfit이 있으면(윤의 "호") 캐스터가 누구든(강승유가 복제해도) 항상 이
+                // outfit 폴더의 그림을 쓴다(arena-battle.js summon_clone 핸들러와 동일).
+                outfit: params.clone_sprite_outfit || caster.outfit,
+                style: caster.style,
                 attackType: caster.attackType, defenseType: caster.defenseType, gender: caster.gender,
                 status: newStatus(), isClone: true,
+                // 아래 넷은 arena-battle.js의 summon_clone 이벤트 핸들러와 동일한 의미(spriteVariantSuffix,
+                // getGapToTarget, dt-basic-attack의 자폭 처리, is-clone 틴트 조건이 각각 참고).
+                spriteVariant: params.clone_sprite_variant || "",
+                meleeOverlapPercent: params.clone_melee_overlap_percent || null,
+                selfDestructAfterAttack: Boolean(params.clone_self_destruct),
+                isCopy: Boolean(params._isCopy),
             };
 
             const cloneEl = document.querySelector(`[data-unit="${cloneSlot}"]`);
@@ -519,11 +565,18 @@
             attackAnimTokens[cloneSlot] = (attackAnimTokens[cloneSlot] || 0) + 1;
             attackAnimActive[cloneSlot] = false;
             rangedResolvePending[cloneSlot] = false;
+            meleeHitPending[cloneSlot] = false;
             delete actorAnimChain[cloneSlot];
             delete walkerSuspended[cloneSlot];
             getAttackFrameCount(units[cloneSlot].outfit);
             renderUnit(cloneSlot);
-            document.querySelector(`[data-unit="${cloneSlot}"] .battle-unit-img`)?.classList.add("is-clone");
+            // "복제" 계열(전용 스프라이트가 없거나, 강승유가 복제해서 만든 경우)만 파란 홀로그램 틴트를
+            // 씌운다 - 윤의 "호"는 소환이라 자기 그림 그대로(arena-battle.js summon_clone 핸들러와 동일 조건).
+            document.querySelector(`[data-unit="${cloneSlot}"] .battle-unit-img`)
+                ?.classList.toggle("is-clone", !units[cloneSlot].spriteVariant || units[cloneSlot].isCopy);
+            // 호처럼 다른 스프라이트와 겹쳐도 항상 위에 그려져야 하는 소환수(arena-battle.js와 동일).
+            document.querySelector(`[data-unit="${cloneSlot}"]`)
+                ?.classList.toggle("render-on-top", Boolean(params.clone_render_on_top));
 
             // 근거리 복제체는 다른 근접 유닛과 완전히 동일하게 취급한다 - meleeArrived를 false로 두면
             // 이동 루프(tick)가 다음 프레임에 실제 겹침 여부를 직접 재서 판정하고, 도착으로 확인되는
@@ -538,8 +591,8 @@
 
             return {
                 text: replaced
-                    ? `복제체가 새로운 복제체로 교체 소환됨! (HP ${cloneMaxHp} / ATK ${cloneAtk})`
-                    : `복제체가 전장에 추가로 소환됨! (HP ${cloneMaxHp} / ATK ${cloneAtk})`,
+                    ? `${units[cloneSlot].name}가 새로운 개체로 교체 소환됨! (HP ${cloneMaxHp} / ATK ${cloneAtk})`
+                    : `${units[cloneSlot].name}가 전장에 추가로 소환됨! (HP ${cloneMaxHp} / ATK ${cloneAtk})`,
             };
         },
 
@@ -640,6 +693,19 @@
                 const potency = params.potency_percent / 100;
                 const scaledParams = {};
                 Object.entries(copied.params).forEach(([k, v]) => { scaledParams[k] = typeof v === "number" ? v * potency : v; });
+                // 윤의 "호"처럼 clone_copy_stat_percent가 있는 소환 스킬을 복제하면, 강승유 자신의 위력
+                // 복제율(potency)과는 별개로 체력/공격력 배율만 한 번 더 이 비율만큼 줄인다(skill_handlers.py의
+                // _skill_copy_target_skill과 동일한 이유 - 원본이 직접 소환할 때는 이 값을 안 읽으므로 영향
+                // 없음). 위력 복제율에 또 깎이지 않도록 복제 "전" 원본 copied.params에서 읽는다.
+                const copyStatPercent = copied.params.clone_copy_stat_percent;
+                if (copyStatPercent) {
+                    const statFactor = copyStatPercent / 100;
+                    if ("hp_percent" in scaledParams) scaledParams.hp_percent *= statFactor;
+                    if ("atk_percent" in scaledParams) scaledParams.atk_percent *= statFactor;
+                }
+                // 복제로 만들어진 결과물임을 표시 - summon_clone 핸들러가 이걸 보고 "소환"이 아니라 "복제"로
+                // 취급해 자기 스프라이트(spriteVariant)가 있어도 파란 홀로그램 틴트를 씌운다.
+                scaledParams._isCopy = true;
                 const result = MANUAL_SKILL_HANDLERS[copied.effectType](casterSlot, scaledParams);
                 // targetSlot/hits/stunned 등 원본 핸들러의 결과 필드를 그대로 물려줘야, 바깥 dispatch(setupSkillButton)가
                 // 복제된 스킬의 실제 전용 연출(투사체/실드링/치유하트 등)을 원본과 동일하게 재생할 수 있다.
@@ -1020,6 +1086,7 @@
         immune: "Combat_Icon_Special_ImmuneDamage.png",
         paint_red: "Combat_Icon_Special_InkRed.png", paint_blue: "Combat_Icon_Special_InkBlue.png",
         paint_yellow: "Combat_Icon_Special_InkYellow.png", damage_reduction: "Combat_Icon_Buff_DamageRatio.png",
+        lifesteal: "Combat_Icon_Special_Lifesteal.png", // 윤 "선생 고혈" - 공격 대상이 선생 타입인 동안(흡혈)
     };
     const MOMENT_ICON_MS = 1200;
     const statusIconState = {}; // slot -> { iconId: { el, sources: Map<sourceKey, {weight, timer}> } }
@@ -1098,7 +1165,10 @@
         const rect = el.getBoundingClientRect();
         const targetRect = targetEl.getBoundingClientRect();
         // overlap이 클수록 "더 깊이 파고들어야"(겹쳐야) 도착 판정이 나서 결과적으로 더 가까이 멈춘다.
-        const overlap = 1; // arena-battle.js의 APPROACH_OVERLAP과 동일
+        // 호처럼 meleeOverlapPercent가 지정된 유닛은 고정 픽셀 대신 자기 히트박스 너비의 그 비율만큼
+        // 파고들어야 도착으로 친다(arena-battle.js와 동일).
+        const overlapPercent = units[unitKey]?.meleeOverlapPercent;
+        const overlap = overlapPercent ? rect.width * overlapPercent / 100 : 1; // 1 = arena-battle.js의 APPROACH_OVERLAP과 동일
         const myCenter = rect.left + rect.width / 2;
         const targetCenter = targetRect.left + targetRect.width / 2;
         return myCenter <= targetCenter
@@ -1164,6 +1234,31 @@
         });
     }
 
+    // 근접 유닛이 targetKey에 "도착"했을 때의 마무리 처리를 한 곳에 모은다 - tick()이 gap을 재서 정상
+    // 도착한 경우와, waitForMeleeArrival의 타임아웃으로 강제 도착 처리된 경우가 모두 이걸 거쳐서
+    // 걷기 애니메이션 정지/자세 전환/방향 전환/대기 중인 공격 연출 재개를 항상 동일하게 수행한다
+    // (arena-battle.js의 markMeleeArrived와 동일).
+    function markMeleeArrived(slot, targetKey) {
+        if (meleeArrived[slot]) return;
+        meleeArrived[slot] = true;
+        const el = document.querySelector(`[data-unit="${slot}"]`);
+        const imgEl = el?.querySelector(".battle-unit-img");
+        imgEl?.classList.remove("walking");
+        stopWalkFrames(slot);
+        if (imgEl && units[slot]) {
+            const unit = units[slot];
+            const variant = spriteVariantSuffix(slot);
+            imgEl.onerror = () => {
+                imgEl.onerror = null;
+                imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.png`;
+            };
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.png`;
+        }
+        if (targetKey) faceToward(slot, targetKey);
+        (pendingArrivalResolvers[slot] || []).forEach((resolve) => resolve());
+        pendingArrivalResolvers[slot] = [];
+    }
+
     function startMeleeWalker() {
         Object.keys(units).forEach((slot) => {
             if (!units[slot] || !units[slot].isMelee) return;
@@ -1171,11 +1266,12 @@
             meleeArrived[slot] = false;
         });
         walkerRunning = true;
+        const myEpoch = ++walkerEpoch;
 
         // summon(복제체) 슬롯은 전투 도중에 units에 새로 추가될 수 있으므로, 고정된 SLOTS 대신
         // 매 프레임 Object.keys(units)를 다시 읽어야 새로 생긴 유닛도 즉시 이동을 시작한다.
         function tick() {
-            if (!walkerRunning) return;
+            if (!walkerRunning || walkerEpoch !== myEpoch) return;
             Object.keys(units).forEach((slot) => {
                 if (!units[slot] || !units[slot].isMelee || units[slot].hp <= 0) return;
                 if (walkerSuspended[slot]) return; // 넉백 트랜지션이 끝날 때까지 이 유닛은 건드리지 않는다
@@ -1190,24 +1286,7 @@
                 }
 
                 if (Math.abs(gap) <= ARRIVE_THRESHOLD_PX) {
-                    if (!meleeArrived[slot]) {
-                        meleeArrived[slot] = true;
-                        imgEl?.classList.remove("walking");
-                        stopWalkFrames(slot);
-                        if (imgEl) {
-                            const unit = units[slot];
-                            const variant = spriteVariantSuffix(slot);
-                            // battle_idle 파일이 없는 캐릭터/의상 조합이면 idle.png로 대체한다(arena-battle.js와 동일).
-                            imgEl.onerror = () => {
-                                imgEl.onerror = null;
-                                imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.png`;
-                            };
-                            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.png`;
-                        }
-                        faceToward(slot, targetKey);
-                        (pendingArrivalResolvers[slot] || []).forEach((resolve) => resolve());
-                        pendingArrivalResolvers[slot] = [];
-                    }
+                    markMeleeArrived(slot, targetKey);
                     return;
                 }
                 meleeArrived[slot] = false;
@@ -1227,6 +1306,11 @@
         requestAnimationFrame(tick);
     }
 
+    // 안전장치: 각자 독립적으로 "자신에게 가장 노출된 적"을 고르므로 서로가 서로의 목표가 아닌 경우가
+    // 흔하다 - 그러면 gap이 끝내 안 좁혀져 이 대기가 자연 도착으로는 영원히 안 풀릴 수 있다(arena-battle.js와
+    // 동일한 이유). 이 시간 안에 못 도착하면 강제로 도착 처리하고 진행한다.
+    const MELEE_ARRIVAL_TIMEOUT_MS = 6000;
+
     function waitForMeleeArrival(actorKey, targetKey) {
         if (!units[actorKey] || !units[actorKey].isMelee) return Promise.resolve();
         if (meleeTargetKey[actorKey] !== targetKey) {
@@ -1236,6 +1320,11 @@
         if (meleeArrived[actorKey]) return Promise.resolve();
         return new Promise((resolve) => {
             (pendingArrivalResolvers[actorKey] = pendingArrivalResolvers[actorKey] || []).push(resolve);
+            // 타임아웃이 걸릴 때 이미 다른 목표로 바뀌어 있었다면 건드리지 않는다 - 그 새 목표를 위한
+            // waitForMeleeArrival 호출이 이미 자기 타임아웃을 새로 걸어뒀을 것이다.
+            setTimeout(() => {
+                if (meleeTargetKey[actorKey] === targetKey) markMeleeArrived(actorKey, targetKey);
+            }, MELEE_ARRIVAL_TIMEOUT_MS);
         });
     }
 
@@ -1262,11 +1351,15 @@
         dot.style.top = `${start.y}px`;
         layer.appendChild(dot);
 
-        requestAnimationFrame(() => {
-            dot.style.transition = `left ${PROJECTILE_TRAVEL_MS}ms linear, top ${PROJECTILE_TRAVEL_MS}ms linear`;
-            dot.style.left = `${end.x}px`;
-            dot.style.top = `${end.y}px`;
-        });
+        // 시작 위치를 강제 리플로우(void dot.offsetWidth)로 확정시킨 뒤에 트랜지션을 걸어야 한다 -
+        // requestAnimationFrame 한 번만으로는 브라우저가 "시작 위치" 상태 변경과 "끝 위치로 트랜지션"
+        // 변경을 하나로 묶어버릴 수 있다(특히 DOM 변경이 짧은 시간에 몰릴 때) - 그러면 트랜지션 자체가
+        // 발동을 안 하고 투사체가 곧장 끝 위치에 나타나버려서 "날아가는 동작이 생략된" 것처럼 보인다
+        // (arena-battle.js와 동일한 이유 - 실제로 재현된 버그).
+        void dot.offsetWidth;
+        dot.style.transition = `left ${PROJECTILE_TRAVEL_MS}ms linear, top ${PROJECTILE_TRAVEL_MS}ms linear`;
+        dot.style.left = `${end.x}px`;
+        dot.style.top = `${end.y}px`;
         setTimeout(() => { dot.remove(); onArrive(); }, PROJECTILE_TRAVEL_MS);
     }
 
@@ -1291,11 +1384,11 @@
         dot.style.top = `${start.y}px`;
         layer.appendChild(dot);
 
-        requestAnimationFrame(() => {
-            dot.style.transition = `left ${PROJECTILE_TRAVEL_MS}ms linear, top ${PROJECTILE_TRAVEL_MS}ms linear`;
-            dot.style.left = `${end.x}px`;
-            dot.style.top = `${end.y}px`;
-        });
+        // 시작 위치를 강제 리플로우로 확정시킨 뒤에 트랜지션을 건다(spawnProjectileStraight 참고).
+        void dot.offsetWidth;
+        dot.style.transition = `left ${PROJECTILE_TRAVEL_MS}ms linear, top ${PROJECTILE_TRAVEL_MS}ms linear`;
+        dot.style.left = `${end.x}px`;
+        dot.style.top = `${end.y}px`;
 
         setTimeout(() => {
             dot.remove();
@@ -1387,10 +1480,10 @@
         flare.style.top = `${start.y}px`;
         layer.appendChild(flare);
 
-        requestAnimationFrame(() => {
-            wrap.style.transition = `width ${durationMs}ms linear`;
-            wrap.style.width = `${distance}px`;
-        });
+        // 시작 상태(width:0)를 강제 리플로우로 확정시킨 뒤에 트랜지션을 건다(spawnProjectileStraight 참고).
+        void wrap.offsetWidth;
+        wrap.style.transition = `width ${durationMs}ms linear`;
+        wrap.style.width = `${distance}px`;
 
         setTimeout(() => {
             wrap.remove();
@@ -1400,10 +1493,14 @@
     }
 
     // 포물선 이동 공용 로직: 직선 보간 + 사인 곡선으로 위로 솟았다가 내려오는 오프셋을 매 프레임 계산한다.
+    // startTime은 반드시 "첫 프레임이 실제로 실행되는 시각"으로 잡아야 한다(arena-battle.js와 동일한 이유 -
+    // 호출 시점 기준으로 잡으면, 메인 스레드가 바빠서 첫 requestAnimationFrame 콜백이 늦게 불리는 경우
+    // 그 첫 콜백에서 이미 progress가 1로 계산돼 투사체가 중간 프레임 없이 목표로 순간이동해버린다).
     function animateArcMotion(el, start, end, durationMs, arcHeight, onArrive) {
-        const startTime = performance.now();
+        let startTime = null;
 
         function frame(now) {
+            if (startTime === null) startTime = now;
             const progress = Math.min(1, (now - startTime) / durationMs);
             const x = start.x + (end.x - start.x) * progress;
             const y = start.y + (end.y - start.y) * progress - Math.sin(progress * Math.PI) * arcHeight;
@@ -1468,6 +1565,8 @@
         const rad = (angle * Math.PI) / 180;
         const durationMs = PROJECTILE_TRAVEL_MS * 1.4;
 
+        // 다트가 둘이라 onArrive는 먼저 처리되는 쪽 하나에만(중복 방지) 매단다.
+        let onArriveScheduled = false;
         ["crayon-pink", "crayon-blue"].forEach((colorClass, i) => {
             const perp = i === 0 ? -6 : 6;
             const offX = -Math.sin(rad) * perp;
@@ -1480,15 +1579,18 @@
             dot.style.top = `${start.y + offY}px`;
             layer.appendChild(dot);
 
-            requestAnimationFrame(() => {
-                dot.style.transition = `left ${durationMs}ms linear, top ${durationMs}ms linear`;
-                dot.style.left = `${end.x + offX}px`;
-                dot.style.top = `${end.y + offY}px`;
-            });
-            setTimeout(() => dot.remove(), durationMs);
-        });
+            // 시작 위치를 강제 리플로우로 확정시킨 뒤에 트랜지션을 건다(spawnProjectileStraight 참고).
+            void dot.offsetWidth;
+            dot.style.transition = `left ${durationMs}ms linear, top ${durationMs}ms linear`;
+            dot.style.left = `${end.x + offX}px`;
+            dot.style.top = `${end.y + offY}px`;
 
-        setTimeout(onArrive, durationMs);
+            setTimeout(() => dot.remove(), durationMs);
+            if (!onArriveScheduled) {
+                onArriveScheduled = true;
+                setTimeout(onArrive, durationMs);
+            }
+        });
     }
 
     // 이종복 스킬 전용: 붉은 "mg"가 유성처럼 꼬리를 끌며 대상에게 직선으로 날아간다(기본공격보다 큼).
@@ -1512,11 +1614,11 @@
         el.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
         layer.appendChild(el);
 
-        requestAnimationFrame(() => {
-            el.style.transition = `left ${durationMs}ms linear, top ${durationMs}ms linear`;
-            el.style.left = `${end.x}px`;
-            el.style.top = `${end.y}px`;
-        });
+        // 시작 위치를 강제 리플로우로 확정시킨 뒤에 트랜지션을 건다(spawnProjectileStraight 참고).
+        void el.offsetWidth;
+        el.style.transition = `left ${durationMs}ms linear, top ${durationMs}ms linear`;
+        el.style.left = `${end.x}px`;
+        el.style.top = `${end.y}px`;
 
         setTimeout(() => {
             el.remove();
@@ -1832,6 +1934,246 @@
         requestAnimationFrame(frame);
     }
 
+    // 호(자폭 소환수) 전용 - arena-battle.js의 playGoldenSelfDestruct와 동일(참고 데모
+    // golden_self_destruct_optimized.html의 charge->implode->detonate->after 4단계를 호의 위치/크기에
+    // 맞춰 이식, detonate 진입 시각은 EFFECT_LAUNCH_DELAY_MS와 일치). 캐릭터 자체의 빛/스케일/소멸은
+    // CSS(golden-self-destruct-char, arena-battle.css)가 맡고,
+    // 여기서는 주변 파티클과 국소 화면 흔들림만 캔버스로 그린다.
+    function playGoldenSelfDestruct(actorSlot) {
+        const layer = document.getElementById("projectile-layer");
+        const fieldEl = document.querySelector(".battle-field");
+        const imgEl = document.querySelector(`[data-unit="${actorSlot}"] .battle-unit-img`);
+        if (!layer || !fieldEl || !imgEl) return;
+
+        goldenSelfDestructActive[actorSlot] = true;
+        imgEl.classList.remove("golden-self-destruct");
+        void imgEl.offsetWidth;
+        imgEl.classList.add("golden-self-destruct");
+
+        const fieldRect = fieldEl.getBoundingClientRect();
+        const imgRect = imgEl.getBoundingClientRect();
+        const cx = imgRect.left + imgRect.width / 2 - fieldRect.left;
+        const cy = imgRect.top + imgRect.height / 2 - fieldRect.top;
+        const radius = Math.max(24, imgRect.width * 0.55);
+
+        const dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+        const canvas = document.createElement("canvas");
+        canvas.className = "golden-self-destruct-canvas";
+        canvas.style.width = `${fieldRect.width}px`;
+        canvas.style.height = `${fieldRect.height}px`;
+        canvas.width = Math.round(fieldRect.width * dpr);
+        canvas.height = Math.round(fieldRect.height * dpr);
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        layer.appendChild(canvas);
+
+        const spark = document.createElement("canvas");
+        spark.width = spark.height = 64;
+        const sparkCtx = spark.getContext("2d");
+        const sparkGrad = sparkCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
+        sparkGrad.addColorStop(0, "rgba(255,255,240,1)");
+        sparkGrad.addColorStop(0.22, "rgba(255,236,164,.98)");
+        sparkGrad.addColorStop(0.55, "rgba(255,185,56,.62)");
+        sparkGrad.addColorStop(1, "rgba(255,116,0,0)");
+        sparkCtx.fillStyle = sparkGrad;
+        sparkCtx.fillRect(0, 0, 64, 64);
+
+        const smokeSprite = document.createElement("canvas");
+        smokeSprite.width = smokeSprite.height = 96;
+        const smokeCtx = smokeSprite.getContext("2d");
+        const smokeGrad = smokeCtx.createRadialGradient(48, 48, 0, 48, 48, 48);
+        smokeGrad.addColorStop(0, "rgba(255,185,80,.42)");
+        smokeGrad.addColorStop(0.35, "rgba(180,98,35,.18)");
+        smokeGrad.addColorStop(1, "rgba(70,35,15,0)");
+        smokeCtx.fillStyle = smokeGrad;
+        smokeCtx.fillRect(0, 0, 96, 96);
+
+        let particles = [];
+        let smoke = [];
+        let streaks = [];
+        let exploded = false;
+        for (let i = 0; i < 16; i++) {
+            particles.push({
+                a: (Math.PI * 2 * i) / 16 + Math.random() * 0.18,
+                dist: 8 + Math.random() * 16, life: 0, maxLife: 400 + Math.random() * 200, mode: "in",
+            });
+        }
+
+        function explode() {
+            particles = [];
+            smoke = [];
+            streaks = [];
+            for (let i = 0; i < 20; i++) {
+                particles.push({
+                    a: Math.PI * 2 * (i / 20) + Math.random() * 0.16,
+                    dist: 0, speed: (radius / 26) * (4 + Math.random() * 9),
+                    size: radius * (0.16 + Math.random() * 0.16), life: 0, maxLife: 560 + Math.random() * 240, mode: "out",
+                });
+            }
+            for (let i = 0; i < 8; i++) {
+                smoke.push({
+                    a: Math.PI * 2 * Math.random(), dist: 0, speed: (radius / 26) * (1 + Math.random() * 2.4),
+                    size: radius * (0.3 + Math.random() * 0.3), life: 0, maxLife: 700 + Math.random() * 260,
+                });
+            }
+            for (let i = 0; i < 10; i++) {
+                streaks.push({ a: Math.PI * 2 * Math.random(), len: radius * (0.7 + Math.random() * 0.7), width: 2 + Math.random() * 3 });
+            }
+        }
+
+        const startMs = performance.now();
+        // detonate 진입 시각이 EFFECT_LAUNCH_DELAY_MS(다른 근접 캐릭터의 명중 판정 시각)와 정확히 같아야
+        // 한다 - charge/implode를 원래 참고 데모의 비율(480:160)로 그 시간 안에 압축한다(arena-battle.js와 동일).
+        const CHARGE_MS = EFFECT_LAUNCH_DELAY_MS * 0.75;
+        const IMPLODE_END_MS = EFFECT_LAUNCH_DELAY_MS;
+        const DETONATE_END_MS = IMPLODE_END_MS + 55;
+        const TOTAL_MS = DETONATE_END_MS + 765;
+
+        function frame(now) {
+            const t = now - startMs;
+            let flashAlpha, ringAlpha, ringR, ringR2 = 0, shake = 0;
+
+            if (t < CHARGE_MS) {
+                const p = t / CHARGE_MS;
+                flashAlpha = 0.12 + p * 0.2;
+                ringAlpha = 0.2 + p * 0.22;
+                ringR = radius * (0.5 + p * 0.22);
+            } else if (t < IMPLODE_END_MS) {
+                const p = (t - CHARGE_MS) / (IMPLODE_END_MS - CHARGE_MS);
+                flashAlpha = 0.32 + p * 0.24;
+                ringAlpha = 0.45 - p * 0.18;
+                ringR = radius * (0.72 - p * 0.2);
+            } else if (t < DETONATE_END_MS) {
+                if (!exploded) { exploded = true; explode(); }
+                const p = (t - IMPLODE_END_MS) / (DETONATE_END_MS - IMPLODE_END_MS);
+                flashAlpha = 1 - p * 0.15;
+                ringAlpha = 0.95;
+                ringR = radius * (0.55 + p * 3.4);
+                ringR2 = radius * (0.35 + p * 2.2);
+                shake = Math.max(2, radius * 0.22) * (1 - p * 0.3);
+            } else if (t < TOTAL_MS) {
+                const p = (t - DETONATE_END_MS) / (TOTAL_MS - DETONATE_END_MS);
+                flashAlpha = Math.max(0, 0.85 - p * 0.85);
+                ringAlpha = Math.max(0, 0.78 - p * 0.78);
+                ringR = radius * (2.5 + p * 4);
+                ringR2 = radius * (1.4 + p * 3);
+                shake = Math.max(0, radius * 0.1 * (1 - p));
+            } else {
+                canvas.remove();
+                goldenSelfDestructActive[actorSlot] = false;
+                fieldEl.style.transform = "";
+                return;
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.life += 16.67;
+                if (p.mode === "in") p.dist += (1.4 - p.life / p.maxLife) * (radius / 30);
+                else { p.dist += p.speed; p.speed *= 0.988; }
+                if (p.life > p.maxLife) particles.splice(i, 1);
+            }
+            for (let i = smoke.length - 1; i >= 0; i--) {
+                const s = smoke[i];
+                s.life += 16.67;
+                s.dist += s.speed;
+                s.speed *= 0.994;
+                s.size += radius * 0.008;
+                if (s.life > s.maxLife) smoke.splice(i, 1);
+            }
+
+            ctx.clearRect(0, 0, fieldRect.width, fieldRect.height);
+            ctx.save();
+            ctx.globalCompositeOperation = "lighter";
+
+            if (flashAlpha > 0) {
+                const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 0.95);
+                g.addColorStop(0, `rgba(255,255,240,${0.45 * flashAlpha})`);
+                g.addColorStop(0.22, `rgba(255,236,162,${0.38 * flashAlpha})`);
+                g.addColorStop(0.5, `rgba(255,192,74,${0.22 * flashAlpha})`);
+                g.addColorStop(1, "rgba(255,120,0,0)");
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius * 0.95, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            [[ringR, ringAlpha, Math.max(2, radius * 0.07)], [ringR2, ringAlpha * 0.75, Math.max(1.5, radius * 0.04)]].forEach(([r, a, w]) => {
+                if (a <= 0 || r <= 0) return;
+                ctx.save();
+                ctx.beginPath();
+                ctx.lineWidth = w;
+                ctx.strokeStyle = `rgba(255, ${180 + Math.floor(a * 40)}, 72, ${a})`;
+                ctx.shadowBlur = radius * 0.16;
+                ctx.shadowColor = `rgba(255, 174, 54, ${a * 0.8})`;
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            if (exploded && streaks.length && ringAlpha > 0) {
+                ctx.save();
+                ctx.translate(cx, cy);
+                for (const s of streaks) {
+                    ctx.save();
+                    ctx.rotate(s.a);
+                    const grad = ctx.createLinearGradient(0, 0, s.len, 0);
+                    grad.addColorStop(0, `rgba(255,255,240,${0.9 * ringAlpha})`);
+                    grad.addColorStop(0.4, `rgba(255,221,125,${0.65 * ringAlpha})`);
+                    grad.addColorStop(1, "rgba(255,118,0,0)");
+                    ctx.strokeStyle = grad;
+                    ctx.lineWidth = s.width;
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(s.len, 0);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+                ctx.restore();
+            }
+
+            for (const p of particles) {
+                const lifeP = p.life / p.maxLife;
+                let px, py, alpha;
+                if (p.mode === "in") {
+                    const d = radius * 0.9 - p.dist;
+                    px = cx + Math.cos(p.a) * d;
+                    py = cy + Math.sin(p.a) * d;
+                    alpha = Math.max(0, 0.6 - lifeP * 0.5);
+                } else {
+                    px = cx + Math.cos(p.a) * p.dist;
+                    py = cy + Math.sin(p.a) * p.dist;
+                    alpha = Math.max(0, 1 - lifeP);
+                }
+                const size = p.size * (p.mode === "out" ? 1 - lifeP * 0.3 : 1);
+                ctx.globalAlpha = alpha;
+                ctx.drawImage(spark, px - size / 2, py - size / 2, size, size);
+            }
+            ctx.globalAlpha = 1;
+
+            for (const s of smoke) {
+                const lifeP = s.life / s.maxLife;
+                const px = cx + Math.cos(s.a) * (radius * 0.15 + s.dist * 3.4);
+                const py = cy + Math.sin(s.a) * (radius * 0.15 + s.dist * 2.6);
+                const size = s.size * (1 + lifeP * 1.2);
+                ctx.globalAlpha = Math.max(0, 0.4 - lifeP * 0.4);
+                ctx.drawImage(smokeSprite, px - size / 2, py - size / 2, size, size);
+            }
+            ctx.globalAlpha = 1;
+            ctx.restore();
+
+            if (shake > 0) {
+                const sx = (Math.random() - 0.5) * shake;
+                const sy = (Math.random() - 0.5) * shake * 0.6;
+                fieldEl.style.transform = `translate3d(${sx}px, ${sy}px, 0)`;
+            } else {
+                fieldEl.style.transform = "";
+            }
+
+            requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+    }
+
     // 임소정 전기의 발사 시작점(손/지팡이 위치 근사치) - arena-battle.js와 동일. 기본공격/스킬이 서로
     // 다른 지점에서 나가야 해서 따로 둔다.
     const ELECTRIC_ORIGIN_BASIC = { fx: 0.9, fy: 0.27 };
@@ -1923,10 +2265,10 @@
         `;
         layer.appendChild(wrap);
 
-        requestAnimationFrame(() => {
-            wrap.style.transition = `top ${durationMs}ms ease-in`;
-            wrap.style.top = `${end.y}px`;
-        });
+        // 시작 위치를 강제 리플로우로 확정시킨 뒤에 트랜지션을 건다(spawnProjectileStraight 참고).
+        void wrap.offsetWidth;
+        wrap.style.transition = `top ${durationMs}ms ease-in`;
+        wrap.style.top = `${end.y}px`;
 
         setTimeout(() => {
             wrap.remove();
@@ -1968,15 +2310,16 @@
                 el.style.left = `${start.x}px`;
                 el.style.top = `${start.y}px`;
                 layer.appendChild(el);
-                requestAnimationFrame(() => {
-                    el.style.transition = `left ${PROJECTILE_TRAVEL_MS}ms linear, top ${PROJECTILE_TRAVEL_MS}ms linear`;
-                    el.style.left = `${end.x}px`;
-                    el.style.top = `${end.y}px`;
-                });
+                // 시작 위치를 강제 리플로우로 확정시킨 뒤에 트랜지션을 건다(spawnProjectileStraight 참고) -
+                // onArrive는 마지막 글자에만(그 글자가 실제로 도착할 시점 기준) 매단다.
+                void el.offsetWidth;
+                el.style.transition = `left ${PROJECTILE_TRAVEL_MS}ms linear, top ${PROJECTILE_TRAVEL_MS}ms linear`;
+                el.style.left = `${end.x}px`;
+                el.style.top = `${end.y}px`;
                 setTimeout(() => el.remove(), PROJECTILE_TRAVEL_MS + 50);
+                if (i === letters.length - 1) setTimeout(onArrive, PROJECTILE_TRAVEL_MS);
             }, i * 100);
         });
-        setTimeout(onArrive, letters.length * 100 + PROJECTILE_TRAVEL_MS);
     }
 
     function playRangedAttack(actorSlot, targetSlot, onArrive) {
@@ -1997,7 +2340,9 @@
     function setupManualButtons() {
         document.getElementById("dt-basic-attack").addEventListener("click", () => {
             if (!activeSlot || !units[activeSlot]) { log("먼저 전장에서 캐릭터를 클릭해 활성 유닛을 선택하세요."); return; }
-            const targetSlot = aliveEnemyTarget(activeSlot); // 복제체(미끼)가 있으면 그쪽이 우선 타겟
+            // aliveEnemyTarget: front -> back -> summon 순서(가장 앞의 살아있는 자리) - 복제체를 노려보고
+            // 싶으면 상대 front/back의 체력을 먼저 0으로 만들어서 복제체만 살아남게 해야 한다.
+            const targetSlot = aliveEnemyTarget(activeSlot);
             if (!targetSlot) { log("대상이 없습니다."); return; }
 
             const actor = units[activeSlot];
@@ -2018,12 +2363,26 @@
                     stunText = ` (${stunSeconds}초 기절)`;
                 }
                 log(`[수동] ${actor.name} 기본공격 -> ${units[targetSlot].name} (${dummyDamage} 피해)${isCrit ? " 치명타!" : ""}${stunText}`);
+                // 호(자폭 소환수): renderUnit이 hp<=0을 감지해서 자동으로 사망 처리를 한다 - 폭발이 곧
+                // 타격이므로, 아래 호출부에서 이 applyHit() 자체를 detonate 시점까지 통째로 미룬다.
+                if (actor.selfDestructAfterAttack) {
+                    actor.hp = 0;
+                    renderUnit(activeSlot);
+                    log(`[수동] ${actor.name} 자폭!`);
+                }
             }
 
             if (actor.isMelee) {
                 waitForMeleeArrival(activeSlot, targetSlot).then(() => {
                     playAttackFrames(activeSlot);
-                    applyHit();
+                    // 호(자폭 소환수): 폭발이 곧 타격이다 - 스윙이 시작되는 이 순간부터 이펙트를 먼저 튼다.
+                    if (actor.selfDestructAfterAttack) playGoldenSelfDestruct(activeSlot);
+                    // 근접도 원거리처럼 스윙이 몇 프레임 재생된 뒤에야 명중 판정이 난다(arena-battle.js와 동일).
+                    meleeHitPending[activeSlot] = true;
+                    setTimeout(() => {
+                        meleeHitPending[activeSlot] = false;
+                        applyHit();
+                    }, EFFECT_LAUNCH_DELAY_MS);
                 });
                 if (!walkerRunning) startMeleeWalker();
             } else {
@@ -2382,7 +2741,11 @@
             if (!units[slot]) return false;
             return attackAnimActive[slot] ||
                 (units[slot].isMelee && meleeArrived[slot] === false) ||
-                rangedResolvePending[slot];
+                rangedResolvePending[slot] ||
+                meleeHitPending[slot] ||
+                // 호(자폭 소환수): 명중 판정 자체는 meleeHitPending으로 잡히지만, 그 뒤로도 폭발 파티클/
+                // 흔들림 연출이 한동안 더 이어질 수 있다(arena-battle.js와 동일한 이유).
+                goldenSelfDestructActive[slot];
         });
     }
 
@@ -2483,6 +2846,18 @@
                 }
             }
             log(`[특성] ${event.actor}의 방임 상태 ${event.detail?.active ? "활성화" : "해제"}`);
+        } else if (event.event_type === "lifesteal_status_resolve") {
+            // 윤 "선생 고혈"(arena-battle.js와 동일) - 지속시간 없이 걸어두고, 꺼질 때 직접 지운다.
+            const lifestealSlot = findSlotByName(actorSide, event.actor);
+            if (lifestealSlot) {
+                if (event.detail?.active) {
+                    flashEffectAura(lifestealSlot, "buff");
+                    setStatusIcon(lifestealSlot, "lifesteal", { source: `${lifestealSlot}:lifesteal` });
+                } else {
+                    clearStatusIconSource(lifestealSlot, "lifesteal", `${lifestealSlot}:lifesteal`);
+                }
+            }
+            log(`[특성] ${event.actor}의 흡혈 상태 ${event.detail?.active ? "활성화" : "해제"}`);
         } else if (event.event_type === "target_lock_resolve") {
             // 백엔드가 새 기본공격 대상을 "확정"한 시점(실제 명중보다 먼저 온다, arena-battle.js와 동일) -
             // 근접 유닛은 이 신호를 받는 즉시 새 목표를 향해 걷기 시작한다.
@@ -2536,6 +2911,24 @@
                 units[actorSlot].isType2 = !!event.detail?.type2_active;
             }
 
+            // 방임 해제 즉시 발동은 cast_start 없이 skill_resolve만 온다(arena-battle.js와 동일한 이유 -
+            // 무방비 노출을 막으려고 정상 시전 절차를 건너뛰기 때문). 그대로 두면 시전 자세 없이 곧바로
+            // idle로 스냅해버려서 발동감이 없으므로, 순수 연출로만 짧은 시전 자세를 끼워넣는다(백엔드
+            // 판정은 이미 끝난 그대로, 재현/딜레이 없음). onNeglectReleasePoseDone은 아래 dispatchEffectType별
+            // 분기(이번 이벤트 처리의 나머지, 지금 동기 실행 흐름 안에서 곧 채워짐)가 채워준다 - 이
+            // 클로저는 항상 그보다 나중(비동기, playCastFrames가 끝난 뒤)에야 실행되므로 항상 채워진 뒤에 호출된다.
+            const isNeglectReleaseTrigger = Boolean(event.detail?.neglect_release_trigger);
+            let onNeglectReleasePoseDone = null;
+            if (isNeglectReleaseTrigger && actorSlot && units[actorSlot]) {
+                chainActorAnim(actorSlot, async () => {
+                    await waitForAnimIdle(actorSlot);
+                    const poseImgEl = document.querySelector(`[data-unit="${actorSlot}"] .battle-unit-img`);
+                    poseImgEl?.classList.add("casting");
+                    await playCastFrames(actorSlot, NEGLECT_RELEASE_POSE_SECONDS * 1000 * PLAYBACK_SPEED);
+                    onNeglectReleasePoseDone?.();
+                });
+            }
+
             if (actorSlot) {
                 // "시전 자세 풀기 + idle 스냅"만 이 배우 전용 체인에 매달아둔다(arena-battle.js와 동일한
                 // 이유 - 데이터/상태 아이콘/오라 등 나머지는 지금처럼 즉시 반영해서, 이 배우의 체인이
@@ -2550,6 +2943,18 @@
                         attackAnimActive[actorSlot] = false;
                         if (imgEl && units[actorSlot]) {
                             imgEl.src = `${OUTFIT_IMAGE_BASE}${units[actorSlot].outfit}/battle_idle${spriteVariantSuffix(actorSlot)}.png`;
+                        }
+                        // 청년(밀쳐내기): 이 배우 자신의 시전 자세가 "실제로" 끝난 이 시점에야 밀쳐내기를
+                        // 실행한다(arena-battle.js와 동일한 이유 - HP는 아래 동기 분기에서 여전히 즉시 반영).
+                        if (dispatchEffectType === "bonus_damage_knockback" && event.detail?.hits?.length) {
+                            const hit = event.detail.hits[0];
+                            const knockSlot = findHitSlot(actorSide, hit.target, hit.target_side);
+                            if (knockSlot) {
+                                applyKnockback(knockSlot, { distance: 9999, suspendSelfWalker: true });
+                                flashEffectAura(knockSlot, "cc");
+                                setStatusIcon(knockSlot, "knockback", { source: `${event.actor}:knockback`, durationMs: MOMENT_ICON_MS });
+                                if (event.detail?.interrupted_cast) interruptCasting(knockSlot);
+                            }
                         }
                     });
                 }
@@ -2581,13 +2986,26 @@
                 const cloneSlot = `${actorSide}-${event.detail.clone_slot || "summon"}`;
                 const caster = actorSlot ? units[actorSlot] : null;
 
+                // 윤(호 출격!): 소환 대가로 자신의 현재 체력을 소모하는 경우(arena-battle.js와 동일한 이유).
+                if (caster && event.detail.caster_hp_after != null) {
+                    caster.hp = event.detail.caster_hp_after;
+                    renderUnit(actorSlot);
+                    flashEffectAura(actorSlot, "debuff");
+                }
+
                 units[cloneSlot] = {
                     name: event.detail.clone_name,
                     maxHp: event.detail.clone_hp,
                     hp: event.detail.clone_hp,
                     isMelee: caster ? caster.isMelee : true,
-                    outfit: caster ? caster.outfit : null,
+                    // clone_sprite_outfit이 있으면(윤의 "호") 시전자가 누구든 항상 이 outfit 폴더의
+                    // 그림을 쓴다(arena-battle.js와 동일) - 없으면 시전자 outfit을 그대로 물려받는다.
+                    outfit: event.detail.clone_sprite_outfit || (caster ? caster.outfit : null),
                     style: caster ? caster.style : "melee",
+                    spriteVariant: event.detail.clone_sprite_variant || "",
+                    meleeOverlapPercent: event.detail.clone_melee_overlap_percent || null,
+                    // 강승유가 남의 스킬을 복제해서 나온 소환수인지(arena-battle.js와 동일한 이유).
+                    isCopy: Boolean(event.detail.copied_from),
                 };
 
                 const cloneEl = document.querySelector(`[data-unit="${cloneSlot}"]`);
@@ -2624,12 +3042,19 @@
                 attackAnimTokens[cloneSlot] = (attackAnimTokens[cloneSlot] || 0) + 1;
                 attackAnimActive[cloneSlot] = false;
                 rangedResolvePending[cloneSlot] = false;
+                meleeHitPending[cloneSlot] = false;
                 delete actorAnimChain[cloneSlot];
                 delete walkerSuspended[cloneSlot];
                 getAttackFrameCount(units[cloneSlot].outfit);
                 renderUnit(cloneSlot);
-                // 복제체는 원본과 구분되게 전체적으로 푸른 색감이 돌도록(3D 프린트 홀로그램 느낌)
-                document.querySelector(`[data-unit="${cloneSlot}"] .battle-unit-img`)?.classList.add("is-clone");
+                // "복제" 계열은 전체적으로 푸른 색감이 돌도록(3D 프린트 홀로그램 느낌, arena-battle.js와
+                // 동일한 조건) - 윤의 "호"는 소환이라 전용 스프라이트가 있으면 원래 색 그대로 두지만,
+                // 강승유가 그 "호"를 복제한 경우(isCopy)는 소환이 아니라 복제이므로 틴트를 씌운다.
+                document.querySelector(`[data-unit="${cloneSlot}"] .battle-unit-img`)
+                    ?.classList.toggle("is-clone", !units[cloneSlot].spriteVariant || units[cloneSlot].isCopy);
+                // 호처럼 다른 스프라이트와 겹쳐도 항상 그 위에 그려져야 하는 소환수(arena-battle.js와 동일).
+                document.querySelector(`[data-unit="${cloneSlot}"]`)
+                    ?.classList.toggle("render-on-top", Boolean(event.detail.clone_render_on_top));
 
                 // 근거리 복제체는 다른 근접 유닛과 완전히 동일하게 취급한다 - meleeArrived를 false로
                 // 두면 이동 루프(tick)가 실제 겹침 여부를 직접 재서 판정하고, 도착이 확인되는 순간에만
@@ -2711,16 +3136,15 @@
                     });
                 }
             } else if (dispatchEffectType === "bonus_damage_knockback" && actorSlot && event.detail?.hits?.length) {
+                // HP는 여기서 즉시 반영한다 - 실제 밀쳐내기 연출과 그에 딸린 오라/아이콘/interruptCasting은
+                // 이 배우 자신의 시전 자세가 실제로 끝나는 시점에 맞춰야 해서 위쪽 체인(chainActorAnim)
+                // 안으로 옮겼다(arena-battle.js와 동일한 이유).
                 const hit = event.detail.hits[0];
                 const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                 if (hitSlot) {
                     units[hitSlot].hp = hit.target_hp_after;
                     renderUnit(hitSlot);
                     flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
-                    applyKnockback(hitSlot, { distance: 9999, suspendSelfWalker: true });
-                    flashEffectAura(hitSlot, "cc");
-                    setStatusIcon(hitSlot, "knockback", { source: `${event.actor}:knockback`, durationMs: MOMENT_ICON_MS });
-                    if (event.detail?.interrupted_cast) interruptCasting(hitSlot);
                 }
             } else if (dispatchEffectType === "aoe_enemy_damage" && actorSlot) {
                 // 가스 숨결이 실제로 닿는 순간에 맞춰 피해/HP/피격 이펙트를 반영한다(arena-battle.js와
@@ -2777,18 +3201,28 @@
                 const d = event.detail || {};
                 const hasAnyPaint = d.red || d.blue || d.yellow;
 
-                // 물감 계열도 전부 같은 이유(captureAndApplyHp 참고)로 HP는 지금 즉시 반영하고, 투사체
-                // 도착 콜백은 화면 갱신만 하도록 죽음 여부를 미리 캡처해둔다.
+                // 백엔드가 이 스킬 발동 시 보유 물감을 전부 0으로 리셋하는데(arena-battle.js와 동일한
+                // 이유), 소모 이벤트 자체엔 그걸 알리는 별도 신호가 없어서 여기서 세 색 아이콘을 직접
+                // 지운다 - 안 그러면 소모 전 개수가 화면에 그대로 남는다.
+                ["paint_red", "paint_blue", "paint_yellow"].forEach((iconId) => {
+                    clearStatusIconSource(actorSlot, iconId, `${actorSlot}:${iconId}`);
+                });
+
+                // 물감 계열도 전부 같은 이유(captureAndApplyHp 참고)로 HP는 지금 즉시 반영해서, 무관한
+                // 다른 배우 이벤트가 아래 투사체 연출(방임 해제 즉시 발동일 땐 시전 자세 재생까지 끝나야
+                // 하므로 더 늦게 뜬다)보다 먼저 처리돼도 체력이 과거 값으로 되돌아가지 않게 한다. 실제
+                // 투사체 발사(순수 연출)는 fireConsumePaintVisuals로 묶어서, 평소엔 즉시 실행하고 방임
+                // 해제 즉시 발동일 땐 시전 자세가 다 재생된 뒤로 미룬다(arena-battle.js와 동일한 패턴).
+                let whiteHit = null;
+                let redHit = null;
+                let blueHeal = null;
+                let stunTargets = null;
                 if (!hasAnyPaint && d.hits?.length) {
                     const hit = d.hits[0];
                     const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                     if (hitSlot) {
                         const wasAlreadyDead = captureAndApplyHp(hitSlot, hit.target_hp_after);
-                        spawnPaintSkillProjectile(actorSlot, hitSlot, "paint-white", () => {
-                            if (wasAlreadyDead) return;
-                            renderUnit(hitSlot);
-                            flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
-                        });
+                        whiteHit = { hit, hitSlot, wasAlreadyDead };
                     }
                 } else {
                     if (d.red && d.hits?.length) {
@@ -2796,11 +3230,7 @@
                         const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                         if (hitSlot) {
                             const wasAlreadyDead = captureAndApplyHp(hitSlot, hit.target_hp_after);
-                            spawnPaintSkillProjectile(actorSlot, hitSlot, "paint-red", () => {
-                                if (wasAlreadyDead) return;
-                                renderUnit(hitSlot);
-                                flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
-                            });
+                            redHit = { hit, hitSlot, wasAlreadyDead };
                         }
                     }
 
@@ -2810,19 +3240,48 @@
                         const healSlot = findSlotByName(actorSide, heal.target);
                         if (healSlot) {
                             const wasAlreadyDead = captureAndApplyHp(healSlot, heal.target_hp_after);
-                            spawnPaintSkillProjectile(actorSlot, healSlot, "paint-blue", () => {
-                                if (wasAlreadyDead) return;
-                                renderUnit(healSlot);
-                                flashEffectAura(healSlot, "heal");
-                                setStatusIcon(healSlot, "heal", { source: `${event.actor}:paint_heal`, durationMs: MOMENT_ICON_MS });
-                            });
+                            blueHeal = { heal, healSlot, wasAlreadyDead };
                         }
                     }
 
                     if (d.yellow && d.stunned?.length) {
-                        const firstStunSlot = findHitSlot(actorSide, d.stunned[0].target, d.stunned[0].target_side);
+                        stunTargets = d.stunned;
+                    }
+                }
+
+                const fireConsumePaintVisuals = () => {
+                    if (whiteHit) {
+                        const { hit, hitSlot, wasAlreadyDead } = whiteHit;
+                        spawnPaintSkillProjectile(actorSlot, hitSlot, "paint-white", () => {
+                            if (wasAlreadyDead) return;
+                            renderUnit(hitSlot);
+                            flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
+                        });
+                    }
+
+                    if (redHit) {
+                        const { hit, hitSlot, wasAlreadyDead } = redHit;
+                        spawnPaintSkillProjectile(actorSlot, hitSlot, "paint-red", () => {
+                            if (wasAlreadyDead) return;
+                            renderUnit(hitSlot);
+                            flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
+                        });
+                    }
+
+                    if (blueHeal) {
+                        const { heal, healSlot, wasAlreadyDead } = blueHeal;
+                        spawnPaintSkillProjectile(actorSlot, healSlot, "paint-blue", () => {
+                            if (wasAlreadyDead) return;
+                            renderUnit(healSlot);
+                            flashEffectAura(healSlot, "heal");
+                            setStatusIcon(healSlot, "heal", { source: `${event.actor}:paint_heal`, durationMs: MOMENT_ICON_MS });
+                        });
+                    }
+
+                    if (stunTargets) {
+                        const firstStunSlot = findHitSlot(actorSide, stunTargets[0].target, stunTargets[0].target_side);
                         const applyAllStuns = () => {
-                            d.stunned.forEach((s) => {
+                            stunTargets.forEach((s) => {
                                 const sSlot = findHitSlot(actorSide, s.target, s.target_side);
                                 if (!sSlot || units[sSlot].hp <= 0) return;
                                 flashEffectAura(sSlot, "cc");
@@ -2833,6 +3292,12 @@
                         if (firstStunSlot) spawnPaintSkillProjectile(actorSlot, firstStunSlot, "paint-yellow", applyAllStuns);
                         else applyAllStuns();
                     }
+                };
+
+                if (isNeglectReleaseTrigger) {
+                    onNeglectReleasePoseDone = fireConsumePaintVisuals;
+                } else {
+                    fireConsumePaintVisuals();
                 }
             } else {
                 (event.detail?.hits || []).forEach((hit) => {
@@ -2852,6 +3317,16 @@
             // 뒤늦게 또 때린" 경우를 더 이상 hp만 보고는 구분할 수 없다(arena-battle.js와 동일).
             const targetWasAlreadyDead = targetSlot && units[targetSlot] && units[targetSlot].hp <= 0;
             if (targetSlot) units[targetSlot].hp = event.target_hp_after;
+            // 윤(영혼 흡수/선생 고혈): 기본공격에 딸려오는 시전자 자가 회복 데이터도 즉시 반영한다
+            // (arena-battle.js와 동일한 이유 - 연출만 아래 applyHitVisual에서 타격 시점에 맞춘다).
+            if (actorSlot && units[actorSlot] && event.actor_self_heal) {
+                units[actorSlot].hp = event.actor_hp_after;
+            }
+            // 호(자폭 소환수): 이 공격을 명중시키는 즉시 스스로 죽는다(arena-battle.js와 동일한 이유 -
+            // 이미 도착해서 정지한 상태라 걷기 루프에 영향 없다). 연출은 아래 applyHitVisual에서.
+            if (actorSlot && units[actorSlot] && event.actor_self_destruct) {
+                units[actorSlot].hp = 0;
+            }
 
             function applyHitVisual() {
                 if (targetSlot) {
@@ -2867,7 +3342,15 @@
                         if (event.interrupted_cast) interruptCasting(targetSlot);
                     }
                 }
-                log(`${event.actor} -> ${event.target} 피해 ${event.damage}${event.is_crit ? " 치명타!" : ""}`);
+                if (actorSlot && event.actor_self_heal) {
+                    renderUnit(actorSlot);
+                    flashEffectAura(actorSlot, "heal");
+                    setStatusIcon(actorSlot, "heal", { source: `${actorSlot}:basic_attack_heal`, durationMs: MOMENT_ICON_MS });
+                }
+                if (actorSlot && event.actor_self_destruct) {
+                    renderUnit(actorSlot);
+                }
+                log(`${event.actor} -> ${event.target} 피해 ${event.damage}${event.is_crit ? " 치명타!" : ""}${event.actor_self_heal ? ` (자가 회복 ${event.actor_self_heal})` : ""}${event.actor_self_destruct ? " (자폭)" : ""}`);
             }
 
             if (actorSlot && units[actorSlot]?.isMelee) {
@@ -2879,7 +3362,16 @@
                     // 전투만 끝나버리는 버그가 생긴다 - arena-battle.js와 동일).
                     if (targetWasAlreadyDead) return;
                     playAttackFrames(actorSlot);
-                    applyHitVisual();
+                    // 호(자폭 소환수): 폭발이 곧 타격이다 - 스윙이 시작되는 이 순간(=아직 명중 판정 전)부터
+                    // 이펙트를 먼저 튼다(arena-battle.js와 동일).
+                    if (event.actor_self_destruct) playGoldenSelfDestruct(actorSlot);
+                    // 근접도 원거리처럼 스윙이 몇 프레임(EFFECT_LAUNCH_DELAY_MS) 재생된 뒤에야 명중
+                    // 판정이 난다(arena-battle.js와 동일한 이유).
+                    meleeHitPending[actorSlot] = true;
+                    setTimeout(() => {
+                        meleeHitPending[actorSlot] = false;
+                        applyHitVisual();
+                    }, EFFECT_LAUNCH_DELAY_MS);
                 });
             } else if (actorSlot && targetSlot) {
                 // 원거리는 공격 애니메이션(윈드업)을 먼저 시작하고, 3프레임쯤 재생된 뒤에야 이펙트가 나간다.

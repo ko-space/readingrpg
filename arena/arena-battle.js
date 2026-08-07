@@ -23,6 +23,9 @@
     const OUTFIT_IMAGE_BASE = `${API_BASE_URL}/static/outfits/`;
 
     const PLAYBACK_SPEED = 0.8;
+    // 방임 해제 즉시 발동(cast_start 없는 skill_resolve)에 순수 연출용으로 붙이는 시전 자세 재생
+    // 시간 - 백엔드가 시간을 안 주므로(판정은 이미 즉시 끝남) 프론트가 임의로 정한 짧은 고정값.
+    const NEGLECT_RELEASE_POSE_SECONDS = 0.6;
     const PREP_MS = 1300;
     const APPROACH_OVERLAP = 1;
     const PROJECTILE_TRAVEL_MS = 220;
@@ -94,6 +97,11 @@
     // 실제 피해 반영(HP바 갱신 + 사망 로그)은 투사체가 도착해야 일어나므로 별도로 추적한다 - 마지막
     // 이벤트가 원거리 공격일 때, 투사체가 아직 날아가는 중인데 "전투 종료!"가 먼저 떠버리는 걸 막는다.
     const rangedResolvePending = {};
+    // key -> 그 유닛의 근접 기본공격이 스윙은 시작됐지만 아직 명중 판정(applyHitVisual)이 안 났는지 -
+    // rangedResolvePending과 동일한 이유. 근접도 이제 원거리처럼 스윙이 몇 프레임 재생된 뒤에야 판정이
+    // 나므로(EFFECT_LAUNCH_DELAY_MS), attackAnimActive만으로는(스윙 프레임 수가 적은 캐릭터는 판정
+    // 전에 attackAnimActive가 먼저 꺼질 수 있음) "아직 안 끝났다"를 놓칠 수 있어 따로 추적한다.
+    const meleeHitPending = {};
     const walkAnimTokens = {};
     const walkAnimActive = {}; // key -> 지금 playWalkFrames 루프가 이미 돌고 있는지(매 tick마다 중복으로 새로 시작하지 않기 위함)
 
@@ -227,6 +235,20 @@
      */
     const MAX_LOG_LINES = 24; // 이보다 많아지면 오래된 줄부터 지움
 
+    // 전투 중 표시(로스터 이름표/로그)에서만 이름을 줄여 보여준다 - 캐릭터 데이터상 정식 이름은
+    // "윤 & 호"지만, 소환수 호가 화면에 별도로 나온 뒤엔 이름표/로그에 "윤 & 호"라고 또 쓰는 게
+    // 중복돼 보인다. 인벤토리/가챠 등 다른 화면은 이 치환과 무관하게 원래 이름을 그대로 쓴다.
+    // 로그 문장은 이름이 "윤 & 호의 공격!"처럼 문장 중간에 부분 문자열로 섞여 나오므로, 정확히
+    // 일치하는 이름 하나만 다루는 매핑이 아니라 문자열 치환으로 처리한다.
+    const BATTLE_DISPLAY_NAME_OVERRIDES = { "윤 & 호": "윤" };
+    function battleDisplayText(text) {
+        let result = text;
+        for (const [full, short] of Object.entries(BATTLE_DISPLAY_NAME_OVERRIDES)) {
+            result = result.replaceAll(full, short);
+        }
+        return result;
+    }
+
     function appendLog(text, side) {
         if (!logPanelEl) return null;
 
@@ -241,7 +263,7 @@
             side === "draw" ? "log-draw" :
             "log-system"
         }`;
-        entry.textContent = text;
+        entry.textContent = battleDisplayText(text);
         logPanelEl.appendChild(entry);
 
         // 맨 위(가장 오래된) 줄부터 지워서, 항상 최근 줄들만 남고 계속 위로 밀려 올라가는 형태가 되게 한다.
@@ -295,15 +317,29 @@
         return `${event.actor}의 [Special] 발동!`;
     }
 
+    // 윤처럼 전투 로스터 "프로필"(idle 사진) 하나만 별도 그림을 쓰고 싶은 캐릭터용 - battle_idle/
+    // attack 등 실제 전투 스프라이트는 그대로 두고 이 로스터 초상화만 idle${variant}.png로 바꾼다.
+    // 호는 별도 표에 넣지 않는다 - 이미 units[cloneKey].spriteVariant("_ho")가 있어서 그걸 그대로 쓴다.
+    const PROFILE_SPRITE_VARIANT_OVERRIDES = { "윤 & 호": "_yoon" };
+
     /*
      * 로비와 동일한 avatar-crop.js 규칙을 대표 프로필과 로스터 프로필에 적용한다.
      * HTML의 frame/thumb 요소가 overflow:hidden이므로 확대된 사진이 카드 밖으로 나오지 않는다.
+     * variant가 있으면 idle${variant}.png를 먼저 시도하고, 없으면(파일 미준비 등) 평소 idle.png로 대체한다.
      */
-    function setPortraitImage(imgEl, outfit) {
+    function setPortraitImage(imgEl, outfit, variant = "") {
         if (!imgEl || !outfit) return;
 
-        imgEl.onerror = null;
-        imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.png`;
+        if (variant) {
+            imgEl.onerror = () => {
+                imgEl.onerror = null;
+                imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.png`;
+            };
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle${variant}.png`;
+        } else {
+            imgEl.onerror = null;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.png`;
+        }
 
         if (typeof applyAvatarCrop === "function") {
             applyAvatarCrop(imgEl, outfit);
@@ -325,8 +361,11 @@
 
     // 이의진처럼 상태(type1/type2)에 따라 다른 스프라이트 파일을 쓰는 캐릭터용 - 평소엔 빈 문자열,
     // isType2가 true면 "_type2"를 붙여서 attack_N_type2.png가 아니라 attack_type2_N.png 규칙을 맞춘다.
+    // 윤의 "호"처럼 소환수가 시전자와 같은 outfit 폴더를 공유하면서 접미사로만 구분되는 경우엔
+    // units[key].spriteVariant(백엔드 clone_sprite_variant, 예: "_ho")가 우선한다 - summon_clone
+    // 처리부에서 설정. 둘 다 없으면(대부분의 캐릭터, 윤영준의 복제체 등) 기존처럼 접미사 없음.
     function spriteVariantSuffix(key) {
-        return units[key]?.isType2 ? "_type2" : "";
+        return units[key]?.spriteVariant || (units[key]?.isType2 ? "_type2" : "");
     }
 
     // 최재혁은 ★3부터 후방 적을 우선 공격한다(battle_engine.py의 _select_basic_attack_target과 동일 규칙).
@@ -400,14 +439,19 @@
         const nameEl = rosterEl.querySelector(".roster-unit-name");
         const portraitEl = rosterEl.querySelector(".roster-unit-img");
 
-        if (nameEl) nameEl.textContent = units[key].name;
-        setPortraitImage(portraitEl, units[key].outfit);
+        if (nameEl) nameEl.textContent = battleDisplayText(units[key].name);
+        setPortraitImage(portraitEl, units[key].outfit, PROFILE_SPRITE_VARIANT_OVERRIDES[units[key].name] || "");
     });
 
     // ===== 중앙 전투 유닛 상태 =====
     // key별로 사망 연출을 이미 재생했는지 - 죽은 뒤에도 hp가 그대로 0인 채로 renderUnit이 계속
     // 다시 불릴 수 있어서(다른 유닛의 이벤트 등), 한 번만 재생되도록 막는다.
     const deathHandled = {};
+
+    // 호(자폭 소환수) 전용: playGoldenSelfDestruct가 진행 중인 키는 자기만의 폭발 연출로 캐릭터를
+    // 직접 소멸시키므로, playDeathSequence의 기본 사망 스프라이트 전환(death.png + .dying 페이드)을
+    // 건너뛴다 - 사망 로그/로스터 체력바/상태 아이콘 정리 등 나머지 사망 처리는 그대로 진행된다.
+    const goldenSelfDestructActive = {};
 
     // ===== 바라보는 방향(스프라이트 반전) =====
     // 기본값: 아군은 오른쪽(적진), 적군은 왼쪽(아군진)을 본다. 전투 중 공격 대상이 자기 등 뒤로
@@ -441,8 +485,10 @@
         setFacing(key, targetIsLeft);
     }
 
-    // 사망 시: 로그 한 줄 + 사망 디폴트 사진(death.png, 아직 없으면 idle 사진을 흑백으로 임시 대체) +
-    // 투명해지면서 가로 실선 무늬로 스캔되듯 사라지는 연출.
+    // 사망 시: 로그 한 줄 + 사망 디폴트 사진(death${variant}.png, 아직 없으면 idle 사진을 흑백으로
+    // 임시 대체) + 투명해지면서 가로 실선 무늬로 스캔되듯 사라지는 연출. variant는 battle_idle/attack과
+    // 동일하게 spriteVariantSuffix로 정한다 - 윤의 "호"처럼 시전자와 outfit 폴더를 공유하는 소환수도
+    // 이걸로 자기 전용 사망 그림(예: death_ho.png)을 따로 쓸 수 있다.
     function playDeathSequence(key) {
         const unit = units[key];
         const imgEl = document.querySelector(`[data-unit="${key}"] .battle-unit-img`);
@@ -453,13 +499,18 @@
         // 한 틱 미뤄서, 같은 콜백 안에서 이어지는(동기) 피해 로그가 먼저 찍히고 그 다음에 사망 로그가 오게 한다.
         setTimeout(() => appendLog(`${unit.name} 사망!`, null), 0);
 
+        // 호(자폭 소환수): playGoldenSelfDestruct가 이미 캐릭터 자체의 소멸(스케일/빛/페이드)을 맡고
+        // 있으므로, 여기서 death.png로 바꾸거나 .dying 페이드를 얹지 않는다 - 로그만 남기고 끝낸다.
+        if (goldenSelfDestructActive[key]) return;
+
+        const variant = spriteVariantSuffix(key);
         imgEl.classList.remove("death-fallback-filter");
         imgEl.onerror = () => {
             imgEl.onerror = null;
             imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.png`;
-            imgEl.classList.add("death-fallback-filter"); // 아직 death.png가 없는 캐릭터는 idle을 흑백으로 임시 대체
+            imgEl.classList.add("death-fallback-filter"); // 전용 사망 그림이 없는 캐릭터는 idle을 흑백으로 임시 대체
         };
-        imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/death.png`;
+        imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/death${variant}.png`;
 
         imgEl.classList.add("dying");
     }
@@ -507,10 +558,11 @@
             }
         } else {
             deathHandled[key] = false; // 복제체 재소환 등으로 슬롯이 재사용될 때를 대비해 리셋
+            goldenSelfDestructActive[key] = false;
 
-            // .dying은 animation-fill-mode:forwards라서 슬롯이 재사용돼도 그대로 남아있으면
-            // 새 스프라이트가 계속 투명하게 보인다 - 살아있을 땐 반드시 지운다.
-            imgEl.classList.remove("dying", "death-fallback-filter");
+            // .dying/.golden-self-destruct는 animation-fill-mode:forwards라서 슬롯이 재사용돼도 그대로
+            // 남아있으면 새 스프라이트가 계속 투명하게 보인다 - 살아있을 땐 반드시 지운다.
+            imgEl.classList.remove("dying", "death-fallback-filter", "golden-self-destruct");
 
             if (!attackAnimActive[key]) {
                 const variant = spriteVariantSuffix(key);
@@ -585,6 +637,12 @@
     const pendingArrivalResolvers = {};     // key -> 도착을 기다리고 있는 Promise resolve 함수들
     const walkerSuspended = {};             // key -> 이동 루프를 잠깐 멈춰둘지(넉백 트랜지션 중 tick()과 충돌 방지)
     let walkerRunning = false;
+    // startMeleeWalker가 다시 호출될 때마다 증가 - attackAnimTokens와 동일한 이유(재시작 시 이전 세대의
+    // tick() 루프가 확실히 멈추도록). walkerRunning 하나만 보면, 리셋(false) 직후 아주 짧은 틈에 새
+    // 전투가 다시 시작(true)돼서 이전 tick()의 다음 프레임 체크가 "여전히 유효함"으로 오판할 여지가
+    // 있다(이 프로젝트에서는 아레나는 전투당 1회만 호출돼 실질적 위험이 없지만, devtest는 같은 화면에서
+    // 재시작이 가능해 이 보호가 필요하다).
+    let walkerEpoch = 0;
 
     // unitKey가 targetKey에게 도달하려면 지금 이 순간 기준으로 얼마나 더(어느 방향으로) 움직여야 하는지.
     // 양쪽 다 매 프레임 이 함수로 "실시간" 위치를 재기 때문에, 상대가 동시에 움직여도 항상 정확하다.
@@ -597,7 +655,11 @@
         const rect = el.getBoundingClientRect();
         const targetRect = targetEl.getBoundingClientRect();
         // overlap이 클수록 "더 깊이 파고들어야"(겹쳐야) 도착 판정이 나서 결과적으로 더 가까이 멈춘다.
-        const overlap = APPROACH_OVERLAP;
+        // 윤의 "호"처럼 meleeOverlapPercent가 지정된 유닛은 고정 픽셀(APPROACH_OVERLAP) 대신 자기
+        // 히트박스 너비의 그 비율만큼 실제로 파고들어야 도착으로 친다(예: 50 -> 몸의 절반이 상대와
+        // 겹쳐야 공격 시작) - summon_clone의 clone_melee_overlap_percent가 전달해준 값.
+        const overlapPercent = units[unitKey]?.meleeOverlapPercent;
+        const overlap = overlapPercent ? rect.width * overlapPercent / 100 : APPROACH_OVERLAP;
 
         const myCenter = rect.left + rect.width / 2;
         const targetCenter = targetRect.left + targetRect.width / 2;
@@ -669,6 +731,30 @@
         });
     }
 
+    // 근접 유닛이 targetKey에 "도착"했을 때의 마무리 처리를 한 곳에 모은다 - tick()이 gap을 재서 정상
+    // 도착한 경우와, 아래 waitForMeleeArrival의 타임아웃으로 강제 도착 처리된 경우가 모두 이걸 거쳐서
+    // 걷기 애니메이션 정지/자세 전환/방향 전환/대기 중인 공격 연출 재개를 항상 동일하게 수행한다.
+    function markMeleeArrived(key, targetKey) {
+        if (meleeArrived[key]) return;
+        meleeArrived[key] = true;
+        const el = document.querySelector(`[data-unit="${key}"]`);
+        const imgEl = el?.querySelector(".battle-unit-img");
+        if (imgEl) imgEl.classList.remove("walking");
+        stopWalkFrames(key);
+        if (imgEl && units[key]) {
+            const outfit = units[key].outfit;
+            const variant = spriteVariantSuffix(key);
+            imgEl.onerror = () => {
+                imgEl.onerror = null;
+                imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.png`;
+            };
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/battle_idle${variant}.png`;
+        }
+        if (targetKey) faceToward(key, targetKey); // 도착하면 대상 쪽을 확실히 바라본다(등 뒤 대상 포함)
+        (pendingArrivalResolvers[key] || []).forEach((resolve) => resolve());
+        pendingArrivalResolvers[key] = [];
+    }
+
     // 준비시간이 끝나면 호출됨. 모든 근거리 유닛의 최초 목표(적 전방)를 정해두고,
     // 전투가 끝날 때까지 계속 도는 이동 루프를 시작한다.
     function startMeleeWalker() {
@@ -679,9 +765,10 @@
         });
 
         walkerRunning = true;
+        const myEpoch = ++walkerEpoch;
 
         function tick() {
-            if (!walkerRunning) return;
+            if (!walkerRunning || walkerEpoch !== myEpoch) return;
 
             Object.keys(units).forEach((key) => {
                 if (!units[key].isMelee) return;
@@ -706,23 +793,7 @@
                 }
 
                 if (Math.abs(gap) <= ARRIVE_THRESHOLD_PX) {
-                    if (!meleeArrived[key]) {
-                        meleeArrived[key] = true;
-                        if (imgEl) imgEl.classList.remove("walking");
-                        stopWalkFrames(key);
-                        if (imgEl) {
-                            const outfit = units[key].outfit;
-                            const variant = spriteVariantSuffix(key);
-                            imgEl.onerror = () => {
-                                imgEl.onerror = null;
-                                imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.png`;
-                            };
-                            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/battle_idle${variant}.png`;
-                        }
-                        faceToward(key, targetKey); // 도착하면 대상 쪽을 확실히 바라본다(등 뒤 대상 포함)
-                        (pendingArrivalResolvers[key] || []).forEach((resolve) => resolve());
-                        pendingArrivalResolvers[key] = [];
-                    }
+                    markMeleeArrived(key, targetKey);
                     return;
                 }
 
@@ -748,6 +819,12 @@
         requestAnimationFrame(tick);
     }
 
+    // 안전장치: 목표가 다른 아군을 쫓아 계속 이동 중이면(각자 독립적으로 "자신에게 가장 노출된 적"을
+    // 고르므로, 서로가 서로의 목표가 아닌 경우가 흔하다) gap이 끝내 ARRIVE_THRESHOLD_PX 안으로 안
+    // 좁혀질 수 있다 - 그러면 이 대기가 자연 도착으로는 영원히 안 풀려서 그 공격의 연출(체력바/사망
+    // 로그/공격 애니메이션)이 무기한 보류된다. 이 시간 안에 못 도착하면 강제로 도착 처리하고 진행한다.
+    const MELEE_ARRIVAL_TIMEOUT_MS = 6000;
+
     // 근거리 유닛이 targetKey에 도착할 때까지 기다린다. 타겟이 이전과 다르면(=이전 타겟이 죽어서
     // 새로운 상대를 노려야 하면) 이동 루프가 자동으로 그쪽을 향해 다시 움직이기 시작한다.
     function waitForMeleeArrival(actorKey, targetKey) {
@@ -763,6 +840,11 @@
         return new Promise((resolve) => {
             if (!pendingArrivalResolvers[actorKey]) pendingArrivalResolvers[actorKey] = [];
             pendingArrivalResolvers[actorKey].push(resolve);
+            // 타임아웃이 걸릴 때 이미 다른 목표로 바뀌어 있었다면 건드리지 않는다 - 그 새 목표를 위한
+            // waitForMeleeArrival 호출이 이미 자기 타임아웃을 새로 걸어뒀을 것이다.
+            setTimeout(() => {
+                if (meleeTargetKey[actorKey] === targetKey) markMeleeArrived(actorKey, targetKey);
+            }, MELEE_ARRIVAL_TIMEOUT_MS);
         });
     }
 
@@ -801,13 +883,19 @@
         dot.style.top = `${startY}px`;
         layer.appendChild(dot);
 
-        requestAnimationFrame(() => {
-            dot.style.transition =
-                `left ${PROJECTILE_TRAVEL_MS}ms linear, ` +
-                `top ${PROJECTILE_TRAVEL_MS}ms linear`;
-            dot.style.left = `${endX}px`;
-            dot.style.top = `${endY}px`;
-        });
+        // 시작 위치를 반드시 한 번 리플로우로 "확정"시킨 뒤에 트랜지션을 걸어야 한다 - requestAnimationFrame
+        // 한 번만으로는 부족하다(브라우저가 두 상태 변경을 하나로 묶어버릴 수 있음). 이벤트가 몰려서
+        // DOM 변경이 짧은 시간에 여럿 겹치는 상황(예: 두 원거리 캐릭터가 동시에 스킬을 쓸 때)에서
+        // 특히 잘 드러났다 - 트랜지션이 아예 발동을 안 하고 투사체가 곧장 목표 지점에 나타나버려서
+        // "날아가는 동작이 생략된" 것처럼 보였다. void dot.offsetWidth로 강제 리플로우하면(이 코드베이스의
+        // 기존 관례 - playGoldenSelfDestruct의 클래스 재시작과 동일한 기법) 시작 위치가 반드시 한 번
+        // 반영된 뒤에야 다음 줄의 변경이 "전환 대상"으로 인식되어 트랜지션이 확실히 재생된다.
+        void dot.offsetWidth;
+        dot.style.transition =
+            `left ${PROJECTILE_TRAVEL_MS}ms linear, ` +
+            `top ${PROJECTILE_TRAVEL_MS}ms linear`;
+        dot.style.left = `${endX}px`;
+        dot.style.top = `${endY}px`;
 
         setTimeout(() => {
             dot.remove();
@@ -842,11 +930,11 @@
         dot.style.top = `${start.y}px`;
         layer.appendChild(dot);
 
-        requestAnimationFrame(() => {
-            dot.style.transition = `left ${PROJECTILE_TRAVEL_MS}ms linear, top ${PROJECTILE_TRAVEL_MS}ms linear`;
-            dot.style.left = `${end.x}px`;
-            dot.style.top = `${end.y}px`;
-        });
+        // 시작 위치를 강제 리플로우로 확정시킨 뒤에 트랜지션을 건다(spawnProjectile 참고).
+        void dot.offsetWidth;
+        dot.style.transition = `left ${PROJECTILE_TRAVEL_MS}ms linear, top ${PROJECTILE_TRAVEL_MS}ms linear`;
+        dot.style.left = `${end.x}px`;
+        dot.style.top = `${end.y}px`;
 
         setTimeout(() => {
             dot.remove();
@@ -961,10 +1049,10 @@
         flare.style.top = `${start.y}px`;
         layer.appendChild(flare);
 
-        requestAnimationFrame(() => {
-            wrap.style.transition = `width ${durationMs}ms linear`;
-            wrap.style.width = `${distance}px`;
-        });
+        // 시작 상태(width:0)를 강제 리플로우로 확정시킨 뒤에 트랜지션을 건다(spawnProjectile 참고).
+        void wrap.offsetWidth;
+        wrap.style.transition = `width ${durationMs}ms linear`;
+        wrap.style.width = `${distance}px`;
 
         setTimeout(() => {
             wrap.remove();
@@ -975,10 +1063,18 @@
 
     // 포물선 이동 공용 로직: 직선 보간 + 사인 곡선으로 위로 솟았다가 내려오는 오프셋을 매 프레임 계산한다.
     // el은 이미 layer에 붙어있어야 하고, 도착하면 el을 제거하고 onArrive를 부른다.
+    //
+    // startTime은 반드시 "첫 프레임이 실제로 실행되는 시각"으로 잡아야 한다(호출 시점의 performance.now()가
+    // 아니라) - 이벤트가 몰려서 메인 스레드가 잠깐 바빴던 직후처럼 requestAnimationFrame(frame)을 예약한
+    // 뒤 브라우저가 첫 콜백을 늦게 불러주면(수백ms 뒤), 그 첫 콜백에서조차 이미 durationMs를 넘겨버려서
+    // progress가 곧장 1로 계산되고 - 중간 프레임이 단 한 번도 그려지지 못한 채 투사체가 목표 지점으로
+    // "순간이동"해버린다(날아가는 동작이 통째로 생략되는 버그의 원인). 첫 콜백의 now를 기준점으로 삼으면
+    // 실제로 얼마나 늦게 시작됐든 상관없이 항상 progress=0인 프레임이 최소 한 번은 그려진다.
     function animateArcMotion(el, start, end, durationMs, arcHeight, onArrive) {
-        const startTime = performance.now();
+        let startTime = null;
 
         function frame(now) {
+            if (startTime === null) startTime = now;
             const progress = Math.min(1, (now - startTime) / durationMs);
             const x = start.x + (end.x - start.x) * progress;
             const y = start.y + (end.y - start.y) * progress - Math.sin(progress * Math.PI) * arcHeight;
@@ -1043,6 +1139,8 @@
         const rad = (angle * Math.PI) / 180;
         const durationMs = PROJECTILE_TRAVEL_MS * 1.4;
 
+        // 다트가 둘이라 onArrive는 먼저 처리되는 쪽 하나에만(중복 방지) 매단다.
+        let onArriveScheduled = false;
         ["crayon-pink", "crayon-blue"].forEach((colorClass, i) => {
             // 두 다트가 겹쳐서 하나처럼 안 보이도록, 진행 방향과 수직으로 살짝 어긋나게 띄운다.
             const perp = i === 0 ? -6 : 6;
@@ -1056,15 +1154,18 @@
             dot.style.top = `${start.y + offY}px`;
             layer.appendChild(dot);
 
-            requestAnimationFrame(() => {
-                dot.style.transition = `left ${durationMs}ms linear, top ${durationMs}ms linear`;
-                dot.style.left = `${end.x + offX}px`;
-                dot.style.top = `${end.y + offY}px`;
-            });
-            setTimeout(() => dot.remove(), durationMs);
-        });
+            // 시작 위치를 강제 리플로우로 확정시킨 뒤에 트랜지션을 건다(spawnProjectile 참고).
+            void dot.offsetWidth;
+            dot.style.transition = `left ${durationMs}ms linear, top ${durationMs}ms linear`;
+            dot.style.left = `${end.x + offX}px`;
+            dot.style.top = `${end.y + offY}px`;
 
-        setTimeout(onArrive, durationMs);
+            setTimeout(() => dot.remove(), durationMs);
+            if (!onArriveScheduled) {
+                onArriveScheduled = true;
+                setTimeout(onArrive, durationMs);
+            }
+        });
     }
 
     // 이종복 스킬 전용: 붉은 "mg"가 유성처럼 꼬리를 끌며 대상에게 직선으로 날아간다(기본공격보다 큼).
@@ -1088,11 +1189,11 @@
         el.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
         layer.appendChild(el);
 
-        requestAnimationFrame(() => {
-            el.style.transition = `left ${durationMs}ms linear, top ${durationMs}ms linear`;
-            el.style.left = `${end.x}px`;
-            el.style.top = `${end.y}px`;
-        });
+        // 시작 위치를 강제 리플로우로 확정시킨 뒤에 트랜지션을 건다(spawnProjectile 참고).
+        void el.offsetWidth;
+        el.style.transition = `left ${durationMs}ms linear, top ${durationMs}ms linear`;
+        el.style.left = `${end.x}px`;
+        el.style.top = `${end.y}px`;
 
         setTimeout(() => {
             el.remove();
@@ -1420,6 +1521,264 @@
         requestAnimationFrame(frame);
     }
 
+    // 호(자폭 소환수) 전용 - 사용자가 제공한 참고 데모(golden_self_destruct_optimized.html)의 4단계
+    // (charge=응축 -> implode=수축 -> detonate=폭발 -> after=여운)를 캐릭터 스프라이트 크기에 맞춰
+    // 이식했다. 데모는 화면 중앙의 캐릭터 하나를 위한 데모였지만, 여기서는 실제 호의 위치/크기를
+    // 기준으로 좌표와 반지름을 잡는다. 캐릭터 자체의 빛/스케일/소멸은 CSS(golden-self-destruct-char,
+    // arena-battle.css)가 맡고, 여기서는 그 주변에 그려지는 파티클(코어 플래시/링/스파크/연기/스트릭)과
+    // 국소 화면 흔들림만 캔버스로 그린다. 실제 사망 처리(HP 반영/사망 로그/roster 등)는 기존과 동일하게
+    // 명중 시점에 따로 일어난다 - playDeathSequence가 goldenSelfDestructActive를 보고 자기 몫의 사망
+    // 스프라이트 전환만 건너뛴다.
+    //
+    // 공격 애니메이션이 "시작"되는 시점(스윙 재생 시작, 명중보다 먼저)에 호출한다 - 다른 근접 캐릭터와
+    // 마찬가지로 실제 명중 판정은 EFFECT_LAUNCH_DELAY_MS(스윙 몇 프레임 재생 후)에 나므로, charge/implode
+    // (응축/수축 - 아직 멀쩡히 빛나기만 하는 "뜸들이는" 구간)를 그 안에 다 압축해서, detonate(폭발/흔들림
+    // 절정) 진입 시각이 EFFECT_LAUNCH_DELAY_MS와 정확히 일치하도록 맞췄다 - 화면이 흔들리는 바로 그
+    // 순간에 다른 캐릭터들과 동일한 타이밍으로 명중 판정(대상 피격 + 자신의 소멸)이 함께 난다.
+    function playGoldenSelfDestruct(actorKey) {
+        const layer = document.getElementById("projectile-layer");
+        const fieldEl = document.querySelector(".battle-field");
+        const imgEl = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);
+        if (!layer || !fieldEl || !imgEl) return;
+
+        goldenSelfDestructActive[actorKey] = true;
+        imgEl.classList.remove("golden-self-destruct");
+        void imgEl.offsetWidth; // 재시전(재소환 후 재자폭 등) 시에도 애니메이션이 처음부터 다시 재생되도록 리플로우
+        imgEl.classList.add("golden-self-destruct");
+
+        const fieldRect = fieldEl.getBoundingClientRect();
+        const imgRect = imgEl.getBoundingClientRect();
+        const cx = imgRect.left + imgRect.width / 2 - fieldRect.left;
+        const cy = imgRect.top + imgRect.height / 2 - fieldRect.top;
+        const radius = Math.max(24, imgRect.width * 0.55);
+
+        const dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+        const canvas = document.createElement("canvas");
+        canvas.className = "golden-self-destruct-canvas";
+        canvas.style.width = `${fieldRect.width}px`;
+        canvas.style.height = `${fieldRect.height}px`;
+        canvas.width = Math.round(fieldRect.width * dpr);
+        canvas.height = Math.round(fieldRect.height * dpr);
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        layer.appendChild(canvas);
+
+        // 참고 데모와 동일한 방식 - 작은 오프스크린 캔버스에 방사형 그라디언트로 스파크/연기 한 장을
+        // 미리 그려두고, 매 프레임 drawImage로 재사용한다(직접 arc를 여러 번 그리는 것보다 훨씬 싸다).
+        const spark = document.createElement("canvas");
+        spark.width = spark.height = 64;
+        const sparkCtx = spark.getContext("2d");
+        const sparkGrad = sparkCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
+        sparkGrad.addColorStop(0, "rgba(255,255,240,1)");
+        sparkGrad.addColorStop(0.22, "rgba(255,236,164,.98)");
+        sparkGrad.addColorStop(0.55, "rgba(255,185,56,.62)");
+        sparkGrad.addColorStop(1, "rgba(255,116,0,0)");
+        sparkCtx.fillStyle = sparkGrad;
+        sparkCtx.fillRect(0, 0, 64, 64);
+
+        const smokeSprite = document.createElement("canvas");
+        smokeSprite.width = smokeSprite.height = 96;
+        const smokeCtx = smokeSprite.getContext("2d");
+        const smokeGrad = smokeCtx.createRadialGradient(48, 48, 0, 48, 48, 48);
+        smokeGrad.addColorStop(0, "rgba(255,185,80,.42)");
+        smokeGrad.addColorStop(0.35, "rgba(180,98,35,.18)");
+        smokeGrad.addColorStop(1, "rgba(70,35,15,0)");
+        smokeCtx.fillStyle = smokeGrad;
+        smokeCtx.fillRect(0, 0, 96, 96);
+
+        let particles = [];
+        let smoke = [];
+        let streaks = [];
+        let exploded = false;
+        for (let i = 0; i < 16; i++) {
+            particles.push({
+                a: (Math.PI * 2 * i) / 16 + Math.random() * 0.18,
+                dist: 8 + Math.random() * 16, life: 0, maxLife: 400 + Math.random() * 200, mode: "in",
+            });
+        }
+
+        // detonate 단계로 넘어가는 순간 한 번만 호출 - 안쪽으로 모이던 파티클을 비우고 바깥으로 터지는
+        // 파티클/연기/스트릭을 새로 채운다(참고 데모의 explode()와 동일).
+        function explode() {
+            particles = [];
+            smoke = [];
+            streaks = [];
+            for (let i = 0; i < 20; i++) {
+                particles.push({
+                    a: Math.PI * 2 * (i / 20) + Math.random() * 0.16,
+                    dist: 0, speed: (radius / 26) * (4 + Math.random() * 9),
+                    size: radius * (0.16 + Math.random() * 0.16), life: 0, maxLife: 560 + Math.random() * 240, mode: "out",
+                });
+            }
+            for (let i = 0; i < 8; i++) {
+                smoke.push({
+                    a: Math.PI * 2 * Math.random(), dist: 0, speed: (radius / 26) * (1 + Math.random() * 2.4),
+                    size: radius * (0.3 + Math.random() * 0.3), life: 0, maxLife: 700 + Math.random() * 260,
+                });
+            }
+            for (let i = 0; i < 10; i++) {
+                streaks.push({ a: Math.PI * 2 * Math.random(), len: radius * (0.7 + Math.random() * 0.7), width: 2 + Math.random() * 3 });
+            }
+        }
+
+        const startMs = performance.now();
+        // detonate(폭발/흔들림 절정) 진입 시각이 다른 근접 캐릭터의 명중 판정 시각(EFFECT_LAUNCH_DELAY_MS)과
+        // 정확히 같아야 한다 - charge/implode(응축/수축)를 원래 참고 데모의 비율(480:160 ≈ 3:1)을
+        // 유지한 채 그 시간 안에 압축해 넣는다. 폭발 자체(원래도 60ms 안팎의 짧은 burst)와 그 뒤 여운은
+        // 원래 데모와 비슷한 길이를 그대로 둔다 - 뜸들이는 시간이 짧아졌다고 폭발/여운까지 짧아질 이유는 없다.
+        const CHARGE_MS = EFFECT_LAUNCH_DELAY_MS * 0.75;
+        const IMPLODE_END_MS = EFFECT_LAUNCH_DELAY_MS;
+        const DETONATE_END_MS = IMPLODE_END_MS + 55;
+        const TOTAL_MS = DETONATE_END_MS + 765;
+
+        function frame(now) {
+            const t = now - startMs;
+            let flashAlpha, ringAlpha, ringR, ringR2 = 0, shake = 0;
+
+            if (t < CHARGE_MS) {
+                const p = t / CHARGE_MS;
+                flashAlpha = 0.12 + p * 0.2;
+                ringAlpha = 0.2 + p * 0.22;
+                ringR = radius * (0.5 + p * 0.22);
+            } else if (t < IMPLODE_END_MS) {
+                const p = (t - CHARGE_MS) / (IMPLODE_END_MS - CHARGE_MS);
+                flashAlpha = 0.32 + p * 0.24;
+                ringAlpha = 0.45 - p * 0.18;
+                ringR = radius * (0.72 - p * 0.2);
+            } else if (t < DETONATE_END_MS) {
+                if (!exploded) { exploded = true; explode(); }
+                const p = (t - IMPLODE_END_MS) / (DETONATE_END_MS - IMPLODE_END_MS);
+                flashAlpha = 1 - p * 0.15;
+                ringAlpha = 0.95;
+                ringR = radius * (0.55 + p * 3.4);
+                ringR2 = radius * (0.35 + p * 2.2);
+                shake = Math.max(2, radius * 0.22) * (1 - p * 0.3);
+            } else if (t < TOTAL_MS) {
+                const p = (t - DETONATE_END_MS) / (TOTAL_MS - DETONATE_END_MS);
+                flashAlpha = Math.max(0, 0.85 - p * 0.85);
+                ringAlpha = Math.max(0, 0.78 - p * 0.78);
+                ringR = radius * (2.5 + p * 4);
+                ringR2 = radius * (1.4 + p * 3);
+                shake = Math.max(0, radius * 0.1 * (1 - p));
+            } else {
+                canvas.remove();
+                goldenSelfDestructActive[actorKey] = false;
+                fieldEl.style.transform = "";
+                return;
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.life += 16.67;
+                if (p.mode === "in") p.dist += (1.4 - p.life / p.maxLife) * (radius / 30);
+                else { p.dist += p.speed; p.speed *= 0.988; }
+                if (p.life > p.maxLife) particles.splice(i, 1);
+            }
+            for (let i = smoke.length - 1; i >= 0; i--) {
+                const s = smoke[i];
+                s.life += 16.67;
+                s.dist += s.speed;
+                s.speed *= 0.994;
+                s.size += radius * 0.008;
+                if (s.life > s.maxLife) smoke.splice(i, 1);
+            }
+
+            ctx.clearRect(0, 0, fieldRect.width, fieldRect.height);
+            ctx.save();
+            ctx.globalCompositeOperation = "lighter";
+
+            if (flashAlpha > 0) {
+                const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 0.95);
+                g.addColorStop(0, `rgba(255,255,240,${0.45 * flashAlpha})`);
+                g.addColorStop(0.22, `rgba(255,236,162,${0.38 * flashAlpha})`);
+                g.addColorStop(0.5, `rgba(255,192,74,${0.22 * flashAlpha})`);
+                g.addColorStop(1, "rgba(255,120,0,0)");
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius * 0.95, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            [[ringR, ringAlpha, Math.max(2, radius * 0.07)], [ringR2, ringAlpha * 0.75, Math.max(1.5, radius * 0.04)]].forEach(([r, a, w]) => {
+                if (a <= 0 || r <= 0) return;
+                ctx.save();
+                ctx.beginPath();
+                ctx.lineWidth = w;
+                ctx.strokeStyle = `rgba(255, ${180 + Math.floor(a * 40)}, 72, ${a})`;
+                ctx.shadowBlur = radius * 0.16;
+                ctx.shadowColor = `rgba(255, 174, 54, ${a * 0.8})`;
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            if (exploded && streaks.length && ringAlpha > 0) {
+                ctx.save();
+                ctx.translate(cx, cy);
+                for (const s of streaks) {
+                    ctx.save();
+                    ctx.rotate(s.a);
+                    const grad = ctx.createLinearGradient(0, 0, s.len, 0);
+                    grad.addColorStop(0, `rgba(255,255,240,${0.9 * ringAlpha})`);
+                    grad.addColorStop(0.4, `rgba(255,221,125,${0.65 * ringAlpha})`);
+                    grad.addColorStop(1, "rgba(255,118,0,0)");
+                    ctx.strokeStyle = grad;
+                    ctx.lineWidth = s.width;
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(s.len, 0);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+                ctx.restore();
+            }
+
+            for (const p of particles) {
+                const lifeP = p.life / p.maxLife;
+                let px, py, alpha;
+                if (p.mode === "in") {
+                    const d = radius * 0.9 - p.dist;
+                    px = cx + Math.cos(p.a) * d;
+                    py = cy + Math.sin(p.a) * d;
+                    alpha = Math.max(0, 0.6 - lifeP * 0.5);
+                } else {
+                    px = cx + Math.cos(p.a) * p.dist;
+                    py = cy + Math.sin(p.a) * p.dist;
+                    alpha = Math.max(0, 1 - lifeP);
+                }
+                const size = p.size * (p.mode === "out" ? 1 - lifeP * 0.3 : 1);
+                ctx.globalAlpha = alpha;
+                ctx.drawImage(spark, px - size / 2, py - size / 2, size, size);
+            }
+            ctx.globalAlpha = 1;
+
+            for (const s of smoke) {
+                const lifeP = s.life / s.maxLife;
+                const px = cx + Math.cos(s.a) * (radius * 0.15 + s.dist * 3.4);
+                const py = cy + Math.sin(s.a) * (radius * 0.15 + s.dist * 2.6);
+                const size = s.size * (1 + lifeP * 1.2);
+                ctx.globalAlpha = Math.max(0, 0.4 - lifeP * 0.4);
+                ctx.drawImage(smokeSprite, px - size / 2, py - size / 2, size, size);
+            }
+            ctx.globalAlpha = 1;
+            ctx.restore();
+
+            // 국소 화면 흔들림 - 김어진의 ground-fire-shake(고정 CSS 키프레임)보다 작고 짧게, 폭발
+            // 타이밍(detonate~after)에 맞춰서만 세기가 오르내리도록 직접 계산한다. 호는 작은 소환수라
+            // 화면 전체가 크게 흔들리면 과하므로 radius 기준으로 세기를 잡는다.
+            if (shake > 0) {
+                const sx = (Math.random() - 0.5) * shake;
+                const sy = (Math.random() - 0.5) * shake * 0.6;
+                fieldEl.style.transform = `translate3d(${sx}px, ${sy}px, 0)`;
+            } else {
+                fieldEl.style.transform = "";
+            }
+
+            requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+    }
+
     // 임소정 전기의 발사 시작점
     // fx(오른쪽일수록 값이 큼)/fy(아래쪽일수록 값이 큼)
     const ELECTRIC_ORIGIN_BASIC = { fx: 0.9, fy: 0.27 };
@@ -1517,10 +1876,10 @@
         `;
         layer.appendChild(wrap);
 
-        requestAnimationFrame(() => {
-            wrap.style.transition = `top ${durationMs}ms ease-in`;
-            wrap.style.top = `${end.y}px`;
-        });
+        // 시작 위치를 강제 리플로우로 확정시킨 뒤에 트랜지션을 건다(spawnProjectile 참고).
+        void wrap.offsetWidth;
+        wrap.style.transition = `top ${durationMs}ms ease-in`;
+        wrap.style.top = `${end.y}px`;
 
         setTimeout(() => {
             wrap.remove();
@@ -1562,15 +1921,16 @@
                 el.style.left = `${start.x}px`;
                 el.style.top = `${start.y}px`;
                 layer.appendChild(el);
-                requestAnimationFrame(() => {
-                    el.style.transition = `left ${PROJECTILE_TRAVEL_MS}ms linear, top ${PROJECTILE_TRAVEL_MS}ms linear`;
-                    el.style.left = `${end.x}px`;
-                    el.style.top = `${end.y}px`;
-                });
+                // 시작 위치를 강제 리플로우로 확정시킨 뒤에 트랜지션을 건다(spawnProjectile 참고) -
+                // onArrive는 마지막 글자에만(그 글자가 실제로 도착할 시점 기준) 매단다.
+                void el.offsetWidth;
+                el.style.transition = `left ${PROJECTILE_TRAVEL_MS}ms linear, top ${PROJECTILE_TRAVEL_MS}ms linear`;
+                el.style.left = `${end.x}px`;
+                el.style.top = `${end.y}px`;
                 setTimeout(() => el.remove(), PROJECTILE_TRAVEL_MS + 50);
+                if (i === letters.length - 1) setTimeout(onArrive, PROJECTILE_TRAVEL_MS);
             }, i * 100);
         });
-        setTimeout(onArrive, letters.length * 100 + PROJECTILE_TRAVEL_MS);
     }
 
     function playRangedAttack(actorKey, targetKey, onArrive) {
@@ -1602,7 +1962,12 @@
             if (!units[key]) return false;
             return attackAnimActive[key] ||
                 (units[key].isMelee && meleeArrived[key] === false) ||
-                rangedResolvePending[key];
+                rangedResolvePending[key] ||
+                meleeHitPending[key] ||
+                // 호(자폭 소환수): 명중 판정 자체는 meleeHitPending으로 이미 잡히지만, 그 뒤로도 폭발
+                // 파티클/흔들림 연출이 한동안 더 이어질 수 있다 - 이걸 빼먹으면 폭발이 채 끝나기도
+                // 전에 "전투 종료!"가 떠버린다.
+                goldenSelfDestructActive[key];
         });
     }
 
@@ -2023,8 +2388,12 @@
      * 타격 로그: 이제 한 줄을 덮어쓰지 않고, 행동한 쪽 색으로 새 줄을 계속 추가한다.
      */
     function showDamageMessage(event) {
+        // 윤(영혼 흡수/선생 고혈): 기본공격에 자가 회복이 딸려온 경우(actor_self_heal) 같은 줄에 이어붙인다.
+        const healText = event.actor_self_heal ? ` (자신 체력 ${event.actor_self_heal} 회복)` : "";
+        // 호(자폭 소환수): 이 공격을 끝으로 스스로 사라진다는 걸 같은 줄에 표시한다.
+        const selfDestructText = event.actor_self_destruct ? " (자폭)" : "";
         appendLog(
-            `${event.actor}의 공격! ${event.target}에게 ${event.damage}만큼 피해!${event.is_crit ? " 치명타!" : ""}`,
+            `${event.actor}의 공격! ${event.target}에게 ${event.damage}만큼 피해!${event.is_crit ? " 치명타!" : ""}${healText}${selfDestructText}`,
             event.side
         );
     }
@@ -2086,6 +2455,7 @@
         paint_blue: "Combat_Icon_Special_InkBlue.png",   // 방임석 보유 물감(파랑)
         paint_yellow: "Combat_Icon_Special_InkYellow.png", // 방임석 보유 물감(노랑)
         damage_reduction: "Combat_Icon_Buff_DamageRatio.png", // 방임석 "방임" - 받는 피해 감소
+        lifesteal: "Combat_Icon_Special_Lifesteal.png", // 윤 "선생 고혈" - 공격 대상이 선생 타입인 동안(고혈)
     };
     const MOMENT_ICON_MS = 1200; // 순간 효과(회복, 넉백)는 이 시간만 표시됐다가 사라짐
 
@@ -2198,9 +2568,11 @@
 
         rosterEl.classList.remove("roster-unit-dead");
         const nameEl = rosterEl.querySelector(".roster-unit-name");
-        if (nameEl) nameEl.textContent = unit.name; // 서버가 "윤영준의 복제체" 형태로 이름을 내려준다
-        setPortraitImage(rosterEl.querySelector(".roster-unit-img"), unit.outfit);
-        rosterEl.querySelector(".roster-unit-img")?.classList.toggle("roster-clone-img", true);
+        if (nameEl) nameEl.textContent = battleDisplayText(unit.name); // 서버가 "윤영준의 복제체" 형태로 이름을 내려준다
+        setPortraitImage(rosterEl.querySelector(".roster-unit-img"), unit.outfit, unit.spriteVariant || "");
+        // 전장 스탠딩(.is-clone)과 동일한 조건(위 summon_clone 핸들러 참고).
+        rosterEl.querySelector(".roster-unit-img")
+            ?.classList.toggle("roster-clone-img", !unit.spriteVariant || unit.isCopy);
         clearAllStatusIcons(cloneKey);
 
         // 새로 생긴 행은 폴링(최대 450ms)을 기다리지 않고 즉시 전방/중방/후방 순서에 맞춰 자리잡는다.
@@ -2439,6 +2811,28 @@
                 units[actorKey].isType2 = !!event.detail?.type2_active;
             }
 
+            // 방임(neglect) 해제 즉시 발동은 백엔드가 cast_start 없이 skill_resolve만 보낸다(무방비
+            // 노출을 막으려고 정상 시전 절차 자체를 건너뛰기 때문 - battle_engine.py 참고). 그래서
+            // 이 배우 체인엔 평소처럼 앞서 매달려있는 playCastFrames가 없어 시전 자세가 전혀 안 뜨고,
+            // 곧바로 아래(2451번 줄)의 "casting 해제 + 복귀 애니메이션"만 얹혀서 마치 아무 자세도 없이
+            // "복귀"만 하는 것처럼 보인다. 이걸 순수 연출로만 보정한다 - 백엔드 판정(HP 등)은 이미
+            // 이 시점에 다 끝난 상태 그대로 두고(재현/딜레이 없음), 화면에만 "시전 자세가 짧게 재생된
+            // 뒤에 효과가 터진다"는 인상을 준다. onNeglectReleasePoseDone은 아래 dispatchEffectType별
+            // 분기(이번 이벤트 처리의 나머지, 지금 이 동기 실행 흐름 안에서 곧 채워짐)가 채워주는데,
+            // 이 클로저 자신은 항상 그보다 나중(비동기, playCastFrames가 끝난 뒤)에야 실행되므로 항상
+            // 채워진 뒤에 호출된다.
+            const isNeglectReleaseTrigger = Boolean(event.detail?.neglect_release_trigger);
+            let onNeglectReleasePoseDone = null;
+            if (isNeglectReleaseTrigger && actorKey && units[actorKey]) {
+                chainActorAnim(actorKey, async () => {
+                    await waitForAnimIdle(actorKey);
+                    const poseImgEl = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);
+                    poseImgEl?.classList.add("casting");
+                    await playCastFrames(actorKey, NEGLECT_RELEASE_POSE_SECONDS * 1000 * PLAYBACK_SPEED);
+                    onNeglectReleasePoseDone?.();
+                });
+            }
+
             if (actorKey) {
                 // "시전 자세 풀기 + 복귀 애니메이션"만 이 배우 전용 체인에 매달아둔다(순수 스프라이트
                 // 연출이라 데이터 의존이 없다) - 상태 아이콘/오라 등 나머지는 지금처럼 즉시 반영한다.
@@ -2452,6 +2846,23 @@
                     chainActorAnim(actorKey, async () => {
                         const castImgEl = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);
                         castImgEl?.classList.remove("casting", "casting-rainbow");
+                        // 청년(밀쳐내기): 이 배우 자신의 시전 자세가 "실제로" 끝난 이 시점에야 밀쳐내기를
+                        // 실행한다 - waitForAnimIdle이 이 배우의 직전 애니메이션 때문에 시전 자세 시작
+                        // 자체가 늦어졌을 때, 전역 커서는 그 지연을 모른 채 정상 스케줄대로 이 skill_resolve를
+                        // 처리해버려서(HP 등 데이터는 즉시 반영하는 게 맞지만) 시전 자세가 채 끝나기도
+                        // 전에 밀쳐내기 연출이 먼저 나가버리는 버그가 있었다. 순수 연출(위치 이동)이라
+                        // 데이터 의존이 없으므로, 이 배우 전용 체인에 매달아도 다른 배우와의 HP 역행
+                        // 위험이 없다(applySkillHits로 인한 HP 반영은 아래 동기 분기에서 여전히 즉시 처리).
+                        if (dispatchEffectType === "bonus_damage_knockback" && event.detail?.hits?.length) {
+                            const hit = event.detail.hits[0];
+                            const knockTargetKey = findHitKey(hit.target, hit.target_side);
+                            if (knockTargetKey) {
+                                applyKnockback(knockTargetKey, { distance: 9999, suspendSelfWalker: true });
+                                flashEffectAura(knockTargetKey, "cc");
+                                setStatusIcon(knockTargetKey, "knockback", { source: `${event.actor}:knockback`, durationMs: MOMENT_ICON_MS });
+                                if (event.detail?.interrupted_cast) interruptCasting(knockTargetKey, hit.target_side);
+                            }
+                        }
                         await playReturnFrames(actorKey);
                     });
                 }
@@ -2488,13 +2899,35 @@
                     const cloneKey = `${event.side}-${event.detail.clone_slot || "summon"}`;
                     const caster = units[actorKey];
 
+                    // 윤(호 출격!): 소환 대가로 자신의 현재 체력을 소모하는 경우(hp_cost_percent가 있는
+                    // 캐릭터만 해당 - caster_hp_after가 있을 때만) 체력바를 즉시 반영하고 회복과 구분되는
+                    // 파란(debuff) 오라로 "대가를 치렀다"는 걸 보여준다.
+                    if (caster && event.detail.caster_hp_after != null) {
+                        caster.hp = event.detail.caster_hp_after;
+                        renderUnit(actorKey);
+                        flashEffectAura(actorKey, "debuff");
+                    }
+
                     units[cloneKey] = {
                         name: event.detail.clone_name,
                         maxHp: event.detail.clone_hp,
                         hp: event.detail.clone_hp,
                         isMelee: caster ? caster.isMelee : true,
-                        outfit: caster ? caster.outfit : null,
+                        // clone_sprite_outfit이 있으면(윤의 "호") 시전자가 누구든(강승유가 복제해도) 항상
+                        // 이 outfit 폴더의 그림을 쓴다 - 없으면(대부분의 소환수) 시전자 outfit을 그대로 물려받는다.
+                        outfit: event.detail.clone_sprite_outfit || (caster ? caster.outfit : null),
                         style: caster ? caster.style : "melee",
+                        // 윤의 "호"처럼 시전자와 같은 outfit 폴더를 공유하되 접미사로만 구분되는 스프라이트를
+                        // 쓰는 경우(spriteVariantSuffix 참고) - 없으면(대부분의 소환수) 시전자와 완전히 같은 그림.
+                        spriteVariant: event.detail.clone_sprite_variant || "",
+                        // 호처럼 목표 히트박스에 이 비율(%)만큼 실제로 파고들어야 도착으로 치는 소환수
+                        // (getGapToTarget 참고) - 없으면(대부분의 소환수) 기존처럼 살짝만 닿아도 도착.
+                        meleeOverlapPercent: event.detail.clone_melee_overlap_percent || null,
+                        // 강승유의 "성대모사"처럼 남의 스킬을 복제해서 나온 소환수인지 - 윤의 "호"는 소환
+                        // 계열이라 자기 그림 그대로 두지만(spriteVariant는 있어도 복제는 아님), 강승유가
+                        // 그 "호 출격!"을 복제하면(copy_target_skill) 결과물은 소환이 아니라 "복제"이므로
+                        // 자기 그림(spriteVariant)이 있어도 아래 홀로그램 틴트를 씌운다.
+                        isCopy: Boolean(event.detail.copied_from),
                     };
 
                     const cloneEl = document.querySelector(`[data-unit="${cloneKey}"]`);
@@ -2540,14 +2973,25 @@
                     attackAnimTokens[cloneKey] = (attackAnimTokens[cloneKey] || 0) + 1;
                     attackAnimActive[cloneKey] = false;
                     rangedResolvePending[cloneKey] = false;
+                    meleeHitPending[cloneKey] = false;
                     delete actorAnimChain[cloneKey];
                     delete walkerSuspended[cloneKey];
                     getAttackFrameCount(units[cloneKey].outfit);
                     ensureSummonRosterRow(cloneKey, units[cloneKey]);
                     deathHandled[cloneKey] = false;
                     renderUnit(cloneKey);
-                    // 복제체는 원본과 구분되게 전체적으로 푸른 색감이 돌도록(3D 프린트 홀로그램 느낌)
-                    document.querySelector(`[data-unit="${cloneKey}"] .battle-unit-img`)?.classList.add("is-clone");
+                    // "복제" 계열(윤영준의 복제체, 강승유가 복제한 스킬의 결과물)은 전체적으로 푸른
+                    // 색감이 돌도록(3D 프린트 홀로그램 느낌) - 다만 윤의 "호"는 복제가 아니라 소환이라
+                    // 전용 스프라이트(spriteVariant)가 있으면 원래 색 그대로 두고, 그 "호"를 강승유가
+                    // 복제한 경우(isCopy)에는 소환이 아니라 복제이므로 자기 그림이 있어도 틴트를 씌운다.
+                    // toggle로 명시적 on/off를 주는 이유는 이 자리에 다른 소환 특성의 결과물이
+                    // 재소환돼도 이전 틴트 상태가 안 남게 하기 위함.
+                    document.querySelector(`[data-unit="${cloneKey}"] .battle-unit-img`)
+                        ?.classList.toggle("is-clone", !units[cloneKey].spriteVariant || units[cloneKey].isCopy);
+                    // 호처럼 다른 스프라이트와 겹쳐도 항상 그 위에 그려져야 하는 소환수 - 히트박스
+                    // 엘리먼트(.battle-unit) 자체에 z-index를 고정으로 올리는 클래스를 토글한다.
+                    document.querySelector(`[data-unit="${cloneKey}"]`)
+                        ?.classList.toggle("render-on-top", Boolean(event.detail.clone_render_on_top));
 
                     // 근거리 복제체는 다른 근접 유닛과 완전히 동일하게 취급한다 - meleeArrived를 false로
                     // 두면 이동 루프(tick)가 다음 프레임에 실제 겹침 여부를 직접 재서 판정하고, 도착으로
@@ -2639,20 +3083,11 @@
                 }
                 appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail.hits)}, 공격력 감소`, event.side);
             } else if (dispatchEffectType === "bonus_damage_knockback" && actorKey && event.detail?.hits?.length) {
+                // HP 데이터는 여기서 즉시 반영한다(다른 배우 이벤트와의 HP 역행 방지) - distance를 크게
+                // 잡고 applyKnockback 내부의 맵 경계 클램프에 맡기는 실제 밀쳐내기 연출(위치 이동)과 그에
+                // 딸린 오라/아이콘/interruptCasting은 이 배우 자신의 시전 자세가 실제로 끝나는 시점에
+                // 맞춰야 해서, 위쪽 이 배우 전용 체인(chainActorAnim) 안으로 옮겼다.
                 applySkillHits(event);
-                const hit = event.detail.hits[0];
-                const targetKey = findHitKey(hit.target, hit.target_side);
-                if (targetKey) {
-                    // distance를 크게 잡고 applyKnockback 내부의 맵 경계 클램프에 맡긴다 - "맵을 벗어나지
-                    // 않는 선에서 최대한 많이" 밀려나게 하려는 의도. suspendSelfWalker: 대상이 근접 유닛이라
-                    // walker가 걷는 중이면 그 tick()이 매 프레임 transform을 덮어써서 넉백이 아예 안 보이는
-                    // 문제가 있었다 - 트랜지션이 끝날 때까지 그 유닛의 walker만 잠깐 재워서 고친다.
-                    applyKnockback(targetKey, { distance: 9999, suspendSelfWalker: true });
-                    // 넉백(CC기) = 보라색 오라 + 넉백 아이콘(순간 표시 후 사라짐)
-                    flashEffectAura(targetKey, "cc");
-                    setStatusIcon(targetKey, "knockback", { source: `${event.actor}:knockback`, durationMs: MOMENT_ICON_MS });
-                    if (event.detail?.interrupted_cast) interruptCasting(targetKey, hit.target_side);
-                }
                 appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail.hits)}, 밀쳐냄`, event.side);
             } else if (dispatchEffectType === "aoe_enemy_damage" && actorKey) {
                 // 가스 숨결이 화면을 가로질러 실제로 닿는 순간(onArrive)에 맞춰 피해/HP/피격 이펙트를 반영한다 -
@@ -2726,18 +3161,29 @@
                 const hasAnyPaint = d.red || d.blue || d.yellow;
                 const logParts = [];
 
-                // 물감 계열도 전부 같은 이유(captureAndApplyHp 참고)로 HP는 지금 즉시 반영하고, 투사체
-                // 도착 콜백은 화면 갱신만 하도록 죽음 여부를 미리 캡처해둔다.
+                // 백엔드는 이 스킬이 발동하는 순간 보유 물감(빨강/파랑/노랑)을 예외 없이 전부 0으로
+                // 리셋한다 - paint_gain_resolve(물감을 "얻을 때")는 아이콘을 갱신/제거하는데, 이 스킬로
+                // "소모할 때"는 그런 이벤트가 따로 없어서 여기서 직접 세 색 아이콘을 전부 지워야 한다.
+                // 안 그러면 실제로는 0개인데 화면엔 소모 전 개수가 그대로 남아있는 것처럼 보인다.
+                ["paint_red", "paint_blue", "paint_yellow"].forEach((iconId) => {
+                    clearStatusIconSource(actorKey, iconId, `${actorKey}:${iconId}`);
+                });
+
+                // 물감 계열도 전부 같은 이유(captureAndApplyHp 참고)로 HP는 지금 즉시 반영해서, 무관한
+                // 다른 배우가 같은 대상을 잇달아 때리는 이벤트가 아래 투사체 연출(방임 해제 즉시
+                // 발동일 땐 시전 자세 재생까지 끝나야 하므로 더 늦게 뜬다)보다 먼저 처리돼도 체력이
+                // 과거 값으로 되돌아가지 않게 한다. 실제 투사체 발사(순수 연출)는 fireConsumePaintVisuals로
+                // 묶어서, 평소엔 즉시 실행하고 방임 해제 즉시 발동일 땐 시전 자세가 다 재생된 뒤로 미룬다.
+                let whiteHit = null;
+                let redHit = null;
+                let blueHeal = null;
+                let stunTargets = null;
                 if (!hasAnyPaint && d.hits?.length) {
                     const hit = d.hits[0];
                     const targetKey = findHitKey(hit.target, hit.target_side);
                     if (targetKey) {
                         const wasAlreadyDead = captureAndApplyHp(targetKey, hit.target_hp_after);
-                        spawnPaintSkillProjectile(actorKey, targetKey, "paint-white", () => {
-                            if (wasAlreadyDead) return;
-                            renderUnit(targetKey);
-                            flashHit(targetKey, hit.is_crit, hit.type_multiplier);
-                        });
+                        whiteHit = { hit, targetKey, wasAlreadyDead };
                     }
                     logParts.push(hitsSummaryText(d.hits));
                 } else {
@@ -2746,11 +3192,7 @@
                         const targetKey = findHitKey(hit.target, hit.target_side);
                         if (targetKey) {
                             const wasAlreadyDead = captureAndApplyHp(targetKey, hit.target_hp_after);
-                            spawnPaintSkillProjectile(actorKey, targetKey, "paint-red", () => {
-                                if (wasAlreadyDead) return;
-                                renderUnit(targetKey);
-                                flashHit(targetKey, hit.is_crit, hit.type_multiplier);
-                            });
+                            redHit = { hit, targetKey, wasAlreadyDead };
                         }
                         logParts.push(hitsSummaryText(d.hits));
                     }
@@ -2761,21 +3203,51 @@
                         const healTargetKey = findHitKey(heal.target, event.side);
                         if (healTargetKey) {
                             const wasAlreadyDead = captureAndApplyHp(healTargetKey, heal.target_hp_after);
-                            spawnPaintSkillProjectile(actorKey, healTargetKey, "paint-blue", () => {
-                                if (wasAlreadyDead) return;
-                                renderUnit(healTargetKey);
-                                flashEffectAura(healTargetKey, "heal");
-                                setStatusIcon(healTargetKey, "heal", { source: `${event.actor}:paint_heal`, durationMs: MOMENT_ICON_MS });
-                            });
+                            blueHeal = { heal, healTargetKey, wasAlreadyDead };
                         }
                         logParts.push(`${heal.target} 체력 ${heal.amount} 회복`);
                     }
 
                     if (d.yellow && d.stunned?.length) {
+                        stunTargets = d.stunned;
+                        logParts.push(`적 전체 ${d.stun_seconds}초 기절`);
+                    }
+                }
+
+                const fireConsumePaintVisuals = () => {
+                    if (whiteHit) {
+                        const { hit, targetKey, wasAlreadyDead } = whiteHit;
+                        spawnPaintSkillProjectile(actorKey, targetKey, "paint-white", () => {
+                            if (wasAlreadyDead) return;
+                            renderUnit(targetKey);
+                            flashHit(targetKey, hit.is_crit, hit.type_multiplier);
+                        });
+                    }
+
+                    if (redHit) {
+                        const { hit, targetKey, wasAlreadyDead } = redHit;
+                        spawnPaintSkillProjectile(actorKey, targetKey, "paint-red", () => {
+                            if (wasAlreadyDead) return;
+                            renderUnit(targetKey);
+                            flashHit(targetKey, hit.is_crit, hit.type_multiplier);
+                        });
+                    }
+
+                    if (blueHeal) {
+                        const { heal, healTargetKey, wasAlreadyDead } = blueHeal;
+                        spawnPaintSkillProjectile(actorKey, healTargetKey, "paint-blue", () => {
+                            if (wasAlreadyDead) return;
+                            renderUnit(healTargetKey);
+                            flashEffectAura(healTargetKey, "heal");
+                            setStatusIcon(healTargetKey, "heal", { source: `${event.actor}:paint_heal`, durationMs: MOMENT_ICON_MS });
+                        });
+                    }
+
+                    if (stunTargets) {
                         // 노란 물감 = 적 전체 기절 - 대표로 첫 대상에게 투사체를 날리고, 도착 시 전원에게 한번에 적용한다.
-                        const firstStunKey = findHitKey(d.stunned[0].target, d.stunned[0].target_side);
+                        const firstStunKey = findHitKey(stunTargets[0].target, stunTargets[0].target_side);
                         const applyAllStuns = () => {
-                            d.stunned.forEach((s) => {
+                            stunTargets.forEach((s) => {
                                 const sKey = findHitKey(s.target, s.target_side);
                                 // 기절은 HP를 쓰지 않아 되살아나는 위험은 없지만, 그 사이 이미 죽은
                                 // 대상에게 기절 아이콘/오라가 뜨는 건 여전히 어색하므로 함께 막는다.
@@ -2790,18 +3262,26 @@
                         };
                         if (firstStunKey) spawnPaintSkillProjectile(actorKey, firstStunKey, "paint-yellow", applyAllStuns);
                         else applyAllStuns();
-                        logParts.push(`적 전체 ${d.stun_seconds}초 기절`);
                     }
-                }
 
-                appendLog(`${event.actor}의 [Active] 발동! ${logParts.join(", ")}`, event.side);
+                    appendLog(`${event.actor}의 [Active] 발동! ${logParts.join(", ")}`, event.side);
+                };
+
+                if (isNeglectReleaseTrigger) {
+                    onNeglectReleasePoseDone = fireConsumePaintVisuals;
+                } else {
+                    fireConsumePaintVisuals();
+                }
             } else {
                 applySkillHits(event);
                 if (dispatchEffectType === "summon_clone" && event.detail?.summoned) {
+                    const costText = event.detail.caster_hp_after != null
+                        ? ` (체력 소모로 ${event.detail.caster_hp_after}/${event.detail.caster_max_hp})`
+                        : "";
                     appendLog(
-                        event.detail.replaced
-                            ? `${event.actor}의 복제체가 새로운 복제체로 교체 소환됨!`
-                            : `${event.actor}의 복제체가 전장에 추가로 소환됨!`,
+                        (event.detail.replaced
+                            ? `${event.actor}의 [Active] 발동! ${event.detail.clone_name}이(가) 새로 소환되어 이전 소환수를 대체함!`
+                            : `${event.actor}의 [Active] 발동! ${event.detail.clone_name}이(가) 전장에 소환됨!`) + costText,
                         event.side
                     );
                 } else if (dispatchEffectType === "self_stack_buff" && event.detail?.stack_count) {
@@ -2857,6 +3337,21 @@
                     appendLog(`${event.actor}의 방임 상태 해제!`, "trait");
                 }
             }
+        } else if (eventType === "lifesteal_status_resolve") {
+            // 윤 "선생 고혈": 지금 확정된 공격 대상이 선생 타입인 동안(공격/방어 상관없이) "고혈" 상태 -
+            // neglect_status_resolve와 동일한 패턴(고정 지속시간 없이 조건이 유지되는 동안만 걸어두고,
+            // 대상이 바뀌거나 죽어서 조건이 풀리면 직접 지운다).
+            const lifestealKey = findUnitKey(event.side, event.actor);
+            if (lifestealKey) {
+                if (event.detail?.active) {
+                    flashEffectAura(lifestealKey, "buff");
+                    setStatusIcon(lifestealKey, "lifesteal", { source: `${lifestealKey}:lifesteal` });
+                    appendLog(`${event.actor}의 [Special] 발동! 고혈 상태(교사 타입 대상 기본공격 시 회복)`, "trait");
+                } else {
+                    clearStatusIconSource(lifestealKey, "lifesteal", `${lifestealKey}:lifesteal`);
+                    appendLog(`${event.actor}의 고혈 상태 해제!`, "trait");
+                }
+            }
         } else if (eventType === "target_lock_resolve") {
             // 백엔드가 새 기본공격 대상을 "확정"한 시점(실제 명중보다 먼저 온다) - 근접 유닛은 이 신호를
             // 받는 즉시 새 목표를 향해 걷기 시작한다. 예전엔 이 정보가 따로 없어서 실제로 명중한
@@ -2887,6 +3382,17 @@
             if (targetKey) {
                 units[targetKey].hp = event.target_hp_after;
             }
+            // 윤(영혼 흡수/선생 고혈): 기본공격 자체에 딸려오는 시전자 자가 회복도 데이터는 위와 같은
+            // 이유로 즉시 반영한다(연출만 아래 applyHitVisual에서 타격 시점에 맞춰 보여준다).
+            if (actorKey && units[actorKey] && event.actor_self_heal) {
+                units[actorKey].hp = event.actor_hp_after;
+            }
+            // 호(자폭 소환수): 이 공격을 명중시키는 즉시 스스로 죽는다 - 데이터는 여기서 즉시 반영하고
+            // (호는 이 시점에 이미 도착해서 정지해 있으므로 걷기 루프에 영향 없음), 실제로 사라지는
+            // 연출(playDeathSequence)은 아래 applyHitVisual에서 공격이 화면에 닿은 뒤에 재생한다.
+            if (actorKey && units[actorKey] && event.actor_self_destruct) {
+                units[actorKey].hp = 0;
+            }
             // meleeTargetKey는 여기서 직접 건드리지 않는다 - 아래 waitForMeleeArrival이 target이
             // 바뀌었는지 스스로 비교해서 바뀐 경우에만 meleeArrived를 다시 false로 리셋한다. 여기서
             // 미리 값을 같게 만들어버리면 그 비교가 항상 "안 바뀜"으로 나와서, 예전 타겟이 죽어 새
@@ -2909,6 +3415,20 @@
                         }
                     }
                 }
+                // 윤(영혼 흡수/선생 고혈): 시전자 자가 회복 연출 - 데이터는 이미 위에서 즉시 반영됐고,
+                // 여기서는 타격이 실제로 화면에 닿는 시점에 맞춰 체력바 갱신 + 회복 오라만 보여준다.
+                if (actorKey && event.actor_self_heal) {
+                    renderUnit(actorKey);
+                    flashEffectAura(actorKey, "heal");
+                    setStatusIcon(actorKey, "heal", { source: `${actorKey}:basic_attack_heal`, durationMs: MOMENT_ICON_MS });
+                }
+                // 호(자폭 소환수): renderUnit이 hp<=0을 감지해서 자동으로(golden-self-destruct가 활성
+                // 상태면 playDeathSequence의 사망 스프라이트 전환은 건너뛰고) 사망 처리를 한다. 자폭
+                // 공격은 아래 waitForMeleeArrival 콜백에서 applyHitVisual() 호출 자체를 폭발(detonate)
+                // 순간까지 통째로 미루므로, 여기서는 그냥 즉시 부르면 된다(대상 피격도 같은 타이밍).
+                if (actorKey && event.actor_self_destruct) {
+                    renderUnit(actorKey);
+                }
                 showDamageMessage(event);
             }
 
@@ -2923,7 +3443,19 @@
                     // 체력바가 옛 값에 멈춰있고 사망 로그도 안 뜬 채로 전투만 끝나버리는 버그가 있었다.
                     if (targetWasAlreadyDead) return;
                     if (actorKey) playAttackFrames(actorKey);
-                    applyHitVisual();
+                    // 호(자폭 소환수): 폭발이 곧 타격이다 - 스윙이 시작되는 이 순간(=아직 명중 판정 전,
+                    // "뜸들이는" 구간)부터 이펙트를 먼저 튼다. playGoldenSelfDestruct 내부에서 detonate
+                    // (흔들림 절정) 진입 시각을 EFFECT_LAUNCH_DELAY_MS에 맞춰뒀으므로, 아래에서 명중
+                    // 판정을 미루는 시점과 정확히 겹친다.
+                    if (actorKey && event.actor_self_destruct) playGoldenSelfDestruct(actorKey);
+                    // 근접도 원거리(아래 else-if 분기)처럼 스윙이 몇 프레임(EFFECT_LAUNCH_DELAY_MS) 재생된
+                    // 뒤에야 명중 판정이 난다 - 예전엔 스윙 시작과 동시에 판정이 나서, 근접 캐릭터만 유독
+                    // 무기가 닿기도 전에 이미 맞은 것처럼 보였다.
+                    if (actorKey) meleeHitPending[actorKey] = true;
+                    setTimeout(() => {
+                        if (actorKey) meleeHitPending[actorKey] = false;
+                        applyHitVisual();
+                    }, EFFECT_LAUNCH_DELAY_MS);
                 });
             } else if (actorKey && targetKey) {
                 // 원거리는 공격 애니메이션(윈드업)을 먼저 시작하고, 3프레임쯤 재생된 뒤에야 투사체/이펙트가 나간다.
