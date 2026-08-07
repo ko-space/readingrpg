@@ -56,8 +56,18 @@ body {
     box-sizing: border-box;
 }
 
-/* 전투 제한시간 카운트다운(mm:ss, 3분에서 0으로 줄어듦) - battle-layout보다 먼저 오는 flex 자식이라
-   자연스럽게 화면 맨 위 중앙에 온다. 회복형 조합 등으로 전투가 길어질 때 남은 시간이 얼마인지 보여준다. */
+/* 전투 제한시간 카운트다운(mm:ss, 3분에서 0으로 줄어듦) + 배속 토글 버튼을 한 줄에 두는 컨테이너 -
+   battle-layout보다 먼저 오는 flex 자식이라 자연스럽게 화면 맨 위 중앙에 온다. */
+.battle-timer-row {
+    flex-shrink: 0;
+    display: flex;
+    /* stretch로 둬야 아래 버튼이 폭 계산과 무관하게 옆 타이머와 항상 같은 높이를 유지한다(패딩/폰트
+       수치를 따로 맞출 필요 없이 행의 크로스축 크기 = 더 큰 자식인 타이머의 높이를 그대로 따라감). */
+    align-items: stretch;
+    gap: 8px;
+}
+
+/* 회복형 조합 등으로 전투가 길어질 때 남은 시간이 얼마인지 보여준다. */
 .battle-timer {
     flex-shrink: 0;
     padding: 4px 18px;
@@ -69,6 +79,47 @@ body {
     font-weight: 900;
     letter-spacing: 1px;
     font-variant-numeric: tabular-nums;
+}
+
+/* 재생 배속 토글 버튼 - 옆 타이머(.battle-timer)와 같은 알약 모양 테두리를 쓰되 너비는 고정값으로
+   살짝 좁게(화살표 개수가 1~3개로 바뀌어도 버튼 크기 자체는 안 바뀜) - 높이는 위 .battle-timer-row의
+   stretch가 맞춰준다. 누를 때마다 화살표 개수/색이 바뀌며 순환한다(2개/하늘색(0.8배) -> 3개/노란색
+   (0.6배, 더 빠름) -> 1개/흰색(1배, 배속 없음) -> 다시 2개로). 기본색은 JS가
+   applyBattleSpeedState()에서 speed-sky/speed-yellow/speed-white 클래스를 토글해서 정한다. */
+.battle-speed-toggle {
+    flex-shrink: 0;
+    box-sizing: border-box;
+    /* 화살표 개수(1~3개)가 바뀌어도 버튼 너비가 같이 늘었다 줄었다 하지 않도록 고정폭을 쓴다 -
+       내용은 justify-content: center로 항상 가운데 정렬. */
+    width: 52px;
+    border: 2px solid rgba(232, 184, 75, 0.55);
+    border-radius: 999px;
+    background: #63c6f0;
+    color: #0f1424;
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: -1px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.15s ease, filter 0.1s ease;
+}
+
+.battle-speed-toggle:hover {
+    filter: brightness(1.1);
+}
+
+.battle-speed-toggle.speed-sky {
+    background: #63c6f0;
+}
+
+.battle-speed-toggle.speed-yellow {
+    background: #f5d33e;
+}
+
+.battle-speed-toggle.speed-white {
+    background: #ffffff;
 }
 
 /* ===== 3열 배치 ===== */
@@ -544,38 +595,14 @@ body {
     filter: blur(1px);
 }
 
-/* ── 임소정 전용: 캐스터-대상을 잠깐 잇는 전기. 기본공격은 얇고 푸른색, 스킬은 더 두껍고 노란색.
-   wrap(바깥)이 위치/회전/크기를 한 번만 정적으로 잡고, 그 안의 beam이 지글거리는 애니메이션
-   (scaleX/skewX/밝기)을 맡는다 - 회전과 지글거림이 같은 transform 속성을 두고 서로 안 덮어쓰게
-   두 요소로 분리했다. ── */
-.electric-connector-wrap {
+/* ── 임소정 전용: 캐스터-대상을 잇는 지그재그 번개(참고 데모 blue_chain_and_yellow_ultimate.html) -
+   실제 드로잉은 arena-battle.js의 playElectricBolt가 담당하고, 이 캔버스는 그 그림판일 뿐이다
+   (호의 golden-self-destruct-canvas와 동일한 방식). ── */
+.electric-bolt-canvas {
     position: absolute;
     left: 0;
     top: 0;
-    transform-origin: 0 50%;
     pointer-events: none;
-}
-@keyframes electric-buzz {
-    0% { opacity: 0; transform: scaleX(.85) skewX(0deg); filter: brightness(1); }
-    15% { opacity: 1; transform: scaleX(1.05) skewX(-8deg); filter: brightness(1.6); }
-    35% { opacity: .85; transform: scaleX(.95) skewX(6deg); filter: brightness(1.2); }
-    55% { opacity: 1; transform: scaleX(1.1) skewX(-5deg); filter: brightness(1.7); }
-    75% { opacity: .8; transform: scaleX(1) skewX(4deg); filter: brightness(1.3); }
-    100% { opacity: 0; transform: scaleX(.9) skewX(0deg); filter: brightness(1); }
-}
-.electric-connector {
-    width: 100%;
-    height: 100%;
-    border-radius: 3px;
-    animation: electric-buzz 280ms ease-in-out both;
-}
-.electric-connector.electric-blue {
-    background: linear-gradient(90deg, transparent, #00c3ff, #a8ecff, #00c3ff, transparent);
-    box-shadow: 0 0 5px #00c3ff, 0 0 15px #4facfe, 0 0 30px #00c3ff;
-}
-.electric-connector.electric-yellow {
-    background: linear-gradient(90deg, transparent, #ffcf3d, #fff3b0, #ffcf3d, transparent);
-    box-shadow: 0 0 5px #ffcf3d, 0 0 15px #ffe066, 0 0 30px #ffcf3d;
 }
 
 /* ── 강 희 스킬 전용: 얼굴에서 뿜어져 나오는 좁은 부채꼴 초록 입냄새(가스) - 참고 디자인(임시.html)의
@@ -1316,27 +1343,30 @@ body {
    (다른 근접 캐릭터의 명중 판정 시각)와 정확히 같아야 한다 - JS 상수를 CSS가 직접 참조할 수 없으므로,
    EFFECT_LAUNCH_DELAY_MS(ATTACK_FRAME_DURATION_MS*3)를 바꾸면 이 퍼센트/총 재생시간(1000ms)도 같이
    다시 계산해야 한다. 이 클래스가 켜진 유닛은 playDeathSequence가 death.png/.dying 페이드를 건너뛰므로,
-   사망 시 사라지는 연출을 이 애니메이션이 전담한다(호 전용 - 다른 캐릭터의 사망 연출과는 무관). ── */
+   사망 시 사라지는 연출을 이 애니메이션이 전담한다(호 전용 - 다른 캐릭터의 사망 연출과는 무관).
+   crit-flash-filter와 동일한 이유로 scaleX(var(--flip-x))를 scale 값과 항상 같이 곱해야 한다 - 안
+   그러면 상대편(반전된 상태, --flip-x:-1)의 호가 터질 때만 애니메이션이 도는 동안 좌우 반전이
+   풀려서 캐릭터가 순간적으로 뒤집혀 보인다. ── */
 @keyframes golden-self-destruct-char {
     0% {
-        transform: scale(1);
+        transform: scaleX(var(--flip-x)) scale(1);
         filter: drop-shadow(0 0 10px rgba(255, 227, 130, .72)) drop-shadow(0 0 28px rgba(255, 170, 55, .38)) brightness(1);
     }
     13.5% {
-        transform: scale(1.04);
+        transform: scaleX(var(--flip-x)) scale(1.04);
         filter: drop-shadow(0 0 18px rgba(255, 232, 150, .85)) drop-shadow(0 0 46px rgba(255, 169, 48, .55)) brightness(1.15);
     }
     18% {
-        transform: scale(.92);
+        transform: scaleX(var(--flip-x)) scale(.92);
         filter: drop-shadow(0 0 30px rgba(255, 247, 200, .95)) drop-shadow(0 0 60px rgba(255, 185, 60, .7)) brightness(1.6);
     }
     23.5% {
-        transform: scale(1.3);
+        transform: scaleX(var(--flip-x)) scale(1.3);
         filter: drop-shadow(0 0 34px rgba(255, 247, 200, .9)) drop-shadow(0 0 64px rgba(255, 185, 60, .6)) brightness(1.8);
         opacity: .08;
     }
     100% {
-        transform: scale(1.3);
+        transform: scaleX(var(--flip-x)) scale(1.3);
         filter: drop-shadow(0 0 34px rgba(255, 247, 200, 0)) drop-shadow(0 0 64px rgba(255, 185, 60, 0)) brightness(1.8);
         opacity: 0;
     }

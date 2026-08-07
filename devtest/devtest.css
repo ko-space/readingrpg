@@ -269,37 +269,8 @@ html, body {
     filter: blur(1px);
 }
 
-/* ===== 임소정 전용: 캐스터-대상을 잠깐 잇는 전기 - 기본공격은 얇고 푸른색, 스킬은 두껍고 노란색.
-   wrap(바깥)이 위치/회전/크기를 한 번만 정적으로 잡고, 안쪽 beam이 지글거리는 애니메이션을 맡는다. ===== */
-.electric-connector-wrap {
-    position: absolute;
-    left: 0;
-    top: 0;
-    transform-origin: 0 50%;
-    pointer-events: none;
-}
-@keyframes electric-buzz {
-    0% { opacity: 0; transform: scaleX(.85) skewX(0deg); filter: brightness(1); }
-    15% { opacity: 1; transform: scaleX(1.05) skewX(-8deg); filter: brightness(1.6); }
-    35% { opacity: .85; transform: scaleX(.95) skewX(6deg); filter: brightness(1.2); }
-    55% { opacity: 1; transform: scaleX(1.1) skewX(-5deg); filter: brightness(1.7); }
-    75% { opacity: .8; transform: scaleX(1) skewX(4deg); filter: brightness(1.3); }
-    100% { opacity: 0; transform: scaleX(.9) skewX(0deg); filter: brightness(1); }
-}
-.electric-connector {
-    width: 100%;
-    height: 100%;
-    border-radius: 3px;
-    animation: electric-buzz 280ms ease-in-out both;
-}
-.electric-connector.electric-blue {
-    background: linear-gradient(90deg, transparent, #00c3ff, #a8ecff, #00c3ff, transparent);
-    box-shadow: 0 0 5px #00c3ff, 0 0 15px #4facfe, 0 0 30px #00c3ff;
-}
-.electric-connector.electric-yellow {
-    background: linear-gradient(90deg, transparent, #ffcf3d, #fff3b0, #ffcf3d, transparent);
-    box-shadow: 0 0 5px #ffcf3d, 0 0 15px #ffe066, 0 0 30px #ffcf3d;
-}
+/* 임소정 전용 번개 캔버스(.electric-bolt-canvas)는 arena-battle.css에서 그대로 상속받는다(devtest.html이
+   arena-battle.css를 먼저 로드) - golden-self-destruct-canvas와 동일한 패턴. */
 
 /* 강 희 스킬 전용: 얼굴에서 뿜어져 나오는 좁은 부채꼴 초록 입냄새(가스, arena-battle.css와 동일). */
 .gas-breath-wrap {

@@ -305,6 +305,10 @@
     // 직접 소멸시키므로, playDeathSequence의 기본 사망 스프라이트 전환을 건너뛴다(arena-battle.js와 동일).
     const goldenSelfDestructActive = {};
 
+    // 임소정 전기 이펙트: playElectricBolt가 진행 중인 슬롯은 명중 판정(onArrive) 뒤에도 스파크
+    // 잔상이 한동안 더 남아있을 수 있다(arena-battle.js와 동일 - anyActorStillFinishing 참고).
+    const electricBoltActive = {};
+
     // 사망 시: 로그 한 줄 + 사망 디폴트 사진(death${variant}.png, 아직 없으면 idle 사진을 흑백으로
     // 임시 대체) + 투명해지면서 가로 실선 무늬로 스캔되듯 사라지는 연출. (arena-battle.js의
     // playDeathSequence와 동일 - variant는 spriteVariantSuffix로, 윤의 "호" 같은 소환수도 전용
@@ -1064,6 +1068,10 @@
     const EFFECT_AURA_COLORS = {
         buff: "#ff4d3d", debuff: "#4d8bff", cc: "#b266ff", heal: "#4ee06a", special: "#ffffff",
     };
+    const EFFECT_AURA_FLASH_MS = 900; // @keyframes effect-aura-flash의 실제 재생시간(0.9s)과 반드시 일치해야 한다.
+    // slot -> 마지막으로 건 트리거의 토큰(arena-battle.js와 동일한 이유 - 재트리거 시 예전 정리
+    // 타이머가 방금 새로 켠 오라를 실수로 지우지 않게 막는다).
+    const auraFlashTokens = {};
     function flashEffectAura(slot, kind) {
         const imgEl = document.querySelector(`[data-unit="${slot}"] .battle-unit-img`);
         const color = EFFECT_AURA_COLORS[kind];
@@ -1072,6 +1080,14 @@
         void imgEl.offsetWidth;
         imgEl.style.setProperty("--effect-aura-color", color);
         imgEl.classList.add("effect-aura-flash");
+        // animationend에 의존하면 안 된다 - hit-flash 등 같은 filter 속성을 쓰는 다른 애니메이션이
+        // 이후 겹치면 이 오라 애니메이션 자체가 우선순위에서 밀려 끝까지 재생되지 못해 animationend가
+        // 영영 안 올 수 있다(arena-battle.js와 동일한 이유로 실제 재현됨). 실제 CSS 지속시간에 맞춘
+        // 타이머로 무조건 지운다.
+        const myToken = (auraFlashTokens[slot] = (auraFlashTokens[slot] || 0) + 1);
+        setTimeout(() => {
+            if (auraFlashTokens[slot] === myToken) imgEl.classList.remove("effect-aura-flash");
+        }, EFFECT_AURA_FLASH_MS);
     }
 
     // ===== 상태 아이콘(체력바 위, 왼쪽부터 채워짐) - arena-battle.js와 동일한 source-map 방식 =====
@@ -2177,37 +2193,188 @@
     // 임소정 전기의 발사 시작점(손/지팡이 위치 근사치) - arena-battle.js와 동일. 기본공격/스킬이 서로
     // 다른 지점에서 나가야 해서 따로 둔다.
     const ELECTRIC_ORIGIN_BASIC = { fx: 0.9, fy: 0.27 };
-    const ELECTRIC_ORIGIN_SKILL = { fx: 0.9, fy: 0.28 };
+    const ELECTRIC_ORIGIN_SKILL = { fx: 1.3, fy: 0.28 };
 
-    // 임소정 전용: 캐스터-대상을 잠깐 잇는 전기(이동하는 점이 아니라, 두 위치 사이를 잇는 막대를 회전시켜 만든다).
-    // 기본공격은 얇고 푸른색(electric-blue), 스킬은 더 두껍고 노란색(electric-yellow)으로 호출한다.
-    function playElectricConnector(actorSlot, targetSlot, colorClass, radiusPx, onArrive, origin) {
+    // 임소정 전용 번개 - arena-battle.js의 makeLightningPath/drawLightningBolt/playElectricBolt와 동일
+    // (참고 데모 blue_chain_and_yellow_ultimate.html의 지그재그 번개 줄기를 캔버스에 그린다).
+    function makeLightningPath(x1, y1, x2, y2, segments, wobble) {
+        const pts = [{ x: x1, y: y1 }];
+        for (let i = 1; i < segments; i++) {
+            const t = i / segments;
+            const x = x1 + (x2 - x1) * t;
+            const y = y1 + (y2 - y1) * t;
+            const nx = -(y2 - y1), ny = (x2 - x1);
+            const nLen = Math.hypot(nx, ny) || 1;
+            const scale = 0.45 + Math.sin(t * Math.PI) * 0.9;
+            pts.push({
+                x: x + (nx / nLen) * (Math.random() * 2 - 1) * wobble * scale,
+                y: y + (ny / nLen) * (Math.random() * 2 - 1) * wobble * scale,
+            });
+        }
+        pts.push({ x: x2, y: y2 });
+        return pts;
+    }
+
+    function drawLightningBolt(ctx, pts, width, alpha, isUlt) {
+        if (alpha <= 0) return;
+        ctx.save();
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.shadowBlur = isUlt ? 24 : 18;
+        ctx.shadowColor = isUlt ? `rgba(255,210,90,${0.72 * alpha})` : `rgba(120,208,255,${0.62 * alpha})`;
+        ctx.strokeStyle = isUlt ? `rgba(255,197,62,${0.92 * alpha})` : `rgba(76,165,255,${0.86 * alpha})`;
+        ctx.lineWidth = width + 3;
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) {
+            const prev = pts[i - 1], cur = pts[i];
+            const mx = (prev.x + cur.x) * 0.5, my = (prev.y + cur.y) * 0.5;
+            ctx.quadraticCurveTo(prev.x, prev.y, mx, my);
+        }
+        const last = pts[pts.length - 1];
+        ctx.lineTo(last.x, last.y);
+        ctx.stroke();
+
+        ctx.shadowBlur = isUlt ? 10 : 6;
+        ctx.strokeStyle = isUlt ? `rgba(255,252,225,${0.97 * alpha})` : `rgba(244,250,255,${0.96 * alpha})`;
+        ctx.lineWidth = Math.max(1.2, width * 0.42);
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) {
+            const prev = pts[i - 1], cur = pts[i];
+            const mx = (prev.x + cur.x) * 0.5, my = (prev.y + cur.y) * 0.5;
+            ctx.quadraticCurveTo(prev.x, prev.y, mx, my);
+        }
+        ctx.lineTo(last.x, last.y);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    function playElectricBolt(actorSlot, targetSlot, isUlt, onArrive, origin) {
         const layer = document.getElementById("projectile-layer");
+        const fieldEl = document.querySelector(".battle-field");
         const actorImg = document.querySelector(`[data-unit="${actorSlot}"] .battle-unit-img`);
         const targetImg = document.querySelector(`[data-unit="${targetSlot}"] .battle-unit-img`);
-        if (!layer || !actorImg || !targetImg) { if (onArrive) onArrive(); return; }
+        if (!layer || !fieldEl || !actorImg || !targetImg) { if (onArrive) onArrive(); return; }
 
+        const fieldRect = fieldEl.getBoundingClientRect();
         const o = origin || ELECTRIC_ORIGIN_BASIC;
         const start = imageContentPoint(actorImg, o.fx, o.fy);
         const end = fieldRelativeCenter(targetImg);
-        const distance = Math.hypot(end.x - start.x, end.y - start.y);
-        const angle = angleDeg(start, end);
 
-        const wrap = document.createElement("div");
-        wrap.className = "electric-connector-wrap";
-        wrap.style.left = `${start.x}px`;
-        wrap.style.top = `${start.y}px`;
-        wrap.style.width = `${distance}px`;
-        wrap.style.height = `${radiusPx}px`;
-        wrap.style.marginTop = `${-radiusPx / 2}px`;
-        wrap.style.transform = `rotate(${angle}deg)`;
+        electricBoltActive[actorSlot] = true;
 
-        const beam = document.createElement("div");
-        beam.className = `electric-connector ${colorClass}`;
-        wrap.appendChild(beam);
-        layer.appendChild(wrap);
+        const dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+        const canvas = document.createElement("canvas");
+        canvas.className = "electric-bolt-canvas";
+        canvas.style.width = `${fieldRect.width}px`;
+        canvas.style.height = `${fieldRect.height}px`;
+        canvas.width = Math.round(fieldRect.width * dpr);
+        canvas.height = Math.round(fieldRect.height * dpr);
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        layer.appendChild(canvas);
 
-        setTimeout(() => wrap.remove(), 280);
+        const sparkSprite = document.createElement("canvas");
+        sparkSprite.width = sparkSprite.height = 48;
+        const sparkCtx = sparkSprite.getContext("2d");
+        const sparkGrad = sparkCtx.createRadialGradient(24, 24, 0, 24, 24, 24);
+        sparkGrad.addColorStop(0, "rgba(255,255,255,1)");
+        sparkGrad.addColorStop(0.2, isUlt ? "rgba(255,234,154,.96)" : "rgba(194,231,255,.96)");
+        sparkGrad.addColorStop(0.5, isUlt ? "rgba(255,186,42,.62)" : "rgba(102,192,255,.58)");
+        sparkGrad.addColorStop(1, "rgba(0,0,0,0)");
+        sparkCtx.fillStyle = sparkGrad;
+        sparkCtx.fillRect(0, 0, 48, 48);
+
+        const bolts = [{
+            pts: makeLightningPath(start.x, start.y, end.x, end.y, isUlt ? 13 : 11, isUlt ? 32 : 20),
+            life: 0, maxLife: isUlt ? 340 : 220, alpha: 1, width: 3.7,
+        }];
+        const branchCount = isUlt ? 4 : 2;
+        for (let i = 0; i < branchCount; i++) {
+            const main = bolts[0].pts;
+            const src = main[2 + Math.floor(Math.random() * Math.max(1, main.length - 4))];
+            const t = 0.55 + Math.random() * 0.4;
+            const spread = isUlt ? 55 : 24;
+            bolts.push({
+                pts: makeLightningPath(
+                    src.x, src.y,
+                    start.x + (end.x - start.x) * t + (Math.random() * 2 - 1) * spread,
+                    start.y + (end.y - start.y) * t + (Math.random() * 2 - 1) * spread * 0.85,
+                    isUlt ? 6 : 5, isUlt ? 20 : 12
+                ),
+                life: 0, maxLife: isUlt ? 250 : 170, alpha: isUlt ? 0.88 : 0.82, width: 2.1,
+            });
+        }
+
+        const sparks = [];
+        function spawnBoltSpark(atEnd) {
+            const baseX = atEnd ? end.x : start.x;
+            const baseY = atEnd ? end.y : start.y;
+            const a = Math.random() * Math.PI * 2 - Math.PI;
+            const speed = (0.6 + Math.random() * 2.0) * (isUlt ? 1.5 : 1);
+            sparks.push({
+                x: baseX + (Math.random() * 20 - 10), y: baseY + (Math.random() * 20 - 10),
+                vx: Math.cos(a) * speed, vy: Math.sin(a) * speed,
+                size: (isUlt ? 10 : 7) + Math.random() * (isUlt ? 9 : 8),
+                life: 0, maxLife: (isUlt ? 280 : 220) + Math.random() * (isUlt ? 240 : 200),
+            });
+        }
+        const sparkCount = isUlt ? 28 : 12;
+        for (let i = 0; i < sparkCount; i++) spawnBoltSpark(Math.random() < 0.6);
+
+        const startMs = performance.now();
+        const totalMs = isUlt ? 820 : 420;
+        const flashUntilMs = isUlt ? startMs + 220 : 0;
+
+        function frame(now) {
+            const t = now - startMs;
+            if (t >= totalMs) {
+                canvas.remove();
+                electricBoltActive[actorSlot] = false;
+                return;
+            }
+            const dt = 16.67;
+
+            ctx.clearRect(0, 0, fieldRect.width, fieldRect.height);
+            ctx.save();
+            ctx.globalCompositeOperation = "lighter";
+
+            if (isUlt && now < flashUntilMs) {
+                const flashAlpha = Math.max(0, 1 - (flashUntilMs - now) / 220);
+                const g = ctx.createRadialGradient(end.x, end.y, 0, end.x, end.y, 70);
+                g.addColorStop(0, `rgba(255,250,230,${0.75 * (1 - flashAlpha)})`);
+                g.addColorStop(0.4, `rgba(255,228,116,${0.4 * (1 - flashAlpha)})`);
+                g.addColorStop(1, "rgba(255,180,0,0)");
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.arc(end.x, end.y, 70, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            for (let i = bolts.length - 1; i >= 0; i--) {
+                const b = bolts[i];
+                b.life += dt;
+                if (b.life >= b.maxLife) { bolts.splice(i, 1); continue; }
+                drawLightningBolt(ctx, b.pts, b.width, (1 - b.life / b.maxLife) * b.alpha, isUlt);
+            }
+
+            for (let i = sparks.length - 1; i >= 0; i--) {
+                const s = sparks[i];
+                s.life += dt; s.x += s.vx * dt * 0.06; s.y += s.vy * dt * 0.06; s.vx *= 0.992; s.vy *= 0.992;
+                if (s.life >= s.maxLife) { sparks.splice(i, 1); continue; }
+                const p = s.life / s.maxLife;
+                const size = s.size * (1 - p * 0.25);
+                ctx.globalAlpha = 1 - p;
+                ctx.drawImage(sparkSprite, s.x - size / 2, s.y - size / 2, size, size);
+            }
+            ctx.globalAlpha = 1;
+
+            ctx.restore();
+            requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+
         if (onArrive) setTimeout(onArrive, 80);
     }
 
@@ -2328,7 +2495,7 @@
         else if (style === "instant_flash") playInstantFlash(actorSlot, targetSlot, onArrive);
         else if (style === "text_particles") playTextParticles(actorSlot, targetSlot, onArrive);
         else if (style === "crayon") spawnCrayonProjectile(actorSlot, targetSlot, onArrive);
-        else if (style === "electric") playElectricConnector(actorSlot, targetSlot, "electric-blue", 5, onArrive, ELECTRIC_ORIGIN_BASIC);
+        else if (style === "electric") playElectricBolt(actorSlot, targetSlot, false, onArrive, ELECTRIC_ORIGIN_BASIC);
         else if (style === "book") spawnBookProjectile(actorSlot, targetSlot, onArrive);
         else if (style === "eye_laser") spawnEyeLaserBeam(actorSlot, targetSlot, units[actorSlot]?.isType2 ? "type2" : "type1", onArrive);
         else if (style === "paint_gold") spawnPaintProjectile(actorSlot, targetSlot, "paint-gold", onArrive);
@@ -2483,7 +2650,7 @@
                         spawnHeartProjectile(actorSlot, hit.targetSlot, hit.gender === "여" ? "heart-red" : "heart-pink", () => {});
                     });
                 } else if (dispatchEffectType === "debuff_atk_and_damage" && result.targetSlot) {
-                    playElectricConnector(actorSlot, result.targetSlot, "electric-yellow", 9, null, ELECTRIC_ORIGIN_SKILL);
+                    playElectricBolt(actorSlot, result.targetSlot, true, null, ELECTRIC_ORIGIN_SKILL);
                     flashEffectAura(result.targetSlot, "debuff");
                     setStatusIcon(result.targetSlot, "atk_down", { source: `${actorSlot}:atk_down`, durationMs: params.debuff_seconds * 1000 });
                 } else if (dispatchEffectType === "bonus_damage_knockback" && result.targetSlot) {
@@ -2745,7 +2912,9 @@
                 meleeHitPending[slot] ||
                 // 호(자폭 소환수): 명중 판정 자체는 meleeHitPending으로 잡히지만, 그 뒤로도 폭발 파티클/
                 // 흔들림 연출이 한동안 더 이어질 수 있다(arena-battle.js와 동일한 이유).
-                goldenSelfDestructActive[slot];
+                goldenSelfDestructActive[slot] ||
+                // 임소정 번개도 같은 이유(명중 판정 뒤에도 스파크 잔상이 남는다).
+                electricBoltActive[slot];
         });
     }
 
@@ -3128,7 +3297,7 @@
                     units[hitSlot].hp = hit.target_hp_after;
                     renderUnit(hitSlot);
                     flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
-                    playElectricConnector(actorSlot, hitSlot, "electric-yellow", 9, null, ELECTRIC_ORIGIN_SKILL);
+                    playElectricBolt(actorSlot, hitSlot, true, null, ELECTRIC_ORIGIN_SKILL);
                     flashEffectAura(hitSlot, "debuff");
                     setStatusIcon(hitSlot, "atk_down", {
                         source: `${event.actor}:atk_down`,
