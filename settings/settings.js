@@ -256,6 +256,9 @@
             console.error("로그아웃 요청 실패:", error);
         }
         localStorage.removeItem("access_token");
+        // 로그아웃 후 같은 브라우저로 다른 계정이 로그인할 수 있으므로, 남은 독서 세션(있다면)이
+        // 엉뚱한 계정으로 이어지지 않게 같이 지운다.
+        window.ReadingSession?.clear();
         window.location.href = "index.html";
     }
 
