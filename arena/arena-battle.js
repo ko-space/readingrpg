@@ -1690,7 +1690,17 @@
                 if (s.life > s.maxLife) smoke.splice(i, 1);
             }
 
-            ctx.clearRect(0, 0, fieldRect.width, fieldRect.height);
+            // 이번 프레임에 실제로 그려질 범위(캐릭터 중심 기준 반경)를 링 크기로부터 어림잡아, 매번
+            // 필드 전체를 clearRect하는 대신 그만큼만 지운다 - 필드 전체 크기 캔버스를 매 프레임 통째로
+            // 지우고 다시 그리는 게 렉의 두 번째 원인이었다(아래 shadowBlur 제거와 함께 호 폭발의
+            // 프레임당 비용을 크게 줄인다). 파티클/스모크/스트릭이 링보다 더 멀리 튈 수 있는 극단치까지
+            // 감안해 넉넉히(2.6배 + 여유폭) 잡아서 클리핑/잔상이 생길 일은 없게 한다.
+            const clearR = Math.max(ringR, ringR2, radius * 0.95) * 2.6 + radius * 1.5;
+            const clearX = Math.max(0, cx - clearR);
+            const clearY = Math.max(0, cy - clearR);
+            const clearW = Math.min(fieldRect.width, cx + clearR) - clearX;
+            const clearH = Math.min(fieldRect.height, cy + clearR) - clearY;
+            ctx.clearRect(clearX, clearY, clearW, clearH);
             ctx.save();
             ctx.globalCompositeOperation = "lighter";
 
@@ -1706,17 +1716,23 @@
                 ctx.fill();
             }
 
+            // 링은 shadowBlur(도형을 오프스크린에 그려 블러 컨볼루션을 적용하는, Canvas2D에서 가장 비싼
+            // 축에 속하는 연산) 대신 굵고 옅은 stroke + 얇고 밝은 stroke 두 겹으로 "번지는" 느낌을
+            // 흉내낸다 - 링이 detonate~after 구간에서 캐릭터 크기의 최대 6.5배까지 자라는데, 그 큰
+            // 도형에 shadowBlur를 매 프레임 두 겹 적용하는 게 호 폭발 렉의 가장 유력한 원인이었다.
             [[ringR, ringAlpha, Math.max(2, radius * 0.07)], [ringR2, ringAlpha * 0.75, Math.max(1.5, radius * 0.04)]].forEach(([r, a, w]) => {
                 if (a <= 0 || r <= 0) return;
-                ctx.save();
+                ctx.beginPath();
+                ctx.lineWidth = w * 3.2;
+                ctx.strokeStyle = `rgba(255, 174, 54, ${a * 0.35})`;
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.stroke();
+
                 ctx.beginPath();
                 ctx.lineWidth = w;
                 ctx.strokeStyle = `rgba(255, ${180 + Math.floor(a * 40)}, 72, ${a})`;
-                ctx.shadowBlur = radius * 0.16;
-                ctx.shadowColor = `rgba(255, 174, 54, ${a * 0.8})`;
                 ctx.arc(cx, cy, r, 0, Math.PI * 2);
                 ctx.stroke();
-                ctx.restore();
             });
 
             if (exploded && streaks.length && ringAlpha > 0) {
@@ -1789,7 +1805,7 @@
     // 임소정 전기의 발사 시작점
     // fx(오른쪽일수록 값이 큼)/fy(아래쪽일수록 값이 큼)
     const ELECTRIC_ORIGIN_BASIC = { fx: 0.9, fy: 0.27 };
-    const ELECTRIC_ORIGIN_SKILL = { fx: 1.3, fy: 0.28 };
+    const ELECTRIC_ORIGIN_SKILL = { fx: 0.9, fy: 0.28 };
 
     // 임소정 전용 번개 - 참고 데모(blue_chain_and_yellow_ultimate.html)의 지그재그 번개 줄기를 캔버스에
     // 그린다(호의 playGoldenSelfDestruct와 같은 방식: 필드 크기의 캔버스를 만들어 requestAnimationFrame으로
@@ -2505,7 +2521,15 @@
 
             imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/${framePrefix}${variant}_${i}.png`;
             const remainingMs = castStartMs + perFrameMs * i - performance.now();
-            if (remainingMs > 0) await sleep(remainingMs);
+            // remainingMs가 0 이하(이미 이 프레임의 목표 시각을 지남)라고 await 자체를 건너뛰면, 뒤이은
+            // 프레임들의 remainingMs도 연쇄로 계속 음수라 반복문이 한 번도 브라우저에 제어권을 넘기지
+            // 않고(=한 번도 페인트되지 않고) 곧바로 여러 프레임의 src를 연달아 덮어써버린다 - 화면엔
+            // 몇 프레임이 통째로 사라지고 훅 건너뛴 것처럼(=시전 애니메이션이 비정상적으로 빨라진
+            // 것처럼) 보인다. 호의 폭발 연출처럼 캔버스 작업이 무거워 메인 스레드가 잠깐 멈췄다 풀릴 때
+            // 특히 두드러졌다. Math.max(0, ...)로 무조건 await해서 늦었어도 프레임마다 최소 한 번은
+            // 브라우저에 제어권을 넘겨(페인트 기회를 줘서) 밀린 만큼 빠르게는 재생하되 프레임이 통째로
+            // 스킵되지는 않게 한다.
+            await sleep(Math.max(0, remainingMs));
         }
 
         // 시전 프레임 루프가 다 끝났으니 skill_resolve 처리를 막고 있던 게이트는 풀어준다(안 그러면
