@@ -9,6 +9,21 @@
     // 모의고사 탭의 과목별 소요시간(분). dungeon.js가 duration을 실어 보내지만, 값이 비거나 이상하면 여기서도 검증한다.
     const MOCK_EXAM_MINUTES = { "국어": 80, "수학": 100, "수학(하프)": 50, "영어": 70, "영어(하프)": 40, "탐구": 30 };
 
+    // 로딩 오버레이 자체(검은 배경)는 hidden 속성이 없는 한 CSS 기본값으로 이미 보이지만, "입장하는
+    // 중..." 뒤의 점 애니메이션은 JS가 켜줘야 시작된다. 아래 세션 복구 로직이 URL과 저장된 세션이
+    // 다를 때 confirm()으로 화면을 막아버릴 수 있는데, 그게 뜨는 동안에도 최소한 이 점 애니메이션은
+    // 실제로 움직이고 있어야 "멈춰있는 화면"처럼 보이지 않는다 - 그래서 파일 맨 위에서 가장 먼저 켠다.
+    // 실제 배경/캐릭터 이미지 로딩(showRegionEntrance)은 세션이 확정된 뒤 이어서 진행하고, 이 타이머는
+    // 그때 가서 멈춘다.
+    const regionLoadingOverlayEl = document.getElementById("region-loading-overlay");
+    const regionLoadingDotsEl = document.getElementById("region-loading-dots");
+    let regionLoadingDotCount = 1;
+    if (regionLoadingDotsEl) regionLoadingDotsEl.textContent = ".";
+    const regionLoadingDotTimer = setInterval(() => {
+        regionLoadingDotCount = (regionLoadingDotCount % 3) + 1;
+        if (regionLoadingDotsEl) regionLoadingDotsEl.textContent = ".".repeat(regionLoadingDotCount);
+    }, 400);
+
     function authHeaders() {
         const token = localStorage.getItem("access_token");
         return token ? { "Authorization": `Bearer ${token}` } : {};
@@ -35,9 +50,37 @@
     // URL에서 1단계가 실어 보낸 정보를 읽는다.
     // (예: reading.html?region=초심자의+평원&session_type=mock_exam&difficulty=국어&duration=80)
     const params = new URLSearchParams(window.location.search);
-    const regionName = params.get("region");
-    const sessionType = params.get("session_type") || "reading"; // "reading" | "subject" | "mock_exam"
-    const label = params.get("difficulty"); // session_type에 따라 장르(비문학/문학) 또는 과목명
+
+    // 탭을 실수로 닫았다가 reading.html로 돌아왔을 때(직접 재접속하거나, home.js가 곧장 돌려보내서)
+    // 끝내지 못한 세션이 남아있으면 그 진행 시간을 이어서 잰다 - shared/reading-session.js 참고.
+    // URL이 그 저장된 세션과 다른 걸 가리키면(예: 방치된 옛 세션이 있는 채로 새로 다른 과목을
+    // 골라 들어온 경우) 무엇을 원하는지 사용자에게 직접 확인한다 - 그렇지 않으면 진짜로 새로
+    // 시작하려는 선택이 조용히 무시될 수 있다.
+    let restoredSession = window.ReadingSession ? window.ReadingSession.load() : null;
+    if (restoredSession) {
+        const urlRegion = params.get("region");
+        const urlTargetsSomethingElse = urlRegion && (
+            urlRegion !== restoredSession.region ||
+            (params.get("session_type") || "reading") !== restoredSession.sessionType ||
+            params.get("difficulty") !== restoredSession.difficulty
+        );
+        if (urlTargetsSomethingElse) {
+            const resume = window.confirm(
+                `끝내지 않은 독서 세션이 있어요 (${restoredSession.region} · ${restoredSession.difficulty}).\n` +
+                `이어서 하시겠어요? ("취소"를 누르면 지금 고른 걸로 새로 시작해요.)`
+            );
+            if (resume) {
+                window.history.replaceState(null, "", window.ReadingSession.buildUrl(restoredSession));
+            } else {
+                window.ReadingSession.clear();
+                restoredSession = null;
+            }
+        }
+    }
+
+    const regionName = restoredSession ? restoredSession.region : params.get("region");
+    const sessionType = (restoredSession ? restoredSession.sessionType : params.get("session_type")) || "reading"; // "reading" | "subject" | "mock_exam"
+    const label = restoredSession ? restoredSession.difficulty : params.get("difficulty"); // session_type에 따라 장르(비문학/문학) 또는 과목명
 
     if (!regionName || !label || !["reading", "subject", "mock_exam"].includes(sessionType)) {
         alert("잘못된 접근이에요. 로비로 돌아갈게요.");
@@ -47,7 +90,7 @@
 
     let durationMs = 0;
     if (sessionType === "mock_exam") {
-        const minutes = Number(params.get("duration")) || MOCK_EXAM_MINUTES[label];
+        const minutes = (restoredSession && Number(restoredSession.duration)) || Number(params.get("duration")) || MOCK_EXAM_MINUTES[label];
         if (!minutes) {
             alert("잘못된 접근이에요. 로비로 돌아갈게요.");
             window.location.href = "home.html";
@@ -95,9 +138,6 @@
         }
     };
 
-    // ── 캐릭터: 장착 중인 의상의 '독서 자세' 일러스트 ──
-    // outfit은 이제 폴더 경로(예: songjuheon/basic)라, 그 안의 reading.png를 먼저 시도하고
-    // 없으면(404) idle.png(기본 서있는 자세)로 자동 대체된다.
     async function loadCharacterIllustration() {
         try {
             const res = await fetch(`${API_BASE_URL}/users/me`, { headers: authHeaders() });
@@ -122,7 +162,7 @@
         }
     }
 
-    // ── 노란 반딧불이가 계속 위로 피어오르는 이펙트 ──
+    // 반딧불이
     function spawnFireflies() {
         const layer = document.getElementById("firefly-layer");
         for (let i = 0; i < FIREFLY_COUNT; i++) {
@@ -135,7 +175,7 @@
         }
     }
 
-    // ── 상단 라벨: 지금 뭘 하고 있는지(장르/과목/모의고사) 보여줌 ──
+    // 독서, 과목, 모의고사 표시
     function setupModeLabel() {
         const labelEl = document.getElementById("reading-mode-label");
         const timeLabelEl = document.getElementById("reading-time-label");
@@ -160,6 +200,8 @@
     let handledEnd = false;
     let tickIntervalId = null;
     let cutoffPerfMs = Infinity; // 이 performance.now() 값을 넘기면 더 이상 경과시간이 안 쌓인다(아래 참고)
+    let cutoffWallMs = Infinity; // 위와 같은 컷오프의 Date.now() 버전 - localStorage 저장은 벽시계 기준이라야
+                                  // 페이지를 새로 열었을 때(performance.now()가 0으로 리셋됨)도 비교할 수 있다.
     let hiddenSinceWallMs = null; // 탭/화면이 안 보이게 된 시점의 Date.now() - 다시 보일 때 이 구간만 보정(아래 startSessionClock 참고)
     let hiddenSincePerfMs = null; // 같은 순간의 performance.now() - 벽시계와 비교해서 "실제로 모자란 만큼"만 계산하는 데 씀
 
@@ -173,9 +215,8 @@
     // Date.now()는 이 계산에 딱 한 번만 참고용으로 쓰이고, 이후로는 다시 보지 않으므로 세션 도중
     // 시스템 시간을 바꿔도 이 컷오프 자체는 영향받지 않는다. 서버(logs.py)도 같은 규칙을 다시 한번
     // 검증하므로, 여기서는 "깜빡 잊고 켜둔" 흔한 경우를 화면에서 바로 반영해주는 역할이다.
-    function computeCutoffPerfMs(nowPerfMs) {
+    function computeCutoffWallMs(nowWallMs) {
         const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
-        const nowWallMs = Date.now();
         const kstNowMs = nowWallMs + KST_OFFSET_MS;
         const kstNowDate = new Date(kstNowMs);
         let cutoffKstMs = Date.UTC(
@@ -183,8 +224,7 @@
             1, 0, 0, 0
         );
         if (cutoffKstMs <= kstNowMs) cutoffKstMs += 24 * 60 * 60 * 1000; // 오늘 01시를 이미 지났으면 내일 01시
-        const cutoffWallMs = cutoffKstMs - KST_OFFSET_MS;
-        return nowPerfMs + (cutoffWallMs - nowWallMs);
+        return cutoffKstMs - KST_OFFSET_MS;
     }
 
     function getElapsedMs() {
@@ -269,9 +309,25 @@
         return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
     }
 
+    // 매초 진행 상황을 localStorage에 남긴다 - 탭이 갑자기 닫혀도(크래시, 강제 종료 등) 최대 1초
+    // 오차 안에서 진행 시간을 복구할 수 있다. 저장하는 accumulatedMs는 "지금까지 확정된" 값이라,
+    // 나중에 복구할 땐 이 값에서 새 구간을 시작하기만 하면 된다(탭이 닫혀있던 시간은 포함되지 않음).
+    function persistActiveSession() {
+        if (!sessionStarted || handledEnd || !window.ReadingSession) return;
+        window.ReadingSession.save({
+            region: regionName,
+            sessionType,
+            difficulty: label,
+            duration: sessionType === "mock_exam" ? Math.round(durationMs / 60000) : undefined,
+            accumulatedMs: getElapsedMs(),
+            cutoffWallMs,
+        });
+    }
+
     function tick() {
         const stopwatchEl = document.getElementById("reading-stopwatch");
         stopwatchEl.classList.toggle("stopwatch-paused", isPaused);
+        persistActiveSession();
 
         if (sessionType === "mock_exam") {
             const remainingMs = durationMs - getElapsedMs();
@@ -307,8 +363,16 @@
     }
 
     function startSessionClock() {
+        // 복구된 세션이 있으면 거기서 확정된 누적 시간부터 이어서 잰다 - 탭이 닫혀있던 구간은
+        // 세지 않는다(그 시간엔 실제로 독서를 안 했으니까). cutoffWallMs도 원래 세션이 시작될 때
+        // 계산해둔 값을 그대로 이어받아야, 탭을 닫았다 늦게 열어서 이미 새벽 1시를 넘긴 경우에도
+        // (ReadingSession.load가 이미 걸러내긴 하지만) 컷오프 자체가 새로 밀리지 않는다.
+        accumulatedMs = restoredSession ? Math.max(0, Number(restoredSession.accumulatedMs) || 0) : 0;
         segmentStartMs = performance.now();
-        cutoffPerfMs = computeCutoffPerfMs(segmentStartMs);
+        cutoffWallMs = (restoredSession && typeof restoredSession.cutoffWallMs === "number")
+            ? restoredSession.cutoffWallMs
+            : computeCutoffWallMs(Date.now());
+        cutoffPerfMs = segmentStartMs + (cutoffWallMs - Date.now());
         sessionStarted = true;
         document.getElementById("reading-pause-btn").hidden = false;
         document.getElementById("reading-end-btn").hidden = false;
@@ -435,6 +499,10 @@
                 handledEnd = false;
                 return;
             }
+
+            // 서버 저장이 끝났으니 안전망으로 남겨둔 진행 상황은 지운다 - 안 지우면 다음에 reading.html에
+            // 다시 들어갔을 때 이미 보상까지 받은 옛 세션이 계속 복구 대상으로 남는다.
+            window.ReadingSession?.clear();
 
             releaseWakeLock();
             document.getElementById("reading-complete-title").textContent = "독서 완료!";
@@ -598,20 +666,12 @@
 
     // 페이지 진입 즉시(암전) "입장하는 중"을 보여주다가, 배경/캐릭터 이미지 요청이 끝나면 가린다
     // (arena-battle.js의 showBattleEntrance와 같은 목적 - 서버/이미지 로딩 지연이 빈 화면으로 보이지 않게).
+    // 점 애니메이션 자체는 파일 맨 위에서 이미 시작해뒀으므로(regionLoadingDotTimer), 여기서는 실제
+    // 배경/캐릭터 로딩만 진행하고 끝나면 그 타이머를 멈추고 오버레이를 가린다.
     function showRegionEntrance() {
-        const overlay = document.getElementById("region-loading-overlay");
-        const dotsEl = document.getElementById("region-loading-dots");
-
-        let dotCount = 1;
-        if (dotsEl) dotsEl.textContent = ".";
-        const dotTimer = setInterval(() => {
-            dotCount = (dotCount % 3) + 1;
-            if (dotsEl) dotsEl.textContent = ".".repeat(dotCount);
-        }, 400);
-
         Promise.all([loadRegionBackground(), loadCharacterIllustration()]).finally(() => {
-            clearInterval(dotTimer);
-            if (overlay) overlay.hidden = true;
+            clearInterval(regionLoadingDotTimer);
+            if (regionLoadingOverlayEl) regionLoadingOverlayEl.hidden = true;
         });
     }
 
@@ -630,12 +690,25 @@
             if (!document.hidden) requestWakeLock();
         });
 
+        // 세션이 진행되는 동안(끝내기 전) 탭을 닫거나 새로고침하려 하면 브라우저 기본 경고창을
+        // 띄운다 - localStorage 복구가 있어도, 애초에 실수로 닫는 것 자체를 한 번 더 막아주는 게 낫다.
+        window.addEventListener("beforeunload", (e) => {
+            if (!sessionStarted || handledEnd) return;
+            e.preventDefault();
+            e.returnValue = "";
+        });
+
         if (sessionType === "mock_exam") {
             const stopwatchEl = document.getElementById("reading-stopwatch");
             stopwatchEl.textContent = formatRemaining(durationMs);
             document.getElementById("reading-pause-btn").hidden = true;
             document.getElementById("reading-end-btn").hidden = true;
-            runPreCountdown(startSessionClock);
+            // 이어서 하는 세션은 이미 한 번 카운트다운을 보고 시작한 것이므로 다시 보여주지 않는다.
+            if (restoredSession) {
+                startSessionClock();
+            } else {
+                runPreCountdown(startSessionClock);
+            }
         } else {
             startSessionClock();
         }
