@@ -5,15 +5,18 @@
 //         (토큰은 유효하므로 지우지 않는다 - 막힌 동안은 더 짧은 주기로 자동 재시도해서, 먼저 쓰던
 //         탭이 닫히거나 만료되면 새로고침 없이도 스스로 풀린다.)
 //
-// 탭이 닫힐 때 자리를 즉시 반납하는 releaseTabOnUnload(pagehide 훅)는 예전에 있었지만 제거했다 -
+// 탭이 닫힐 때 자리를 즉시 반납하는 releaseTabOnUnload(pagehide 훅)는 한동안 아예 제거돼 있었다 -
 // pagehide는 탭을 진짜로 닫을 때뿐 아니라 같은 탭에서 다른 페이지로 이동할 때도 그대로 발생하는데,
 // keepalive 요청이라 페이지가 이미 넘어간 뒤에도 백그라운드에서 살아있다가, 새 페이지가 이미 정상
-// 하트비트로 같은 tab_id 자리를 재청구한 "이후"에 뒤늦게 서버에 도달할 수 있었다. 그러면 방금 정상
-// 청구된 자리가 도로 비워지고, 그 틈을 다른 요청이 채가면 정작 지금 쓰고 있는 진짜 탭이 다음
-// 하트비트에서 "이미 다른 탭이 쓰고 있다"고 튕겨나가는 회귀가 있었다(특히 페이지 로드 즉시 자동으로
-// 다음 페이지로 넘어가는 흐름에서 이 경합이 좁은 시간 안에 자주 발생). 로그아웃은 서버가 /auth/logout
-// 에서 active_tab_id를 직접 지우므로 이 훅이 없어도 영향 없고, "탭을 그냥 닫아버린" 경우만 최대
-// SESSION_TIMEOUT_SECONDS(90초) 뒤 자연 만료 + 위 자동 재시도로(새로고침 없이) 조금 늦게 풀린다.
+// 하트비트로 같은 tab_id 자리를 재청구한 "이후"에 뒤늦게 서버에 도달해 그 자리를 도로 비워버리는
+// 회귀가 있었다. 그런데 훅을 통째로 없애니 "탭을 닫고 금방 다시 로그인/새로고침"하는 흔한 경우까지
+// 전부 SESSION_TIMEOUT_SECONDS(90초)를 꽉 채워 기다려야 하는 부작용이 생겨서(다른 창을 닫아도 나머지
+// 창의 "이미 접속 중" 표시가 새로고침해도 안 풀리는 문제), 아래처럼 LOAD_ID(탭이 아니라 "이 페이지가
+// 로드된 1회"마다 새로 발급 - 같은 탭이어도 페이지 이동하면 새로 발급됨)를 같이 실어보내는 방식으로
+// 다시 넣었다. 서버(routers/auth.py의 release_tab)가 tab_id뿐 아니라 이 LOAD_ID까지 지금 활성 claim과
+// 일치할 때만 반납을 받아들이므로, 낡은(같은 탭의 이전 페이지가 보낸) 반납 요청이 뒤늦게 도착해도
+// 이미 새 페이지가 자기 LOAD_ID로 갱신해둔 최신 claim을 잘못 지우지 않는다 - 원래 경합은 이렇게
+// 없앤 채로, 진짜 탭 종료 시엔 즉시 반납되는 이점만 되살렸다.
 // API_BASE_URL은 shared/api-config.js가 이 스크립트보다 먼저 로드되어 전역으로 제공한다.
 (function () {
     const HEARTBEAT_INTERVAL_MS = 30000;
@@ -37,6 +40,10 @@
         }
         return id;
     }
+
+    // tab_id와 달리 sessionStorage에 저장하지 않는다 - "이 페이지가 로드된 1회"를 식별해야 하므로, 같은
+    // 탭 안에서 다른 페이지로 이동하면(=이 스크립트가 다시 처음부터 실행되면) 매번 새로 발급돼야 한다.
+    const LOAD_ID = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}-${Math.random()}`;
 
     function showBlockedOverlay(message) {
         if (document.getElementById("dup-session-overlay")) return;
@@ -73,7 +80,7 @@
             const res = await fetch(`${API_BASE_URL}/auth/heartbeat`, {
                 method: "POST",
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ tab_id: getTabId() }),
+                body: JSON.stringify({ tab_id: getTabId(), load_id: LOAD_ID }),
             });
 
             if (res.status === 401) {
@@ -101,7 +108,23 @@
         scheduleNextHeartbeat();
     }
 
+    // 탭이 닫히거나(진짜 종료) 같은 탭에서 사이트 내 다른 페이지로 이동할 때 둘 다 발생한다 - 후자의
+    // 경우 이 요청이 새 페이지의 첫 하트비트보다 늦게 서버에 도달해도, 서버가 tab_id뿐 아니라 LOAD_ID까지
+    // 함께 확인해서 이미 새 페이지가 갱신해둔 최신 claim을 잘못 지우지 않는다(파일 상단 주석 참고).
+    // keepalive: true로 페이지가 이미 언로드된 뒤에도 요청이 배경에서 계속 전송되게 한다.
+    function releaseTabOnUnload() {
+        const token = localStorage.getItem("access_token");
+        if (!token) return;
+        fetch(`${API_BASE_URL}/auth/release-tab`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ tab_id: getTabId(), load_id: LOAD_ID }),
+            keepalive: true,
+        }).catch(() => {}); // 페이지가 이미 넘어가는 중이라 실패해도 딱히 할 수 있는 게 없다 - 다음 자연 만료로 대체.
+    }
+
     if (localStorage.getItem("access_token")) {
         sendHeartbeat(); // 이 안에서 scheduleNextHeartbeat()를 스스로 이어 불러 계속 반복한다.
+        window.addEventListener("pagehide", releaseTabOnUnload);
     }
 })();
