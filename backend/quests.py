@@ -18,7 +18,10 @@ KST = timezone(timedelta(hours=9))
 
 # 모의고사 난이도별 지정 시간(분). reading/reading.js의 MOCK_EXAM_MINUTES와 동일하게 유지해야 한다.
 # "모의고사를 봤다"로 인정하는 기준(아래 session_count의 mock_exam 분기)이 이 표를 기준으로 삼는다.
-MOCK_EXAM_MINUTES = {"국어": 80, "수학": 100, "수학(하프)": 50, "영어": 70, "영어(하프)": 40, "탐구": 30}
+MOCK_EXAM_MINUTES = {
+    "국어": 80, "수학": 100, "수학(하프)": 50, "영어": 70, "영어(하프)": 40,
+    "한국사": 30, "탐구": 30, "한문/제2외국어": 40,
+}
 
 
 def _daily_period_key(today: date | None = None) -> str:

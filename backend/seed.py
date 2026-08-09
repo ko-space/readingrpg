@@ -492,7 +492,7 @@ ACHIEVEMENTS = [
         "description": "기타 공부 누적 24시간 달성",
         "condition_type": "subject_minutes",
         "condition_value": 1440,
-        "condition_params": {"subjects": ["기타"]},
+        "condition_params": {"subjects": ["기타", "한국사", "한문/제2외국어"]},
         "reward_gold": 100,
     },
     {
