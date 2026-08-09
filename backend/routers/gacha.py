@@ -40,14 +40,14 @@ PICKUP_SCHEDULE = [
     {
         "start_at": datetime(2026, 8, 11, 21, 20, tzinfo=KST),  
         "banner_name": "픽업모집",
-        "image_file": "pickup-banner.png",
-        "characters": [{"character_name": "송주헌", "point_cost": 20, "rate_up": 0.99}],
+        "image_file": "pickup-banner-new3.png",
+        "characters": [{"character_name": "윤 & 호", "point_cost": 40, "rate_up": 0.75}],
     },
     {
         "start_at": datetime(2026, 8, 18, 21, 20, tzinfo=KST),  
         "banner_name": "픽업모집",
-        "image_file": "pickup-banner-new3.png",
-        "characters": [{"character_name": "윤 & 호", "point_cost": 40, "rate_up": 0.75}],
+        "image_file": "pickup-banner.png",
+        "characters": [{"character_name": "송주헌", "point_cost": 20, "rate_up": 0.99}],
     },    
   
 ]
