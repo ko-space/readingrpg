@@ -182,6 +182,12 @@ def add_reading_log(
     user.daily_reading_minutes += reading_minutes
     user.lifetime_reading_minutes += reading_minutes
 
+    # 로비의 "현재 지역" 표시(region_info)가 가리키는 값 - /regions/advance(순차 진행)는 프론트에서
+    # 아무도 호출하지 않아 사실상 죽은 경로라, 대신 "가장 최근에 입장해 학습을 완료한 지역"으로
+    # 갱신한다. 이 함수는 던전 화면에서 지역을 자유롭게 골라 들어온 뒤 세션을 마칠 때마다 호출되므로,
+    # 여기서 갱신하는 게 곧 "최근 입장 지역"과 같은 의미가 된다.
+    user.current_region_id = region.id
+
     new_log = ReadingLog(
         user_id=user.id,
         region_id=region.id,

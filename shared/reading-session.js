@@ -19,16 +19,19 @@ window.ReadingSession = (function () {
             if (!session || typeof session !== "object" || !session.region || !session.sessionType || !session.difficulty) {
                 return null;
             }
-            // 새벽 1시 컷오프(서버/reading.js와 동일한 규칙)를 이미 지난 세션은 더 이상 유효하지
-            // 않다 - 복구하지 않고 조용히 지운다(어차피 서버도 그만큼은 인정해주지 않는다).
-            if (typeof session.cutoffWallMs === "number" && Date.now() >= session.cutoffWallMs) {
-                clear();
-                return null;
-            }
             return session;
         } catch (err) {
             return null;
         }
+    }
+
+    // 새벽 1시 컷오프(서버/reading.js와 동일한 규칙)를 이미 지난 세션인지. 지났다면 더 이상 이어서
+    // 잴 순 없지만, 컷오프 전까지 쌓인 시간(accumulatedMs)은 실제로 공부한 시간이니 그냥 버리면 안 된다
+    // - reading.js가 이 값을 그대로 자동 제출해서(모의고사가 시간 종료 시 자동 제출되는 것과 동일한
+    // 취급) 보상을 지급한 뒤에 지운다. load()가 알아서 지우지 않는 이유도 이 때문 - 호출부가 먼저
+    // isExpired로 판단해서 제출을 시도하고, 성공했을 때만 clear()해야 유실 없이 안전하다.
+    function isExpired(session) {
+        return typeof session.cutoffWallMs === "number" && Date.now() >= session.cutoffWallMs;
     }
 
     function clear() {
@@ -48,5 +51,5 @@ window.ReadingSession = (function () {
         return `reading.html?${p.toString()}`;
     }
 
-    return { save, load, clear, buildUrl };
+    return { save, load, clear, buildUrl, isExpired };
 })();
