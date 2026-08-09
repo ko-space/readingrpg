@@ -1,6 +1,106 @@
 {
   "신화": [
     {
+      "name": "방임석",
+      "job_class": "화백",
+      "gender": "남",
+      "outfits": {
+        "기본": "artist/basic"
+      },
+      "description": "그는 학생의 자율성을 존중했을 뿐. 방치한 것이 아닙니다.",
+      "range": "원거리",
+      "attack_type": "Parent",
+      "defense_type": "Teacher",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": 0,
+        "4": 0,
+        "5": 2.8,
+        "6": 15
+      },
+      "exp_subjects": ["탐구", "기타"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "예술가의 혼: 자신을 제외한 전장 내 인물이 [Active] 스킬을 발동할 때마다, 그 스킬이 가진 효과 종류에 따라 물감을 각각 1개씩 획득. \n- 피해: 빨간 물감\n- 회복·특수: 파란 물감\n- 강화·약화·CC: 노란 물감",
+        "4": "예술가의 혼: 자신을 제외한 전장 내 인물이 [Active] 스킬을 발동할 때마다, 그 스킬이 가진 효과 종류에 따라 물감을 각각 1개씩 획득. \n- 피해: 빨간 물감\n- 회복·특수: 파란 물감\n- 강화·약화·CC: 노란 물감",
+        "5": "예술가의 혼: 자신을 제외한 전장 내 인물이 [Active] 스킬을 발동할 때마다, 그 스킬이 가진 효과 종류에 따라 물감을 각각 1개씩 획득. \n- 피해: 빨간 물감\n- 회복·특수: 파란 물감\n- 강화·약화·CC: 노란 물감",
+        "6": "예술가의 혼: 자신을 제외한 전장 내 인물이 [Active] 스킬을 발동할 때마다, 그 스킬이 가진 효과 종류에 따라 물감을 각각 2개씩 획득. \n- 피해: 빨간 물감\n- 회복·특수: 파란 물감\n- 강화·약화·CC: 노란 물감"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": "제목은 관객이 정하세요: 보유한 물감을 전부 소모하여 작품을 완성하고, 물감의 종류에 따라 다음 효과 발동.\n- 빨간 물감 1개당: 공격 대상에게 공격력의 80% 피해\n- 파란 물감 1개당: 체력이 가장 낮은 아군의 최대 체력 5% 회복\n- 노란 물감 1개당: 적 전체를 0.5초 기절\n보유한 물감이 없는 경우 공격 대상에게 공격력의 150%만큼 피해",
+        "5": "제목은 관객이 정하세요: 보유한 물감을 전부 소모하여 작품을 완성하고, 물감의 종류에 따라 다음 효과 발동.\n- 빨간 물감 1개당: 공격 대상에게 공격력의 150% 피해\n- 파란 물감 1개당: 체력이 가장 낮은 아군의 최대 체력 5% 회복\n- 노란 물감 1개당: 적 전체를 0.5초 기절\n보유한 물감이 없는 경우 공격 대상에게 공격력의 150%만큼 피해",
+        "6": "제목은 관객이 정하세요: 보유한 물감을 전부 소모하여 작품을 완성하고, 물감의 종류에 따라 다음 효과 발동.\n- 빨간 물감 1개당: 공격 대상에게 공격력의 300% 피해\n- 파란 물감 1개당: 체력이 가장 낮은 아군의 최대 체력 15% 회복\n- 노란 물감 1개당: 적 전체를 1초 기절\n보유한 물감이 없는 경우 공격 대상에게 공격력의 300%만큼 피해"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "방임: 아군 학생 타입 보유 인물이 존재하는 동안(공격/방어 상관없이) 자신 기절, 받는 피해량 50% 감소",
+        "6": "방임: 아군 학생 타입 보유 인물이 존재하는 동안(공격/방어 상관없이) 자신 기절, 받는 피해량 75% 감소, 2초마다 무작위 물감 1개 획득"
+      },
+      "star_mechanics": {
+        "effect_type": "gain_paint_on_active_use",
+        "params": {
+          "3": {
+            "amount_per_use": 1
+          },
+          "4": {
+            "amount_per_use": 1
+          },
+          "5": {
+            "amount_per_use": 1
+          },
+          "6": {
+            "amount_per_use": 2
+          }
+        }
+      },
+      "skill_mechanics": {
+        "effect_type": "consume_paint_multi_effect",
+        "params": {
+          "4": {
+            "red_percent_per_paint": 80,
+            "blue_percent_per_paint": 5,
+            "yellow_seconds_per_paint": 0.5,
+            "no_paint_multiplier": 150
+          },
+          "5": {
+            "red_percent_per_paint": 150,
+            "blue_percent_per_paint": 5,
+            "yellow_seconds_per_paint": 0.5,
+            "no_paint_multiplier": 150
+          },
+          "6": {
+            "red_percent_per_paint": 300,
+            "blue_percent_per_paint": 15,
+            "yellow_seconds_per_paint": 1,
+            "no_paint_multiplier": 300
+          }
+        }
+      },
+      "skill_categories": ["yellow"],
+      "trait_mechanics": {
+        "effect_type": "conditional_stun_dr_ally_type",
+        "params": {
+          "5": {
+            "ally_type": "Student",
+            "dr_percent": 50
+          },
+          "6": {
+            "ally_type": "Student",
+            "dr_percent": 75,
+            "paint_interval_seconds": 2
+          }
+        }
+      }
+    },
+    {
       "name": "윤대웅",
       "job_class": "사진 작가",
       "gender": "남",
@@ -190,106 +290,6 @@
           }
         }
       }
-    },
-    {
-      "name": "방임석",
-      "job_class": "화백",
-      "gender": "남",
-      "outfits": {
-        "기본": "artist/basic"
-      },
-      "description": "그는 학생의 자율성을 존중했을 뿐. 방치한 것이 아닙니다.",
-      "range": "원거리",
-      "attack_type": "Parent",
-      "defense_type": "Teacher",
-      "exp_multiplier": {
-        "1": null,
-        "2": null,
-        "3": 0,
-        "4": 0,
-        "5": 2.8,
-        "6": 15
-      },
-      "exp_subjects": ["탐구", "기타"],
-      "star_effects": {
-        "1": "해당 성급의 별도 효과가 없습니다.",
-        "2": "해당 성급의 별도 효과가 없습니다.",
-        "3": "예술가의 혼: 자신을 제외한 전장 내 인물이 [Active] 스킬을 발동할 때마다, 그 스킬이 가진 효과 종류에 따라 물감을 각각 1개씩 획득. \n- 피해: 빨간 물감\n- 회복·특수: 파란 물감\n- 강화·약화·CC: 노란 물감",
-        "4": "예술가의 혼: 자신을 제외한 전장 내 인물이 [Active] 스킬을 발동할 때마다, 그 스킬이 가진 효과 종류에 따라 물감을 각각 1개씩 획득. \n- 피해: 빨간 물감\n- 회복·특수: 파란 물감\n- 강화·약화·CC: 노란 물감",
-        "5": "예술가의 혼: 자신을 제외한 전장 내 인물이 [Active] 스킬을 발동할 때마다, 그 스킬이 가진 효과 종류에 따라 물감을 각각 1개씩 획득. \n- 피해: 빨간 물감\n- 회복·특수: 파란 물감\n- 강화·약화·CC: 노란 물감",
-        "6": "예술가의 혼: 자신을 제외한 전장 내 인물이 [Active] 스킬을 발동할 때마다, 그 스킬이 가진 효과 종류에 따라 물감을 각각 2개씩 획득. \n- 피해: 빨간 물감\n- 회복·특수: 파란 물감\n- 강화·약화·CC: 노란 물감"
-      },
-      "skill_effects": {
-        "1": null,
-        "2": null,
-        "3": null,
-        "4": "제목은 관객이 정하세요: 보유한 물감을 전부 소모하여 작품을 완성하고, 물감의 종류에 따라 다음 효과 발동.\n- 빨간 물감 1개당: 공격 대상에게 공격력의 80% 피해\n- 파란 물감 1개당: 체력이 가장 낮은 아군의 최대 체력 5% 회복\n- 노란 물감 1개당: 적 전체를 0.5초 기절\n보유한 물감이 없는 경우 공격 대상에게 공격력의 150%만큼 피해",
-        "5": "제목은 관객이 정하세요: 보유한 물감을 전부 소모하여 작품을 완성하고, 물감의 종류에 따라 다음 효과 발동.\n- 빨간 물감 1개당: 공격 대상에게 공격력의 150% 피해\n- 파란 물감 1개당: 체력이 가장 낮은 아군의 최대 체력 5% 회복\n- 노란 물감 1개당: 적 전체를 0.5초 기절\n보유한 물감이 없는 경우 공격 대상에게 공격력의 150%만큼 피해",
-        "6": "제목은 관객이 정하세요: 보유한 물감을 전부 소모하여 작품을 완성하고, 물감의 종류에 따라 다음 효과 발동.\n- 빨간 물감 1개당: 공격 대상에게 공격력의 300% 피해\n- 파란 물감 1개당: 체력이 가장 낮은 아군의 최대 체력 15% 회복\n- 노란 물감 1개당: 적 전체를 1초 기절\n보유한 물감이 없는 경우 공격 대상에게 공격력의 300%만큼 피해"
-      },
-      "trait_effects": {
-        "1": null,
-        "2": null,
-        "3": null,
-        "4": null,
-        "5": "방임: 아군 학생 타입 보유 인물이 존재하는 동안(공격/방어 상관없이) 자신 기절, 받는 피해량 50% 감소",
-        "6": "방임: 아군 학생 타입 보유 인물이 존재하는 동안(공격/방어 상관없이) 자신 기절, 받는 피해량 75% 감소, 2초마다 무작위 물감 1개 획득"
-      },
-      "star_mechanics": {
-        "effect_type": "gain_paint_on_active_use",
-        "params": {
-          "3": {
-            "amount_per_use": 1
-          },
-          "4": {
-            "amount_per_use": 1
-          },
-          "5": {
-            "amount_per_use": 1
-          },
-          "6": {
-            "amount_per_use": 2
-          }
-        }
-      },
-      "skill_mechanics": {
-        "effect_type": "consume_paint_multi_effect",
-        "params": {
-          "4": {
-            "red_percent_per_paint": 80,
-            "blue_percent_per_paint": 5,
-            "yellow_seconds_per_paint": 0.5,
-            "no_paint_multiplier": 150
-          },
-          "5": {
-            "red_percent_per_paint": 150,
-            "blue_percent_per_paint": 5,
-            "yellow_seconds_per_paint": 0.5,
-            "no_paint_multiplier": 150
-          },
-          "6": {
-            "red_percent_per_paint": 300,
-            "blue_percent_per_paint": 15,
-            "yellow_seconds_per_paint": 1,
-            "no_paint_multiplier": 300
-          }
-        }
-      },
-      "skill_categories": ["yellow"],
-      "trait_mechanics": {
-        "effect_type": "conditional_stun_dr_ally_type",
-        "params": {
-          "5": {
-            "ally_type": "Student",
-            "dr_percent": 50
-          },
-          "6": {
-            "ally_type": "Student",
-            "dr_percent": 75,
-            "paint_interval_seconds": 2
-          }
-        }
-      }
     }
   ],
   "전설": [
@@ -390,6 +390,124 @@
           "6": {
             "job_type": "Student",
             "hp_percent": 50
+          }
+        }
+      }
+    },
+    {
+      "name": "윤 & 호",
+      "job_class": "마법사",
+      "gender": "여",
+      "outfits": {
+        "기본": "mage_2/basic"
+      },
+      "description": "둘은 절대 떨어지지 않습니다.",
+      "range": "근거리",
+      "attack_type": "Student",
+      "defense_type": "Parent",
+      "exp_multiplier": {
+        "1": null,
+        "2": 2.0,
+        "3": 2.0,
+        "4": 2.0,
+        "5": 2.7,
+        "6": 14.5
+      },
+      "exp_subjects": ["국어", "탐구"],
+      "is_hidden": true,
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "영혼 흡수: 적 캐릭터 처치 시 최대 체력의 15% 회복",
+        "4": "영혼 흡수: 적 캐릭터 처치 시 최대 체력의 15% 회복",
+        "5": "영혼 흡수: 적 캐릭터 처치 시 최대 체력의 15% 회복",
+        "6": "영혼 흡수: 적 캐릭터 처치 시 최대 체력의 45% 회복"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": "호 출격!: 자신의 최대 체력 5%를 소모해 최대 체력 15%와 공격력 350%를 지닌 ‘호’를 소환한다. 호는 가장 가까운 적에게 돌진해 피해를 입힌다.",
+        "5": "호 출격!: 자신의 최대 체력 5%를 소모해 최대 체력 15%와 공격력 350%를 지닌 ‘호’를 소환한다. 호는 가장 가까운 적에게 돌진해 피해를 입힌다.",
+        "6": "호 출격!: 자신의 최대 체력 15%를 소모해 최대 체력 50%와 공격력 500%를 지닌 ‘호’를 소환한다. 호는 가장 가까운 적에게 돌진해 피해를 입힌다."
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "선생 고혈: 교사 타입 대상(공격/방어 상관없이)으로 기본 공격 시 체력 5 회복",
+        "6": "선생 고혈: 교사 타입 대상(공격/방어 상관없이)으로 기본 공격 시 체력 15 회복"
+      },
+      "skill_mechanics": {
+        "effect_type": "summon_clone",
+        "params": {
+          "4": {
+            "hp_percent": 15,
+            "atk_percent": 350,
+            "hp_cost_percent": 5,
+            "clone_name": "호",
+            "clone_gender": "남",
+            "clone_sprite_variant": "_ho",
+            "clone_sprite_outfit": "mage_2/basic",
+            "clone_self_destruct": true,
+            "clone_render_on_top": true,
+            "clone_copy_stat_percent": 50
+          },
+          "5": {
+            "hp_percent": 15,
+            "atk_percent": 350,
+            "hp_cost_percent": 5,
+            "clone_name": "호",
+            "clone_gender": "남",
+            "clone_sprite_variant": "_ho",
+            "clone_sprite_outfit": "mage_2/basic",
+            "clone_self_destruct": true,
+            "clone_render_on_top": true,
+            "clone_copy_stat_percent": 50
+          },
+          "6": {
+            "hp_percent": 50,
+            "atk_percent": 500,
+            "hp_cost_percent": 15,
+            "clone_name": "호",
+            "clone_gender": "남",
+            "clone_sprite_variant": "_ho",
+            "clone_sprite_outfit": "mage_2/basic",
+            "clone_self_destruct": true,
+            "clone_render_on_top": true,
+            "clone_copy_stat_percent": 50
+          }
+        }
+      },
+      "skill_categories": ["blue"],
+      "star_mechanics": {
+        "effect_type": "kill_heal_percent",
+        "params": {
+          "3": {
+            "percent": 15
+          },
+          "4": {
+            "percent": 15
+          },
+          "5": {
+            "percent": 15
+          },
+          "6": {
+            "percent": 45
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "type_attack_lifesteal",
+        "params": {
+          "5": {
+            "type": "Teacher",
+            "amount": 5
+          },
+          "6": {
+            "type": "Teacher",
+            "amount": 15
           }
         }
       }
@@ -592,214 +710,9 @@
           }
         }
       }
-    },
-    {
-      "name": "윤 & 호",
-      "job_class": "마법사",
-      "gender": "남",
-      "outfits": {
-        "기본": "mage_2/basic"
-      },
-      "description": "둘은 절대 떨어지지 않습니다.",
-      "range": "근거리",
-      "attack_type": "Student",
-      "defense_type": "Parent",
-      "exp_multiplier": {
-        "1": null,
-        "2": 2.0,
-        "3": 2.0,
-        "4": 2.0,
-        "5": 2.7,
-        "6": 14.5
-      },
-      "exp_subjects": ["국어", "탐구"],
-      "is_hidden": true,
-      "star_effects": {
-        "1": "해당 성급의 별도 효과가 없습니다.",
-        "2": "해당 성급의 별도 효과가 없습니다.",
-        "3": "영혼 흡수: 적 캐릭터 처치 시 최대 체력의 15% 회복",
-        "4": "영혼 흡수: 적 캐릭터 처치 시 최대 체력의 15% 회복",
-        "5": "영혼 흡수: 적 캐릭터 처치 시 최대 체력의 15% 회복",
-        "6": "영혼 흡수: 적 캐릭터 처치 시 최대 체력의 45% 회복"
-      },
-      "skill_effects": {
-        "1": null,
-        "2": null,
-        "3": null,
-        "4": "호 출격!: 자신의 최대 체력 5%를 소모해 최대 체력 15%와 공격력 350%를 지닌 ‘호’를 소환한다. 호는 가장 가까운 적에게 돌진해 피해를 입힌다.",
-        "5": "호 출격!: 자신의 최대 체력 5%를 소모해 최대 체력 15%와 공격력 350%를 지닌 ‘호’를 소환한다. 호는 가장 가까운 적에게 돌진해 피해를 입힌다.",
-        "6": "호 출격!: 자신의 최대 체력 15%를 소모해 최대 체력 50%와 공격력 500%를 지닌 ‘호’를 소환한다. 호는 가장 가까운 적에게 돌진해 피해를 입힌다."
-      },
-      "trait_effects": {
-        "1": null,
-        "2": null,
-        "3": null,
-        "4": null,
-        "5": "선생 고혈: 교사 타입 대상(공격/방어 상관없이)으로 기본 공격 시 체력 5 회복",
-        "6": "선생 고혈: 교사 타입 대상(공격/방어 상관없이)으로 기본 공격 시 체력 15 회복"
-      },
-      "skill_mechanics": {
-        "effect_type": "summon_clone",
-        "params": {
-          "4": {
-            "hp_percent": 15,
-            "atk_percent": 350,
-            "hp_cost_percent": 5,
-            "clone_name": "호",
-            "clone_sprite_variant": "_ho",
-            "clone_sprite_outfit": "mage_2/basic",
-            "clone_self_destruct": true,
-            "clone_render_on_top": true,
-            "clone_copy_stat_percent": 50
-          },
-          "5": {
-            "hp_percent": 15,
-            "atk_percent": 350,
-            "hp_cost_percent": 5,
-            "clone_name": "호",
-            "clone_sprite_variant": "_ho",
-            "clone_sprite_outfit": "mage_2/basic",
-            "clone_self_destruct": true,
-            "clone_render_on_top": true,
-            "clone_copy_stat_percent": 50
-          },
-          "6": {
-            "hp_percent": 50,
-            "atk_percent": 500,
-            "hp_cost_percent": 15,
-            "clone_name": "호",
-            "clone_sprite_variant": "_ho",
-            "clone_sprite_outfit": "mage_2/basic",
-            "clone_self_destruct": true,
-            "clone_render_on_top": true,
-            "clone_copy_stat_percent": 50
-          }
-        }
-      },
-      "skill_categories": ["blue"],
-      "star_mechanics": {
-        "effect_type": "kill_heal_percent",
-        "params": {
-          "3": {
-            "percent": 15
-          },
-          "4": {
-            "percent": 15
-          },
-          "5": {
-            "percent": 15
-          },
-          "6": {
-            "percent": 45
-          }
-        }
-      },
-      "trait_mechanics": {
-        "effect_type": "type_attack_lifesteal",
-        "params": {
-          "5": {
-            "type": "Teacher",
-            "amount": 5
-          },
-          "6": {
-            "type": "Teacher",
-            "amount": 15
-          }
-        }
-      }
     }
   ],
   "영웅": [
-    {
-      "name": "이영웅",
-      "job_class": "영웅",
-      "gender": "남",
-      "outfits": {
-        "기본": "hero/basic",
-        "여름": "hero/summer",
-        "겨울": "hero/winter"
-      },
-      "description": "건국대 의대에 영웅이 등장합니다. 말 그대로 영웅이었습니다.",
-      "range": "근거리",
-      "attack_type": "Parent",
-      "defense_type": "Student",
-      "exp_multiplier": {
-        "1": null,
-        "2": 1.9,
-        "3": 1.9,
-        "4": 1.9,
-        "5": 2.5,
-        "6": 13
-      },
-      "exp_subjects": ["수학"],
-      "star_effects": {
-        "1": "해당 성급의 별도 효과가 없습니다.",
-        "2": "해당 성급의 별도 효과가 없습니다.",
-        "3": "수면 부족: 자신을 제외한 모든 인물의 공격력 25% 감소",
-        "4": "수면 부족: 자신을 제외한 모든 인물의 공격력 25% 감소",
-        "5": "수면 부족: 자신을 제외한 모든 인물의 공격력 25% 감소",
-        "6": "수면 부족: 자신을 제외한 모든 인물의 공격력 50% 감소"
-      },
-      "skill_effects": {
-        "1": null,
-        "2": null,
-        "3": null,
-        "4": "청진기 진료: 아군의 체력을 대상의 최대 체력의 10%만큼 회복",
-        "5": "청진기 진료: 아군의 체력을 대상의 최대 체력의 10%만큼 회복",
-        "6": "청진기 진료: 아군의 체력을 대상의 최대 체력의 20%만큼 회복"
-      },
-      "trait_effects": {
-        "1": null,
-        "2": null,
-        "3": null,
-        "4": null,
-        "5": "히포크라테스 선서: 자신이 죽을 때, 아군에게 \"이영웅\"의 최대 체력의 10%만큼 회복",
-        "6": "히포크라테스 선서: 자신이 죽을 때, 아군에게 \"이영웅\"의 최대 체력의 20%만큼 회복"
-      },
-      "skill_mechanics": {
-        "effect_type": "heal_ally_percent_max_hp",
-        "params": {
-          "5": {
-            "percent": 10
-          },
-          "6": {
-            "percent": 20
-          },
-          "4": {
-            "percent": 10
-          }
-        }
-      },
-      "skill_categories": ["blue"],
-      "star_mechanics": {
-        "effect_type": "debuff_all_others_atk",
-        "params": {
-          "3": {
-            "percent": 25
-          },
-          "4": {
-            "percent": 25
-          },
-          "5": {
-            "percent": 25
-          },
-          "6": {
-            "percent": 50
-          }
-        }
-      },
-      "trait_mechanics": {
-        "effect_type": "death_heal_ally",
-        "params": {
-          "5": {
-            "percent": 10
-          },
-          "6": {
-            "percent": 20
-          }
-        }
-      }
-    },
     {
       "name": "불빠따 김어진",
       "job_class": "타자",
@@ -890,6 +803,96 @@
           },
           "6": {
             "percent": 100
+          }
+        }
+      }
+    },
+    {
+      "name": "이영웅",
+      "job_class": "영웅",
+      "gender": "남",
+      "outfits": {
+        "기본": "hero/basic",
+        "여름": "hero/summer",
+        "겨울": "hero/winter"
+      },
+      "description": "건국대 의대에 영웅이 등장합니다. 말 그대로 영웅이었습니다.",
+      "range": "근거리",
+      "attack_type": "Parent",
+      "defense_type": "Student",
+      "exp_multiplier": {
+        "1": null,
+        "2": 1.9,
+        "3": 1.9,
+        "4": 1.9,
+        "5": 2.5,
+        "6": 13
+      },
+      "exp_subjects": ["수학"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "수면 부족: 자신을 제외한 모든 인물의 공격력 25% 감소",
+        "4": "수면 부족: 자신을 제외한 모든 인물의 공격력 25% 감소",
+        "5": "수면 부족: 자신을 제외한 모든 인물의 공격력 25% 감소",
+        "6": "수면 부족: 자신을 제외한 모든 인물의 공격력 50% 감소"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": "청진기 진료: 모든 아군의 체력을 각자 최대 체력의 10%만큼 회복",
+        "5": "청진기 진료: 모든 아군의 체력을 각자 최대 체력의 10%만큼 회복",
+        "6": "청진기 진료: 모든 아군의 체력을 각자 최대 체력의 20%만큼 회복"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "히포크라테스 선서: 자신이 죽을 때, 아군에게 \"이영웅\"의 최대 체력의 10%만큼 회복",
+        "6": "히포크라테스 선서: 자신이 죽을 때, 아군에게 \"이영웅\"의 최대 체력의 20%만큼 회복"
+      },
+      "skill_mechanics": {
+        "effect_type": "heal_ally_percent_max_hp",
+        "params": {
+          "5": {
+            "percent": 10
+          },
+          "6": {
+            "percent": 20
+          },
+          "4": {
+            "percent": 10
+          }
+        }
+      },
+      "skill_categories": ["blue"],
+      "star_mechanics": {
+        "effect_type": "debuff_all_others_atk",
+        "params": {
+          "3": {
+            "percent": 25
+          },
+          "4": {
+            "percent": 25
+          },
+          "5": {
+            "percent": 25
+          },
+          "6": {
+            "percent": 50
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "death_heal_ally",
+        "params": {
+          "5": {
+            "percent": 10
+          },
+          "6": {
+            "percent": 20
           }
         }
       }
@@ -991,107 +994,6 @@
   ],
   "희귀": [
     {
-      "name": "서민석",
-      "job_class": "학생",
-      "gender": "남",
-      "outfits": {
-        "기본": "sms/basic",
-        "여름": "sms/summer",
-        "겨울": "sms/winter"
-      },
-      "description": "책 읽는 모습이 정서적 귀감이 됩니다.",
-      "range": "원거리",
-      "attack_type": "Student",
-      "defense_type": "Parent",
-      "exp_multiplier": {
-        "1": null,
-        "2": 1.8,
-        "3": 1.8,
-        "4": 1.8,
-        "5": 2.4,
-        "6": 12
-      },
-      "exp_subjects": ["영어"],
-      "star_effects": {
-        "1": "해당 성급의 별도 효과가 없습니다.",
-        "2": "해당 성급의 별도 효과가 없습니다.",
-        "3": "행복: 여성인 아군 전체의 공격력과 최대 체력 25% 증가",
-        "4": "행복: 여성인 아군 전체의 공격력과 최대 체력 25% 증가",
-        "5": "행복: 여성인 아군 전체의 공격력과 최대 체력 25% 증가",
-        "6": "행복: 여성인 아군 전체의 공격력과 최대 체력 75% 증가"
-      },
-      "skill_effects": {
-        "1": null,
-        "2": null,
-        "3": null,
-        "4": "고백: 남성인 적 전체에게 공격력의 150%만큼 피해, 여성인 적 전체에게 공격력의 300%만큼 피해",
-        "5": "고백: 남성인 적 전체에게 공격력의 150%만큼 피해, 여성인 적 전체에게 공격력의 300%만큼 피해",
-        "6": "고백: 남성인 적 전체에게 공격력의 300%만큼 피해, 여성인 적 전체에게 공격력의 600%만큼 피해"
-      },
-      "trait_effects": {
-        "1": null,
-        "2": null,
-        "3": null,
-        "4": null,
-        "5": "본능: (전장 내 여성 인물의 수)x20%만큼 공격속도 증가",
-        "6": "본능: (전장 내 여성 인물의 수)x30%만큼 공격속도 증가"
-      },
-      "skill_mechanics": {
-        "effect_type": "aoe_gendered_damage",
-        "params": {
-          "5": {
-            "male_multiplier": 150,
-            "female_multiplier": 300
-          },
-          "6": {
-            "male_multiplier": 300,
-            "female_multiplier": 600
-          },
-          "4": {
-            "male_multiplier": 150,
-            "female_multiplier": 300
-          }
-        }
-      },
-      "skill_categories": ["red"],
-      "star_mechanics": {
-        "effect_type": "ally_gender_stat_percent",
-        "params": {
-          "3": {
-            "gender": "여",
-            "atk_percent": 25,
-            "hp_percent": 25
-          },
-          "4": {
-            "gender": "여",
-            "atk_percent": 25,
-            "hp_percent": 25
-          },
-          "5": {
-            "gender": "여",
-            "atk_percent": 25,
-            "hp_percent": 25
-          },
-          "6": {
-            "gender": "여",
-            "atk_percent": 75,
-            "hp_percent": 75
-          }
-        }
-      },
-      "trait_mechanics": {
-        "effect_type": "female_count_haste",
-        "params": {
-          "5": {
-            "percent_per_female": 20
-          },
-          "6": {
-            "percent_per_female": 30
-          }
-        }
-      }
-    },
-    {
       "name": "강승유",
       "job_class": "학생",
       "gender": "남",
@@ -1188,6 +1090,107 @@
             "job_type": "Student",
             "atk_percent": 45,
             "hp_percent": 45
+          }
+        }
+      }
+    },
+    {
+      "name": "서민석",
+      "job_class": "학생",
+      "gender": "남",
+      "outfits": {
+        "기본": "sms/basic",
+        "여름": "sms/summer",
+        "겨울": "sms/winter"
+      },
+      "description": "책 읽는 모습이 정서적 귀감이 됩니다.",
+      "range": "원거리",
+      "attack_type": "Student",
+      "defense_type": "Parent",
+      "exp_multiplier": {
+        "1": null,
+        "2": 1.8,
+        "3": 1.8,
+        "4": 1.8,
+        "5": 2.4,
+        "6": 12
+      },
+      "exp_subjects": ["영어"],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "행복: 여성인 아군 전체의 공격력과 최대 체력 25% 증가",
+        "4": "행복: 여성인 아군 전체의 공격력과 최대 체력 25% 증가",
+        "5": "행복: 여성인 아군 전체의 공격력과 최대 체력 25% 증가",
+        "6": "행복: 여성인 아군 전체의 공격력과 최대 체력 75% 증가"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": "고백: 남성인 적 전체에게 공격력의 150%만큼 피해, 여성인 적 전체에게 공격력의 300%만큼 피해",
+        "5": "고백: 남성인 적 전체에게 공격력의 150%만큼 피해, 여성인 적 전체에게 공격력의 300%만큼 피해",
+        "6": "고백: 남성인 적 전체에게 공격력의 300%만큼 피해, 여성인 적 전체에게 공격력의 600%만큼 피해"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "본능: (전장 내 여성 인물의 수)x20%만큼 공격속도 증가",
+        "6": "본능: (전장 내 여성 인물의 수)x30%만큼 공격속도 증가"
+      },
+      "skill_mechanics": {
+        "effect_type": "aoe_gendered_damage",
+        "params": {
+          "5": {
+            "male_multiplier": 150,
+            "female_multiplier": 300
+          },
+          "6": {
+            "male_multiplier": 300,
+            "female_multiplier": 600
+          },
+          "4": {
+            "male_multiplier": 150,
+            "female_multiplier": 300
+          }
+        }
+      },
+      "skill_categories": ["red"],
+      "star_mechanics": {
+        "effect_type": "ally_gender_stat_percent",
+        "params": {
+          "3": {
+            "gender": "여",
+            "atk_percent": 25,
+            "hp_percent": 25
+          },
+          "4": {
+            "gender": "여",
+            "atk_percent": 25,
+            "hp_percent": 25
+          },
+          "5": {
+            "gender": "여",
+            "atk_percent": 25,
+            "hp_percent": 25
+          },
+          "6": {
+            "gender": "여",
+            "atk_percent": 75,
+            "hp_percent": 75
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "female_count_haste",
+        "params": {
+          "5": {
+            "percent_per_female": 20
+          },
+          "6": {
+            "percent_per_female": 30
           }
         }
       }
@@ -1294,15 +1297,15 @@
   ],
   "일반": [
     {
-      "name": "최재혁",
-      "job_class": "마법사",
-      "gender": "남",
+      "name": "강 희",
+      "job_class": "1반 학생",
+      "gender": "여",
       "outfits": {
-        "기본": "mage_weak/basic",
-        "여름": "mage_weak/summer",
-        "겨울": "mage_weak/winter"
+        "기본": "student/basic",
+        "여름": "student/summer",
+        "겨울": "student/winter"
       },
-      "description": "미디어실에 상주하는 최약체 마법사입니다.",
+      "description": "직접 찾아가보세요.",
       "range": "근거리",
       "attack_type": "Student",
       "defense_type": "Student",
@@ -1314,73 +1317,73 @@
         "5": 2.2,
         "6": 11
       },
-      "exp_subjects": ["영어"],
+      "exp_subjects": ["국어"],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
-        "3": "설교와 수정: 후방 적 우선 공격",
-        "4": "설교와 수정: 후방 적 우선 공격",
-        "5": "설교와 수정: 후방 적 우선 공격",
-        "6": "설교와 수정: 후방 적 우선 공격, 후방 적 생존 시 공격력 25% 증가"
+        "3": "철면피: 최대 체력 25% 증가",
+        "4": "철면피: 최대 체력 25% 증가",
+        "5": "철면피: 최대 체력 25% 증가",
+        "6": "철면피: 최대 체력 75% 증가"
       },
       "skill_effects": {
         "1": null,
         "2": null,
         "3": null,
-        "4": "환상살: 자신에게 1.5초간 모든 피해를 무효화하는 보호막 부여",
-        "5": "환상살: 자신에게 1.5초간 모든 피해를 무효화하는 보호막 부여",
-        "6": "환상살: 자신에게 3초간 모든 피해를 무효화하는 보호막 부여"
+        "4": "생화학 구취 브레스: 적 전체에게 각각 공격력의 200%만큼 피해",
+        "5": "생화학 구취 브레스: 적 전체에게 각각 공격력의 200%만큼 피해",
+        "6": "생화학 구취 브레스: 적 전체에게 각각 공격력의 500%만큼 피해"
       },
       "trait_effects": {
         "1": null,
         "2": null,
         "3": null,
         "4": null,
-        "5": "마법사 아카데미: 직업:마법사와 함께 편성 시 아군 마법사 또한 후방 적 우선 공격",
-        "6": "마법사 아카데미: 직업:마법사와 함께 사용 시 아군 마법사 또한 후방 적 우선 공격 + 후방 적 생존 시 아군 공격력 25% 증가"
+        "5": "광역 도발: 공격타입:교사와 함께 편성 시 아군의 공격력 25% 증가, 방어타입:교사와 함께 편성 시 아군의 최대 체력 25% 증가 (중첩가능)",
+        "6": "광역 도발: 공격타입:교사와 함께 편성 시 아군의 공격력 75% 증가, 방어타입:교사와 함께 편성 시 아군의 최대 체력 75% 증가 (중첩가능)"
       },
       "skill_mechanics": {
-        "effect_type": "self_shield_duration",
+        "effect_type": "aoe_enemy_damage",
         "params": {
           "5": {
-            "seconds": 1.5
+            "multiplier": 200
           },
           "6": {
-            "seconds": 3
+            "multiplier": 500
           },
           "4": {
-            "seconds": 1.5
+            "multiplier": 200
           }
         }
       },
-      "skill_categories": ["blue"],
+      "skill_categories": ["red"],
       "star_mechanics": {
-        "effect_type": "self_rear_priority",
+        "effect_type": "self_stat_percent",
         "params": {
           "3": {
-            "active": true
+            "hp_percent": 25
           },
           "4": {
-            "active": true
+            "hp_percent": 25
           },
           "5": {
-            "active": true
+            "hp_percent": 25
           },
           "6": {
-            "active": true,
-            "survive_atk_percent": 25
+            "hp_percent": 75
           }
         }
       },
       "trait_mechanics": {
-        "effect_type": "dynamic_grant_rear_priority",
+        "effect_type": "ally_type_conditional_team_buff",
         "params": {
           "5": {
-            "active": true
+            "atk_percent": 25,
+            "hp_percent": 25
           },
           "6": {
-            "active": true,
-            "survive_atk_percent": 25
+            "atk_percent": 75,
+            "hp_percent": 75
           }
         }
       }
@@ -1479,15 +1482,15 @@
       }
     },
     {
-      "name": "강 희",
-      "job_class": "1반 학생",
-      "gender": "여",
+      "name": "최재혁",
+      "job_class": "마법사",
+      "gender": "남",
       "outfits": {
-        "기본": "student/basic",
-        "여름": "student/summer",
-        "겨울": "student/winter"
+        "기본": "mage_weak/basic",
+        "여름": "mage_weak/summer",
+        "겨울": "mage_weak/winter"
       },
-      "description": "직접 찾아가보세요.",
+      "description": "미디어실에 상주하는 최약체 마법사입니다.",
       "range": "근거리",
       "attack_type": "Student",
       "defense_type": "Student",
@@ -1499,73 +1502,73 @@
         "5": 2.2,
         "6": 11
       },
-      "exp_subjects": ["국어"],
+      "exp_subjects": ["영어"],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
-        "3": "철면피: 최대 체력 25% 증가",
-        "4": "철면피: 최대 체력 25% 증가",
-        "5": "철면피: 최대 체력 25% 증가",
-        "6": "철면피: 최대 체력 75% 증가"
+        "3": "설교와 수정: 후방 적 우선 공격",
+        "4": "설교와 수정: 후방 적 우선 공격",
+        "5": "설교와 수정: 후방 적 우선 공격",
+        "6": "설교와 수정: 후방 적 우선 공격, 후방 적 생존 시 공격력 25% 증가"
       },
       "skill_effects": {
         "1": null,
         "2": null,
         "3": null,
-        "4": "생화학 구취 브레스: 적 전체에게 각각 공격력의 200%만큼 피해",
-        "5": "생화학 구취 브레스: 적 전체에게 각각 공격력의 200%만큼 피해",
-        "6": "생화학 구취 브레스: 적 전체에게 각각 공격력의 500%만큼 피해"
+        "4": "환상살: 자신에게 1.5초간 모든 피해를 무효화하는 보호막 부여",
+        "5": "환상살: 자신에게 1.5초간 모든 피해를 무효화하는 보호막 부여",
+        "6": "환상살: 자신에게 3초간 모든 피해를 무효화하는 보호막 부여"
       },
       "trait_effects": {
         "1": null,
         "2": null,
         "3": null,
         "4": null,
-        "5": "광역 도발: 공격타입:교사와 함께 편성 시 아군의 공격력 25% 증가, 방어타입:교사와 함께 편성 시 아군의 최대 체력 25% 증가 (중첩가능)",
-        "6": "광역 도발: 공격타입:교사와 함께 편성 시 아군의 공격력 75% 증가, 방어타입:교사와 함께 편성 시 아군의 최대 체력 75% 증가 (중첩가능)"
+        "5": "마법사 아카데미: 직업:마법사와 함께 편성 시 아군 마법사 또한 후방 적 우선 공격",
+        "6": "마법사 아카데미: 직업:마법사와 함께 사용 시 아군 마법사 또한 후방 적 우선 공격 + 후방 적 생존 시 아군 공격력 25% 증가"
       },
       "skill_mechanics": {
-        "effect_type": "aoe_enemy_damage",
+        "effect_type": "self_shield_duration",
         "params": {
           "5": {
-            "multiplier": 200
+            "seconds": 1.5
           },
           "6": {
-            "multiplier": 500
+            "seconds": 3
           },
           "4": {
-            "multiplier": 200
+            "seconds": 1.5
           }
         }
       },
-      "skill_categories": ["red"],
+      "skill_categories": ["blue"],
       "star_mechanics": {
-        "effect_type": "self_stat_percent",
+        "effect_type": "self_rear_priority",
         "params": {
           "3": {
-            "hp_percent": 25
+            "active": true
           },
           "4": {
-            "hp_percent": 25
+            "active": true
           },
           "5": {
-            "hp_percent": 25
+            "active": true
           },
           "6": {
-            "hp_percent": 75
+            "active": true,
+            "survive_atk_percent": 25
           }
         }
       },
       "trait_mechanics": {
-        "effect_type": "ally_type_conditional_team_buff",
+        "effect_type": "dynamic_grant_rear_priority",
         "params": {
           "5": {
-            "atk_percent": 25,
-            "hp_percent": 25
+            "active": true
           },
           "6": {
-            "atk_percent": 75,
-            "hp_percent": 75
+            "active": true,
+            "survive_atk_percent": 25
           }
         }
       }

@@ -7,7 +7,7 @@ from battle_core import (
     AXIS_ATTACKER_BACK, AXIS_DEFENDER_BACK, CC_PRIORITY_KNOCKBACK, KNOCKBACK_POSITION_DISTANCE,
     _alive_target, _alive_units, _apply_damage, _apply_gendered_damage_bonus, _apply_stun,
     _effective_gender, _interrupt_cast_if_casting, _new_status, _refresh_status_until,
-    _roll_damage_atk, _scale_params, _teammate, get_type_multiplier,
+    _roll_damage_atk, _scale_params, get_type_multiplier,
 )
 
 # ───────────────────────── 스킬(skill) - 기본공격 3회 시전마다 발동 ─────────────────────────
@@ -68,6 +68,10 @@ def _skill_summon_clone(caster, own_team, enemy_team, params, time_elapsed):
         # 윤의 "호"(자폭 소환수)처럼 첫 기본공격 한 번을 명중시키자마자 스스로 죽는 소환수(선택
         # 파라미터) - 실제 자폭 판정은 _do_basic_attack이 매 기본공격마다 이 필드를 확인해서 처리한다.
         "self_destruct_after_attack": bool(params.get("clone_self_destruct")),
+        # 소환수 전용 성별(선택 파라미터) - characters.json에 별도 캐릭터 항목이 없는 소환수(예: 윤의
+        # "호")는 CHARACTER_GENDER에 자기 이름이 없어 _effective_gender가 gender_override를 봐야만
+        # 성별이 잡힌다(시전자 "윤"의 성별과 독립적으로 지정 가능 - 윤이 여성이어도 호는 그대로 남성).
+        "gender_override": params.get("clone_gender"),
     }
     own_team[target_key] = clone
 
@@ -143,13 +147,20 @@ def _skill_conditional_target_debuff(caster, own_team, enemy_team, params, time_
 
 
 def _skill_heal_ally_percent_max_hp(caster, own_team, enemy_team, params, time_elapsed):
-    ally = _teammate(own_team, caster)
-    if not ally or ally["hp"] <= 0:
-        return {"healed": False}
-    heal = round(ally["max_hp"] * params["percent"] / 100)
-    before = ally["hp"]
-    ally["hp"] = min(ally["max_hp"], ally["hp"] + heal)
-    return {"healed": True, "target": ally["name"], "_target_ref": ally, "amount": ally["hp"] - before}
+    # 이영웅 "청진기 진료": 아군 한 명이 아니라 전체(시전자 자신 포함)를 동시에 회복시킨다 - 여러
+    # 명을 동시에 회복시키는 다른 효과(death_heal_ally 등)와 동일하게 heals 배열로 반환한다. 각
+    # 대상은 자기 자신의 최대 체력 기준으로 회복(팀 전체가 같은 % 회복률을 받되, 절대량은 다를 수 있음).
+    heals = []
+    for ally in _alive_units(own_team):
+        heal = round(ally["max_hp"] * params["percent"] / 100)
+        before = ally["hp"]
+        ally["hp"] = min(ally["max_hp"], ally["hp"] + heal)
+        if ally["hp"] != before:
+            heals.append({
+                "target": ally["name"], "amount": ally["hp"] - before,
+                "target_hp_after": ally["hp"], "target_max_hp": ally["max_hp"],
+            })
+    return {"healed": bool(heals), "heals": heals}
 
 
 def _skill_self_shield_duration(caster, own_team, enemy_team, params, time_elapsed):

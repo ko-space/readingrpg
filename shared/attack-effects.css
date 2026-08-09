@@ -1,0 +1,539 @@
+/* shared/attack-effects.js가 그리는 이펙트들의 스타일 - 전술대회/개발자화면/토벌전이 공유한다.
+   원래 arena/arena-battle.css에만 있던 클래스들을 그대로 옮겨왔다(devtest.css/raid-prototype.css의
+   중복 정의는 제거됨). 셀렉터는 arena-battle.css가 쓰던 ".battle-unit-img.hit-flash" 같은 복합
+   셀렉터 대신 클래스 단독 셀렉터로 일반화했다 - 화면마다 스프라이트 엘리먼트의 다른 클래스(예:
+   arena/devtest는 .battle-unit-img, 토벌전은 .unit-sprite)가 붙어있어도 그대로 먹어야 하기 때문이다.
+   동작(애니메이션 내용)은 원본과 완전히 동일하다. */
+
+.projectile-dot {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    margin-left: -7px;
+    margin-top: -7px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fff6c8 0%, #ffd76a 55%, #ff9d2e 100%);
+    box-shadow: 0 0 10px 3px rgba(255, 214, 106, 0.85);
+    pointer-events: none;
+}
+
+/* ── 방임석 전용: 물감 방울 투척. 기본공격은 항상 황금빛(paint-gold), 스킬(포물선)은 소모한 물감
+   색깔에 따라 흰색(물감 없음)/빨강/파랑/노랑 중 하나로 바뀐다. ── */
+.paint-projectile {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    margin-left: -8px;
+    margin-top: -8px;
+    border-radius: 50%;
+    box-shadow: 0 0 10px 3px currentColor;
+    pointer-events: none;
+}
+.paint-projectile.paint-gold { background: radial-gradient(circle at 35% 30%, #fff3c0, #e0a92c); color: #e0a92c; }
+.paint-projectile.paint-white { background: radial-gradient(circle at 35% 30%, #ffffff, #d8d8d8); color: #e8e8e8; }
+.paint-projectile.paint-red { background: radial-gradient(circle at 35% 30%, #ff8a80, #d81f1f); color: #d81f1f; }
+.paint-projectile.paint-blue { background: radial-gradient(circle at 35% 30%, #8ab4ff, #1f4fd8); color: #1f4fd8; }
+.paint-projectile.paint-yellow { background: radial-gradient(circle at 35% 30%, #fff1a0, #d8b31f); color: #d8b31f; }
+
+/* ── 김남옥 전용: 원통형 크레파스 다트. 회전은 JS가 진행 방향에 맞춰 넣는다(transform: rotate).
+   기본공격은 대상이 전방이면 진분홍, 후방/복제체면 푸른색 - 스킬(엑스칼리버)은 두 색이 나란히 같이 날아간다. ── */
+.crayon-projectile {
+    position: absolute;
+    width: 20px;
+    height: 7px;
+    margin-left: -17px;
+    margin-top: -6px;
+    border-radius: 3px;
+    clip-path: polygon(0% 50%, 18% 0%, 100% 0%, 100% 100%, 18% 100%);
+    box-shadow: 0 0 8px 2px currentColor;
+    pointer-events: none;
+}
+.crayon-projectile.crayon-pink { background: linear-gradient(90deg, #ff1f8f, #ff6fc0); color: #ff1f8f; }
+.crayon-projectile.crayon-blue { background: linear-gradient(90deg, #2266ff, #6fa8ff); color: #2266ff; }
+
+/* ── 이종복 스킬 전용: 붉은 "mg"가 유성처럼 꼬리를 끌며 날아간다. ── */
+.meteor-projectile {
+    position: absolute;
+    font-family: monospace;
+    font-weight: 900;
+    font-size: 34px;
+    color: #ff3b30;
+    text-shadow: 0 0 10px #ff3b30, 0 0 20px rgba(255, 59, 48, .8);
+    pointer-events: none;
+}
+.meteor-projectile::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: 100%;
+    width: 64px;
+    height: 6px;
+    transform: translateY(-50%);
+    background: linear-gradient(90deg, transparent, rgba(255, 59, 48, .85));
+    filter: blur(1px);
+}
+
+/* ── 임소정 전용: 캐스터-대상을 잇는 지그재그 번개 - 실제 드로잉은 shared/attack-effects.js의
+   playElectricBolt가 담당하고, 이 캔버스는 그 그림판일 뿐이다. ── */
+.electric-bolt-canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+}
+
+/* ── 강 희 스킬 전용: 얼굴에서 뿜어져 나오는 좁은 부채꼴 초록 입냄새(가스). wrap이 시작점(얼굴)에서
+   사거리(length)만큼의 폭/회전을 잡고, --reach(=length)를 자식들에게 물려줘서 연기/입자가 실제
+   사거리에 비례해 날아가게 한다. ── */
+.gas-breath-wrap {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 64px;
+    margin-top: -32px;
+    transform-origin: 0 50%;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.gas-breath-cone {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 100%;
+    height: 100%;
+    transform-origin: 0 50%;
+    clip-path: polygon(0 48%, 100% 30%, 100% 70%, 0 52%);
+    background: radial-gradient(
+        ellipse at left center,
+        rgba(236, 255, 96, 0.9) 0%,
+        rgba(170, 219, 44, 0.62) 22%,
+        rgba(84, 151, 39, 0.36) 48%,
+        rgba(31, 70, 27, 0.08) 74%,
+        transparent 100%
+    );
+    filter: blur(6px);
+    mix-blend-mode: screen;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, transparent 6%, rgba(0, 0, 0, 0.65) 16%, rgba(0, 0, 0, 1) 26%, rgba(0, 0, 0, 0.92) 82%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0%, transparent 6%, rgba(0, 0, 0, 0.65) 16%, rgba(0, 0, 0, 1) 26%, rgba(0, 0, 0, 0.92) 82%, transparent 100%);
+    animation: gas-breath-cone-shot 900ms ease-out forwards;
+}
+.gas-breath-cone::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 38%;
+    width: 85%;
+    height: 24%;
+    clip-path: polygon(0 42%, 100% 25%, 100% 75%, 0 58%);
+    background: linear-gradient(90deg, rgba(237, 255, 120, 0.78), rgba(125, 198, 37, 0.42), transparent);
+    filter: blur(8px);
+}
+@keyframes gas-breath-cone-shot {
+    0% { opacity: 0; transform: translateY(-50%) scaleX(0.06) scaleY(0.3); }
+    18% { opacity: 0.96; }
+    55% { opacity: 0.9; }
+    100% { opacity: 0; transform: translateY(-50%) scaleX(1) scaleY(1); }
+}
+
+.gas-breath-clear {
+    position: absolute;
+    left: 0;
+    top: 14%;
+    width: 0;
+    height: 72%;
+    opacity: 0;
+    background: linear-gradient(90deg, rgba(16, 22, 27, 0.98) 0%, rgba(16, 22, 27, 0.82) 45%, rgba(16, 22, 27, 0) 100%);
+    filter: blur(8px);
+    z-index: 5;
+    animation: gas-breath-clear-wipe 900ms ease-out forwards;
+}
+@keyframes gas-breath-clear-wipe {
+    0% { width: 0; opacity: 0; }
+    12% { opacity: 0.95; }
+    100% { width: 34%; opacity: 0.9; }
+}
+
+.gas-breath-puff {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: var(--size);
+    height: calc(var(--size) * 0.72);
+    transform: translate(0, -50%) scale(0.2);
+    opacity: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, rgba(241, 255, 137, 0.98), rgba(140, 196, 53, 0.72) 42%, rgba(58, 108, 36, 0.32) 68%, transparent 74%);
+    filter: blur(3px);
+    box-shadow: 0 0 12px rgba(165, 233, 55, 0.35), inset 0 0 8px rgba(255, 255, 180, 0.2);
+    z-index: 2;
+    animation: gas-breath-puff-fly 820ms linear both;
+}
+@keyframes gas-breath-puff-fly {
+    0% { opacity: 0; transform: translate(0, -50%) scale(0.18); }
+    12% { opacity: 0.96; }
+    45% { opacity: 0.85; }
+    100% { opacity: 0; transform: translate(var(--moveX), calc(-50% + var(--moveY))) scale(var(--scale)); }
+}
+.gbp1 { --size: 30px; --moveX: calc(var(--reach) * 0.65); --moveY: -14px; --scale: 1.3; animation-delay: 0ms; }
+.gbp2 { --size: 38px; --moveX: calc(var(--reach) * 0.92); --moveY:  12px; --scale: 1.55; animation-delay: 70ms; }
+.gbp3 { --size: 32px; --moveX: calc(var(--reach) * 0.55); --moveY:  -4px; --scale: 1.35; animation-delay: 140ms; }
+.gbp4 { --size: 44px; --moveX: calc(var(--reach) * 0.98); --moveY:  18px; --scale: 1.7; animation-delay: 210ms; }
+.gbp5 { --size: 40px; --moveX: calc(var(--reach) * 0.78); --moveY: -20px; --scale: 1.6; animation-delay: 280ms; }
+
+.gas-breath-particle {
+    position: absolute;
+    left: 6px;
+    top: calc(50% + var(--startY));
+    width: var(--dot);
+    height: var(--dot);
+    opacity: 0;
+    border-radius: 50%;
+    background: #dcff5b;
+    box-shadow: 0 0 6px #dfff61, 0 0 14px rgba(136, 255, 56, 0.6);
+    transform: translate(0, 0) scale(0.2);
+    z-index: 3;
+    animation: gas-breath-particle-fly 720ms linear both;
+}
+@keyframes gas-breath-particle-fly {
+    0% { opacity: 0; transform: translate(0, 0) scale(0.2); }
+    15% { opacity: 1; }
+    60% { opacity: 0.8; }
+    100% { opacity: 0; transform: translate(var(--dotX), var(--dotY)) scale(1.25); }
+}
+.gbd1 { --dot: 6px; --startY: -10px; --dotX: calc(var(--reach) * 0.5); --dotY: -18px; animation-delay: 40ms; }
+.gbd2 { --dot: 8px; --startY:  12px; --dotX: calc(var(--reach) * 0.62); --dotY:  16px; animation-delay: 110ms; }
+.gbd3 { --dot: 5px; --startY: -16px; --dotX: calc(var(--reach) * 0.44); --dotY:  -8px; animation-delay: 180ms; }
+.gbd4 { --dot: 7px; --startY:   8px; --dotX: calc(var(--reach) * 0.74); --dotY:  22px; animation-delay: 250ms; }
+.gbd5 { --dot: 5px; --startY:  -6px; --dotX: calc(var(--reach) * 0.68); --dotY: -24px; animation-delay: 320ms; }
+.gbd6 { --dot: 7px; --startY:   0px; --dotX: calc(var(--reach) * 0.86); --dotY:   6px; animation-delay: 390ms; }
+
+/* ── 불빠따 김어진 스킬 전용: 캐스터 발밑에서 좌우로 번져나가는 땅불(캔버스로 그림) - 실제 그리기
+   로직은 shared/attack-effects.js의 spawnGroundFireCanvas가 담당하고, 여기서는 캔버스 위치/크기와
+   화면 흔들림만 잡는다. ── */
+.ground-fire-canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+    z-index: 4;
+}
+@keyframes ground-fire-shake {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    14% { transform: translate3d(-5px, 2px, 0) rotate(-.18deg); }
+    28% { transform: translate3d(6px, -3px, 0) rotate(.2deg); }
+    42% { transform: translate3d(-4px, 2px, 0) rotate(-.14deg); }
+    58% { transform: translate3d(3px, -1px, 0) rotate(.1deg); }
+    76% { transform: translate3d(-2px, 1px, 0); }
+}
+.ground-fire-shake {
+    animation: ground-fire-shake 420ms ease-out;
+}
+
+/* ── 서민석 스킬 전용: 하트 모양 투사체(포물선). 대상이 남성이면 분홍, 여성이면 붉은색. ── */
+.heart-projectile {
+    position: absolute;
+    margin-left: -13px;
+    margin-top: -13px;
+    font-size: 26px;
+    line-height: 1;
+    text-shadow: 0 0 8px currentColor;
+    pointer-events: none;
+}
+.heart-projectile.heart-pink { color: #ff6fb0; }
+.heart-projectile.heart-red { color: #e0263f; }
+
+/* ── 이영웅 스킬 전용: 치유 대상 머리 위에서 초록색 하트(가운데 십자가, 노란 오라)가 천천히 내려온다. ── */
+.healing-heart-wrap {
+    position: absolute;
+    margin-left: -22px;
+    margin-top: -22px;
+    width: 44px;
+    height: 44px;
+    pointer-events: none;
+    z-index: 4;
+}
+@keyframes healing-heart-aura-pulse {
+    0%, 100% { transform: scale(0.9); opacity: 0.75; }
+    50% { transform: scale(1.08); opacity: 1; }
+}
+.healing-heart-aura {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 224, 102, 0.45) 0%, rgba(255, 224, 102, 0.15) 55%, transparent 75%);
+    box-shadow: 0 0 14px 4px rgba(255, 224, 102, 0.55);
+    animation: healing-heart-aura-pulse 1s ease-in-out infinite;
+}
+.healing-heart-glyph {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    color: #4ee06a;
+    text-shadow: 0 0 10px #4ee06a, 0 0 4px #fff;
+}
+.healing-heart-cross {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 900;
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+    transform: translateY(-2px);
+}
+
+/* ── 피격/오라(범용) - flashHit/flashEffectAura(shared/attack-effects.js)가 토글하는 클래스.
+   arena-battle.css는 ".battle-unit-img.hit-flash"처럼 스프라이트 엘리먼트의 다른 클래스와 묶어서
+   썼지만, 화면마다 스프라이트에 붙는 기본 클래스가 다르므로(예: 토벌전은 .unit-sprite) 여기서는
+   클래스 단독 셀렉터로 일반화했다 - 애니메이션 내용은 완전히 동일. ── */
+@keyframes hit-flash-filter {
+    0% { filter: drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)) brightness(1) saturate(1); }
+    30% { filter: drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)) brightness(2.3) saturate(4) sepia(0.6) hue-rotate(-50deg); }
+    100% { filter: drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)) brightness(1) saturate(1); }
+}
+.hit-flash {
+    animation: hit-flash-filter 0.25s ease-out;
+}
+
+@keyframes crit-flash-filter {
+    0% {
+        filter: drop-shadow(0 8px 8px rgba(0, 0, 0, .4)) brightness(1) saturate(1);
+        transform: scaleX(var(--flip-x, 1)) scale(1);
+    }
+    20% {
+        filter:
+            drop-shadow(0 0 22px #ffb703)
+            drop-shadow(0 8px 8px rgba(0, 0, 0, .4))
+            brightness(3.4) saturate(6) sepia(.7) hue-rotate(-25deg);
+        transform: scaleX(var(--flip-x, 1)) scale(1.32);
+    }
+    55% {
+        filter:
+            drop-shadow(0 0 14px #ff5a1f)
+            drop-shadow(0 8px 8px rgba(0, 0, 0, .4))
+            brightness(2.2) saturate(4);
+        transform: scaleX(var(--flip-x, 1)) scale(1.14);
+    }
+    100% {
+        filter: drop-shadow(0 8px 8px rgba(0, 0, 0, .4)) brightness(1) saturate(1);
+        transform: scaleX(var(--flip-x, 1)) scale(1);
+    }
+}
+.crit-flash {
+    animation: crit-flash-filter 0.4s ease-out;
+}
+
+/* 효과 수신자 오라: 효과를 "받은" 대상에게 색 오라가 나왔다가 사라진다(이영웅 회복 연출과 같은 톤).
+   색은 JS(flashEffectAura)가 --effect-aura-color 변수로 지정한다: 버프=붉은색, 디버프=파란색,
+   CC기=보라색, 회복=연두색, 스페셜(무적 등)=흰색. 같은 대상에게 여러 효과가 연달아 들어오면 나중
+   효과의 색으로 갱신된다(재트리거). */
+@keyframes effect-aura-flash {
+    0% { filter: drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)); }
+    25% {
+        filter:
+            drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4))
+            drop-shadow(0 0 18px var(--effect-aura-color, transparent))
+            drop-shadow(0 0 32px var(--effect-aura-color, transparent));
+    }
+    100% { filter: drop-shadow(0 8px 8px rgba(0, 0, 0, 0.4)); }
+}
+.effect-aura-flash {
+    animation: effect-aura-flash 0.9s ease-out;
+}
+
+/* ===== 기본공격 전용 이펙트 ===== */
+
+/* ── 윤대웅 전용: 투사체 없는 즉시 플래시 ── */
+@keyframes battle-instant-flash {
+    0% { opacity: 0; }
+    20% { opacity: 1; }
+    100% { opacity: 0; }
+}
+.dt-instant-flash-dot {
+    position: absolute;
+    width: 46px;
+    height: 46px;
+    margin-left: -23px;
+    margin-top: -23px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fff, #fff0);
+    animation: battle-instant-flash 0.25s ease-out;
+    pointer-events: none;
+}
+
+/* ── 이종복 전용: 텍스트 글자 파티클(F/=/m/a) ── */
+.dt-char-particle {
+    position: absolute;
+    margin-left: -8px;
+    margin-top: -12px;
+    font-family: monospace;
+    font-weight: 900;
+    font-size: 20px;
+    color: #7ad8ff;
+    text-shadow: 0 0 6px #7ad8ff;
+    pointer-events: none;
+}
+
+/* ── 서민석 기본공격 전용: 책 모양 투사체. 던져진 책이 빙글빙글 도는 느낌으로 계속 회전한다. ── */
+@keyframes book-tumble {
+    to { transform: rotate(360deg); }
+}
+.book-projectile {
+    position: absolute;
+    width: 26px;
+    height: 20px;
+    margin-left: -13px;
+    margin-top: -10px;
+    background: linear-gradient(135deg, #c8935a, #8a5a2e);
+    border: 2px solid #5c3a1a;
+    border-radius: 2px;
+    box-shadow: 0 0 6px rgba(0, 0, 0, .4);
+    animation: book-tumble 0.35s linear infinite;
+    pointer-events: none;
+}
+.book-projectile::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: rgba(0, 0, 0, .35);
+    transform: translateX(-50%);
+}
+
+/* ── 이의진 기본공격 전용: 눈에서 발사되는 레이저(eye_laser_switch.html / eye_laser (1).html 참고).
+   wrap이 시작점(눈)에서 위치·회전·두께를 잡고, width만 JS가 0→실제 거리로 트랜지션해서 빔이 실제로
+   "뻗어나가는" 것처럼 만든다 - 그 트랜지션이 끝나는 시점(=빔 끝이 대상에 닿는 시점)에 맞춰 JS가
+   onArrive를 불러서 피해/기절 판정을 반영한다. type1(빨강, 참고 파일의 단순 레이저) / type2(청록,
+   변신 상태 전용 - 좀 더 지글거리는 플리커를 얹어 참고 파일의 번개 느낌을 흉내냈다). ── */
+.eye-laser-wrap {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 8px;
+    margin-top: -4px;
+    transform-origin: 0 50%;
+    pointer-events: none;
+    z-index: 4;
+    overflow: visible;
+}
+.eye-laser-glow {
+    position: absolute;
+    inset: -220% 0;
+    filter: blur(7px);
+    opacity: 0.85;
+}
+.eye-laser-core {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+}
+
+.eye-laser-type1 .eye-laser-glow {
+    background: linear-gradient(90deg, rgba(255, 40, 40, .9), rgba(255, 20, 20, .55) 55%, rgba(255, 0, 0, 0));
+}
+.eye-laser-type1 .eye-laser-core {
+    background: linear-gradient(180deg, rgba(215, 0, 0, .98) 0%, rgba(255, 60, 60, .98) 20%, #fff 50%, rgba(255, 60, 60, .98) 80%, rgba(215, 0, 0, .98) 100%);
+    box-shadow: 0 0 6px #fff, 0 0 14px rgba(255, 90, 90, .9), 0 0 26px rgba(255, 0, 0, .7);
+}
+
+@keyframes eye-laser-flicker {
+    0%, 100% { opacity: 1; filter: brightness(1); }
+    30% { opacity: .82; filter: brightness(1.3); }
+    55% { opacity: 1; filter: brightness(0.9); }
+    75% { opacity: .88; filter: brightness(1.4); }
+}
+/* type2는 두께 자체를 더 키운 다음 clip-path로 원뿔(눈 쪽은 좁고 대상 쪽으로 갈수록 넓어짐) 모양으로
+   잘라낸다 - wrap 로컬 좌표계에서 0%가 항상 시작점(눈), 100%가 항상 끝점(대상)이라(회전은 wrap 전체를
+   돌리는 것이므로) 캐릭터가 어느 방향을 보고 있어도 "눈 쪽 좁음 -> 대상 쪽 넓음"이 항상 성립한다. */
+.eye-laser-type2 {
+    height: 22px;
+    margin-top: -11px;
+}
+.eye-laser-type2 .eye-laser-glow {
+    background: linear-gradient(90deg, rgba(120, 200, 255, .9), rgba(46, 107, 255, .5) 55%, rgba(46, 107, 255, 0));
+    animation: eye-laser-flicker 140ms linear infinite;
+    clip-path: polygon(0% 42%, 0% 58%, 100% 0%, 100% 100%);
+}
+.eye-laser-type2 .eye-laser-core {
+    clip-path: polygon(0% 42%, 0% 58%, 100% 0%, 100% 100%);
+    background: linear-gradient(180deg, rgba(30, 80, 220, .98) 0%, rgba(120, 200, 255, .98) 20%, #fff 50%, rgba(120, 200, 255, .98) 80%, rgba(30, 80, 220, .98) 100%);
+    box-shadow: 0 0 6px #fff, 0 0 14px rgba(126, 249, 255, .95), 0 0 30px rgba(46, 107, 255, .75);
+    animation: eye-laser-flicker 90ms linear infinite;
+}
+
+/* 발사 지점(눈)에서 잠깐 반짝이는 발광 - eye_laser_switch.html의 origin-flare에 해당. */
+@keyframes eye-laser-flare-pop {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+    25% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1.3); }
+}
+.eye-laser-flare {
+    position: absolute;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 5;
+    animation: eye-laser-flare-pop 220ms ease-out both;
+}
+.eye-laser-flare-type1 {
+    background: radial-gradient(circle, #fff 0%, #fff 15%, rgba(255, 100, 100, .85) 35%, rgba(255, 0, 0, .35) 60%, rgba(255, 0, 0, 0) 75%);
+}
+.eye-laser-flare-type2 {
+    background: radial-gradient(circle, #fff 0%, #fff 15%, rgba(150, 220, 255, .9) 35%, rgba(46, 107, 255, .4) 60%, rgba(46, 107, 255, 0) 75%);
+}
+
+/* ── 호(자폭 소환수) 전용: 참고 데모 golden_self_destruct_optimized.html의 코어 플래시/링/스파크/연기/
+   스트릭을 그리는 캔버스 - 실제 드로잉은 shared/attack-effects.js의 playGoldenSelfDestruct가 담당한다. ── */
+.golden-self-destruct-canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+    z-index: 51; /* 호 자신(render-on-top=50)보다도 위 - 폭발이 캐릭터를 가리며 터진다 */
+}
+
+/* ── 호(자폭 소환수) 전용: 캐릭터 스프라이트 자체의 황금빛 상승(charge)->압축(implode)->폭발
+   팽창+소멸(detonate/after) - 참고 데모 golden_self_destruct_optimized.html의 #character 타임라인을
+   퍼센트로 옮겼다. detonate 진입 시각(18%=180ms)은 shared/attack-effects.js의
+   attackEffectsConfig.effectLaunchDelayMs(다른 근접 캐릭터의 명중 판정 시각)와 정확히 같아야 한다 -
+   JS 값을 CSS가 직접 참조할 수 없으므로, 그 값을 바꾸면 이 퍼센트/총 재생시간(1000ms)도 같이 다시
+   계산해야 한다. 이 클래스가 켜진 유닛은 사망 시 death.png/.dying 페이드를 건너뛰고 이 애니메이션이
+   전담한다(호 전용 - 다른 캐릭터의 사망 연출과는 무관). --flip-x는 scale 값과 항상 같이 곱해야 한다 -
+   안 그러면 반전된 상태(--flip-x:-1)의 호가 터질 때 애니메이션이 도는 동안 좌우 반전이 풀려서 캐릭터가
+   순간적으로 뒤집혀 보인다(--flip-x가 없는 화면에서는 기본값 1로 안전하게 폴백). ── */
+@keyframes golden-self-destruct-char {
+    0% {
+        transform: scaleX(var(--flip-x, 1)) scale(1);
+        filter: drop-shadow(0 0 10px rgba(255, 227, 130, .72)) drop-shadow(0 0 28px rgba(255, 170, 55, .38)) brightness(1);
+    }
+    13.5% {
+        transform: scaleX(var(--flip-x, 1)) scale(1.04);
+        filter: drop-shadow(0 0 18px rgba(255, 232, 150, .85)) drop-shadow(0 0 46px rgba(255, 169, 48, .55)) brightness(1.15);
+    }
+    18% {
+        transform: scaleX(var(--flip-x, 1)) scale(.92);
+        filter: drop-shadow(0 0 30px rgba(255, 247, 200, .95)) drop-shadow(0 0 60px rgba(255, 185, 60, .7)) brightness(1.6);
+    }
+    23.5% {
+        transform: scaleX(var(--flip-x, 1)) scale(1.3);
+        filter: drop-shadow(0 0 34px rgba(255, 247, 200, .9)) drop-shadow(0 0 64px rgba(255, 185, 60, .6)) brightness(1.8);
+        opacity: .08;
+    }
+    100% {
+        transform: scaleX(var(--flip-x, 1)) scale(1.3);
+        filter: drop-shadow(0 0 34px rgba(255, 247, 200, 0)) drop-shadow(0 0 64px rgba(255, 185, 60, 0)) brightness(1.8);
+        opacity: 0;
+    }
+}
+.golden-self-destruct {
+    animation: golden-self-destruct-char 1000ms ease-out forwards;
+}

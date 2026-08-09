@@ -25,6 +25,13 @@ function withPlayerName(str) {
     return String(str ?? "").split("__PLAYER_NAME__").join(PLAYER_NAME);
 }
 
+// 대화 기록 모달의 독백(thought) 표시용 - 원문 대부분은 이미 괄호가 씌워져 있지만 아닌 경우도 있어서,
+// 없으면 씌워준다.
+function wrapInParens(str) {
+    const trimmed = String(str ?? "").trim();
+    return (trimmed.startsWith("(") && trimmed.endsWith(")")) ? str : `(${str})`;
+}
+
 function updateTicketChips() {
     document.querySelectorAll(
         "#vn-ticket-value-home, #vn-ticket-value-episodes, #vn-ticket-value-detail, #vn-ticket-value-stage"
@@ -117,8 +124,8 @@ async function serverUnlockCG(id) {
 const ASSET_BASE = "assets/story/ep1/";
 
 const CHAR_IMG = {
-  seungyu_true_stand: ASSET_BASE + "characters/seungyu_true_stand.png",
-  ganghee_true_stand: ASSET_BASE + "characters/ganghee_true_stand.png",
+  seungyu_true_stand: ASSET_BASE + "characters/seungyu_true_stand.webp",
+  ganghee_true_stand: ASSET_BASE + "characters/ganghee_true_stand.webp",
   juheon: ASSET_BASE + "characters/juheon.webp",
   seungyu: ASSET_BASE + "characters/seungyu.webp",
   juheon_sil: ASSET_BASE + "characters/juheon_sil.webp",
@@ -126,9 +133,15 @@ const CHAR_IMG = {
   senior_sil: ASSET_BASE + "characters/senior_sil.webp",
   yeongwoong: ASSET_BASE + "characters/yeongwoong.webp",
   ganghee: ASSET_BASE + "characters/ganghee.webp",
-  ganghee2: ASSET_BASE + "characters/ganghee2.png",
+  ganghee2: ASSET_BASE + "characters/ganghee2.webp",
   yoondaewoong: ASSET_BASE + "characters/yoondaewoong.webp",
 };
+
+// 캐릭터 이미지를 미리 브라우저 캐시에 올려둔다 - 안 그러면 그 인물이 씬에 처음 등장하는 순간에야
+// 다운로드+디코드가 시작돼서, 그 찰나 동안 스탠딩이 늦게 바뀌는 것처럼 보인다(특히 용량이 유독 컸던
+// 강희/승유의 "정면 스탠딩" 변형에서 두드러졌다 - 그 png 3장은 webp로 다시 압축해서 실제 용량 자체도
+// 6~8배 줄였다). 로비/메뉴를 보는 동안 미리 받아두도록 스크립트 로드 시점에 곧바로 시작한다.
+Object.values(CHAR_IMG).forEach((src) => { new Image().src = src; });
 
 const BG = {
   true_seungyu_cg: ASSET_BASE + "backgrounds/true_seungyu_cg.png",
@@ -251,7 +264,7 @@ const SCENE1_BRANCHES = {
 // choice1이 '1' 또는 '2'일 때 공통으로 이어지는 인트로
 const SCENE2_INTRO_12 = [
   {type:'narration', text:'여름인지라 저녁시간이 돼도 여전히 덥다.', clearBg:true, noBgFade:true, chars:{left:null, right:null}, stopBgm:true},
-  {type:'narration', text:'노을이 예쁘장하게 일고 여러 자연 백색 소음들이 들려온다.', showBg:'hagutgil', chars:{left:null, right:null}},
+  {type:'narration', text:'노을이 예쁘장하게 일고 여러 자연 백색 소음들이 들려온다.', showBg:'hagutgil', chars:{left:null, right:null}, bgm:'Lovely-Fidelity'},
   {type:'narration', text:'아까 주헌이에게 퇴짜맞은 뒤로 그에게 한마디 하지 않고, 수업만 듣다가 학교 일정이 마무리되었다.'},
   {type:'thought', text:'내가 문제였던걸까.'},
   {type:'thought', text:'몇번이고 생각해보지만 내 문제가 아니라 그 애가 성격이 좀 뒤틀린 것 같다.'},
@@ -1501,6 +1514,10 @@ let currentBgKey = null;
 let backgroundTransitioning = false;
 let mysteryRevealTransitioning = false;
 let timeCardTransitioning = false;
+// 대화 기록(대사) 모달용 - 새 플레이 세션이 시작될 때만 비운다(startGame/resumeGame 참고). playQueue는
+// 선택지 분기 등 훨씬 잦은 단위로도 불려서 거기서 비우면 선택지를 고를 때마다 이전 기록이 사라진다.
+// type:'line'(실제 발화)과 type:'thought'(독백)만 쌓고 narration/chat은 제외한다.
+let dialogueHistory = [];
 const JUHEON_ENDING_VISUAL_CUE = '그리고 지금 내 세상에서, 나를 가장 단단하고 온전하게 지탱해 주는 그 고마운 존재는 바로 주헌이다.';
 
 const el = {
@@ -1631,7 +1648,14 @@ function cancelBgmFade(){
 }
 
 function playBgm(key){
-  if(currentBgmKey === key) return;
+  if(currentBgmKey === key){
+    // 이미 같은 곡으로 지정은 돼 있지만(currentBgmKey), 브라우저 자동재생 정책 등으로 그때의 play()가
+    // 거부돼서 실제로는 소리가 안 나고 있을 수 있다 - 그대로 두면 나중에 어떤 줄이 다시 같은 곡을
+    // 지정해도 "이미 재생 중"으로 오판해서 영영 재시도를 안 한다(몇몇 bgm이 안 들리던 원인). 실제로
+    // 멈춰있으면(=지난 play()가 실패했던 경우) 다시 시도한다.
+    if(key && el.bgmPlayer.paused) el.bgmPlayer.play().catch(()=>{});
+    return;
+  }
   currentBgmKey = key;
   cancelBgmFade(); // 페이드아웃 도중 새 곡이 지정되면 페이드를 취소하고 볼륨을 원래대로
 
@@ -1975,6 +1999,15 @@ function playTimeCard(line){
   clearInterval(typeTimer);
   hideAllCharacters();
 
+  // renderCurrent()는 timecard 타입을 만나면 곧바로 여기로 넘기고 return하기 때문에, 거기 있는
+  // line.stopBgm/line.bgm 처리를 거치지 않는다 - 그래서 여기서 따로 처리해줘야 한다(안 그러면 타임카드
+  // 줄에 stopBgm:true/bgm:'...'을 붙여도 조용히 무시됐다).
+  if(line.stopBgm){
+    playBgm(null);
+  } else if(line.bgm){
+    playBgm(line.bgm);
+  }
+
   el.dialogueWrap.classList.add('hidden');
   el.hint.style.visibility = 'hidden';
   el.sceneFade.classList.add('active');
@@ -2014,6 +2047,9 @@ function playQueue(newQueue, endCallback){
   idx = 0;
   onQueueEnd = endCallback;
   juheonEndingVisualActive = false;
+  // dialogueHistory는 여기서 비우지 않는다 - playQueue는 선택지 분기 등 훨씬 잦은 단위로도 호출되는데,
+  // 매번 비우면 선택지를 고를 때마다 그 전까지의 대화 기록이 사라져버린다(startGame/resumeGame 참고 -
+  // 실제 새 플레이 세션이 시작될 때만 비운다).
   renderCurrent();
 }
 
@@ -2114,7 +2150,10 @@ function renderCurrent(){
     return;
   }
   if(line.closeChat){ closeChat(); }
-  el.dialogueWrap.classList.remove('hidden');
+  // 대사창을 여기서 바로 보이게 하지 않는다 - 특히 타임카드(10년 후 등) 직후처럼 dialogueWrap이
+  // 한동안 hidden이었던 경우, 안에 남아있던 "이전 대사" 텍스트가 지워지기 전에 먼저 보여버려서
+  // 배경이 페이드인된 직후 잠깐 이전 대사가 스쳐 지나가듯 보이는 문제가 있었다. typeText가 텍스트를
+  // 비우는 바로 그 순간에 같이 보이게 해서(아래) 빈 상태로만 나타나게 한다.
 
   el.box.classList.remove('thought','narration','speech');
   let reverseType = false;
@@ -2128,6 +2167,10 @@ function renderCurrent(){
     el.nameplate.style.display = 'none';
     reverseType = false;
     applySpeakingDim(null);
+
+    // 대화 기록 모달용 - 독백은 화자 표시 없이 괄호로만 얇게 보여준다(renderDialogueLog 참고).
+    // 원문에 이미 괄호가 있으면 그대로, 없으면 괄호를 씌운다.
+    dialogueHistory.push({ isMonologue: true, text: wrapInParens(withPlayerName(line.text)) });
   } else if(line.type === 'line'){
     el.box.classList.add('speech');
     el.nameplate.style.display = 'flex';
@@ -2147,6 +2190,16 @@ function renderCurrent(){
       // 기본 캐릭터 또는 공동 대사 - 모든 스탠딩을 밝게
       clearAllCharacterDim();
     }
+
+    // 대화 기록 모달용 - DOM(nameMain 등)을 다시 읽지 않고 같은 판정을 직접 한 번 더 계산한다
+    // (el.nameMain.textContent를 읽으면 화면 표시 타이밍에 종속되기 쉬워서 더 안전하다). 이름 아래
+    // 직업(sub)은 로그에서는 안 보여주기로 해서 여기서는 담지 않는다.
+    dialogueHistory.push({
+      isPlayer: line.speaker === PLAYER,
+      name: line.mysterySpeaker ? '???' : withPlayerName(line.speaker.name),
+      avatarKey: line.speaker.key || null,
+      text: withPlayerName(line.text),
+    });
   }
 
   typeText(withPlayerName(line.text), reverseType);
@@ -2155,6 +2208,7 @@ function renderCurrent(){
 function typeText(full, reverse){
   typing = true;
   el.text.textContent = '';
+  el.dialogueWrap.classList.remove('hidden'); // renderCurrent 참고 - 텍스트를 비운 직후에 보여준다
   el.hint.style.visibility = 'hidden';
   let i = reverse ? full.length - 1 : 0;
   clearInterval(typeTimer);
@@ -2180,6 +2234,10 @@ function typeText(full, reverse){
 }
 
 function advance(){
+  // 자동재생 정책으로 이전 play() 시도가 막혔던 bgm이 있다면, 지금 이 클릭(확실한 사용자 제스처)에
+  // 실어서 다시 시도한다 - playBgm의 재시도(같은 곡이 다시 지정될 때만 재시도)와 별개로, 씬 안에서
+  // 그 곡이 다시 지정되지 않는 경우까지 폭넓게 커버한다.
+  if(currentBgmKey && el.bgmPlayer.paused) el.bgmPlayer.play().catch(()=>{});
   if(
     el.choiceLayer.classList.contains('show') ||
     el.endLayer.classList.contains('show') ||
@@ -2975,6 +3033,7 @@ function startGame(){
   affSeungyu = 0;
   affYeongwoong = 0;
   affGanghee = 0;
+  dialogueHistory = []; // 새 플레이 세션 시작 - 대화 기록도 처음부터 다시 쌓는다
   el.endLayer.classList.remove('show');
   el.choiceLayer.classList.remove('show');
   closeChat();
@@ -2991,6 +3050,7 @@ function resumeGame(progress){
   affSeungyu = state.affSeungyu || 0;
   affYeongwoong = state.affYeongwoong || 0;
   affGanghee = state.affGanghee || 0;
+  dialogueHistory = []; // 체크포인트에는 지난 대화 기록이 없으므로 이어하는 시점부터 새로 쌓는다
   el.endLayer.classList.remove('show');
   el.choiceLayer.classList.remove('show');
   closeChat();
@@ -3158,6 +3218,86 @@ document.getElementById('vn-menu-save-exit').addEventListener('click', ()=>{
   menuModal.classList.remove('show');
   if(currentSceneKey) serverSaveCheckpoint(currentSceneKey);
   exitToLobby();
+});
+
+/* ---- 신규: 대화 기록(대사) 모달 ----
+   dialogueHistory(현재 씬 구간에서 재생된 line 타입만, renderCurrent 참고)를 그대로 목록으로 그린다.
+   내가 한 대사는 사진 없는 카드, 다른 사람은 CHAR_IMG 원본 스탠딩 일러스트를 avatar-crop.js로 얼굴만
+   잘라서 카드 앞에 붙인다 - 캐릭터별 위치 보정이 필요해지면 shared/avatar-crop.js의
+   AVATAR_CROP_OVERRIDES에 그 캐릭터의 key(예: 'juheon')를 outfit 키와 같은 방식으로 추가하면 된다. */
+const logModal = document.getElementById('vn-log-modal');
+const logModalContent = document.getElementById('vn-log-modal-content');
+
+function renderDialogueLog(){
+  logModalContent.innerHTML = '';
+  dialogueHistory.forEach(entry => {
+    if(entry.isMonologue){
+      const mono = document.createElement('div');
+      mono.className = 'log-monologue';
+      mono.textContent = entry.text;
+      logModalContent.appendChild(mono);
+      return;
+    }
+
+    const row = document.createElement('div');
+    row.className = entry.isPlayer ? 'log-entry log-entry-player' : 'log-entry log-entry-other';
+
+    if(!entry.isPlayer && entry.avatarKey && CHAR_IMG[entry.avatarKey]){
+      const avatar = document.createElement('div');
+      avatar.className = 'log-avatar';
+      const img = document.createElement('img');
+      img.src = CHAR_IMG[entry.avatarKey];
+      img.alt = entry.name;
+      applyAvatarCrop(img, entry.avatarKey);
+      avatar.appendChild(img);
+      row.appendChild(avatar);
+    }
+
+    const card = document.createElement('div');
+    card.className = entry.isPlayer ? 'log-bubble-card log-bubble-card-player' : 'log-bubble-card log-bubble-card-other';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'log-speaker-name';
+    nameEl.textContent = entry.name;
+    card.appendChild(nameEl);
+
+    const bubble = document.createElement('div');
+    bubble.className = 'log-bubble';
+    bubble.textContent = entry.text;
+    card.appendChild(bubble);
+
+    row.appendChild(card);
+    logModalContent.appendChild(row);
+  });
+  // 스크롤이 필요한 만큼 쌓였으면 방금 재생된(가장 아래) 대사가 바로 보이게 시작한다.
+  logModalContent.scrollTop = logModalContent.scrollHeight;
+}
+
+document.getElementById('log-btn').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  renderDialogueLog();
+  logModal.classList.add('show');
+});
+document.getElementById('vn-log-modal-close').addEventListener('click', (event)=>{
+  event.stopPropagation();
+  logModal.classList.remove('show');
+});
+logModal.addEventListener('click', (event)=>{
+  if(event.target === logModal) logModal.classList.remove('show');
+});
+
+/* ---- 신규: 확대(UI 숨기기) ----
+   대사창/상단 버튼(자기 자신 포함)을 CSS(#stage.ui-zoomed, story-relationship.css 참고)로 숨겨서
+   배경/스탠딩만 보이게 한다. 버튼 자체가 같이 숨어버리므로 다시 누를 방법이 없다 - 대신 #stage 아무
+   곳이나 클릭하면(숨겨진 요소들은 display:none이라 클릭이 그대로 배경까지 뚫고 들어온다) 원래대로
+   돌아온다. zoom-btn 클릭은 stopPropagation으로 막아서, 켜는 바로 그 클릭이 버블링을 타고 올라가
+   곧바로 #stage의 클릭 리스너에 걸려 즉시 다시 꺼지는 걸 방지한다. */
+document.getElementById('zoom-btn').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  el.stage.classList.add('ui-zoomed');
+});
+el.stage.addEventListener('click', ()=>{
+  if(el.stage.classList.contains('ui-zoomed')) el.stage.classList.remove('ui-zoomed');
 });
 
 document.getElementById('gallery-modal-close').addEventListener('click', (event)=>{

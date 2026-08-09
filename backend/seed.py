@@ -369,13 +369,14 @@ ACHIEVEMENTS = [
     },
     {
         "name": "마법사 조련사",
-        "description": "임소정, 이종복, 최재혁을 ★4 이상으로 보유",
+        "description": "윤 & 호, 이종복, 임소정, 최재혁을 ★4 이상으로 보유",
         "condition_type": "own_characters_star",
-        "condition_value": 3,
-        "condition_params": {"names": ["임소정", "이종복", "최재혁"], "star": 4},
+        "condition_value": 4,
+        "condition_params": {"names": ["윤 & 호", "이종복", "임소정", "최재혁"], "star": 4},
         "reward_items": [
-            {"type": "character", "name": "임소정", "quantity": 2},
+            {"type": "character", "name": "윤 & 호", "quantity": 2},
             {"type": "character", "name": "이종복", "quantity": 2},
+            {"type": "character", "name": "임소정", "quantity": 2},
             {"type": "character", "name": "최재혁", "quantity": 2},
         ],
     },
@@ -1524,6 +1525,16 @@ NOTICES = [
                 "[[red]]모집포인트는 새로운 픽업이 시작되면 골드로 전환됩니다.[[/red]]"
             ),
         },
+    {
+            "title": "[인물 소개 - 윤 & 호]",
+            "image_file": "assets/notices/y&h.png",
+            "body": (
+                "\"사람들은 의견을 모을 때 머리를 맞댄다던데, 우리는 배를 맞대는 쪽이 더 잘 맞는 것 같아.\"\n\n"
+                "둘은 절대 떨어지지 않습니다.\n\n"
+                "[[red]]2026.8.11 21:20부터 새로운 픽업 모집과 함께 윤 & 호를 모집할 수 있습니다.[[/red]]\n"
+                "[[red]]모집포인트는 새로운 픽업이 시작되면 골드로 전환됩니다.[[/red]]"
+                ),
+            },
     
 ]
 
