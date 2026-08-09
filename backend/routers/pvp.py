@@ -88,8 +88,9 @@ def _collect_ally_status_categories(events: list, side: str) -> dict:
                 for hit in detail.get("hits", []) or []:
                     if hit.get("target_side") == side:
                         add(hit.get("target"), "knockback")
-            elif effect == "heal_ally_percent_max_hp" and detail.get("healed") and detail.get("target_side") == side:
-                add(detail.get("target"), "heal")
+            elif effect == "heal_ally_percent_max_hp" and actor_side == side:
+                for h in detail.get("heals", []) or []:
+                    add(h.get("target"), "heal")
             elif effect == "self_type_swap_heal" and actor_side == side and detail.get("healed_amount"):
                 add(actor, "heal")
 
