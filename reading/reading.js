@@ -60,6 +60,14 @@
     // 골라 들어온 경우) 무엇을 원하는지 사용자에게 직접 확인한다 - 그렇지 않으면 진짜로 새로
     // 시작하려는 선택이 조용히 무시될 수 있다.
     let restoredSession = window.ReadingSession ? window.ReadingSession.load() : null;
+    // 새벽 1시 컷오프를 이미 지난 세션은 이어서 잴 수 없다 - 하지만 컷오프 전까지 쌓인 시간은 실제로
+    // 공부한 시간이므로, 이걸로 계속하는 대신 따로 떼어내 은행 처리(bankExpiredSession, init()에서
+    // 호출)해서 자동 제출한다. 지금 시작하려는(또는 이어서 하려는) 세션과는 완전히 별개로 취급한다.
+    let expiredSessionToBank = null;
+    if (restoredSession && window.ReadingSession.isExpired(restoredSession)) {
+        expiredSessionToBank = restoredSession;
+        restoredSession = null;
+    }
     if (restoredSession) {
         const urlRegion = params.get("region");
         const urlTargetsSomethingElse = urlRegion && (
@@ -86,6 +94,10 @@
     const label = restoredSession ? restoredSession.difficulty : params.get("difficulty"); // session_type에 따라 장르(비문학/문학) 또는 과목명
 
     if (!regionName || !label || !["reading", "subject", "mock_exam"].includes(sessionType)) {
+        // URL 자체는 잘못됐어도, 떼어낸 만료 세션(expiredSessionToBank)이 있다면 그 진행 시간은
+        // 여전히 유효하니 로비로 돌려보내기 전에 먼저 은행 처리를 시도한다 - 안 그러면 이 경로에서
+        // 유실될 수 있다(bankExpiredSession은 함수 선언이라 호이스팅되어 이 시점에도 호출 가능).
+        if (expiredSessionToBank) bankExpiredSession(expiredSessionToBank);
         alert("잘못된 접근이에요. 로비로 돌아갈게요.");
         window.location.href = "home.html";
         return;
@@ -332,6 +344,14 @@
         stopwatchEl.classList.toggle("stopwatch-paused", isPaused);
         persistActiveSession();
 
+        // 새벽 1시(KST) 컷오프에 도달하면 모의고사가 시간 종료로 자동 제출되는 것과 동일하게, 독서/과목도
+        // 그 시점까지 쌓인 시간을 자동으로 종료·제출한다 - 탭을 그대로 켜놓은 채 자정을 넘겨도 그때까지
+        // 공부한 시간은 보상으로 이어지게 하기 위함(예전엔 아무 처리 없이 그냥 시간이 멈춰있기만 했다).
+        if (!handledEnd && Date.now() >= cutoffWallMs) {
+            handleEndReading(true);
+            return;
+        }
+
         if (sessionType === "mock_exam") {
             const remainingMs = durationMs - getElapsedMs();
             stopwatchEl.textContent = formatRemaining(remainingMs);
@@ -368,8 +388,9 @@
     function startSessionClock() {
         // 복구된 세션이 있으면 거기서 확정된 누적 시간부터 이어서 잰다 - 탭이 닫혀있던 구간은
         // 세지 않는다(그 시간엔 실제로 독서를 안 했으니까). cutoffWallMs도 원래 세션이 시작될 때
-        // 계산해둔 값을 그대로 이어받아야, 탭을 닫았다 늦게 열어서 이미 새벽 1시를 넘긴 경우에도
-        // (ReadingSession.load가 이미 걸러내긴 하지만) 컷오프 자체가 새로 밀리지 않는다.
+        // 계산해둔 값을 그대로 이어받아야, 탭을 닫았다 늦게 열어서 컷오프에 가까워진 경우에도
+        // 컷오프 자체가 새로 밀리지 않는다(이미 컷오프를 지난 세션은 여기까지 오지 않는다 -
+        // expiredSessionToBank로 먼저 걸러져 자동 제출된다).
         accumulatedMs = restoredSession ? Math.max(0, Number(restoredSession.accumulatedMs) || 0) : 0;
         segmentStartMs = performance.now();
         cutoffWallMs = (restoredSession && typeof restoredSession.cutoffWallMs === "number")
@@ -412,6 +433,44 @@
             hiddenSincePerfMs = null;
             if (sessionStarted && !handledEnd) tick();
         });
+    }
+
+    // 컷오프가 지나 더 이상 이어서 잴 수 없는 이전 세션을 조용히 서버에 자동 제출해 보상을 지급한다 -
+    // 모의고사가 시간이 다 되면 자동으로 끝나는 것과 같은 취급이다. 지금 이 페이지가 새로 시작하려는(또는
+    // 이어서 하려는) 세션과는 완전히 별개로 동작하며, 그 흐름을 막지 않는다. 실패하면(네트워크 오류 등)
+    // localStorage에서 지우지 않고 그대로 남겨둬 다음 접속 때 다시 시도할 수 있게 한다.
+    async function bankExpiredSession(session) {
+        const elapsedMinutes = Math.floor((Number(session.accumulatedMs) || 0) / 60000);
+        if (elapsedMinutes < 1) {
+            window.ReadingSession?.clear();
+            return;
+        }
+        try {
+            const res = await fetch(`${API_BASE_URL}/logs/`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", ...authHeaders() },
+                body: JSON.stringify({
+                    dungeon_name: session.region,
+                    difficulty: session.difficulty,
+                    reading_minutes: elapsedMinutes,
+                    session_type: session.sessionType,
+                    is_auto_complete: true,
+                }),
+                // "잘못된 접근" 경로에서는 이 요청을 보낸 직후 곧장 home.html로 리다이렉트하므로,
+                // keepalive 없이는 페이지 전환에 요청 자체가 취소될 수 있다(session-guard.js의
+                // releaseTabOnUnload와 동일한 이유).
+                keepalive: true,
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            window.ReadingSession?.clear();
+            alert(
+                `새벽 1시가 지나면서 이전 학습이 자동으로 종료·저장됐어요.\n` +
+                `${session.difficulty} · ${elapsedMinutes}분 (+${data.gained_exp} EXP, +${data.gained_gold} 골드)`
+            );
+        } catch (err) {
+            console.error("만료된 세션 자동 저장 실패:", err);
+        }
     }
 
     // ── 종료: 실제로 기록을 저장하고, 결과를 순차 애니메이션으로 보여줌 ──
@@ -679,6 +738,9 @@
     }
 
     function init() {
+        if (expiredSessionToBank) {
+            bankExpiredSession(expiredSessionToBank);
+        }
         showRegionEntrance();
         // 반딧불이는 loadCharacterIllustration()이 /users/me 응답(hide_region_effects)을 받은 뒤에
         // applyRegionEffectsVisibility로 띄운다 - 여기서 무조건 먼저 띄우면 설정과 상관없이 항상 보인다.
