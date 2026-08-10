@@ -71,9 +71,14 @@
         if (contentEl) contentEl.hidden = false;
         const alreadyLoaded = loaded;
         await loadPvpPartial();
-        // 나갔다가 다시 들어올 때마다 후보 목록을 새로 뽑는다(리롤) - 첫 진입은 loadPvpPartial이
-        // 이미 초기 로딩 과정에서 한 번 불러오므로 중복 호출하지 않는다.
-        if (alreadyLoaded) await loadOpponents();
+        // 나갔다가 다시 들어올 때마다 티켓 보유수(상점에서 방금 샀을 수 있음)와 후보 목록을 새로
+        // 불러온다(리롤) - 첫 진입은 loadPvpPartial이 이미 초기 로딩 과정에서 한 번 불러오므로
+        // 중복 호출하지 않는다. myArenaTicketCount가 먼저 갱신돼야 후보 카드의 전투 버튼
+        // 활성화 여부가 맞게 그려진다.
+        if (alreadyLoaded) {
+            await loadMyProfileAndDefense();
+            await loadOpponents();
+        }
     }
 
     async function loadPvpPartial() {

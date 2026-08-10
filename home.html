@@ -56,6 +56,13 @@
                 <img src="assets/icons/shop.png" alt="" class="rail-icon" onerror="this.style.display='none'">
                 <span>상점</span>
             </button>
+            <button class="rail-btn rail-btn-locked" type="button" disabled title="준비 중">
+                <div class="rail-icon-frame">
+                    <img src="assets/icons/trade.png" alt="" class="rail-icon" onerror="this.style.display='none'">
+                    <img src="assets/icons/lock_white.png" alt="" class="rail-lock-icon" onerror="this.outerHTML='🔒'">
+                </div>
+                <span>거래</span>
+            </button>
             <button class="rail-btn" data-modal-target="modal-help">
                 <img src="assets/icons/help.png" alt="" class="rail-icon" onerror="this.style.display='none'">
                 <span>도움말</span>
@@ -79,6 +86,7 @@
                                 <div class="title-line">
                                     <img src="assets/icons/title.png" alt="" class="icon-img" onerror="this.style.display='none'">
                                     <span id="title-value">칭호 없음</span>
+                                    <img src="assets/icons/title.png" alt="" class="icon-img" onerror="this.style.display='none'">
                                 </div>
                             </div>
                             <div class="level-exp-card">
@@ -97,7 +105,7 @@
                 <div class="top-bar-right">
                     <div class="stat-row">
                         <div class="stat-chip"><img src="assets/icons/clock.png" alt="" class="icon-img" onerror="this.style.display='none'"> <span id="clock-value">00:00</span></div>
-                        <div class="stat-chip" id="gold-chip">G <span id="gold-value">100</span></div>
+                        <div class="stat-chip" id="gold-chip"><span>G</span> <span id="gold-value">100</span></div>
                         <button class="icon-btn" data-modal-target="modal-mail" title="우편함">
                             <img src="assets/icons/mail.png" alt="" class="icon-btn-img" onerror='this.outerHTML="✉️"'>
                             <span class="icon-badge" id="mail-badge" hidden>0</span>

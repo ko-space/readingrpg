@@ -667,6 +667,7 @@
     border-radius: 5px;
     color: #4f6877;
     background: #edf5f7;
+    line-height: 1.3; /* GyeonggiTitle의 기본 line-height(normal)가 커서 명시하지 않으면 칸 높이가 들쭉날쭉해짐 */
 }
 
 .inventory-info-row strong { color: #1f3f54; }
@@ -727,6 +728,13 @@
     cursor: not-allowed;
     background: #7c868c;
     border-color: #5e6a70;
+}
+
+.inventory-ability-name {
+    /* 위 정보 칸(.inventory-info-row)과 크기·줄높이를 맞춤 - line-height를 안 정하면 GyeonggiTitle의
+       기본값(normal)이 커서 스킬 버튼 높이가 정보 칸과 어긋나 보인다 */
+    font-size: 16px;
+    line-height: 1.3;
 }
 
 .inventory-ability-btn:disabled .inventory-ability-name {

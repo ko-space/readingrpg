@@ -1,7 +1,26 @@
+/* 스토리 모드(story/story-relationship.css)와 동일한 폰트로 통일. 원본은 300/400/500/700 네 굵기를
+   전부 선언하지만, 이 사이트에서 실제로 쓰는 font-weight는 400(기본)과 600~1000(전부 "굵게" 취급되어
+   가장 굵은 선언인 700에 매칭됨) 뿐이라 - 300(Light)은 어디서도 요청되지 않는 완전한 낭비 다운로드였고,
+   500은 400과 파일이 같아 별도로 선언할 이유가 없다. 굵기 파일 하나가 550~680KB(woff2 미제공)라
+   불필요한 파일 하나(Light, ~544KB)를 빼는 것만으로 최초 로딩 부담이 꽤 줄어든다. */
+@font-face {
+    font-family: 'GyeonggiTitle';
+    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2410-3@1.0/Title_Medium.woff') format('woff');
+    font-weight: 400;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'GyeonggiTitle';
+    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2410-3@1.0/Title_Bold.woff') format('woff');
+    font-weight: 700;
+    font-display: swap;
+}
+
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    font-family: inherit; /* button/input 등은 기본적으로 body의 font-family를 상속하지 않으므로 명시 */
 }
 
 :root {
@@ -32,7 +51,7 @@
 body, html {
     width: 100%;
     height: 100%;
-    font-family: 'Malgun Gothic', sans-serif;
+    font-family: "GyeonggiTitle", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
 }
 
 .game-home {
@@ -58,6 +77,7 @@ body, html {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center; /* 레일이 버튼 묶음보다 길 때(align-items:stretch로 부모 높이를 그대로 받음) 남는 공간이 아래로만 쏠리지 않고 위아래로 고르게 나뉘도록 - 위아래 padding이 같아도 이게 없으면 버튼들이 위로 붙어버려 아래 여백만 커짐 */
     gap: 14px;
     padding: 20px 8px;
 }
@@ -85,10 +105,54 @@ body, html {
     box-shadow: 0 0 12px rgba(232, 184, 75, 0.6);
 }
 
+.rail-btn:disabled {
+    cursor: default;
+}
+
+.rail-btn:disabled:hover {
+    background: none;
+    box-shadow: none;
+}
+
 .rail-icon {
     width: 30px;
     height: 30px;
     object-fit: contain;
+}
+
+/* "거래" 등 아직 준비 중인 버튼 - 아이콘이 원래 검은색이라 아이콘 자체를 어둡게 해봐야 티가 안 나서,
+   버튼(배경) 쪽을 어둡게 눌러 잠긴 느낌을 낸다. 위 .rail-btn:disabled:hover(클래스1+가상클래스2 = 상세도
+   0,3,0)가 배경을 지우는데, .rail-btn-locked:hover만으로는 상세도가 0,2,0이라 순서와 무관하게 무조건
+   져서 호버 시 어두움이 사라졌었다 - :disabled를 같이 걸어 상세도를 0,3,0으로 맞추고(동률은 소스
+   순서상 나중에 오는 이 규칙이 이김) 확실히 이기게 한다. */
+.rail-btn-locked {
+    background: rgba(20, 12, 4, 0.4);
+    box-shadow: none;
+}
+
+/* 골드빛 배경을 겹치는 방식(그라디언트+색 다중 배경)은 단색 배경과 구조가 달라 transition이
+   부드럽게 안 이어지고 순간적으로 툭 바뀌어(깜빡이는 느낌) 보였다 - 배경은 같은 단색 계열로 더
+   어둡게만(0.4 -> 0.6) 눌러서 자연스럽게 이어지게 하고, 다른 버튼과 같은 호버 테두리 글로우
+   (box-shadow)는 그대로 살려둔다. */
+.rail-btn-locked:disabled:hover {
+    background: rgba(20, 12, 4, 0.6);
+    box-shadow: 0 0 12px rgba(232, 184, 75, 0.6);
+}
+
+.rail-icon-frame {
+    position: relative;
+    width: 30px;
+    height: 30px;
+}
+
+.rail-lock-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 16px;
+    height: 16px;
+    pointer-events: none;
 }
 
 /* ===== 메인 영역 (상단바 + 월드) ===== */
@@ -179,6 +243,7 @@ body, html {
 .title-line {
     display: flex;
     align-items: center;
+    justify-content: center; /* 닉네임 줄처럼 중앙 정렬 - 아이콘은 gap으로 칭호 텍스트 바로 옆에 붙어 함께 이동 */
     gap: 10px;
     font-size: 16px;
     font-weight: bold;
@@ -210,8 +275,13 @@ body, html {
     color: #8a5a1a;
     font-weight: bold;
     font-size: 20px;
+    line-height: 1;
     white-space: nowrap;
     text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+    /* line-height만으로는 GyeonggiTitle 글리프 자체 위아래 여백이 비대칭이라 안 맞아서, 위/아래
+       padding을 비대칭으로 줘서 글자를 직접 밀어 맞춘다. 첫 값(위)을 늘리면 글자가 아래로,
+       셋째 값(아래)을 늘리면 위로. */
+    padding: 3px 0 0;
 }
 
 .exp-bar-track {
@@ -256,18 +326,26 @@ body, html {
 }
 
 .stat-chip {
+    height: 38px; /* 우측 아이콘 버튼(.icon-btn)과 높이를 맞춤 - 안 주면 padding+글자 높이로만 정해져 조금씩 어긋남 */
+    box-sizing: border-box;
     background: var(--panel-bg);
     border: 2px solid var(--panel-border);
     border-radius: 8px;
     box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15), var(--gold-glow);
     color: #4a3c2a;
-    padding: 8px 16px;
     font-weight: bold;
     font-size: 14px;
+    line-height: 1;
+    padding: 0 16px;
     display: flex;
     align-items: center;
     gap: 6px;
     white-space: nowrap;
+}
+
+/* 글자 아래로 밀기 */
+.stat-chip span {
+    padding: 3.5px 0 0;
 }
 
 /* ===== ⑥ 우편함 / 알림 / 설정 아이콘 ===== */
@@ -305,7 +383,6 @@ body, html {
     right: -6px;
     min-width: 18px;
     height: 18px;
-    padding: 0 4px;
     border-radius: 999px;
     background: #d64545;
     border: 2px solid #fff6e8;
@@ -316,6 +393,12 @@ body, html {
     align-items: center;
     justify-content: center;
     line-height: 1;
+    /* line-height:1 + flex 중앙정렬만으로는 GyeonggiTitle 숫자 글리프 자체의 위아래 여백이 비대칭이라
+       완전히 안 맞는다. transform은 원(테두리·그림자 포함) 전체를 옮겨버려서 쓸 수 없으니, 대신
+       위/아래 padding을 비대칭으로 줘서 글자만 밀리게 한다 - 첫 값(위)을 늘리면 글자가 아래로,
+       셋째 값(아래)을 늘리면 위로 이동. 위+아래+글자높이가 14px(18px에서 테두리 2px*2 제외)를
+       넘지 않게 유지할 것. */
+    padding: 3px 4px 0;
     box-shadow: 0 2px 4px rgba(0, 0, 0, .3);
 }
 
