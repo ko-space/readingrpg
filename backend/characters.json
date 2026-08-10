@@ -2,6 +2,7 @@
   "신화": [
     {
       "name": "방임석",
+      "designer_user_id": 2,
       "job_class": "화백",
       "gender": "남",
       "outfits": {
@@ -102,6 +103,7 @@
     },
     {
       "name": "윤대웅",
+      "designer_user_id": 4,
       "job_class": "사진 작가",
       "gender": "남",
       "outfits": {
@@ -199,6 +201,7 @@
     },
     {
       "name": "윤영준",
+      "designer_user_id": 4,
       "job_class": "가정 교사",
       "gender": "남",
       "outfits": {
@@ -295,6 +298,7 @@
   "전설": [
     {
       "name": "김남옥",
+      "designer_user_id": 4,
       "job_class": "크레파스 회사 사장",
       "gender": "여",
       "outfits": {
@@ -396,6 +400,7 @@
     },
     {
       "name": "윤 & 호",
+      "designer_user_id": 4,
       "job_class": "마법사",
       "gender": "여",
       "outfits": {
@@ -514,6 +519,7 @@
     },
     {
       "name": "이종복",
+      "designer_user_id": 2,
       "job_class": "마법사",
       "gender": "남",
       "outfits": {
@@ -612,6 +618,7 @@
     },
     {
       "name": "임소정",
+      "designer_user_id": 2,
       "job_class": "마법사",
       "gender": "여",
       "outfits": {
@@ -715,6 +722,7 @@
   "영웅": [
     {
       "name": "불빠따 김어진",
+      "designer_user_id": 2,
       "job_class": "타자",
       "gender": "남",
       "outfits": {
@@ -809,6 +817,7 @@
     },
     {
       "name": "이영웅",
+      "designer_user_id": 4,
       "job_class": "영웅",
       "gender": "남",
       "outfits": {
@@ -899,6 +908,7 @@
     },
     {
       "name": "이의진",
+      "designer_user_id": 4,
       "job_class": "동남아 유학생",
       "gender": "남",
       "outfits": {
@@ -995,6 +1005,7 @@
   "희귀": [
     {
       "name": "강승유",
+      "designer_user_id": 4,
       "job_class": "학생",
       "gender": "남",
       "outfits": {
@@ -1096,6 +1107,7 @@
     },
     {
       "name": "서민석",
+      "designer_user_id": 4,
       "job_class": "학생",
       "gender": "남",
       "outfits": {
@@ -1197,6 +1209,7 @@
     },
     {
       "name": "송주헌",
+      "designer_user_id": 4,
       "job_class": "학생",
       "gender": "남",
       "outfits": {
@@ -1298,6 +1311,7 @@
   "일반": [
     {
       "name": "강 희",
+      "designer_user_id": 4,
       "job_class": "1반 학생",
       "gender": "여",
       "outfits": {
@@ -1390,6 +1404,7 @@
     },
     {
       "name": "청년",
+      "designer_user_id": 2,
       "job_class": "초심자",
       "gender": "남",
       "outfits": {
@@ -1483,6 +1498,7 @@
     },
     {
       "name": "최재혁",
+      "designer_user_id": 2,
       "job_class": "마법사",
       "gender": "남",
       "outfits": {
