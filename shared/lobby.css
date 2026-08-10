@@ -793,6 +793,28 @@ body, html {
         justify-content: space-around;
         border-right: none;
         border-bottom: 3px solid #c9a86a;
+        /* 세로형 레일의 위아래 20px 여백을 그대로 물려받으면, 눕혀진 가로 바 하나가 필요 이상으로
+           두꺼워져서 그만큼 아래 월드 영역을 밀어내고 화면을 스크롤해야 하는 상황을 만들었다 -
+           가로 바에서는 위아래 여백을 크게 줄인다. */
+        padding: 6px 8px;
+        gap: 4px;
+    }
+
+    .rail-btn {
+        padding: 4px 3px;
+        gap: 2px;
+        font-size: 9px;
+    }
+
+    .rail-icon,
+    .rail-icon-frame {
+        width: 22px;
+        height: 22px;
+    }
+
+    .rail-lock-icon {
+        width: 12px;
+        height: 12px;
     }
 
     /* 지역입장/투기장/스토리 3장은 한 줄 배치가 최우선 - 캐릭터 스프라이트를 숨겨서 자리를 내주고,
