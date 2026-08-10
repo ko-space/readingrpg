@@ -51,6 +51,25 @@ for rarity, char_list in CHARACTER_POOL.items():
         CATALOG_BY_NAME[character["name"]] = entry
 
 
+# 인물별 디자인 담당자(user_id 기준). "윤 & 호"/"이의진"만 예외고 나머지는 전부 기본값(user_id 2)이라,
+# 캐릭터마다 일일이 적기보다 예외만 적어두는 override 방식으로 둔다. 닉네임이 아니라 user_id로 저장해서
+# 나중에 그 유저가 닉네임을 바꿔도(_attach_designer_nicknames가 매번 최신 닉네임을 조회) 코드 수정 없이
+# 자동으로 반영된다.
+DEFAULT_DESIGNER_USER_ID = 2
+DESIGNER_USER_ID_OVERRIDES = {
+    "윤 & 호": 4,
+    "이의진": 4,
+}
+
+
+def _attach_designer_nicknames(db: Session, entries: list[dict]):
+    needed_ids = {DESIGNER_USER_ID_OVERRIDES.get(e["name"], DEFAULT_DESIGNER_USER_ID) for e in entries}
+    nickname_by_id = dict(db.query(User.id, User.nickname).filter(User.id.in_(needed_ids)).all())
+    for entry in entries:
+        designer_id = DESIGNER_USER_ID_OVERRIDES.get(entry["name"], DEFAULT_DESIGNER_USER_ID)
+        entry["designer_nickname"] = nickname_by_id.get(designer_id)
+
+
 def _character_payload(c: Character):
     return {
         "id": c.id,
@@ -178,6 +197,7 @@ def get_character_inventory(
         if entry["name"] not in owned_names and not is_hidden_override(entry["name"], entry.get("is_hidden", False))
     ]
     unowned.sort(key=lambda row: (-RARITY_RANK.get(row["rarity"], 0), row["name"]))
+    _attach_designer_nicknames(db, rows + unowned)
     return {
         "characters": rows,
         "unowned_characters": unowned,

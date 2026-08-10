@@ -317,6 +317,9 @@
         document.getElementById("inventory-info-range").textContent = g.range || "-";
         document.getElementById("inventory-info-attack").textContent = TYPE_LABELS[g.attack_type] || g.attack_type || "-";
         document.getElementById("inventory-info-defense").textContent = TYPE_LABELS[g.defense_type] || g.defense_type || "-";
+        // designer_nickname은 백엔드가 담당자의 user_id를 매번 최신 닉네임으로 조회해서 내려준다 -
+        // 여기선 받은 문자열을 그대로 보여주기만 하면, 담당자가 닉네임을 바꿔도 자동으로 반영된다.
+        document.getElementById("inventory-info-designer").textContent = g.designer_nickname || "-";
         document.getElementById("inventory-description").textContent = unowned
             ? "아직 보유하지 않은 인물입니다."
             : (g.description || "설명이 없습니다.");
@@ -370,6 +373,14 @@
         return "";
     }
 
+    // 잠긴 능력 버튼에 "몇 성부터 풀리는지" 보여주기 위해, 이 능력이 처음으로 사용 가능해지는 성급을 찾는다.
+    function findUnlockStar(effectsByStar) {
+        for (let star = 1; star <= 6; star++) {
+            if (isAbilityAvailable(effectsByStar?.[String(star)])) return star;
+        }
+        return null;
+    }
+
     // 숫자(퍼센트/배수 등 뒤에 붙는 단위 포함)를 굵게 강조. escapeHtml을 숫자 매치 앞뒤로만 따로 적용해서,
     // "&#039;" 같은 엔티티 안의 숫자가 강조 정규식에 걸려 태그가 깨지는 일이 없게 한다.
     function highlightNumbers(rawText) {
@@ -392,20 +403,24 @@
         const key = String(g.star);
         const unowned = Boolean(g._unowned);
 
+        // "EXP 과목"과 "EXP 배수"는 항상 같이 봐야 의미가 있는 정보라(어느 과목에 몇 배가 붙는지)
+        // 한 줄로 합친다 - 과목이 없으면 애초에 이 성급에서 배수가 붙을 일이 없으므로 "-".
         const expMultiplier = g.exp_multiplier?.[key];
         const expSubjects = g.exp_subjects || [];
-        document.getElementById("inventory-info-exp-subject").textContent = expSubjects.length ? expSubjects.join(", ") : "-";
-        document.getElementById("inventory-info-exp-rate").textContent = expMultiplier == null ? "-" : `${expMultiplier}배`;
+        const expRateText = expSubjects.length
+            ? `${expSubjects.join(", ")}에서 ${expMultiplier == null ? "-" : `${expMultiplier}배`}`
+            : "-";
+        document.getElementById("inventory-info-exp-rate").textContent = expRateText;
 
         Object.entries(ABILITY_META).forEach(([kind, meta]) => {
             const effectsByStar = g[meta.field] || {};
             // 미보유 인물은 스킬 "이름"은 보여주되(findCanonicalAbilityName), 실제로 해금됐는지와
             // 무관하게 항상 잠금 상태로 그린다(forceLocked) - 설명은 절대 클릭해서 못 보게 한다.
-            renderAbilityGroup(kind, meta, effectsByStar[key], findCanonicalAbilityName(effectsByStar), unowned);
+            renderAbilityGroup(kind, meta, effectsByStar[key], findCanonicalAbilityName(effectsByStar), unowned, findUnlockStar(effectsByStar));
         });
     }
 
-    function renderAbilityGroup(kind, meta, text, canonicalName, forceLocked = false) {
+    function renderAbilityGroup(kind, meta, text, canonicalName, forceLocked = false, unlockStar = null) {
         const holder = document.getElementById(`inventory-ability-${kind}`);
         if (!holder) return;
         holder.innerHTML = "";
@@ -419,8 +434,13 @@
         button.className = "inventory-ability-btn";
         button.disabled = !available;
         button.innerHTML = `
-            <span>${escapeHtml(label)}</span>
-            ${!available ? `<img class="inventory-skill-trait-lock" src="assets/icons/lock.png" alt="" onerror="this.outerHTML='🔒'">` : ""}
+            <span class="inventory-ability-name">${escapeHtml(label)}</span>
+            ${!available ? `
+                <div class="inventory-lock-overlay">
+                    <img class="inventory-skill-trait-lock" src="assets/icons/lock_white.png" alt="" onerror="this.outerHTML='🔒'">
+                    ${unlockStar ? `<span class="inventory-lock-star">★${unlockStar}</span>` : ""}
+                </div>
+            ` : ""}
         `;
         if (available) {
             button.addEventListener("click", () => openAbilityModal(meta.bracket, desc));

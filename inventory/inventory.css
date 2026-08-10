@@ -11,6 +11,9 @@
     background:
         linear-gradient(145deg, rgba(245, 252, 255, 0.98), rgba(215, 239, 249, 0.98));
     box-shadow: 0 16px 50px rgba(8, 42, 65, 0.45), 0 0 0 1px rgba(255,255,255,.8) inset;
+    /* 이 박스 안(특히 블러 배경이 있는 상세창)의 레이아웃/페인트가 바깥으로 새어나가 페이지 전체
+       리플로우를 유발하지 않도록 범위를 가둔다 - 저사양 기기(패드 등)에서의 렉 완화에 도움이 된다. */
+    contain: layout paint;
     transition: width .46s cubic-bezier(.2,.75,.25,1),
                 height .46s cubic-bezier(.2,.75,.25,1),
                 border-radius .32s ease,
@@ -26,6 +29,12 @@
     width: min(97vw, 1420px);
     height: min(92vh, 860px);
     border-radius: 6px;
+    /* 상세창은 목록보다 훨씬 크고(좁은/패드 화면에선 좌우 대신 위아래로 쌓여 더 길어짐), 배경에
+       filter:blur까지 걸려있다(.inventory-detail-view::before) - width/height를 애니메이션으로
+       바꾸면 그 커진 블러 배경을 매 프레임 다시 계산·리페인트해야 해서(레이아웃도 같이 흔들림)
+       인물을 선택할 때마다 렉이 생겼다. 상세창 진입만은 크기 전환을 애니메이션 없이 즉시 적용해서
+       이 반복 리페인트 자체를 없앤다 - 나머지(border-radius/transform)는 그대로 부드럽게 유지. */
+    transition: border-radius .32s ease, transform .32s ease;
 }
 
 #modal-character .modal-close {
@@ -635,15 +644,22 @@
     clip-path: polygon(2% 0, 98% 0, 100% 50%, 98% 100%, 2% 100%, 0 50%);
 }
 
+/* 화면 비율에 따라 .inventory-detail-right(부모, flex column)가 내용물보다 길어지는 경우가 있다
+   (좁고 긴 화면 등) - 그때 아래쪽 "로비에 장착하기" 버튼 위에만 빈 공간이 몰리지 않도록, 아래 4개
+   구획(basic-info/EXP·디자인 행/description/ability-section)에 flex-grow를 줘서 남는 세로 공간을
+   버튼 바로 위까지 골고루 나눠 채우게 한다. flex-shrink:0은 그대로 둬서 반대로 공간이 모자랄 땐
+   내용이 잘리지 않고 원래 크기를 유지한다.*/
 .inventory-basic-info {
-    flex-shrink: 0; /* 아래 항목들과 함께 이 칸도 눌려 찌그러지면 텍스트가 박스 밖으로 넘칠 수 있어 축소 금지 */
+    flex: 1 0 auto;
     display: grid;
     grid-template-columns: 1fr 1fr;
+    align-content: stretch; /* 남는 세로 공간을 6개 행(정보 칸)에 고르게 나눠줘서 늘어나게 함 */
     gap: 8px 12px;
 }
 
 .inventory-info-row {
     display: flex;
+    align-items: center; /* 위 stretch로 행이 늘어나도 라벨/값 텍스트가 세로 가운데 유지 */
     justify-content: space-between;
     gap: 12px;
     padding: 10px 12px;
@@ -656,12 +672,12 @@
 .inventory-info-row strong { color: #1f3f54; }
 
 .inventory-info-row-wide {
-    flex-shrink: 0;
+    flex: 1 0 auto;
 }
 
 /* ── 스킬 3분류([Passive]/[Active]/[Special]) 버튼 - 한 줄(가로 3칸)에 배치 ── */
 .inventory-ability-section {
-    flex-shrink: 0;
+    flex: 1 0 auto;
     display: flex;
     flex-direction: row;
     gap: 10px;
@@ -676,12 +692,14 @@
 }
 
 .inventory-ability-buttons {
+    flex: 1; /* ability-section이 늘어난 만큼 이 칸도 늘어나야 안의 버튼(.inventory-ability-btn, flex:1)까지 전달됨 */
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
 
 .inventory-ability-btn {
+    position: relative; /* 잠금 아이콘을 이름 위에 절대위치로 겹쳐 그리기 위한 기준점 */
     flex: 1;
     display: flex;
     align-items: center;
@@ -702,22 +720,51 @@
     box-shadow: 0 0 10px rgba(78, 183, 223, .5);
 }
 
-/* 해당 성급에 아직 없으면 비활성화 + 자물쇠 아이콘(썸네일 성급 버튼과 같은 톤) */
+/* 해당 성급에 아직 없으면 비활성화 - 버튼 전체를 opacity로 흐리게 하면 위에 겹친 자물쇠/성급까지
+   같이 흐려져서 오히려 잘 안 보이므로, opacity 대신 배경/이름 글자만 어둡게 눌러서(아래 span 규칙)
+   자물쇠·★N이 상대적으로 도드라져 보이게 한다. */
 .inventory-ability-btn:disabled {
     cursor: not-allowed;
-    opacity: .6;
-    background: #e4eaec;
-    color: #7c8b93;
-    border-color: #c3ced2;
+    background: #7c868c;
+    border-color: #5e6a70;
+}
+
+.inventory-ability-btn:disabled .inventory-ability-name {
+    color: #5c6a70;
+    opacity: .5;
+}
+
+/* 이름 옆이 아니라 이름 위에 겹쳐서 표시 - 버튼(.inventory-ability-btn) 정중앙에 절대위치로 고정하고,
+   그 안에서 자물쇠 아이콘과 해금 성급(★N)을 세로로 쌓는다. */
+.inventory-lock-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    pointer-events: none;
 }
 
 .inventory-skill-trait-lock {
-    width: 14px;
-    height: 14px;
+    width: 17px;
+    height: 17px;
+}
+
+.inventory-lock-star {
+    font-size: 11px;
+    font-weight: 900;
+    color: #fff066;
+    text-shadow: 0 1px 3px #000, 0 0 5px rgba(255, 240, 102, .6);
+    line-height: 1;
 }
 
 .inventory-description {
-    flex-shrink: 0;
+    flex: 1 0 auto;
+    display: flex;
+    align-items: center; /* 늘어난 만큼 생기는 여백을 아래로만 몰지 않고 텍스트를 세로 가운데 유지 */
     color: #496878;
     line-height: 1.55;
     padding: 11px 14px;
@@ -728,8 +775,9 @@
 .inventory-section-label { color: #31566c; font-weight: 900; }
 
 .inventory-equip-button {
+    /* margin-top:auto는 더 이상 필요 없음 - 위 구획들이 이제 flex-grow로 남는 공간을 직접 채우므로,
+       이 버튼은 그 뒤에 자연스러운 크기로 붙는다(항상 맨 아래, 늘어나지 않음). */
     flex-shrink: 0;
-    margin-top: auto;
     width: 100%;
     padding: 14px;
     font-size: 17px;
