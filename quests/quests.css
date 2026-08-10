@@ -69,7 +69,6 @@
     right: -6px;
     min-width: 17px;
     height: 17px;
-    padding: 0 4px;
     border-radius: 999px;
     background: #d64545;
     border: 2px solid #232c52;
@@ -80,6 +79,11 @@
     align-items: center;
     justify-content: center;
     line-height: 1;
+    /* shared/lobby.css의 .icon-badge와 같은 이유/방식 - GyeonggiTitle 숫자가 line-height:1 +
+       flex 중앙정렬만으로 안 맞아서, 위/아래 padding을 비대칭으로 줘서 글자만 밀어 맞춘다(원 테두리는
+       고정). 첫 값(위)을 늘리면 글자가 아래로, 셋째 값(아래)을 늘리면 위로. 위+아래+글자높이가
+       13px(17px에서 테두리 2px*2 제외)를 넘지 않게 유지할 것. */
+    padding: 3px 4px 0;
     box-shadow: 0 2px 4px rgba(0, 0, 0, .3);
 }
 

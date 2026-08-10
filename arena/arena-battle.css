@@ -70,7 +70,7 @@ body {
 /* 회복형 조합 등으로 전투가 길어질 때 남은 시간이 얼마인지 보여준다. */
 .battle-timer {
     flex-shrink: 0;
-    padding: 4px 18px;
+    padding: 6px 18px 2px;
     border: 2px solid rgba(232, 184, 75, 0.55);
     border-radius: 999px;
     background: rgba(15, 20, 36, 0.55);
@@ -79,6 +79,9 @@ body {
     font-weight: 900;
     letter-spacing: 1px;
     font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: center;
+    line-height: 1;
 }
 
 /* 재생 배속 토글 버튼 - 옆 타이머(.battle-timer)와 같은 알약 모양 테두리를 쓰되 너비는 고정값으로
@@ -92,6 +95,12 @@ body {
     /* 화살표 개수(1~3개)가 바뀌어도 버튼 너비가 같이 늘었다 줄었다 하지 않도록 고정폭을 쓴다 -
        내용은 justify-content: center로 항상 가운데 정렬. */
     width: 52px;
+    /* .battle-timer는 padding(위아래 비대칭)으로 실제 높이가 정해지는데, 여기는 padding이 아예
+       없어서(패딩 0 + 폰트 20px) 자연 높이가 더 짧다 - align-items:stretch만으로는 안 맞아서
+       height:100%로 부모 행(.battle-timer-row, 더 큰 형제인 .battle-timer 기준으로 높이가 정해짐)을
+       명시적으로 꽉 채우게 한다. */
+    height: 100%;
+    align-self: stretch;
     border: 2px solid rgba(232, 184, 75, 0.55);
     border-radius: 999px;
     background: #63c6f0;
@@ -99,6 +108,7 @@ body {
     font-size: 20px;
     font-weight: 900;
     letter-spacing: -1px;
+    line-height: 1; /* 옆 .battle-timer와 같은 이유 - GyeonggiTitle 기본 line-height 탓에 글씨가 살짝 아래로 치우쳐 보이던 것을 보정 */
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -220,15 +230,36 @@ body {
     align-items: flex-end;
 }
 
+/* 로비 name-title-card의 구분선(.card-divider, shared/lobby.css)을 재사용 - 그쪽은 flex 컨테이너가
+   아니라 자동으로 폭이 꽉 차지만, 여기(.player-summary)는 flex-column이라 defender 쪽처럼
+   align-items:flex-end가 걸리면 내용 없는 빈 div가 폭 0으로 찌그러진다. align-self로 항상
+   가로폭을 꽉 채우게 강제한다. */
+.player-summary .card-divider {
+    align-self: stretch;
+}
+
+/* 기본(.card-divider)은 양옆으로 옅어지지만, 여기서는 아군(왼쪽 패널)은 전장 쪽(오른쪽)으로,
+   적(오른쪽 패널)은 전장 쪽(왼쪽)으로 - 즉 둘 다 화면 중앙(전장) 방향으로 옅어지게 방향을 준다. */
+.player-panel[data-side="attacker"] .card-divider {
+    background: linear-gradient(to right, #c9a86a, transparent);
+}
+
+.player-panel[data-side="defender"] .card-divider {
+    background: linear-gradient(to left, #c9a86a, transparent);
+}
+
 .player-name {
     max-width: 100%;
     color: var(--text-dark, #4a3c2a);
     font-size: 22px;
     font-weight: 900;
-    line-height: 1.15;
+    line-height: 1;
     word-break: keep-all;
     overflow-wrap: anywhere;
     text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+    /* line-height:1만으로는 부족해서 바로 밑 구분선(.card-divider)과 여전히 떠 보임 - player-summary의
+       flex gap(12px)에서 추가로 당겨오는 값. 음수를 더 키우면(예: -8px) 더 가깝게, 0에 가까워지면 멀어짐. */
+    margin-bottom: -6px;
 }
 
 .player-meta {
@@ -238,9 +269,13 @@ body {
     line-height: 1.3;
 }
 
-.player-meta-divider {
-    margin: 0 4px;
-    color: var(--panel-border, #c9a86a);
+.player-title-line {
+    /* player-summary의 flex gap(12px)에서 일부를 당겨와 Lv 줄 바로 아래에 붙게 함 */
+    margin-top: -6px;
+    color: #6b5434;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.3;
 }
 
 /* ===== 로스터 카드 ===== */
@@ -913,6 +948,10 @@ body {
     }
 
     .player-meta {
+        font-size: 13px;
+    }
+
+    .player-title-line {
         font-size: 13px;
     }
 

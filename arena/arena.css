@@ -563,7 +563,7 @@
 }
 
 .pvp-fight-btn:disabled {
-    cursor: wait;
+    cursor: not-allowed;
     filter: grayscale(0.25);
     opacity: 0.72;
 }
