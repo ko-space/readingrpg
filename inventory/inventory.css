@@ -617,6 +617,14 @@
     box-shadow: 0 12px 28px rgba(33,77,101,.20);
     display: flex;
     flex-direction: column;
+    /* 화면 비율에 따라 이 박스가 내용물보다 길어질 때(좁고 긴 화면 등), 남는 세로 공간을 아래
+       버튼 위에만 몰아주지 않고 위 4개 구획(기본정보/EXP·디자인/설명/스킬버튼)에 나눠서 채운다.
+       "공평하게" 나누려면 각 구획이 자기 원래 크기에 비례해서 늘어나야 하는데(작은 항목과 큰
+       항목이 똑같은 절대량만큼 늘면 작은 쪽만 눈에 띄게 커 보임), CSS의 flex-grow는 항목 크기와
+       무관하게 비율(숫자)로만 분배해서 이걸 그대로는 표현할 수 없다 - 그래서 inventory.js의
+       renderDetail()이 각 구획을 일단 자연스러운 높이로 그린 뒤 그 실측 높이(px)를 flex-grow
+       값으로 그대로 넣어준다(자세한 설명은 그쪽 주석 참고). 이 CSS의 flex:0 0 auto는 JS가 아직
+       실행되지 않았을 때의 안전한 기본값일 뿐이다. */
     gap: 14px;
     overflow-y: auto;
 }
@@ -644,29 +652,16 @@
     clip-path: polygon(2% 0, 98% 0, 100% 50%, 98% 100%, 2% 100%, 0 50%);
 }
 
-/* 화면 비율에 따라 .inventory-detail-right(부모, flex column)가 내용물보다 길어지는 경우가 있다
-   (좁고 긴 화면 등) - 그때 아래쪽 "로비에 장착하기" 버튼 위에만 빈 공간이 몰리지 않도록, 아래 4개
-   구획(basic-info/EXP·디자인 행/description/ability-section)에 flex-grow를 줘서 남는 세로 공간을
-   버튼 바로 위까지 골고루 나눠 채우게 한다.
-   flex-basis는 auto(내용물 크기)가 아니라 0으로 둔다 - description(문단, 줄 간격 1.55)이나
-   ability-section(버튼+라벨)은 원래도 내용물 자체가 basic-info의 한 행(짧은 텍스트 한 줄)보다
-   커서, auto 기준으로 시작하면 grow를 아무리 비율 맞춰 더해도 시작점 차이가 그대로 남아 서로
-   높이가 달라 보였다. basis:0으로 시작점을 전부 0으로 통일하고 grow 비율만으로 전체 높이를
-   나누면 내용물 종류와 무관하게 실제 배분되는 높이가 똑같아진다. */
 .inventory-basic-info {
-    /* EXP/디자인/설명/스킬버튼은 각자 "한 행" 몫으로 flex-grow:1을 받는데, 여긴 그 한 몫을 내부
-       6개 행이 또 나눠 가져서(align-content:stretch) 행 하나당 늘어나는 양이 1/6밖에 안 됐다 -
-       grow를 6배로 줘서 내부 행 하나당 늘어나는 양을 다른 구획들과 맞춘다. */
-    flex: 6 0 0;
+    flex: 0 0 auto;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    align-content: stretch; /* 남는 세로 공간을 6개 행(정보 칸)에 고르게 나눠줘서 늘어나게 함 */
     gap: 8px 12px;
 }
 
 .inventory-info-row {
     display: flex;
-    align-items: center; /* 위 stretch로 행이 늘어나도 라벨/값 텍스트가 세로 가운데 유지 */
+    align-items: center;
     justify-content: space-between;
     gap: 12px;
     padding: 10px 12px;
@@ -680,12 +675,12 @@
 .inventory-info-row strong { color: #1f3f54; }
 
 .inventory-info-row-wide {
-    flex: 1 0 0;
+    flex: 0 0 auto;
 }
 
 /* ── 스킬 3분류([Passive]/[Active]/[Special]) 버튼 - 한 줄(가로 3칸)에 배치 ── */
 .inventory-ability-section {
-    flex: 1 0 0;
+    flex: 0 0 auto;
     display: flex;
     flex-direction: row;
     gap: 10px;
@@ -777,9 +772,9 @@
 }
 
 .inventory-description {
-    flex: 1 0 0;
+    flex: 0 0 auto;
     display: flex;
-    align-items: center; /* 늘어난 만큼 생기는 여백을 아래로만 몰지 않고 텍스트를 세로 가운데 유지 */
+    align-items: center;
     color: #496878;
     line-height: 1.55;
     padding: 11px 14px;
@@ -790,8 +785,8 @@
 .inventory-section-label { color: #31566c; font-weight: 900; }
 
 .inventory-equip-button {
-    /* margin-top:auto는 더 이상 필요 없음 - 위 구획들이 이제 flex-grow로 남는 공간을 직접 채우므로,
-       이 버튼은 그 뒤에 자연스러운 크기로 붙는다(항상 맨 아래, 늘어나지 않음). */
+    /* margin-top:auto 불필요 - 부모(.inventory-detail-right)의 justify-content:space-between이
+       이 버튼(마지막 flex item)을 항상 박스 맨 아래에 붙여준다. */
     flex-shrink: 0;
     width: 100%;
     padding: 14px;
@@ -847,21 +842,8 @@
 @media (max-width: 900px) {
     .inventory-character-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .inventory-detail-view { grid-template-columns: 42% 1fr; }
-    .inventory-basic-info { grid-template-columns: 1fr; align-content: start; }
+    .inventory-basic-info { grid-template-columns: 1fr; }
     .inventory-detail-right { margin-left: 0; }
-
-    /* 넓은 화면에서 남는 세로 공간을 버튼 바로 위까지 균등 분배하던 flex-grow(basis:0 기준)를
-       여기서는 끈다. .inventory-basic-info가 6칸 한 줄(위 grid-template-columns:1fr)로 바뀌면서
-       이 구획들의 "원래 필요한 높이" 자체가 서로 크게 달라지고, 그 상태로 flex-grow가 남는 공간을
-       나누다 보니 구획마다 늘어나는 정도가 들쭉날쭉해져(아래로 갈수록 길어지는 것처럼 보임) -
-       좁은 화면에서는 grow도 끄고 basis도 auto로 되돌려서(0으로 두면 내용물이 아예 안 보임)
-       각자 내용물 높이 그대로 쌓이게 해서 항상 일정하게 만든다. */
-    .inventory-basic-info,
-    .inventory-info-row-wide,
-    .inventory-description,
-    .inventory-ability-section {
-        flex: 0 0 auto;
-    }
 }
 
 @media (max-width: 650px) {
