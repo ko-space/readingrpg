@@ -340,6 +340,26 @@
         if (!unowned) renderOutfitChoices();
         document.getElementById("inventory-outfit-panel").hidden = true;
         closeAbilityModal();
+
+        applyDetailSectionGrow();
+    }
+
+    // 화면 비율에 따라 .inventory-detail-right가 내용물보다 길어질 때(좁고 긴 화면 등), 남는 세로
+    // 공간을 4개 구획(기본정보/EXP·디자인/설명/스킬버튼)에 "공평하게" - 즉 각자 원래 크기에 비례해서
+    // - 나눠 채우고 싶다. CSS의 flex-grow는 항목 원래 크기와 무관하게 지정한 숫자 비율로만 분배하기
+    // 때문에(기본정보 6줄짜리와 EXP 한 줄짜리가 똑같이 늘면 EXP 쪽만 확 커 보임), 순수 CSS로는 이
+    // "크기 비례 분배"를 표현할 수 없다 - 그래서 지금(아직 다들 flex-grow:0인, 즉 내용물 그대로의
+    // 자연스러운 높이인) 상태의 실측 높이(offsetHeight)를 그대로 각자의 flex-grow 값으로 넣어준다.
+    // 이러면 남는 공간이 "원래 높이 비율"대로 나뉘어, 큰 구획은 많이 작은 구획은 적게 늘어나되
+    // 다들 자기 크기 대비 같은 비율만큼만 커져서 눈에 띄게 튀는 구획이 없어진다.
+    function applyDetailSectionGrow() {
+        const right = document.getElementById("inventory-detail-right");
+        if (!right) return;
+        right.querySelectorAll(
+            ":scope > .inventory-basic-info, :scope > .inventory-info-row-wide, :scope > .inventory-description, :scope > .inventory-ability-section"
+        ).forEach((el) => {
+            el.style.flexGrow = el.offsetHeight || 1;
+        });
     }
 
     // 성급별 텍스트가 "이 성급엔 효과 없음"을 나타낼 때 쓰는 자리표시 문구(주로 패시브) - 문자열 자체는
