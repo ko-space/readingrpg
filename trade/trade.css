@@ -391,9 +391,6 @@
     position: relative;
     flex: 1;
     min-height: 0;
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
 }
 
 /* 캐릭터 크기는 오직 높이(max-height)로만 정한다 - max-width를 아예 두지 않는다. 100%로 프레임
@@ -402,9 +399,20 @@
    100%까지 못 크고 작아 보였다. 폭 제한을 없애면 항상 높이만으로 스케일이 정해지므로 캐릭터
    키(세로)는 항상 프레임을 꽉 채우고, 대신 여백이 있는 이미지는 그 폭만큼 옆 카드 쪽으로
    자연스럽게 넘칠 수 있다(의도적으로 허용 - 프레임/그리드에 overflow:hidden을 안 걸어둔 이유).
-   overflow가 하나라도 hidden이면 이 넘침이 그대로 잘려버리니 조상 요소에 새로 추가하지 말 것. */
+   overflow가 하나라도 hidden이면 이 넘침이 그대로 잘려버리니 조상 요소에 새로 추가하지 말 것.
+
+   좁은 화면에서 이 넘침이 커지면 카드가 왼쪽으로 쏠려 보이고 이름이 캐릭터 하단 왼쪽에 걸린
+   것처럼 보이는 문제가 있었다 - 원인은 프레임이 flex(justify-content:center)로 이미지를
+   가운데 두고 있었던 것: 그 계산은 이미지의 "정렬 전 크기"를 기준으로 컨테이너 안에서 남는
+   공간을 좌우로 나누는 방식이라, 넘치는 정도가 클수록(이미지가 프레임보다 훨씬 넓어질수록)
+   센터링 오차가 함께 커지기 쉬웠다. flex 정렬 대신 절대위치(left:50% + translateX(-50%))로
+   바꾸면 이미지 자신의 실제 렌더 폭을 기준으로 정확히 중앙에 고정되므로, 넘치는 정도와 무관하게
+   항상 이름과 같은 중심선에 맞는다. */
 .trade-standing-card-frame img {
-    position: relative;
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
     z-index: 1;
     max-width: none;
     max-height: 100%;
@@ -419,10 +427,12 @@
    빡빡한 쪽이라 max-height를 아무리 줄여도 크기가 전혀 안 변했다(반대로 여백이 거의 없는
    model.png는 세로가 빡빡한 쪽이라 max-height 조절이 그대로 먹혔다 - 그래서 이미지마다 중앙/양옆
    차이가 있다 없다 했다). object-fit이 이미 정한 크기를 transform:scale로 균일하게 한 번 더
-   축소하면 어느 쪽이 빡빡했든 상관없이 항상 84%로 작아진다. transform-origin을 발밑에 둬서
-   줄어드는 방향이 위쪽뿐이도록(그림자/바닥 기준선은 그대로) 고정한다. */
+   축소하면 어느 쪽이 빡빡했든 상관없이 항상 작아진다. 위 기본 규칙의 translateX(-50%)는 그대로
+   유지해야 중앙 정렬이 안 깨지므로, transform 하나에 같이 이어붙인다(transform은 나중 규칙이
+   전체를 덮어쓰므로 따로 선언하면 안 됨). transform-origin을 발밑에 둬서 줄어드는 방향이
+   위쪽뿐이도록(그림자/바닥 기준선은 그대로) 고정한다. */
 .trade-standing-card-side .trade-standing-card-frame img {
-    transform: scale(0.9);
+    transform: translateX(-50%) scale(0.9);
     transform-origin: bottom center;
 }
 
@@ -754,15 +764,6 @@
        욱여넣지 않고 desktop과 같은 3열을 유지한다. */
     .trade-standing-grid {
         grid-template-columns: repeat(3, minmax(80px, 1fr));
-    }
-
-    /* 데스크톱에서는 폭 제한을 없애 옆 카드 쪽으로 살짝 넘치는 걸 허용했지만(캐릭터 키를 항상
-       프레임 높이만큼 채우기 위해), 열 폭이 80~100px 정도로 좁아지는 화면에서는 그 넘침이
-       카드 몇 개를 통째로 뒤덮을 만큼 커져서 카드 하나가 왼쪽으로 쏠려 보이고, 그 밑 이름은
-       원래 카드 폭 기준으로 가운데 정렬돼 있으니 상대적으로 캐릭터 왼쪽 밑에 걸린 것처럼
-       보였다. 좁은 화면에서는 다시 카드 폭 안으로 가둔다. */
-    .trade-standing-card-frame img {
-        max-width: 100%;
     }
 
     .trade-detail-panel {
