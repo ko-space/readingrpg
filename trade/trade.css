@@ -388,22 +388,23 @@
     filter: brightness(1.025);
 }
 
+/* position:absolute + left:50%/transform:translateX(-50%) 조합으로 여러 번 조정해봤지만 좁은
+   프레임에서 계속 문제(넘침, 또는 아예 안 보임)가 났다 - 같은 파일의 .trade-standing-wrap/
+   .trade-standing-image(상세보기 패널)가 쓰는, absolute 없이 플렉스박스만으로 가운데+바닥 정렬하는
+   검증된 방식으로 통일한다. */
 .trade-standing-card-frame {
     position: relative;
     flex: 1;
     min-height: 0;
+    min-width: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    overflow: hidden;
 }
 
-/* max-width:none으로 프레임 폭을 무시하면(과거엔 그랬음) 원본 비율상 프레임보다 넓게 그려질 수 있어
-   옆 카드나 패널 밖으로 흘러넘쳤다(특히 맨 왼쪽 카드는 상반신이 안 보일 정도로). overflow:hidden으로
-   잘라내는 방식은 시도해봤지만, 좁은 화면처럼 프레임이 아주 좁아지면 캐릭터가 그려지는 부분 자체가
-   보이는 영역 밖으로 밀려나 아무것도 안 보이는 더 나쁜 결과가 났다 - 잘라내지 않고 프레임 폭 안으로
-   "줄어들도록"(max-width:100%) 바꿔서, 항상 전신이 다 보이되 필요하면 작게 그려지게 한다. */
 .trade-standing-card-frame img {
-    position: absolute;
-    left: 50%;
-    bottom: 0;
-    transform: translateX(-50%);
+    position: relative;
     z-index: 1;
     max-width: 100%;
     max-height: 100%;
@@ -412,18 +413,12 @@
     filter: drop-shadow(0 6px 6px rgba(76, 51, 19, .28));
 }
 
-/* 3장이 나란히 있을 때 중앙이 가장 크게, 양옆은 살짝 작게. max-height만 줄이는 방식은 이미지마다
-   달라서 신뢰할 수 없었다 - object-fit:contain은 (프레임 대비) 가로/세로 중 "더 빡빡한 쪽"으로
-   스케일이 정해지는데, idle.png처럼 캐릭터 좌우로 여백이 넉넉한 이미지는 애초에 가로 쪽이 그
-   빡빡한 쪽이라 max-height를 아무리 줄여도 크기가 전혀 안 변했다(반대로 여백이 거의 없는
-   model.png는 세로가 빡빡한 쪽이라 max-height 조절이 그대로 먹혔다 - 그래서 이미지마다 중앙/양옆
-   차이가 있다 없다 했다). object-fit이 이미 정한 크기를 transform:scale로 균일하게 한 번 더
-   축소하면 어느 쪽이 빡빡했든 상관없이 항상 작아진다. 위 기본 규칙의 translateX(-50%)는 그대로
-   유지해야 중앙 정렬이 안 깨지므로, transform 하나에 같이 이어붙인다(transform은 나중 규칙이
-   전체를 덮어쓰므로 따로 선언하면 안 됨). transform-origin을 발밑에 둬서 줄어드는 방향이
-   위쪽뿐이도록(그림자/바닥 기준선은 그대로) 고정한다. */
+/* 3장이 나란히 있을 때 중앙이 가장 크게, 양옆은 살짝 작게 - object-fit이 정한 크기를 transform:scale로
+   균일하게 한 번 더 축소한다(어느 쪽 치수가 기준이 됐든 항상 작아짐). transform-origin을 발밑에 둬서
+   줄어드는 방향이 위쪽뿐이도록(그림자/바닥 기준선은 그대로) 고정한다. 이제 가운데 정렬은 부모의
+   justify-content가 담당하므로 여기선 scale만 있으면 된다(translateX 불필요). */
 .trade-standing-card-side .trade-standing-card-frame img {
-    transform: translateX(-50%) scale(0.9);
+    transform: scale(0.9);
     transform-origin: bottom center;
 }
 
