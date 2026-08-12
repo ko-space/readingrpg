@@ -71,9 +71,14 @@ def compute_progress(db: Session, user, quest, period_key: str) -> dict:
     start, end = _bounds_utc_naive(quest.period, period_key)
 
     if ctype == "session_minutes":
+        # session_types(리스트)가 있으면 그걸, 없으면 session_type(단일값) 하나짜리 리스트로 취급한다 -
+        # "과목 공부" 계열은 achievements.py의 job_class_subject_exp와 동일하게 모의고사(mock_exam)도
+        # 과목 공부로 인정해야 해서 리스트가 필요해졌다(예전엔 subject 단일값이라 모의고사로 채운
+        # 시간이 "과목 공부 N시간" 퀘스트에 전혀 안 잡혔음).
+        session_types = params.get("session_types") or [params.get("session_type")]
         rows = db.query(ReadingLog.reading_minutes).filter(
             ReadingLog.user_id == user.id,
-            ReadingLog.session_type == params.get("session_type"),
+            ReadingLog.session_type.in_(session_types),
             ReadingLog.created_at >= start,
             ReadingLog.created_at < end,
         ).all()
