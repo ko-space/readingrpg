@@ -3,7 +3,7 @@ from database import SessionLocal
 from models import (
     Item, Region, Achievement, GachaBanner, Quest, UserQuestClaim,
     UserItem, UserItemPurchase, UserDailyItemPurchase, Notice, Challenge,
-    MarketState,
+    UserChallengeClaim, MarketState,
 )
 from character_visibility import is_hidden_override
 
@@ -1602,7 +1602,11 @@ CHALLENGES = [
 # (old_name, new_name). seed_challenges()는 이름 기준 upsert라 이름이 바뀌면 그냥 새 행을 만들고
 # 옛 행은 그대로 남겨두는데, 그러면 이미 옛 이름으로 받은 유저가 새 이름으로 또 받을 수 있게 된다
 # (조건은 똑같은데 행만 2개가 되므로) - 그래서 시딩 전에 옛 이름 행을 새 이름으로 먼저 개명해서
-# 하나의 행(과 그 유저별 수령 기록)을 그대로 이어가게 한다. 한 번 개명되고 나면 old_name을 가진
+# 하나의 행(과 그 유저별 수령 기록)을 그대로 이어가게 한다.
+# new_name 행이 이미 존재하는 경우(이 마이그레이션이 생기기 전 코드로 한 번이라도 배포/시딩된 적이
+# 있어서 두 이름이 동시에 만들어져버린 경우)에는 단순 스킵이 아니라 실제로 두 행을 병합한다 -
+# old_name 행에 걸린 UserChallengeClaim을 new_name 행으로 옮기고(둘 다에 이미 수령 기록이 있는
+# 유저는 중복분만 지운다), old_name 행은 지운다. 두 경우 모두 한 번 처리되고 나면 old_name을 가진
 # 행이 없어지므로 이후 실행에서는 조용히 스킵된다(멱등).
 CHALLENGE_RENAMES = [
     ("도감 Episode 1 No.1 획득", "인연 스토리 도감 Episode 1 No.1 획득"),
@@ -1632,9 +1636,27 @@ def seed_challenges():
             if not old_row:
                 continue
             new_row = db.query(Challenge).filter(Challenge.name == new_name).first()
-            if new_row:
+            if not new_row:
+                # 깨끗한 경우: 그냥 이름만 바꿔서 행(과 수령 기록)을 그대로 이어간다.
+                old_row.name = new_name
+                rename_changed = True
                 continue
-            old_row.name = new_name
+
+            # 두 이름의 행이 이미 둘 다 있는 경우: old_row에 걸린 수령 기록을 new_row로 옮기고 병합한다.
+            old_claims = db.query(UserChallengeClaim).filter(
+                UserChallengeClaim.challenge_id == old_row.id
+            ).all()
+            for claim in old_claims:
+                dup = db.query(UserChallengeClaim).filter(
+                    UserChallengeClaim.user_id == claim.user_id,
+                    UserChallengeClaim.challenge_id == new_row.id,
+                ).first()
+                if dup:
+                    # 이 유저는 이미 두 이름 다 수령한 상태(버그가 실제로 발동했던 경우) - 중복 기록만 지운다.
+                    db.delete(claim)
+                else:
+                    claim.challenge_id = new_row.id
+            db.delete(old_row)
             rename_changed = True
         if rename_changed:
             db.commit()
