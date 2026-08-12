@@ -466,7 +466,7 @@
             window.ReadingSession?.clear();
             alert(
                 `새벽 1시가 지나면서 이전 학습이 자동으로 종료·저장됐어요.\n` +
-                `${session.difficulty} · ${elapsedMinutes}분 (+${data.gained_exp} EXP, +${data.gained_gold} 골드)`
+                `${session.difficulty} · ${elapsedMinutes}분 (+${data.gained_exp} EXP, +${data.gained_silver} 실버, +${data.gained_gold} 골드)`
             );
         } catch (err) {
             console.error("만료된 세션 자동 저장 실패:", err);
