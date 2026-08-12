@@ -24,14 +24,14 @@ with CHARACTERS_JSON.open("r", encoding="utf-8") as f:
 
 RARITY_START_STAR = {"신화": 5, "전설": 4, "영웅": 3, "희귀": 2, "일반": 1}
 
-# 성공 / 유지 / 파괴 확률과 비용.
-# 값은 모두 퍼센트 단위다.
+# 성공 / 유지 / 파괴 확률(퍼센트)과 비용(재화 이원화 이후 실버, cost 값 자체는 기존 골드 비용의 5배).
+# 2(2★→3★)/3(3★→4★) 확률은 새로 조정됐고, 1/4/5는 확률은 그대로에 비용만 실버로 바뀌었다.
 ENHANCEMENT_RULES = {
-    1: {"success": 79, "maintain": 20, "destroy": 1, "cost": 50},
-    2: {"success": 50, "maintain": 45, "destroy": 5, "cost": 100},
-    3: {"success": 30, "maintain": 60, "destroy": 10, "cost": 200},
-    4: {"success": 20, "maintain": 60, "destroy": 20, "cost": 500},
-    5: {"success": 1, "maintain": 49, "destroy": 50, "cost": 1000},
+    1: {"success": 79, "maintain": 20, "destroy": 1, "cost": 250},
+    2: {"success": 60, "maintain": 30, "destroy": 10, "cost": 500},
+    3: {"success": 40, "maintain": 45, "destroy": 15, "cost": 1000},
+    4: {"success": 20, "maintain": 60, "destroy": 20, "cost": 2500},
+    5: {"success": 1, "maintain": 49, "destroy": 50, "cost": 5000},
 }
 
 ENHANCEMENT_REQUIRED_COPIES = 3
@@ -257,7 +257,7 @@ def get_enhancement_inventory(
         }
 
     return {
-        "gold": user.gold,
+        "silver": user.silver,
         "required_copies": ENHANCEMENT_REQUIRED_COPIES,
         "min_required_copies": min_required_copies,
         "has_shredder": has_shredder,
@@ -520,17 +520,17 @@ def enhance_character(
         )
 
     base_rule = ENHANCEMENT_RULES[req.star]
-    if locked_user.gold < base_rule["cost"]:
+    if locked_user.silver < base_rule["cost"]:
         raise HTTPException(
             status_code=400,
-            detail=f"골드가 부족합니다. 강화에는 {base_rule['cost']}G가 필요합니다.",
+            detail=f"실버가 부족합니다. 강화에는 {base_rule['cost']}실버가 필요합니다.",
         )
 
     base, materials = _choose_enhancement_cards(locked_user, copies, required_copies - 1)
     selected = [base, *materials]
     selected_ids = {c.id for c in selected}
 
-    locked_user.gold -= base_rule["cost"]
+    locked_user.silver -= base_rule["cost"]
 
     if is_dust_convert:
         # ── 최재혁의 마법 영약: 성공/유지/파괴 확률표를 통째로 대체한다 ──
@@ -714,6 +714,10 @@ def enhance_character(
     # 마법 영약의 dust_success/dust_fail은 기존 성공/파괴와 성격이 달라 이 집계에는 포함하지 않는다.
     if outcome in ("success", "super_success"):
         db.add(ActivityLog(user_id=locked_user.id, activity_type="character_enhance_success"))
+        if outcome == "super_success":
+            # 도전과제("강화 슈퍼 성공 누적 N회") 판정용 - 위 character_enhance_success와 별개로
+            # 슈퍼 성공만 따로도 셀 수 있게 추가로 남긴다.
+            db.add(ActivityLog(user_id=locked_user.id, activity_type="character_enhance_super_success"))
         # 확률표(아이템 효과 반영 후) 기준 "성공" 계열(일반+슈퍼) 확률 합이 90% 이상이었던 성공 1회를
         # 기록한다. dust_convert(마법 영약)는 확률표 자체가 다른 성격이라 여기(else 분기 안)에서는
         # 애초에 해당 안 됨.
@@ -758,7 +762,7 @@ def enhance_character(
         "star_before": req.star,
         "star_after": result_star,
         "consumed_count": consumed_count,
-        "left_gold": locked_user.gold,
+        "left_silver": locked_user.silver,
         "remaining_same_star": remaining_same_star,
         "roll": round(roll, 4),
         "rule": rule,

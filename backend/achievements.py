@@ -399,6 +399,8 @@ def _grant_reward_items(db: Session, user, reward_items) -> list[Character]:
                 db.add(UserItem(user_id=user.id, item_id=item_row.id, quantity=quantity))
         elif kind == "gacha_points":
             user.gacha_points += quantity
+        elif kind == "silver":
+            user.silver += quantity
 
     return granted
 

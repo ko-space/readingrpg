@@ -107,6 +107,12 @@ def unlock_cg(
         # CG 수집 업적("스토리 수집가"/"이야기꾼"/"노벨 문학상")과 히든 엔딩 관련 업적 판정.
         # 보상(골드/캐릭터)은 이 시점에 서버에서 바로 지급된다.
         check_and_grant_achievements(db, user)
+
+    # 도전과제("스토리모드 앤딩 N회 보기") 판정용 - 처음 보든 재방문이든(위 if와 무관하게) 매번 남긴다.
+    # UserCgUnlock은 "이 엔딩을 최초로 봤는가"(존재 여부, 최대 엔딩 종류 수까지만 셀 수 있음)만 표시하고,
+    # 이건 "몇 번을 봤는가"(재방문 포함 누적 횟수)를 센다.
+    db.add(ActivityLog(user_id=user.id, activity_type="ep1_ending_reached"))
+    db.commit()
     return {"message": "CG가 해금되었습니다."}
 
 

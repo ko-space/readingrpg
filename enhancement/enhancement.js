@@ -15,7 +15,7 @@
     let loaded = false;
     let loading = false;
     let enhancementData = {
-        gold: 0,
+        silver: 0,
         required_copies: 3,
         rules: {},
         characters: [],
@@ -236,7 +236,7 @@
 
         document.getElementById(
             "enhancement-gold-value"
-        ).textContent = Number(body.gold || 0).toLocaleString();
+        ).textContent = Number(body.silver || 0).toLocaleString();
 
         renderCharacterGrid();
 
@@ -462,11 +462,11 @@
         renderSelectedItemsSummary();
 
         const hasCopies = group.count >= requiredForThisAttempt;
-        const hasGold = baseRule
-            ? Number(enhancementData.gold) >= Number(baseRule.cost)
+        const hasSilver = baseRule
+            ? Number(enhancementData.silver) >= Number(baseRule.cost)
             : false;
         const eligible = Boolean(
-            enhancement.eligible && hasCopies && hasGold
+            enhancement.eligible && hasCopies && hasSilver
         );
 
         submitButton.disabled = !eligible;
@@ -476,9 +476,9 @@
             warning.textContent = "★6 인물은 더 이상 강화할 수 없습니다.";
         } else if (!hasCopies) {
             warning.textContent = `같은 이름 + 같은 성급 인물이 ${requiredForThisAttempt}장 필요합니다.`;
-        } else if (!hasGold) {
+        } else if (!hasSilver) {
             warning.textContent =
-                `골드가 부족합니다. ${Number(baseRule.cost).toLocaleString()}G가 필요합니다.`;
+                `실버가 부족합니다. ${Number(baseRule.cost).toLocaleString()}실버가 필요합니다.`;
         } else {
             warning.classList.remove("danger");
             warning.textContent = requiredForThisAttempt === 1
@@ -530,7 +530,7 @@
         document.getElementById(
             "enhancement-cost"
         ).textContent = rule
-            ? `${Number(rule.cost).toLocaleString()}G`
+            ? `${Number(rule.cost).toLocaleString()}실버`
             : "-";
     }
 
@@ -546,7 +546,7 @@
         document.getElementById(
             "enhancement-cost"
         ).textContent = baseRule
-            ? `${Number(baseRule.cost).toLocaleString()}G`
+            ? `${Number(baseRule.cost).toLocaleString()}실버`
             : "-";
     }
 

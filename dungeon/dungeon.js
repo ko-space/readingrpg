@@ -7,11 +7,24 @@
 
     let regions = [];
     let userLevel = 1;
+    let userSilver = 0;
+    let unlockedRegionNames = [];
     let currentIndex = 0;
 
     function authHeaders() {
         const token = localStorage.getItem("access_token");
         return token ? { "Authorization": `Bearer ${token}` } : {};
+    }
+
+    async function refreshUnlockedRegions() {
+        try {
+            const res = await fetch(`${API_BASE_URL}/regions/unlocked`, { headers: authHeaders() });
+            if (!res.ok) return;
+            const data = await res.json();
+            unlockedRegionNames = data.unlocked_region_names || [];
+        } catch (err) {
+            console.error("지역 해금 정보를 불러오지 못했어요.", err);
+        }
     }
 
     async function init() {
@@ -20,13 +33,15 @@
         try {
             const [regionsRes, meRes] = await Promise.all([
                 fetch(`${API_BASE_URL}/regions/`),
-                fetch(`${API_BASE_URL}/users/me`, { headers: authHeaders() })
+                fetch(`${API_BASE_URL}/users/me`, { headers: authHeaders() }),
+                refreshUnlockedRegions(),
             ]);
             if (!regionsRes.ok || !meRes.ok) throw new Error("응답 실패");
 
             regions = await regionsRes.json();
             const me = await meRes.json();
             userLevel = me.user_info.level;
+            userSilver = me.user_info.silver;
             currentRegionName = me.region_info ? me.region_info.name : null;
         } catch (err) {
             console.error("지역 정보를 불러오지 못했어요.", err);
@@ -106,9 +121,45 @@
         });
     }
 
+    function formatRateText(region) {
+        const parts = [];
+        const expPer10Min = Math.round(region.exp_rate * 10);
+        if (expPer10Min > 0) parts.push(`${expPer10Min} EXP`);
+        const silverPer10Min = Math.round((region.silver_rate || 0) * 10);
+        if (silverPer10Min > 0) parts.push(`${silverPer10Min} 실버`);
+        const goldPer10Min = Math.round((region.gold_rate || 0) * 10);
+        if (goldPer10Min > 0) parts.push(`${goldPer10Min} 골드`);
+        return `${parts.join(" · ") || "0 EXP"} / 10분`;
+    }
+
+    async function handlePurchaseClick(region) {
+        const enterBtn = document.getElementById("dungeon-enter-btn");
+        enterBtn.disabled = true;
+        try {
+            const res = await fetch(`${API_BASE_URL}/regions/unlock?region_name=${encodeURIComponent(region.name)}`, {
+                method: "POST",
+                headers: authHeaders(),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                alert(data.detail || "해금에 실패했습니다.");
+                enterBtn.disabled = false;
+                return;
+            }
+            userSilver = data.left_silver;
+            await refreshUnlockedRegions();
+            renderCurrentRegion();
+        } catch (err) {
+            console.error("지역 해금에 실패했어요.", err);
+            enterBtn.disabled = false;
+        }
+    }
+
     function renderCurrentRegion() {
         const region = regions[currentIndex];
-        const isUnlocked = userLevel >= region.required_level;
+        const isLevelUnlocked = userLevel >= region.required_level;
+        const needsPurchase = region.unlock_price_silver != null && !unlockedRegionNames.includes(region.name);
+        const isFullyUnlocked = isLevelUnlocked && !needsPurchase;
 
         const thumbEl = document.getElementById("dungeon-thumb");
         const lockEl = document.getElementById("dungeon-thumb-lock");
@@ -118,8 +169,13 @@
         const FALLBACK_GRADIENT = "linear-gradient(to bottom, #bfe3f7, #a8d98c)";
 
         nameEl.textContent = region.name;
+        // 이전 렌더에서 구매 모드로 바뀌었을 수 있으니 매번 기본 상태(모달 여는 입장 버튼)로 되돌린다.
+        enterBtn.onclick = null;
+        enterBtn.dataset.modalTarget = "modal-dungeon";
+        enterBtn.classList.remove("dungeon-enter-btn-purchase");
+        enterBtn.textContent = "입장하기";
 
-        if (isUnlocked) {
+        if (isFullyUnlocked) {
             thumbEl.classList.remove("locked");
             lockEl.hidden = true;
             // 이미지+그라데이션을 같이 겹쳐 넣어서, 이미지가 404 나도 그라데이션이 그대로 보이게 함
@@ -127,16 +183,30 @@
                 ? `url('${REGION_IMAGE_BASE}${region.image_file}'), ${FALLBACK_GRADIENT}`
                 : FALLBACK_GRADIENT;
 
-            const expPer10Min = Math.round(region.exp_rate * 10);
-            rateEl.textContent = `${expPer10Min} EXP / 10분`;
+            rateEl.textContent = formatRateText(region);
             enterBtn.disabled = false;
-        } else {
+        } else if (!isLevelUnlocked) {
             thumbEl.classList.add("locked");
             lockEl.hidden = false;
             thumbEl.style.backgroundImage = "";
 
             rateEl.textContent = `레벨${region.required_level} 부터 입장 가능`;
             enterBtn.disabled = true;
+        } else {
+            // 레벨은 됐지만 구매(해금)가 아직 안 된 지역 - 입장하기 대신 구매 버튼으로 바꾼다.
+            thumbEl.classList.add("locked");
+            lockEl.hidden = false;
+            thumbEl.style.backgroundImage = "";
+
+            rateEl.textContent = `${region.unlock_price_silver}실버로 해금`;
+            enterBtn.disabled = false;
+            enterBtn.removeAttribute("data-modal-target");
+            enterBtn.textContent = "실버로 해금하기";
+            enterBtn.classList.add("dungeon-enter-btn-purchase");
+            enterBtn.onclick = (e) => {
+                e.stopPropagation();
+                handlePurchaseClick(region);
+            };
         }
     }
 

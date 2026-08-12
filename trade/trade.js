@@ -16,7 +16,7 @@
     let loaded = false;
     let loading = false;
     let myUserId = null;
-    let myGold = 0;
+    let mySilver = 0; // 재화 이원화 이후 거래소는 실버로 거래된다(활용처: 강화·거래·상점 아이템 구매)
     let browseListings = []; // /market/의 전체 매물(최대 10개)
     let visibleBrowseListings = []; // 그중 화면에 실제로 보여주는 3개(pickRandomSubset)
     let marketCap = 10; // /market/ 응답의 market_cap(서버 backend/routers/market.py의 MARKET_CAP)
@@ -128,7 +128,7 @@
             if (!selectedListing) return;
             openConfirm(
                 "정말로 구매하시겠습니까?",
-                `'${selectedListing.name}'을(를) ${selectedListing.display_price.toLocaleString()}G에 구매합니다.`,
+                `'${selectedListing.name}'을(를) ${selectedListing.display_price.toLocaleString()}실버에 구매합니다.`,
                 buySelected
             );
         });
@@ -177,19 +177,19 @@
         // loadMyInventory는 pvpDefenseIds를 참고해서 카드를 그리므로, 방어 편성 정보가 반드시
         // 먼저(또는 동시에 기다린 뒤) 갱신돼 있어야 한다 - 그래서 Promise.all로 함께 기다린 뒤
         // 마지막에 인벤토리를 그린다.
-        await Promise.all([loadGold(), loadBrowse(), loadPvpDefense(), loadMyListingCount()]);
+        await Promise.all([loadSilver(), loadBrowse(), loadPvpDefense(), loadMyListingCount()]);
         await loadMyInventory();
     }
 
-    async function loadGold() {
+    async function loadSilver() {
         try {
             const res = await fetch(`${API_BASE_URL}/users/me`, { headers: authHeaders() });
             const data = await res.json();
-            myGold = data.user_info?.gold ?? 0;
-            const goldEl = document.getElementById("trade-my-gold");
-            if (goldEl) goldEl.textContent = myGold.toLocaleString();
+            mySilver = data.user_info?.silver ?? 0;
+            const silverEl = document.getElementById("trade-my-silver");
+            if (silverEl) silverEl.textContent = mySilver.toLocaleString();
         } catch (err) {
-            console.error("골드 정보를 불러오지 못했어요.", err);
+            console.error("실버 정보를 불러오지 못했어요.", err);
         }
     }
 
@@ -288,7 +288,7 @@
                     <div class="trade-standing-card-star">${stars(listing.star)}</div>
                 </div>
                 <div class="trade-card-name">${escapeHtml(listing.name)}</div>
-                <div class="trade-card-meta">${listing.display_price.toLocaleString()}G</div>
+                <div class="trade-card-meta">${listing.display_price.toLocaleString()}S</div>
             `;
             const img = card.querySelector("img");
             // reading.js가 reading.png를 쓰는 것과 같은 방식 - "인물 선택" 목록 전용 포즈(model.png).
@@ -335,10 +335,10 @@
             buyBtn.disabled = true;
             reasonEl.hidden = false;
             reasonEl.textContent = "자신이 등록한 인물은 구매할 수 없습니다.";
-        } else if (myGold < listing.display_price) {
+        } else if (mySilver < listing.display_price) {
             buyBtn.disabled = true;
             reasonEl.hidden = false;
-            reasonEl.textContent = "골드가 부족합니다.";
+            reasonEl.textContent = "실버가 부족합니다.";
         } else {
             buyBtn.disabled = false;
             reasonEl.hidden = true;
@@ -491,11 +491,11 @@
 
         if (price < minPrice) {
             hintEl.classList.add("is-blocked");
-            hintEl.textContent = `${selectedGroup.star}★ 캐릭터는 최소 ${minPrice.toLocaleString()}G 이상으로 등록해야 합니다.`;
+            hintEl.textContent = `${selectedGroup.star}★ 캐릭터는 최소 ${minPrice.toLocaleString()}실버 이상으로 등록해야 합니다.`;
             btn.disabled = true;
         } else {
             hintEl.classList.remove("is-blocked");
-            hintEl.textContent = `${selectedGroup.star}★ 캐릭터는 최소 ${minPrice.toLocaleString()}G부터 등록할 수 있습니다.`;
+            hintEl.textContent = `${selectedGroup.star}★ 캐릭터는 최소 ${minPrice.toLocaleString()}실버부터 등록할 수 있습니다.`;
             btn.disabled = false;
         }
     }

@@ -72,12 +72,12 @@
             throw new Error(body.detail || "인물 정보를 불러오지 못했습니다.");
         }
         inventoryData = await charactersRes.json();
-        // itemData는 재화(item_type === "currency", 스토리모드 티켓 등)만 빼고 강화 아이템/의상을 전부
-        // 담아둔다 - getOutfitChoices()가 여기서 보유 의상(outfit)을 찾아 캐릭터 상세의 의상 선택
-        // 패널을 채우기 때문에 outfit을 여기서 걸러내면 안 된다. 대신 "아이템" 탭 목록(renderItemGrid)엔
-        // 진짜 아이템(강화 아이템)만 보여주고 의상은 안 보이게, 그 쪽에서 따로 한 번 더 거른다.
+        // itemData는 보유 아이템(강화 아이템/티켓/의상)을 전부 담아둔다 - getOutfitChoices()가 여기서
+        // 보유 의상(outfit)을 찾아 캐릭터 상세의 의상 선택 패널을 채우기 때문에 outfit을 여기서
+        // 걸러내면 안 된다. 대신 "아이템" 탭 목록(renderItemGrid)엔 강화 아이템/티켓만 보여주고
+        // 의상은 안 보이게, 그 쪽에서 따로 한 번 더 거른다.
         const allMyItems = itemsRes.ok ? await itemsRes.json() : [];
-        itemData = allMyItems.filter((item) => item.item_type !== "currency");
+        itemData = allMyItems;
     }
 
     function bindInteractions() {
@@ -237,34 +237,51 @@
         return "";
     }
 
+    function buildItemRow(item, index) {
+        const row = document.createElement("div");
+        row.className = "inventory-item-row";
+        row.style.animationDelay = `${Math.min(index, 15) * 35}ms`;
+        row.innerHTML = `
+            <div class="inventory-item-row-portrait">
+                <img alt="${escapeHtml(item.name)}" loading="lazy" decoding="async">
+                <span class="inventory-item-row-quantity">×${item.quantity}</span>
+            </div>
+            <div class="inventory-item-row-body">
+                <div class="inventory-item-row-name">${escapeHtml(item.name)}</div>
+                <div class="inventory-item-row-desc">${escapeHtml(item.description || "")}</div>
+                <div class="inventory-item-row-effect">${escapeHtml(describeEffect(item))}</div>
+            </div>
+        `;
+        const img = row.querySelector("img");
+        img.src = item.icon_file || "";
+        img.onerror = () => { img.style.visibility = "hidden"; };
+        return row;
+    }
+
     function renderItemGrid() {
         const grid = document.getElementById("inventory-item-grid");
         grid.innerHTML = "";
-        // "아이템" 탭엔 진짜 아이템(강화 아이템)만 보여주고 의상/스킨은 여기 안 보이게 한다 -
-        // 의상은 캐릭터 상세의 의상 선택 패널에서 다룬다(getOutfitChoices 참고).
+        // "아이템" 탭엔 진짜 아이템(강화 아이템)과 티켓만 보여주고 의상/스킨은 여기 안 보이게 한다 -
+        // 의상은 캐릭터 상세의 의상 선택 패널에서 다룬다(getOutfitChoices 참고). 재화 이원화 이후
+        // 티켓도 진짜 아이템(item_type="ticket")으로 취급되므로, 상점과 동일하게 "강화 아이템"/"티켓"
+        // 구간을 구분선으로 나눠 보여준다(inventory-character-grid의 미보유 구분선과 같은 방식).
         const enhancementItems = itemData.filter((item) => item.item_type === "enhancement");
-        showEmpty(enhancementItems.length ? "" : "보유한 아이템이 없습니다.", enhancementItems.length === 0);
+        const ticketItems = itemData.filter((item) => item.item_type === "ticket");
+        showEmpty(
+            enhancementItems.length || ticketItems.length ? "" : "보유한 아이템이 없습니다.",
+            enhancementItems.length === 0 && ticketItems.length === 0
+        );
 
-        enhancementItems.forEach((item, index) => {
-            const row = document.createElement("div");
-            row.className = "inventory-item-row";
-            row.style.animationDelay = `${Math.min(index, 15) * 35}ms`;
-            row.innerHTML = `
-                <div class="inventory-item-row-portrait">
-                    <img alt="${escapeHtml(item.name)}" loading="lazy" decoding="async">
-                    <span class="inventory-item-row-quantity">×${item.quantity}</span>
-                </div>
-                <div class="inventory-item-row-body">
-                    <div class="inventory-item-row-name">${escapeHtml(item.name)}</div>
-                    <div class="inventory-item-row-desc">${escapeHtml(item.description || "")}</div>
-                    <div class="inventory-item-row-effect">${escapeHtml(describeEffect(item))}</div>
-                </div>
-            `;
-            const img = row.querySelector("img");
-            img.src = item.icon_file || "";
-            img.onerror = () => { img.style.visibility = "hidden"; };
-            grid.appendChild(row);
-        });
+        enhancementItems.forEach((item, index) => grid.appendChild(buildItemRow(item, index)));
+
+        if (ticketItems.length) {
+            const divider = document.createElement("div");
+            divider.className = "inventory-unowned-divider";
+            divider.textContent = "티켓";
+            grid.appendChild(divider);
+
+            ticketItems.forEach((item, index) => grid.appendChild(buildItemRow(item, index)));
+        }
     }
 
     function openDetail(group, isUnowned = false) {

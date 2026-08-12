@@ -7,6 +7,7 @@ from sqlalchemy.exc import OperationalError
 from database import Base, engine
 import models
 from character_visibility import seed_character_visibility
+from schema_evolution import evolve_schema
 from seed import seed_shop_items, seed_regions, seed_achievements, seed_gacha_banners, seed_enhancement_items, seed_quests, seed_currency_items, seed_notices, seed_challenges, seed_market_state
 from routers import users, logs, gacha, shop, regions, ranking, characters, auth, pvp, achievements, devtest, quests, story, notices, mailbox, challenges, market
 
@@ -26,6 +27,7 @@ def _create_tables_with_retry():
             time.sleep(wait_seconds)
 
 _create_tables_with_retry()
+evolve_schema()  # create_all()이 못 만드는 기존 테이블의 새 컬럼을 여기서 보정한다(schema_evolution.py 참고)
 seed_character_visibility()  # is_hidden DB 오버라이드 기준 행부터 만들어야 아래 시딩들이 정확한 값을 읽는다
 seed_shop_items()
 seed_regions()

@@ -7,13 +7,19 @@
 자동지급 함수를 두지 않고, 지급은 routers/challenges.py의 claim 엔드포인트가 담당한다).
 """
 from datetime import datetime, timezone, timedelta
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from models import Character, ReadingLog, PvpBattleLog, ActivityLog, UserCgUnlock, Challenge
+from models import (
+    Character, ReadingLog, PvpBattleLog, ActivityLog, UserCgUnlock, Challenge,
+    MarketActivityLog, GachaPullLog, RankingTop1Log, RankingPeriodCursor, User, UserAchievement,
+)
 from achievements import get_character_catalog
-from quests import MOCK_EXAM_MINUTES
+from quests import MOCK_EXAM_MINUTES, _bounds_utc_naive
 
 KST = timezone(timedelta(hours=9))
+ADMIN_USER_ID = 1  # ranking.py/pvp.py와 동일한 관리자 계정 - 랭킹 1위 판정에서 제외
+RARITY_START_STAR = {"신화": 5, "전설": 4, "영웅": 3, "희귀": 2, "일반": 1}  # characters.py와 동일(이 프로젝트 컨벤션)
 
 
 def _job_class_matches(actual_job_class: str | None, target_job_class: str) -> bool:
@@ -159,4 +165,198 @@ def compute_progress(db: Session, user, challenge: Challenge) -> dict:
                 current = 1
                 break
 
+    elif ctype == "market_activity_count":
+        # 거래소 등록/구매 이력(MarketActivityLog) 기준 - params.action이 "register"|"buy",
+        # params.min_star가 있으면 그 성급 이상만 인정("N성 이상 인물 구매" 등). quests.py의
+        # 동명 condition_type과 같은 개념이지만 이쪽은 기간 제한이 없다(도전과제는 누적).
+        q = db.query(MarketActivityLog).filter(
+            MarketActivityLog.user_id == user.id,
+            MarketActivityLog.action == params.get("action"),
+        )
+        if params.get("min_star"):
+            q = q.filter(MarketActivityLog.star >= params["min_star"])
+        current = q.count()
+
+    elif ctype == "ranking_top1_count":
+        # "오늘의/주간 독서시간 랭킹 1위 달성 N회" - _close_ranking_periods_if_needed가 기간이 끝날
+        # 때마다 미리 기록해둔 RankingTop1Log를 그냥 센다(동점자는 전원 각자 한 행씩 가짐).
+        current = db.query(RankingTop1Log).filter(
+            RankingTop1Log.user_id == user.id,
+            RankingTop1Log.category == params.get("category"),
+        ).count()
+
+    elif ctype == "ranking_top1_live":
+        # "보유 골드"/"칭호 수"/"PvP 승수" 랭킹 1위(1회) - 기간 개념이 없어 그냥 "지금 내 값이 전체
+        # 최댓값 이상인가"를 실시간으로 비교한다(ranking.py의 정렬 기준과 동일한 값을 쓴다). 동점자는
+        # 전원 인정(사용자 확정 사항)이므로 "최댓값과 같거나 큼"으로 판정.
+        target = 1
+        metric = params.get("metric")
+        my_value = 0
+        max_value = 0
+        if metric == "gold":
+            my_value = user.gold
+            max_value = db.query(func.max(User.gold)).filter(User.id != ADMIN_USER_ID).scalar() or 0
+        elif metric == "titles":
+            my_value = db.query(UserAchievement).filter(UserAchievement.user_id == user.id).count()
+            counts = (
+                db.query(UserAchievement.user_id, func.count(UserAchievement.id))
+                .join(User, User.id == UserAchievement.user_id)
+                .filter(User.id != ADMIN_USER_ID)
+                .group_by(UserAchievement.user_id)
+                .all()
+            )
+            max_value = max((c for _, c in counts), default=0)
+        elif metric == "pvp_wins":
+            my_value = db.query(PvpBattleLog).filter(
+                PvpBattleLog.attacker_id == user.id, PvpBattleLog.winner_id == user.id
+            ).count()
+            counts = (
+                db.query(PvpBattleLog.winner_id, func.count(PvpBattleLog.id))
+                .filter(
+                    PvpBattleLog.attacker_id == PvpBattleLog.winner_id,
+                    PvpBattleLog.winner_id != ADMIN_USER_ID,
+                )
+                .group_by(PvpBattleLog.winner_id)
+                .all()
+            )
+            max_value = max((c for _, c in counts), default=0)
+        current = 1 if my_value > 0 and my_value >= max_value else 0
+
+    elif ctype == "gacha_pull_all_rarities":
+        # "1,2,3,4,5성 인물 전부 모집" - 모집 시 시작 성급을 정하는 5개 등급(일반~신화)을 전부
+        # 한 번 이상 뽑아봤는지. target은 5로 고정.
+        target = 5
+        rarities = {
+            row[0] for row in db.query(GachaPullLog.rarity).filter(GachaPullLog.user_id == user.id).distinct().all()
+        }
+        current = len(rarities & set(RARITY_START_STAR.keys()))
+
+    elif ctype == "gacha_pull_pickup_count":
+        min_star = params.get("min_star", 3)
+        qualifying = {r for r, s in RARITY_START_STAR.items() if s >= min_star}
+        current = db.query(GachaPullLog).filter(
+            GachaPullLog.user_id == user.id,
+            GachaPullLog.was_pickup == True,
+            GachaPullLog.rarity.in_(qualifying),
+        ).count()
+
+    elif ctype == "gacha_pull_rarity_count":
+        current = db.query(GachaPullLog).filter(
+            GachaPullLog.user_id == user.id,
+            GachaPullLog.rarity == params.get("rarity"),
+        ).count()
+
+    elif ctype == "gacha_pull_star_streak":
+        # "3성 이상 인물 2번 연속으로 모집" - 가장 최근 N번의 모집이 전부 지정 성급 이상이었는지.
+        target = 1
+        min_star = params.get("min_star", 3)
+        streak = params.get("streak", 2)
+        qualifying = {r for r, s in RARITY_START_STAR.items() if s >= min_star}
+        recent = (
+            db.query(GachaPullLog)
+            .filter(GachaPullLog.user_id == user.id)
+            .order_by(GachaPullLog.id.desc())
+            .limit(streak)
+            .all()
+        )
+        current = 1 if len(recent) == streak and all(r.rarity in qualifying for r in recent) else 0
+
+    elif ctype == "daily_all_subjects_study_days":
+        # "하루에 국어·영어·수학·탐구를 각각 N분 이상 공부하기" - 그런 날이 며칠이나 있었는지.
+        required_subjects = ["국어", "영어", "수학", "탐구"]
+        min_minutes = params.get("min_minutes", 60)
+        rows = db.query(ReadingLog).filter(
+            ReadingLog.user_id == user.id,
+            ReadingLog.session_type.in_(["subject", "mock_exam"]),
+        ).all()
+        by_day: dict[str, dict[str, int]] = {}
+        for row in rows:
+            if not row.difficulty:
+                continue
+            day_key = row.created_at.replace(tzinfo=timezone.utc).astimezone(KST).date().isoformat()
+            bucket = by_day.setdefault(day_key, {})
+            for subject in required_subjects:
+                if row.difficulty.startswith(subject):
+                    bucket[subject] = bucket.get(subject, 0) + (row.reading_minutes or 0)
+                    break
+        current = sum(
+            1 for bucket in by_day.values()
+            if all(bucket.get(subject, 0) >= min_minutes for subject in required_subjects)
+        )
+
+    elif ctype == "character_filter_exp":
+        # job_class_subject_exp/gender_subject_exp의 일반화판 - job_classes(목록, OR 조건) 또는
+        # rarity로 캐릭터를 거르고, session_type 제한 없이(독서 포함) earned_exp를 합산한다.
+        job_classes = params.get("job_classes")
+        rarity = params.get("rarity")
+        rows = db.query(ReadingLog).filter(
+            ReadingLog.user_id == user.id,
+            ReadingLog.equipped_character_name.isnot(None),
+        ).all()
+        current = 0
+        for row in rows:
+            catalog = get_character_catalog(row.equipped_character_name)
+            if not catalog:
+                continue
+            if job_classes and not any(_job_class_matches(catalog.get("job_class"), jc) for jc in job_classes):
+                continue
+            if rarity and catalog.get("rarity") != rarity:
+                continue
+            current += row.earned_exp or 0
+
     return {"current": max(0, min(current, target)), "target": target}
+
+
+def _close_ranking_period(db: Session, category: str, period_key: str):
+    """category의 "마지막으로 마감 처리한 기간"이 이 period_key가 아니면(즉 아직 처리 안 됐으면),
+    그 기간(이미 끝난 하루/한 주)의 독서시간 1위(동점자 전원)를 RankingTop1Log에 기록하고 커서를
+    갱신한다. period_key 형식은 quests.py와 동일("2026-07-20" / "W2026-07-20")."""
+    cursor = db.query(RankingPeriodCursor).filter(RankingPeriodCursor.category == category).first()
+    if not cursor:
+        cursor = RankingPeriodCursor(category=category, last_processed_period_key=None)
+        db.add(cursor)
+        db.flush()
+    if cursor.last_processed_period_key == period_key:
+        return
+
+    period = "daily" if category == "reading_daily" else "weekly"
+    start, end = _bounds_utc_naive(period, period_key)
+    rows = (
+        db.query(ReadingLog.user_id, func.sum(ReadingLog.reading_minutes).label("total"))
+        .filter(
+            ReadingLog.created_at >= start,
+            ReadingLog.created_at < end,
+            ReadingLog.user_id != ADMIN_USER_ID,
+        )
+        .group_by(ReadingLog.user_id)
+        .all()
+    )
+    cursor.last_processed_period_key = period_key
+    if rows:
+        max_total = max(r.total or 0 for r in rows)
+        if max_total > 0:
+            winners = [r.user_id for r in rows if (r.total or 0) == max_total]
+            already = {
+                row.user_id for row in db.query(RankingTop1Log.user_id).filter(
+                    RankingTop1Log.category == category, RankingTop1Log.period_key == period_key,
+                ).all()
+            }
+            for uid in winners:
+                if uid not in already:
+                    db.add(RankingTop1Log(user_id=uid, category=category, period_key=period_key))
+    db.commit()
+
+
+def close_ranking_periods_if_needed(db: Session):
+    """"오늘의 독서시간"/"주간 독서시간" 랭킹 1위 도전과제 판정용 - 예약 스케줄러가 없어서, 아무
+    요청이나(routers/users.py의 /users/me) 들어올 때마다 "어제"/"지난 주"가 이미 끝났는데 그 기간의
+    1위를 아직 안 기록해뒀으면 지금 기록한다. 여러 날 동안 요청이 아예 없었으면 그 사이 날짜는
+    건너뛸 수 있다(스케줄러가 없는 이 프로젝트의 구조적 한계 - 매일 요청이 들어오는 실사용 조건에서는
+    문제되지 않는다)."""
+    yesterday = datetime.now(KST).date() - timedelta(days=1)
+    _close_ranking_period(db, "reading_daily", yesterday.isoformat())
+
+    today = datetime.now(KST).date()
+    this_monday = today - timedelta(days=today.weekday())
+    last_monday = this_monday - timedelta(days=7)
+    _close_ranking_period(db, "reading_weekly", f"W{last_monday.isoformat()}")

@@ -50,7 +50,10 @@
     }
 
     function rewardText(mail) {
-        return mail.gold_amount ? `골드 ${Number(mail.gold_amount).toLocaleString()}` : "";
+        const parts = [];
+        if (mail.silver_amount) parts.push(`실버 ${Number(mail.silver_amount).toLocaleString()}`);
+        if (mail.gold_amount) parts.push(`골드 ${Number(mail.gold_amount).toLocaleString()}`);
+        return parts.join(" · ");
     }
 
     function renderList() {

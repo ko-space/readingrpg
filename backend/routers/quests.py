@@ -80,6 +80,8 @@ def _claim_one(db: Session, user: User, quest: Quest) -> dict:
     if quest.reward_type == "gold":
         user.gold += quest.reward_amount
         user.lifetime_gold += quest.reward_amount
+    elif quest.reward_type == "silver":
+        user.silver += quest.reward_amount
     elif quest.reward_type == "exp":
         apply_exp(user, quest.reward_amount)
     elif quest.reward_type == "item":
@@ -120,6 +122,7 @@ def claim_quest(
         "message": f"'{quest.name}' 보상을 받았습니다!",
         **result,
         "gold": user.gold,
+        "silver": user.silver,
         "level": user.level,
         "total_exp": user.total_exp,
         "new_achievements": new_achievements,
@@ -169,6 +172,7 @@ def claim_all_quests(
         "message": f"퀘스트 보상 {len(claimed_results)}개를 받았습니다." if claimed_results else "지금 받을 수 있는 보상이 없습니다.",
         "claimed": claimed_results,
         "gold": user.gold,
+        "silver": user.silver,
         "level": user.level,
         "total_exp": user.total_exp,
         "new_achievements": new_achievements,

@@ -640,6 +640,17 @@ body, html {
     background: linear-gradient(160deg, #6fa6ef, #24569f);
 }
 
+/* 레벨은 됐지만 아직 구매(해금)가 안 된 지역(예: 종말의 금광) - 입장 버튼 대신 해금 구매 버튼 */
+.dungeon-enter-btn-purchase {
+    background: linear-gradient(160deg, #b08ee0, #5c3a8f);
+    border: 2px solid #e4d4ff;
+    box-shadow: 0 0 12px rgba(176, 142, 224, 0.55), 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+.dungeon-enter-btn-purchase:hover {
+    background: linear-gradient(160deg, #c3a6ef, #6d449f);
+}
+
 /* ===== 모달 (크림톤으로 통일) ===== */
 .modal-overlay {
     display: none;

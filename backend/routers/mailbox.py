@@ -31,6 +31,7 @@ def _serialize(mail: Mail) -> dict:
         "title": mail.title,
         "body": mail.body,
         "gold_amount": mail.gold_amount,
+        "silver_amount": mail.silver_amount,
         "created_at": mail.created_at.isoformat() if mail.created_at else None,
         "claimed": mail.claimed_at is not None,
     }
@@ -59,6 +60,8 @@ def _claim_one(db: Session, mail: Mail, user: User) -> bool:
     if mail.gold_amount:
         user.gold += mail.gold_amount
         user.lifetime_gold += mail.gold_amount
+    if mail.silver_amount:
+        user.silver += mail.silver_amount
     return True
 
 
@@ -76,6 +79,7 @@ def claim_mail(mail_id: int, db: Session = Depends(get_db), user: User = Depends
     return {
         "message": f"'{mail.title}' 보상을 받았습니다!",
         "gold": user.gold,
+        "silver": user.silver,
         "new_achievements": new_achievements,
         "new_characters": new_characters,
     }
@@ -92,6 +96,7 @@ def claim_all_mail(db: Session = Depends(get_db), user: User = Depends(get_curre
         "message": f"우편 보상 {len(claimed_mails)}개를 받았습니다." if claimed_mails else "지금 받을 수 있는 보상이 없습니다.",
         "claimed_count": len(claimed_mails),
         "gold": user.gold,
+        "silver": user.silver,
         "new_achievements": new_achievements,
         "new_characters": new_characters,
     }

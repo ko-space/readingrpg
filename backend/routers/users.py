@@ -9,6 +9,7 @@ from achievements import get_equipped_title_info
 from routers.story import STORY_TICKET_ITEM_NAME
 from routers.pvp import ARENA_TICKET_ITEM_NAME
 from quests import log_login_activity
+from challenges import close_ranking_periods_if_needed
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -66,6 +67,7 @@ def _build_profile(user: User, db: Session):
             "total_exp": user.total_exp,
             "lifetime_exp": user.lifetime_exp,
             "gold": user.gold,
+            "silver": user.silver,
             "gacha_points": user.gacha_points,
             "story_ticket_count": _story_ticket_count(user, db),
             "arena_ticket_count": _arena_ticket_count(user, db),
@@ -97,6 +99,10 @@ def get_my_profile(current_user: User = Depends(get_current_user), db: Session =
     # 매일 다시 타지 않으므로, "접속"의 실질적 의미에 맞게 홈 화면 진입(=이 엔드포인트 호출)마다 기록한다.
     # log_login_activity 자체가 KST 기준 하루 1번만 남기므로 여기서 매번 불러도 중복 기록되지 않는다.
     log_login_activity(db, current_user.id)
+    # 랭킹 도전과제("오늘의/주간 독서시간 랭킹 1위 달성 N회") 판정용 - 스케줄러가 없어서 여기서
+    # 조용히 "어제"/"지난 주"가 끝났는지 확인한다(challenges.py 참고). 전체 유저를 훑는 연산이라
+    # 유저 개인 정보와 무관하지만, 로그인 지연 리셋과 같은 자리(가장 자주 호출되는 엔드포인트)에 둔다.
+    close_ranking_periods_if_needed(db)
     return _build_profile(current_user, db)
 
 

@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from database import get_db
-from models import User, Character, GachaBanner, GachaBannerPickup, ActivityLog, Mail
+from models import User, Character, GachaBanner, GachaBannerPickup, ActivityLog, Mail, GachaPullLog
 from schemas import GachaSelectRequest
 from security import get_current_user
 from achievements import check_and_grant_achievements, resolve_character_reveal_info
@@ -221,6 +221,9 @@ def pull_character(
         )
         db.add(duplicate_copy)
         db.add(ActivityLog(user_id=user.id, activity_type="gacha_pull"))  # 퀘스트("모집 N회") 판정용
+        db.add(GachaPullLog(  # 도전과제("N성 인물 모집", "픽업 인물 모집" 등) 판정용
+            user_id=user.id, character_name=picked_character["name"], rarity=rarity, was_pickup=is_pickup,
+        ))
         db.commit()
         db.refresh(duplicate_copy)
         new_achievements, new_characters = check_and_grant_achievements(db, user)
@@ -254,6 +257,9 @@ def pull_character(
     )
     db.add(new_character)
     db.add(ActivityLog(user_id=user.id, activity_type="gacha_pull"))  # 퀘스트("모집 N회") 판정용
+    db.add(GachaPullLog(  # 도전과제("N성 인물 모집", "픽업 인물 모집" 등) 판정용
+        user_id=user.id, character_name=picked_character["name"], rarity=rarity, was_pickup=is_pickup,
+    ))
     db.commit()
     db.refresh(new_character)
     new_achievements, new_characters = check_and_grant_achievements(db, user)
