@@ -1598,9 +1598,47 @@ CHALLENGES = [
 ]
 
 
+# 이번 재화 시스템 개편에서 문구를 다듬으며 이름이 바뀐 "기존에 이미 운영 DB에 있던" 도전과제들
+# (old_name, new_name). seed_challenges()는 이름 기준 upsert라 이름이 바뀌면 그냥 새 행을 만들고
+# 옛 행은 그대로 남겨두는데, 그러면 이미 옛 이름으로 받은 유저가 새 이름으로 또 받을 수 있게 된다
+# (조건은 똑같은데 행만 2개가 되므로) - 그래서 시딩 전에 옛 이름 행을 새 이름으로 먼저 개명해서
+# 하나의 행(과 그 유저별 수령 기록)을 그대로 이어가게 한다. 한 번 개명되고 나면 old_name을 가진
+# 행이 없어지므로 이후 실행에서는 조용히 스킵된다(멱등).
+CHALLENGE_RENAMES = [
+    ("도감 Episode 1 No.1 획득", "인연 스토리 도감 Episode 1 No.1 획득"),
+    ("도감 Episode 1 No.2 획득", "인연 스토리 도감 Episode 1 No.2 획득"),
+    ("도감 Episode 1 No.3 획득", "인연 스토리 도감 Episode 1 No.3 획득"),
+    ("도감 Episode 1 No.4 획득", "인연 스토리 도감 Episode 1 No.4 획득"),
+    ("도감 Episode 1 No.5 획득", "인연 스토리 도감 Episode 1 No.5 획득"),
+    ("도감 Episode 1 No.6 획득", "인연 스토리 도감 Episode 1 No.6 획득"),
+    ("도감 Episode 1 No.7 획득", "인연 스토리 도감 Episode 1 No.7 획득"),
+    ("도감 Episode 1 No.8 획득", "인연 스토리 도감 Episode 1 No.8 획득"),
+    ("도감 Episode 1 No.9 획득", "인연 스토리 도감 Episode 1 No.9 획득"),
+    ("도감 Episode 1 No.10 획득", "인연 스토리 도감 Episode 1 No.10 획득"),
+    ("도감 Episode 1 No.11 획득", "인연 스토리 도감 Episode 1 No.11 획득"),
+    ("★5 이상 캐릭터로 전술대회 전투 참여 1회", "★5 이상 인물로 전술대회 전투 참여 1회"),
+    ("여성 캐릭터를 사용해 과목으로 누적 1000exp 획득", "여성 인물과 함께 과목으로 누적 1000exp 획득"),
+    ("직업:학생과 함께 과목으로 누적 1000exp 획득", "전부 직업이 학생인 인물과 함께 과목으로 누적 1000exp 획득"),
+    ("직업:마법사를 사용해 과목으로 누적 1000exp 획득", "전부 직업이 마법사인 인물과 함께 과목으로 누적 1000exp 획득"),
+]
+
+
 def seed_challenges():
     db = SessionLocal()
     try:
+        rename_changed = False
+        for old_name, new_name in CHALLENGE_RENAMES:
+            old_row = db.query(Challenge).filter(Challenge.name == old_name).first()
+            if not old_row:
+                continue
+            new_row = db.query(Challenge).filter(Challenge.name == new_name).first()
+            if new_row:
+                continue
+            old_row.name = new_name
+            rename_changed = True
+        if rename_changed:
+            db.commit()
+
         existing_rows = {row.name: row for row in db.query(Challenge).all()}
         changed = False
 
