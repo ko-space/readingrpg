@@ -85,9 +85,13 @@
         }
     }
 
-    async function refreshData() {
+    // silent=true면 목록을 비우고 "불러오는 중..."을 보여주는 과정 없이 조용히 최신 데이터로만
+    // 갱신한다 - 모달을 다시 열 때마다(진행도가 바뀌었을 수 있으니 데이터 자체는 새로 받아야 함)
+    // 화면이 매번 깜빡이며 다시 그려지는 느낌을 주지 않기 위함. 진짜 첫 로딩(ensureLoaded)이나
+    // 수령 실패로 낙관적 상태를 되돌려야 할 때만 아닌(=요란한) 갱신을 쓴다.
+    async function refreshData(silent = false) {
         const listEl = document.getElementById("quest-list");
-        if (listEl) listEl.innerHTML = `<p class="screen-placeholder">불러오는 중...</p>`;
+        if (listEl && !silent) listEl.innerHTML = `<p class="screen-placeholder">불러오는 중...</p>`;
 
         try {
             const [questRes, challengeRes] = await Promise.all([
@@ -100,9 +104,11 @@
             renderList();
             updateQuestBadge();
         } catch (error) {
-            if (listEl) {
+            if (listEl && !silent) {
                 listEl.innerHTML =
                     `<p class="screen-placeholder">퀘스트를 불러오지 못했어요. (${escapeHtml(error.message)})</p>`;
+            } else {
+                console.error("퀘스트를 불러오지 못했어요.", error);
             }
         }
     }
@@ -186,11 +192,9 @@
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || "보상을 받지 못했습니다.");
-            // 낙관적으로 바꿔둔 quest 객체가, 응답을 기다리는 사이 모달이 닫혔다 다시 열려서 refreshData가
-            // questData 자체를 새 객체로 통째로 교체해버리면 화면에서 떨어져 나갈 수 있다(참조가
-            // 끊어짐) - 그러면 방금 수령한 게 서버에는 반영됐는데 화면엔 다시 "받기"로 보이는 어긋남이
-            // 생긴다. 성공이 확정된 지금, 서버 최신 상태를 다시 받아와 화면을 그 진실에 맞춘다.
-            await refreshData();
+            // 200 응답을 받았다는 건 서버에도 이미 확정 반영됐다는 뜻이라, 위에서 낙관적으로
+            // 바꿔둔 quest.claimed/claimable이 곧 서버 진실과 같다 - 목록을 통째로 다시 불러와
+            // 화면을 깜빡이며 다시 그릴 필요가 없다(재정렬은 이미 위 renderList()에서 끝났다).
             if (typeof loadProfile === "function") await loadProfile();
             // gacha.js와 동일한 패턴 - 캐릭터 보상이 있으면(퀘스트 자체 보상 또는 이 수령으로 새로 달성한
             // 업적의 보상) 가챠 등장 연출부터 재생하고, 업적 알림은 그 연출이 닫힌 뒤에 뜨도록 넘긴다.
@@ -205,9 +209,9 @@
                 notifyAchievements();
             }
         } catch (error) {
-            // 실패했을 때도 낙관적 mutation을 수동으로 되돌리는 대신 서버 상태를 다시 받아온다 -
-            // 같은 이유(quest 참조가 그 사이 detach됐을 수 있음)로, 수동 되돌리기보다 항상 더 정확하다.
-            await refreshData();
+            // 실패했을 때는 낙관적 mutation이 틀렸다는 뜻(예: 이미 다른 경로로 수령됨)이니 서버
+            // 진실로 조용히 되돌린다 - silent=true라 목록이 지워졌다 다시 그려지는 티는 안 난다.
+            await refreshData(true);
             alert(error.message);
         }
     }
@@ -229,9 +233,8 @@
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || "보상을 받지 못했습니다.");
-            // claimQuest와 동일한 이유 - 응답을 기다리는 사이 모달이 닫혔다 열려 challengeData가
-            // 통째로 교체됐을 수 있으므로, 성공이 확정된 지금 서버 최신 상태로 다시 맞춘다.
-            await refreshData();
+            // claimQuest와 동일한 이유 - 200 응답이 곧 서버 확정 반영이므로 위 낙관적 상태가 이미
+            // 진실과 같다. 다시 불러올 필요 없음.
             if (typeof loadProfile === "function") await loadProfile();
             // 도전과제 보상은 업적 알림을 유발하지 않지만(백엔드가 new_achievements를 안 줌), 보상
             // 캐릭터는 줄 수 있으므로 gacha.js와 동일하게 등장 연출을 재생한다.
@@ -239,7 +242,7 @@
                 showCharacterReveal(data.new_characters);
             }
         } catch (error) {
-            await refreshData();
+            await refreshData(true);
             alert(error.message);
         }
     }
@@ -247,10 +250,10 @@
     async function claimAll() {
         const isChallengeTab = currentPeriod === "challenge";
         const items = isChallengeTab ? challengeData : (questData[currentPeriod] || []);
-        const claimableIds = items.filter((q) => q.claimable && !q.claimed).map((q) => q.id);
-        if (claimableIds.length === 0) return;
+        const claimableItems = items.filter((q) => q.claimable && !q.claimed);
+        if (claimableItems.length === 0) return;
 
-        items.forEach((q) => { if (q.claimable) { q.claimed = true; q.claimable = false; } });
+        claimableItems.forEach((q) => { q.claimed = true; q.claimable = false; });
         renderList();
         updateQuestBadge();
 
@@ -265,8 +268,16 @@
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || "보상을 받지 못했습니다.");
-            // claimQuest/claimChallenge와 동일한 이유로, 성공이 확정된 지금 서버 최신 상태로 다시 맞춘다.
-            await refreshData();
+            // claim-all은 부분 실패를 허용하는 API라(조건 미달/이미 수령한 항목은 조용히 건너뜀),
+            // 위에서 "받을 수 있어 보였던" 항목을 전부 낙관적으로 수령 처리해도 실제로 서버가 받아준
+            // 것과 다를 수 있다 - 응답(data.claimed)에 없는 항목만 골라 되돌린다. 목록 전체를
+            // 다시 불러오지 않고도 정확하게 맞출 수 있다.
+            const claimedIds = new Set((data.claimed || []).map((r) => r.quest_id ?? r.challenge_id));
+            claimableItems.forEach((q) => {
+                if (!claimedIds.has(q.id)) { q.claimed = false; q.claimable = true; }
+            });
+            renderList();
+            updateQuestBadge();
             if (typeof loadProfile === "function") await loadProfile();
             // 퀘스트/도전과제 일괄 수령도 캐릭터 보상이 있으면 등장 연출부터 재생한다(gacha.js와 동일한
             // 패턴). 도전과제 탭은 new_achievements가 아예 안 오므로 optional chaining으로 자연스럽게 스킵.
@@ -281,7 +292,7 @@
                 notifyAchievements();
             }
         } catch (error) {
-            await refreshData();
+            await refreshData(true);
             alert(error.message);
         }
     }
@@ -308,8 +319,12 @@
     }
 
     openButton?.addEventListener("click", async () => {
-        await ensureLoaded();
-        if (loaded) await refreshData();
+        const wasLoaded = loaded;
+        await ensureLoaded(); // 최초 1회는 partial 로드 + refreshData()까지 이 안에서 끝난다.
+        // 이미 로드돼 있던 상태(재오픈)만 여기서 조용히 한 번 더 갱신한다 - 진행도가 그 사이
+        // 바뀌었을 수 있으니 데이터는 새로 받아오되, "불러오는 중..."으로 목록을 지웠다 다시
+        // 그리는 티는 내지 않는다(silent=true).
+        if (wasLoaded) await refreshData(true);
     });
 
     // 퀘스트 화면을 열기 전에도 버튼에 미수령 알림(불)을 보여줘야 하므로, 홈 진입 시점부터

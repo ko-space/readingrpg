@@ -27,6 +27,7 @@
     let selectedListing = null; // 거래 탭에서 선택된 매물
     let selectedGroup = null;   // 등록 탭에서 선택된 내 인물 그룹
     let selectedGroupLockedReason = null; // null | "equipped" | "defending" - 선택된 그룹이 등록 불가한 이유
+    let pendingConfirmAction = null; // #trade-confirm-overlay의 "확인"을 누르면 실행할 함수(구매/등록 공용)
 
     function authHeaders(json = false) {
         const token = localStorage.getItem("access_token");
@@ -103,27 +104,50 @@
         }
     }
 
+    // 구매/등록 공용 확인 모달. onConfirm은 "확인"을 눌렀을 때만 실행되고, "취소"나 바깥에서
+    // 다시 부르면(다른 액션이 먼저 확인창을 채가는 경우는 없음) 그냥 버려진다.
+    function openConfirm(title, desc, onConfirm) {
+        document.getElementById("trade-confirm-title").textContent = title;
+        document.getElementById("trade-confirm-desc").textContent = desc;
+        pendingConfirmAction = onConfirm;
+        document.getElementById("trade-confirm-overlay").hidden = false;
+    }
+
     function bindInteractions() {
         document.querySelectorAll(".trade-tab-btn").forEach((btn) => {
             btn.addEventListener("click", () => switchTab(btn.dataset.tradeTab));
         });
-        document.getElementById("trade-buy-button")?.addEventListener("click", buySelected);
         document.getElementById("trade-price-input")?.addEventListener("input", updateRegisterPreview);
         document.getElementById("trade-result-confirm")?.addEventListener("click", () => {
             document.getElementById("trade-result-overlay").hidden = true;
         });
 
-        // "등록하기"는 바로 API를 부르지 않고, 취소 불가 경고 모달을 먼저 띄운다 - 실제 등록은
+        // "구매"/"등록하기" 둘 다 바로 API를 부르지 않고 확인 모달을 먼저 띄운다 - 실제 요청은
         // 그 모달의 "확인"을 눌러야 진행된다.
+        document.getElementById("trade-buy-button")?.addEventListener("click", () => {
+            if (!selectedListing) return;
+            openConfirm(
+                "정말로 구매하시겠습니까?",
+                `'${selectedListing.name}'을(를) ${selectedListing.display_price.toLocaleString()}G에 구매합니다.`,
+                buySelected
+            );
+        });
         document.getElementById("trade-register-button")?.addEventListener("click", () => {
-            document.getElementById("trade-confirm-overlay").hidden = false;
+            openConfirm(
+                "정말 등록하시겠어요?",
+                "등록한 캐릭터는 판매되거나 자정에 초기화되기 전까지 취소할 수 없습니다.",
+                registerSelected
+            );
         });
         document.getElementById("trade-confirm-cancel")?.addEventListener("click", () => {
             document.getElementById("trade-confirm-overlay").hidden = true;
+            pendingConfirmAction = null;
         });
         document.getElementById("trade-confirm-ok")?.addEventListener("click", async () => {
             document.getElementById("trade-confirm-overlay").hidden = true;
-            await registerSelected();
+            const action = pendingConfirmAction;
+            pendingConfirmAction = null;
+            if (action) await action();
         });
         document.getElementById("trade-browse-refresh-btn")?.addEventListener("click", loadBrowse);
 
@@ -177,6 +201,8 @@
             browseListings = data.listings || [];
             myUserId = data.my_user_id ?? myUserId;
             marketCap = data.market_cap ?? marketCap;
+            const marketCountEl = document.getElementById("trade-market-count");
+            if (marketCountEl) marketCountEl.textContent = `거래 인물 ${browseListings.length}/${marketCap}`;
             visibleBrowseListings = pickRandomSubset(browseListings, 3);
             renderBrowseGrid();
         } catch (err) {
