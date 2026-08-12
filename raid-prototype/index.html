@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>토벌전 프로토타입 (수동 조작 샌드박스)</title>
+<link rel="stylesheet" href="../shared/attack-effects.css">
+<link rel="stylesheet" href="raid-prototype.css">
+</head>
+<body>
+
+<div id="sandbox">
+
+    <!-- 참고 이미지(블루아카이브식 보스 체력바) 스타일 - 좌측 아바타 크롭 초상화, 중앙 큰 체력바,
+         그 아래 얇은 그로기 바, 우측 아래 3분할 필살 게이지(실제 값은 0~100 하나지만 세그먼트 3개가
+         왼쪽부터 순서대로 차오르는 것처럼 보이게 나눠 그린다 - updateUI의 ultimate 세그먼트 계산 참고). -->
+    <div id="boss-status">
+        <div id="boss-avatar-frame">
+            <img id="boss-avatar-img" src="assets/hwangnyeongsoon.png" alt="황녕순"
+                 onerror="this.style.display='none'; document.getElementById('boss-avatar-fallback').style.display='flex';">
+            <div id="boss-avatar-fallback">황녕순</div>
+            <div id="boss-avatar-tag">BATTLE BOSS</div>
+        </div>
+        <div id="boss-status-main">
+            <div class="boss-name-row">
+                <span>황녕순 <span class="proto-badge">PROTOTYPE - 수동 조작</span></span>
+                <span id="phase-badge">1페이즈</span>
+            </div>
+            <!-- 보스 상태 아이콘(CC는 면역이라 절대 안 뜸 - 그로기 등만) - 필드 위가 아니라 실제
+                 체력바 바로 위에 뜨게 여기 둔다. -->
+            <div class="unit-status-row boss-top-status-row" id="boss-status-row"></div>
+
+            <!-- 체력바~필살 게이지를 하나로 감싸는 각진 테두리(참고 이미지 스타일 통일). 체력바는 이제
+                 단일 색이 아니라 3단(노랑/주황/빨강) 레이어를 겹쳐서, 위 색이 닳을수록 아래 색이 서서히
+                 드러나다가 결국 맨 아래 검은 빈 트랙까지 드러나는 방식이다(updateUI 참고). -->
+            <div id="boss-gauge-frame">
+                <div id="boss-hp-track">
+                    <div id="boss-hp-fill-red" class="boss-hp-tier"></div>
+                    <div id="boss-hp-fill-orange" class="boss-hp-tier"></div>
+                    <div id="boss-hp-fill-yellow" class="boss-hp-tier"></div>
+                    <div class="phase-marker" style="left:50%"></div>
+                    <div id="boss-hp-text">- / -</div>
+                </div>
+
+                <div id="boss-groggy-track">
+                    <div id="groggy-fill"></div>
+                </div>
+
+                <div id="boss-ultimate-row">
+                    <div class="ultimate-seg-label">필살</div>
+                    <div class="ultimate-seg"><div class="ultimate-seg-fill" data-seg="0"></div></div>
+                    <div class="ultimate-seg"><div class="ultimate-seg-fill" data-seg="1"></div></div>
+                    <div class="ultimate-seg"><div class="ultimate-seg-fill" data-seg="2"></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 열린 필드 - 왼쪽 끝 방어탑 / 중앙 전방(이동 가능) / 오른쪽 끝 보스. 고정 상자에 가두지 않고
+         전부 field 위에 퍼센트 좌표로 자유롭게 배치한다. -->
+    <div id="field">
+        <div id="ground"></div>
+        <div id="telegraph-zone" class="hidden"></div>
+
+        <div id="tower-unit" class="field-unit" style="left:4%;">
+            <div class="unit-label">방어 탑</div>
+            <div class="unit-status-row" id="tower-status"></div>
+            <div class="unit-hp-track"><div id="tower-hp-fill" class="unit-hp-fill"></div></div>
+            <div class="unit-hp-text" id="tower-hp-text">-</div>
+            <div class="tower-box">TOWER</div>
+        </div>
+
+        <div id="back1-unit" class="field-unit small" style="left:10%;">
+            <div class="unit-label">후방1</div>
+            <div class="unit-status-row" id="back1-status"></div>
+            <div class="unit-hp-track"><div class="unit-hp-fill" data-shared="back"></div></div>
+            <img class="unit-sprite" id="back1-sprite" src="" alt="후방1">
+        </div>
+        <div id="back2-unit" class="field-unit small" style="left:19%;">
+            <div class="unit-label">후방2</div>
+            <div class="unit-status-row" id="back2-status"></div>
+            <div class="unit-hp-track"><div class="unit-hp-fill" data-shared="back"></div></div>
+            <img class="unit-sprite" id="back2-sprite" src="" alt="후방2">
+        </div>
+
+        <div id="front-unit" class="field-unit" style="left:45%;">
+            <div class="unit-label">전방</div>
+            <div class="unit-status-row" id="front-status"></div>
+            <div class="unit-hp-track"><div id="front-hp-fill" class="unit-hp-fill"></div></div>
+            <img class="unit-sprite" id="front-sprite" src="" alt="전방">
+        </div>
+
+        <div id="boss-unit" class="field-unit large" style="left:84%;">
+            <div class="unit-label" id="boss-telegraph-label"></div>
+            <img id="boss-sprite" class="unit-sprite" src="assets/hwangnyeongsoon.png" alt="황녕순"
+                 onerror="this.style.display='none'; document.getElementById('boss-fallback').style.display='flex';">
+            <div id="boss-fallback">황녕순</div>
+        </div>
+    </div>
+
+    <div id="log-panel"></div>
+
+    <!-- 조작판 - 유닛별로 가능한 행동을 전부 버튼으로 노출(프로토타입이라 그냥 다 늘어놓는다) -->
+    <div id="control-panel">
+        <div class="control-group">
+            <div class="control-group-title">전방</div>
+            <button data-action="front-move-left" type="button">◀ 이동</button>
+            <button data-action="front-move-right" type="button">이동 ▶</button>
+            <button data-action="front-basic" type="button">기본공격</button>
+            <button data-action="front-passive" type="button">패시브</button>
+            <button data-action="front-skill" type="button">액티브(스킬카드)</button>
+            <button data-action="front-special" type="button">스페셜</button>
+            <button data-action="front-revive" type="button">부활</button>
+        </div>
+        <div class="control-group">
+            <div class="control-group-title">후방1</div>
+            <button data-action="back1-basic" type="button">기본공격</button>
+            <button data-action="back1-passive" type="button">패시브</button>
+            <button data-action="back1-skill" type="button">액티브(스킬카드)</button>
+            <button data-action="back1-special" type="button">스페셜</button>
+        </div>
+        <div class="control-group">
+            <div class="control-group-title">후방2</div>
+            <button data-action="back2-basic" type="button">기본공격</button>
+            <button data-action="back2-passive" type="button">패시브</button>
+            <button data-action="back2-skill" type="button">액티브(스킬카드)</button>
+            <button data-action="back2-special" type="button">스페셜</button>
+        </div>
+        <div class="control-group">
+            <div class="control-group-title">황녕순 · 기본공격</div>
+            <button data-action="boss-single" type="button">침</button>
+            <button data-action="boss-jab" type="button">쨉</button>
+            <button data-action="boss-straight" type="button">스트레이트</button>
+        </div>
+        <div class="control-group">
+            <div class="control-group-title">황녕순 · 스킬</div>
+            <button data-action="boss-fist" type="button">영광의 주먹</button>
+            <button data-action="boss-palm" type="button">영광의 손바닥</button>
+            <button data-action="boss-roar" type="button">영광의 포효</button>
+            <button data-action="boss-ultimate" type="button">필살기 시전</button>
+        </div>
+        <div class="control-group">
+            <div class="control-group-title">테스트용</div>
+            <button data-action="force-groggy" type="button">그로기 강제 발동</button>
+            <button data-action="add-ultimate" type="button">필살 게이지 +25</button>
+            <button data-action="test-cc-on-boss" type="button">보스에게 기절 시도(CC 면역 확인)</button>
+            <button data-action="test-debuff-on-front" type="button">전방 디버프 테스트</button>
+            <button data-action="reset-all" type="button">전체 리셋</button>
+        </div>
+    </div>
+
+    <!-- 실제 캐릭터 선택(전부 ★5로 통일 - 성급 차이는 테스트에서 배제하고 근거리/원거리 특성만 반영) -->
+    <div id="sprite-config">
+        <span class="sprite-config-title">캐릭터 선택 (전부 ★5 통일):</span>
+        <label>전방 <select id="front-outfit-input"></select></label>
+        <label>후방1 <select id="back1-outfit-input"></select></label>
+        <label>후방2 <select id="back2-outfit-input"></select></label>
+        <button id="apply-sprites-btn" type="button">적용</button>
+    </div>
+
+</div>
+
+<script src="../shared/attack-effects.js"></script>
+<script src="raid-prototype.js"></script>
+</body>
+</html>

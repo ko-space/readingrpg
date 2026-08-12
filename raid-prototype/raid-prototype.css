@@ -1,0 +1,643 @@
+:root {
+    --bg: #0c0e14;
+    --panel: #171a23;
+    --panel2: #1f2330;
+    --border: rgba(255,255,255,0.12);
+    --text: #f0ece0;
+    --text-dim: rgba(240,236,224,0.55);
+    --gold: #e8b84b;
+    --hp-red: #e14b4b;
+    --groggy-yellow: #e0c23a;
+    --ultimate-cyan: #4bc7e0;
+    --tower-blue: #4b8ee1;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Malgun Gothic", "Pretendard", sans-serif;
+}
+
+.hidden { display: none !important; }
+
+#sandbox {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 14px 22px;
+    gap: 10px;
+}
+
+.proto-badge {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: #0c0e14;
+    background: var(--gold);
+    padding: 2px 7px;
+    border-radius: 4px;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+/* ===== 상단 보스 게이지 - 참고 이미지(블루아카이브식) 스타일 ===== */
+#boss-status {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    flex-shrink: 0;
+}
+
+/* 좌측 아바타 - avatar-crop.js와 같은 원리(object-fit:cover + object-position + scale)로 보스 원본
+   이미지를 얼굴 위주로 확대/크롭한다. 실제 크롭 좌표는 이미지를 넣어보면서 조정이 필요할 수 있어서
+   JS(applyBossAvatarCrop)에서 object-position/transform을 잡는다 - 지금은 중앙 상단 기준 기본값. */
+#boss-avatar-frame {
+    position: relative;
+    z-index: 3;
+    flex-shrink: 0;
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 3px solid var(--gold);
+    box-shadow: 0 0 0 3px rgba(12,14,20,0.8), 0 0 18px rgba(232,184,75,0.55);
+    background: #000;
+}
+#boss-avatar-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* object-position/transform(크롭 좌표·확대율)은 JS(applyBossAvatarCrop, shared/avatar-crop.js와
+       같은 방식)가 잡는다 - 실제 보스 이미지를 넣어본 뒤 좌표만 조정하면 되게 하기 위함. */
+    -webkit-user-drag: none;
+    user-select: none;
+}
+#boss-avatar-fallback {
+    display: none;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: var(--text-dim);
+    background: repeating-linear-gradient(45deg, #000, #000 8px, #100c0c 8px, #100c0c 16px);
+}
+#boss-avatar-tag {
+    position: absolute;
+    left: 50%;
+    bottom: -6px;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 8px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    color: #2a1400;
+    background: linear-gradient(180deg, #ffcf6b, var(--gold));
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 1px solid rgba(0,0,0,0.35);
+}
+
+#boss-status-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.boss-name-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 900;
+    font-size: 16px;
+    margin-bottom: 6px;
+}
+#phase-badge {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(232,184,75,0.18);
+    border: 1px solid rgba(232,184,75,0.5);
+    color: var(--gold);
+}
+#phase-badge.phase-2 {
+    background: rgba(225,75,75,0.18);
+    border-color: rgba(225,75,75,0.6);
+    color: #ff8080;
+}
+
+/* 체력바~필살 게이지를 하나로 감싸는 각진 테두리(참고 이미지 스타일을 게이지 전체에 통일) - 왼쪽은
+   아바타 원 밑으로 파고들어가게(음수 margin) 살짝 겹친다 - 아바타가 프레임보다 z-index가 높아서
+   프레임 왼쪽 끝이 아바타 뒤로 들어가 있는 것처럼 보인다. */
+#boss-gauge-frame {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-left: -26px;
+    padding: 8px 8px 8px 30px;
+    clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+    background: linear-gradient(180deg, rgba(120,104,32,0.4), rgba(0,0,0,0.4));
+    border: 1px solid rgba(232,184,75,0.5);
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
+}
+
+/* 체력바 - 모서리를 깎은 각진 모양(clip-path). 빈 트랙 자체는 이제 검은색이고, 그 위를 노랑/주황/빨강
+   3단 레이어가 겹쳐 덮는다(체력을 3등분해서 위(노랑)부터 순서대로 닳는다 - updateUI의
+   updateBossHpTiers 참고): 노랑이 다 닳아야 주황이 드러나며 닳기 시작하고, 주황까지 다 닳아야 빨강이
+   드러나며 닳기 시작하고, 빨강까지 다 닳으면 그 아래 검은 빈 트랙이 드러난다. */
+#boss-hp-track {
+    position: relative;
+    height: 26px;
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+    background: #000;
+    border: 1px solid rgba(0,0,0,0.4);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.35);
+    overflow: hidden;
+}
+.boss-hp-tier {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 0%;
+    min-width: 0%;
+    transition: width 0.2s linear;
+}
+#boss-hp-fill-red    { z-index: 1; background: linear-gradient(180deg, #ff6b52, #e8341f 55%, #a8220f); }
+#boss-hp-fill-orange { z-index: 2; background: linear-gradient(180deg, #ffb066, #e8701f 55%, #c9560f); }
+#boss-hp-fill-yellow { z-index: 3; background: linear-gradient(180deg, #fff5b0, #e8c93a 55%, #c9a72a); }
+/* 지금 실제로 깎이고 있는(맨 위에 드러난) 티어에만 밝은 하이라이트 선을 붙인다(JS가 토글) - 아래 깔린
+   티어는 아직 안 닳고 있어서 굳이 하이라이트가 필요 없다. */
+.boss-hp-tier.hp-tier-leading::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 6px;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,240,200,0.9));
+}
+#boss-hp-text {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.5);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.5px;
+}
+.phase-marker {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: rgba(255,255,255,0.7);
+    z-index: 4;
+}
+
+/* 그로기 - 체력바 바로 아래 얇은 게이지. 이제 프레임 안에 같이 들어있어서 왼쪽 파고들기는 프레임이
+   한 번에 처리하므로 자체 margin은 필요 없다. */
+#boss-groggy-track {
+    height: 8px;
+    clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+    background: #000;
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+#groggy-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #8a7a1f, var(--groggy-yellow));
+    transition: width 0.2s linear;
+}
+
+/* 필살 게이지 - 우측 아래에 3분할로 표시(실제 값은 하나지만 세그먼트 3개가 왼쪽부터 순서대로
+   찬다 - updateUI 참고). 아래에서 위로 차오르는 형식이라 세로로 길게 잡아야 채워지는 게 잘 보인다.
+   테두리/각진 정도는 위 프레임·체력바와 통일하고, 가로 두께도 그에 맞춰 조금 더 두껍게 잡았다. */
+#boss-ultimate-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: 5px;
+}
+.ultimate-seg-label {
+    margin-right: auto;
+    align-self: center;
+    font-size: 11px;
+    color: var(--text-dim);
+}
+.ultimate-seg {
+    width: 20px;
+    height: 48px;
+    clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+    background: #000;
+    border: 1px solid rgba(232,184,75,0.4);
+    overflow: hidden;
+    display: flex;
+    align-items: flex-end; /* 채워지는 막대가 바닥부터 자라도록 */
+}
+.ultimate-seg-fill {
+    width: 100%;
+    height: 0%;
+    background: linear-gradient(0deg, #1f6a8a, var(--ultimate-cyan));
+    transition: height 0.2s linear;
+}
+
+/* ===== 필드 - 캐릭터를 상자에 가두지 않고 자유 배치 ===== */
+#field {
+    position: relative;
+    flex: 1;
+    min-height: 320px;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.03), transparent 40%),
+        radial-gradient(circle at 85% 40%, rgba(225,75,75,0.08), transparent 55%),
+        radial-gradient(circle at 10% 60%, rgba(75,142,225,0.08), transparent 55%),
+        var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* 전장 정중앙에 놓인 긴 땅 - 캐릭터(보스 제외)는 전부 이 위에 서 있는 것처럼 보이게, field-unit
+   기본 top(아래)과 같은 높이에 맞춘다. 캐릭터 스탠딩이 세로로 길어서 딱 50%(정중앙)에 두면 발이
+   허공에 뜬 것처럼 보여서, 살짝 아래로 내렸다. */
+#ground {
+    position: absolute;
+    left: 2%;
+    width: 80%;
+    top: 62%;
+    height: 64px;
+    background: linear-gradient(180deg, rgba(122,102,72,0.38), rgba(58,46,30,0.58));
+    border-top: 2px solid rgba(205,184,142,0.42);
+    border-radius: 6px;
+}
+
+/* field-unit(보스 제외)은 이제 "한 점"이 아니라 "천장(0)부터 땅 라인(62%)까지의 구간" 자체를 자기
+   높이로 갖는다 - justify-content: flex-end로 라벨/상태줄/HP바/스프라이트를 전부 이 구간의 맨 아래
+   (=땅 라인)에 붙여서, 스프라이트의 발끝이 항상 땅 위에 닿아 있게 한다. 세로 위치를 더 이상 top으로
+   옮길 필요가 없어(항상 발이 땅에 붙어있어야 하므로) transition도 left만 남긴다.
+
+   히트박스는 전술대회(arena-battle.css의 .battle-unit)와 동일한 매커니즘 - 이 박스 자체가 "판정
+   영역(히트박스)"이고, 실제 그림(.unit-sprite)의 크기와는 독립적으로 고정폭을 가진다. 그림은 이 박스
+   폭에 맞춰 줄어들지 않고(width 제약 없음, 세로 기준으로만 커짐) 필요하면 폭 밖으로 자연스럽게
+   넘친다 - 그래서 방임석처럼 가로가 긴 그림도 세로 기준 정상 크기로 보이고, 히트박스 자체는 계속
+   일정하게 작다. align-items도 전술대회와 동일하게 center가 아니라 flex-start(왼쪽 정렬) - 히트박스의
+   왼쪽 끝이 기준점이고, 그림은 거기서부터 오른쪽으로 넘친다(아군은 전부 보스를 보고 오른쪽을 향해
+   있는 셈이라 전술대회의 "안 뒤집힌 기본 상태"와 같다). center로 두면 히트박스가 그림 한가운데에
+   떠 있는 것처럼 보여서 실제 판정 기준점이 어딘지 헷갈린다. */
+.field-unit {
+    position: absolute;
+    top: 0;
+    height: 62%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-end;
+    gap: 3px;
+    width: clamp(46px, 6vw, 110px);
+    transition: left 0.25s ease;
+    pointer-events: none;
+    /* 히트박스 표시(개발용) - 판정 영역은 이 박스(field-unit) 하나뿐이다(전술대회의 .battle-unit과
+       동일한 매커니즘 - 그림 크기와 무관한 고정폭). 노란 점선으로 그 경계를 그대로 보여준다. */
+    outline: 1px dashed rgba(255, 214, 60, 0.75);
+    outline-offset: -1px;
+}
+.field-unit.small { width: clamp(32px, 4.2vw, 78px); }
+.field-unit.large { width: clamp(100px, 13vw, 220px); }
+/* 라벨/상태줄/HP바 등은 계속 히트박스 폭 안에서 가운데 정렬되어야 자연스럽다 - align-items:flex-start는
+   그림(.unit-sprite)에만 해당하고, 그 위의 UI 요소들은 별도로 다시 가운데로 맞춘다. */
+.field-unit > *:not(.unit-sprite) {
+    align-self: center;
+}
+/* 보스는 땅 위에 서 있는 아군 그룹과 별개 - 원래 정중앙 높이/앵커를 그대로 유지한다. 보스는 반대로
+   아군 쪽(왼쪽)을 보고 있는 셈이라, 히트박스 오른쪽 끝이 기준점이고 그림은 왼쪽으로 넘친다(전술대회의
+   "뒤집힌"/적 기본 상태와 동일한 방향). */
+#boss-unit {
+    top: 50%;
+    height: auto;
+    transform: translate(-50%, -50%);
+    justify-content: center;
+    align-items: flex-end;
+}
+
+.unit-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-dim);
+    background: rgba(0,0,0,0.45);
+    padding: 1px 8px;
+    border-radius: 999px;
+}
+
+/* 상태 효과 배지 - HP 바 바로 위에 표시(unit-label과 unit-hp-track 사이). 비어있으면 자리만 차지하지
+   않도록 min-height 없이 gap만으로 처리 - 배지가 하나도 없으면 자연히 안 보인다. */
+.unit-status-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    justify-content: center;
+}
+/* 보스는 필드 위가 아니라 상단 패널의 체력바 바로 위에 뜬다 - 왼쪽 정렬 + 배지가 있을 때만 아래쪽에
+   여백이 생기도록. */
+.boss-top-status-row {
+    justify-content: flex-start;
+    margin-bottom: 2px;
+}
+.boss-top-status-row:empty { margin-bottom: 0; }
+/* 실제 게임(arena-battle.js의 STATUS_ICON_FILES, assets/arena/Combat_Icon_*.png)과 동일한 아이콘
+   이미지를 그대로 가져다 쓴다 - 텍스트 대신 진짜 아이콘이 보여야 해서, 라벨은 title(hover 툴팁)로만 남긴다. */
+.status-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 2px;
+    border-radius: 5px;
+    background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(255,255,255,0.3);
+    overflow: hidden;
+}
+.status-badge img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.status-badge.kind-stun, .status-badge.kind-groggy, .status-badge.kind-knockback { border-color: rgba(225,75,75,0.7); }
+.status-badge.kind-debuff { border-color: rgba(75,142,225,0.7); }
+.status-badge.kind-buff { border-color: rgba(75,225,120,0.65); }
+/* 아이콘 파일이 없는 kind는 기존처럼 글자 배지로 폴백(텍스트 노드가 채워질 때만 적용). */
+.status-badge:not(:has(img)) {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 6px;
+    width: auto;
+    height: auto;
+    color: var(--text);
+    white-space: nowrap;
+}
+.unit-hp-track {
+    width: 100%;
+    height: 7px;
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.unit-hp-fill {
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(90deg, #1f4a8a, var(--tower-blue));
+    transition: width 0.2s linear;
+}
+.unit-hp-text {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+}
+
+/* 전술대회(.battle-unit-img)와 동일한 매커니즘 - width는 auto(제약 없음), height만 고정해서
+   원본 비율 그대로 키운다. object-fit/max-width로 "박스 안에 욱여넣는" 방식이 아니라서, 방임석처럼
+   가로가 긴 그림도 다른 캐릭터와 같은 세로 기준으로 정상 크기가 되고(예전엔 폭 130px 제한 때문에
+   contain이 세로까지 덩달아 줄여서 작아 보이는 버그가 있었다), 필요하면 히트박스(.field-unit) 폭
+   밖으로 자연스럽게 넘친다(overflow 제한 없음 - 판정에 쓰이는 히트박스 크기 자체는 전혀 안 흔들림). */
+.unit-sprite {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: auto;
+    /* 라벨/상태줄/HP바가 위쪽 공간을 차지하고 남는 만큼 채우되(flex: 1 1 auto), 천장에 딱 안 닿게
+       살짝 여유를 둔다(요청한 "조금 더 축소") - object-position: bottom으로 그 안에서도 발끝은
+       항상 이 박스의 맨 아래(=땅 라인)에 붙는다. */
+    max-height: 92%;
+    object-fit: contain;
+    object-position: center bottom;
+    filter: drop-shadow(0 6px 8px rgba(0,0,0,0.55));
+    -webkit-user-drag: none;
+    user-select: none;
+}
+/* 보스는 이 flex 규칙(발-땅 고정)과 무관하게 원래의 고정 크기를 그대로 쓴다. */
+#boss-unit .unit-sprite {
+    flex: none;
+    width: auto;
+    max-height: 260px;
+    object-position: center;
+}
+
+.tower-box {
+    width: 74px;
+    height: 130px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    writing-mode: vertical-rl;
+    letter-spacing: 3px;
+    font-weight: 900;
+    font-size: 13px;
+    color: var(--tower-blue);
+    background: repeating-linear-gradient(135deg, rgba(75,142,225,0.14), rgba(75,142,225,0.14) 8px, rgba(75,142,225,0.05) 8px, rgba(75,142,225,0.05) 16px);
+    border: 1px solid rgba(75,142,225,0.45);
+    border-radius: 6px;
+}
+
+#boss-fallback {
+    display: none;
+    width: 160px;
+    height: 200px;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    font-size: 13px;
+    background: repeating-linear-gradient(45deg, #000, #000 10px, #100c0c 10px, #100c0c 20px);
+    border-radius: 8px;
+}
+#boss-telegraph-label {
+    min-height: 16px;
+}
+
+.telegraph-zone {
+    position: absolute;
+    top: 6%;
+    bottom: 6%;
+    width: 16%;
+    background: rgba(225,75,75,0.22);
+    border: 1px solid rgba(225,75,75,0.6);
+    transition: left 0.15s linear, background 0.15s linear;
+}
+.telegraph-zone.counter-ready {
+    background: rgba(232,184,75,0.32);
+    border-color: var(--gold);
+}
+
+/* 피격/스턴 강조 - field-unit의 기본 transform이 유닛마다 다르므로(보스는 translate(-50%,-50%), 나머지는
+   translateX(-50%)) 흔들림도 각자의 기준 transform에 맞춰 두 버전으로 나눈다(안 그러면 흔들리는 동안
+   세로 위치가 순간적으로 어긋난다). */
+@keyframes shake-hit {
+    0%, 100% { transform: translateX(-50%); }
+    25% { transform: translateX(calc(-50% - 6px)); }
+    75% { transform: translateX(calc(-50% + 6px)); }
+}
+.field-unit.hit-shake { animation: shake-hit 0.18s ease; }
+@keyframes shake-hit-boss {
+    0%, 100% { transform: translate(-50%, -50%); }
+    25% { transform: translate(calc(-50% - 6px), -50%); }
+    75% { transform: translate(calc(-50% + 6px), -50%); }
+}
+#boss-unit.hit-shake { animation: shake-hit-boss 0.18s ease; }
+.field-unit.dead .unit-sprite, .field-unit.dead .tower-box { opacity: 0.3; filter: grayscale(1); }
+
+@keyframes groggy-stun-pulse {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.7); }
+}
+#boss-unit.groggy-stunned .unit-sprite,
+#boss-unit.groggy-stunned #boss-fallback { animation: groggy-stun-pulse 0.5s ease infinite; }
+
+/* ===== 공격 이펙트 =====
+   hit-flash/effect-aura-flash와 캐릭터별 전용 이펙트(물감/유성/하트/치유하트/가스숨결/전자기파/땅불)는
+   전술대회/개발자화면과 함께 shared/attack-effects.css로 옮겼다(중복 방지) - 이 파일에는 이 raid
+   프로토타입에만 있는 것들(피격 시 맞은 자리에 뜨는 충격파, 기본공격 전용 투사체)만 남는다. */
+.impact-burst {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(255,255,255,0.95), rgba(255,170,60,0.75) 45%, rgba(255,80,0,0) 72%);
+    pointer-events: none;
+    z-index: 20;
+    animation: impact-burst-anim 0.35s ease-out forwards;
+}
+@keyframes impact-burst-anim {
+    0% { width: 12px; height: 12px; opacity: 1; }
+    100% { width: 100px; height: 100px; opacity: 0; }
+}
+
+/* 투기장(arena-battle.js)과 같은 방식의 기본공격/액티브/스페셜 투사체 - 공격자에서 보스까지 날아간다.
+   left/top을 transition으로 애니메이션하는데, 시작 위치를 잡자마자 바로 transition을 걸면 브라우저가
+   두 스타일 변경을 한 프레임으로 묶어버려서(코얼레싱) 투사체가 날아가지 않고 순간이동하는 버그가 날 수
+   있다(이 세션에서 이미 겪었던 문제) - JS에서 강제 리플로우(void offsetWidth)로 반드시 방지한다. */
+.attack-projectile {
+    position: absolute;
+    left: 0;
+    top: 0;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 15;
+}
+.attack-projectile.kind-basic {
+    width: 10px;
+    height: 10px;
+    background: radial-gradient(circle, #fff, #ffd35e 45%, rgba(255,180,0,0) 75%);
+    box-shadow: 0 0 8px rgba(255,200,80,0.85);
+}
+
+/* ===== 로그 ===== */
+#log-panel {
+    height: 68px;
+    overflow-y: auto;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--text-dim);
+    display: flex;
+    flex-direction: column-reverse;
+    flex-shrink: 0;
+}
+#log-panel div { padding: 1px 0; }
+#log-panel .log-dmg { color: #ff8f8f; }
+#log-panel .log-heal { color: #8fe08f; }
+#log-panel .log-notice { color: var(--gold); }
+
+/* ===== 조작판 ===== */
+#control-panel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    flex-shrink: 0;
+}
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding-right: 12px;
+    border-right: 1px solid var(--border);
+}
+.control-group:last-child { border-right: none; }
+.control-group-title {
+    font-size: 11px;
+    color: var(--text-dim);
+    width: 100%;
+}
+.control-group button {
+    padding: 7px 11px;
+    font-size: 12px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+}
+.control-group button:hover { border-color: var(--gold); background: #262b3a; }
+.control-group button:active { transform: translateY(1px); }
+
+/* ===== 스프라이트 설정 ===== */
+#sprite-config {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 12px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+}
+.sprite-config-title { flex-basis: 100%; }
+#sprite-config label { display: flex; align-items: center; gap: 6px; }
+#sprite-config select {
+    width: 160px;
+    padding: 5px 8px;
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+}
+#sprite-config button {
+    padding: 6px 14px;
+    background: var(--gold);
+    border: none;
+    border-radius: 6px;
+    color: #0c0e14;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+}

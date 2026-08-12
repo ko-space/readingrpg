@@ -920,11 +920,10 @@ function playRangedAttackByStyle(style, actorKeyOrEl, targetKeyOrEl, onArrive, o
 // effect_type(스킬 매커니즘) -> 이 파일이 제공하는 전용 이펙트 함수 이름. 여기 없는 effect_type은
 // 전용 투사체가 없다는 뜻(flashHit/flashEffectAura만으로 충분) - arena-battle.js의 dispatchEffectType
 // 분기를 참고해서 정리했다. 방임석(consume_paint_multi_effect, 물감 색깔별로 여러 번 호출하는 다중
-// 분기)과 김남옥(conditional_target_debuff, 대상이 여성일 때만 발동하는 조건부)은 단순 1:1 매핑으로
+// 분기), 김남옥(conditional_target_debuff, 대상이 여성일 때만 발동하는 조건부), 이영웅
+// (heal_ally_percent_max_hp, 아군 전체 각자에게 spawnHealingHeart를 반복 호출)은 단순 1:1 매핑으로
 // 표현되지 않아 이 표에 넣지 않았다 - 호출부가 직접 spawnPaintSkillProjectile/
-// playDualCrayonSkillProjectile을 호출해서 판단한다. 이영웅(heal_ally_percent_max_hp)은 이제 아군
-// 전체를 동시에 회복시키는 효과라 spawnHealingHeart(단일 대상 전용, 포물선으로 떨어지는 하트) 대신
-// death_heal_ally와 동일하게 대상마다 flashEffectAura("heal")만 얹는다 - 그래서 이 표에도 없다.
+// playDualCrayonSkillProjectile/spawnHealingHeart를 호출해서 판단한다.
 const EFFECT_TYPE_VISUALS = {
     damage_hp_percent_plus_atk: "spawnMeteorProjectile",  // 이종복 "질량 충격파"
     aoe_gendered_damage: "spawnHeartProjectile",           // 서민석 "고백"

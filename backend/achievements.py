@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from models import (
     Character, Item, UserItem, Achievement, UserAchievement, ReadingLog, PvpBattleLog,
-    UserCgUnlock, ActivityLog, UserItemPurchase,
+    UserCgUnlock, ActivityLog, UserItemPurchase, MarketListing,
 )
 from leveling import apply_exp
 from quests import MOCK_EXAM_MINUTES
@@ -184,7 +184,11 @@ def compute_progress(db: Session, user, ach: Achievement) -> dict:
         )
     elif ctype == "empty_inventory":
         target = 1
-        current = 1 if db.query(Character).filter(Character.user_id == user.id).count() == 0 else 0
+        # 인력 거래소에 등록 중인 캐릭터는 Character.user_id가 잠시 NULL이 되어 인벤토리 개수에
+        # 안 잡히는데, 그것만으로 "인벤토리가 텅 비었다"고 오판하면 캐릭터를 등록만 해도(하나도
+        # 안 부수고) 이 히든 업적이 발급돼버린다 - 등록 중인 매물이 하나라도 있으면 제외한다.
+        has_active_listing = db.query(MarketListing).filter(MarketListing.seller_id == user.id).first() is not None
+        current = 1 if (not has_active_listing and db.query(Character).filter(Character.user_id == user.id).count() == 0) else 0
     elif ctype == "achievement_count":
         current = db.query(UserAchievement).filter(UserAchievement.user_id == user.id).count()
     elif ctype == "hidden_achievement_count":

@@ -3,6 +3,7 @@ from database import SessionLocal
 from models import (
     Item, Region, Achievement, GachaBanner, Quest, UserQuestClaim,
     UserItem, UserItemPurchase, UserDailyItemPurchase, Notice, Challenge,
+    MarketState,
 )
 from character_visibility import is_hidden_override
 
@@ -1243,7 +1244,7 @@ QUESTS = [
         "name": "영어 모의고사 2회",
         "period": "weekly",
         "condition_type": "session_count",
-        "condition_params": {"session_type": "mock_exam", "difficulty": "영어"},
+        "condition_params": {"session_type": "mock_exam", "difficulties": ["영어", "영어(하프)"]},
         "condition_target": 2,
         "reward_type": "gold",
         "reward_amount": 150,
@@ -1559,6 +1560,19 @@ def seed_notices():
             changed = True
 
         if changed:
+            db.commit()
+    finally:
+        db.close()
+
+
+def seed_market_state():
+    """인력 거래소 전체 매물 상한(10개) 체크용 잠금 행(id=1) 하나만 존재하면 되는 싱글턴 테이블 -
+    없으면 만들어두기만 하면 되고 값 자체는 없다(routers/market.py가 이 행을 with_for_update로
+    잠그기만 한다)."""
+    db = SessionLocal()
+    try:
+        if not db.query(MarketState).filter(MarketState.id == 1).first():
+            db.add(MarketState(id=1))
             db.commit()
     finally:
         db.close()

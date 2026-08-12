@@ -1397,11 +1397,50 @@
 
         // 지속시간이 있으면 그 source만 그 시점에 제거(재적용 시 타이머 리셋). 없으면 전투 끝(사망)까지 유지.
         if (source.timer) { clearTimeout(source.timer); source.timer = null; }
-        if (opts.durationMs) {
+        source.untilSimTime = undefined;
+        if (opts.untilSimTime !== undefined) {
+            // 백엔드 시뮬레이션 시각(예: 스킬이 실제로 발동한 event.time + 지속 초) 기준 - durationMs처럼
+            // "지금부터 몇 ms"를 한 번 못박지 않고, 실제 그 상태가 끝나는 시뮬레이션 시각을 저장해뒀다가
+            // 매 이벤트 재생마다(rearmAllSimTimers) 그 시점의 실시간 환산값으로 다시 계산한다 - 애니메이션
+            // 밀림 등으로 재생이 늦어져도 아이콘이 실제 상태보다 먼저 사라지지 않는다.
+            source.untilSimTime = opts.untilSimTime;
+            armSimTimer(unitKey, iconId, sourceKey);
+        } else if (opts.durationMs) {
+            // 회복/넉백처럼 "그 순간을 알려주는" 용도일 뿐 백엔드 상태 지속시간과 무관한 표시는 지금처럼
+            // 고정 실시간(ms)으로 충분하다(realMsUntilSimTime로 환산할 시뮬레이션 시각 자체가 없음).
             source.timer = setTimeout(() => clearStatusIconSource(unitKey, iconId, sourceKey), opts.durationMs);
         }
 
         renderStatusIconTotal(unitKey, iconId);
+    }
+
+    // 이벤트 재생 원점(playbackOriginWallMs/-EventTime)이 갱신될 때마다(playNext) 호출 - 지금까지의
+    // 실제 재생 지연(애니메이션 대기 등)을 반영한 최신 환산으로 모든 시뮬레이션 시각 기반 아이콘
+    // 타이머를 다시 잡는다. 앞서 확인한 버그(김남옥 공격속도 버프 아이콘이 실제 상태보다 먼저 사라짐)의
+    // 원인이 "생성 시점 실시간으로 못박은 타이머가 이후 재생 지연을 반영하지 못함"이었으므로, 매번
+    // 다시 계산해서 실제 상태 종료 시각과 항상 일치시킨다.
+    function realMsUntilSimTime(simTime) {
+        const targetWallMs = playbackOriginWallMs + (simTime - playbackOriginEventTime) * 1000 * playbackSpeed;
+        return Math.max(0, targetWallMs - performance.now());
+    }
+
+    function armSimTimer(unitKey, iconId, sourceKey) {
+        const entry = statusIconState[unitKey]?.[iconId];
+        const source = entry?.sources.get(sourceKey);
+        if (!source || source.untilSimTime === undefined) return;
+        if (source.timer) clearTimeout(source.timer);
+        source.timer = setTimeout(() => clearStatusIconSource(unitKey, iconId, sourceKey), realMsUntilSimTime(source.untilSimTime));
+    }
+
+    function rearmAllSimTimers() {
+        Object.keys(statusIconState).forEach((unitKey) => {
+            const icons = statusIconState[unitKey];
+            Object.keys(icons).forEach((iconId) => {
+                icons[iconId].sources.forEach((source, sourceKey) => {
+                    if (source.untilSimTime !== undefined) armSimTimer(unitKey, iconId, sourceKey);
+                });
+            });
+        });
     }
 
     function clearStatusIconSource(unitKey, iconId, sourceKey) {
@@ -1772,17 +1811,21 @@
                 }
 
                 if (dispatchEffectType === "self_shield_duration" && event.detail?.shield_seconds) {
-                    const shieldMs = event.detail.shield_seconds * 1000 * playbackSpeed;
                     flashEffectAura(actorKey, "special"); // 무적(실드) = 스페셜(흰색)
-                    setStatusIcon(actorKey, "immune", { source: `${actorKey}:self_shield_duration`, durationMs: shieldMs });
+                    setStatusIcon(actorKey, "immune", {
+                        source: `${actorKey}:self_shield_duration`,
+                        untilSimTime: event.time + event.detail.shield_seconds,
+                    });
                 }
 
                 if (dispatchEffectType === "conditional_target_debuff") {
                     // 김남옥: 공격속도 증가는 대상 성별과 무관하게 항상 자신에게 적용되는 버프.
                     // source를 자기 자신 고정으로 두어, 반복 시전은 "갱신"으로만 처리되고 중첩되지 않는다.
-                    const hasteMs = (event.detail?.haste_seconds || 0) * 1000 * playbackSpeed;
                     flashEffectAura(actorKey, "buff");
-                    setStatusIcon(actorKey, "atk_speed_up", { source: `${actorKey}:haste`, ...(hasteMs ? { durationMs: hasteMs } : {}) });
+                    setStatusIcon(actorKey, "atk_speed_up", {
+                        source: `${actorKey}:haste`,
+                        ...(event.detail?.haste_seconds ? { untilSimTime: event.time + event.detail.haste_seconds } : {}),
+                    });
                 }
 
                 // 복제체(윤영준/강승유)는 기존 전방/후방을 대체하지 않는 추가 유닛 - 시전자 전용 summon 슬롯에
@@ -1914,7 +1957,7 @@
                         flashEffectAura(targetKey, "cc");
                         setStatusIcon(targetKey, "stun", {
                             source: `${event.actor}:stun`,
-                            durationMs: (event.detail.stun_seconds || 0) * 1000 * playbackSpeed,
+                            untilSimTime: event.time + (event.detail.stun_seconds || 0),
                         });
                         if (event.detail?.interrupted_cast) interruptCasting(targetKey, event.detail.target_side);
                         appendLog(`${event.actor}의 [Active] 발동! ${hasteText}, ${event.detail.target} ${event.detail.stun_seconds}초 기절`, event.side);
@@ -1929,7 +1972,7 @@
                     flashEffectAura(stunTargetKey, "cc");
                     setStatusIcon(stunTargetKey, "stun", {
                         source: `${event.actor}:stun`,
-                        durationMs: (event.detail.stun_seconds || 0) * 1000 * playbackSpeed,
+                        untilSimTime: event.time + (event.detail.stun_seconds || 0),
                     });
                     if (event.detail?.interrupted_cast) interruptCasting(stunTargetKey, event.detail.target_side);
                 }
@@ -1971,7 +2014,7 @@
                     flashEffectAura(targetKey, "debuff");
                     setStatusIcon(targetKey, "atk_down", {
                         source: `${event.actor}:atk_down`,
-                        durationMs: (event.detail?.debuff_seconds || 0) * 1000 * playbackSpeed,
+                        untilSimTime: event.time + (event.detail?.debuff_seconds || 0),
                     });
                 }
                 appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail.hits)}, 공격력 감소`, event.side);
@@ -2000,17 +2043,30 @@
                 });
                 appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail?.hits)}`, event.side);
             } else if (dispatchEffectType === "heal_ally_percent_max_hp" && event.detail?.healed) {
-                // 이제 아군 전체를 동시에 회복시킨다 - death_heal_ally와 동일한 이유(여럿에게 한 번에
-                // 갈 수 있어) 투사체 연출 없이 곧바로 반영한다.
-                (event.detail.heals || []).forEach((heal) => {
+                // 이영웅 "청진기 진료": 아군 전체(자신 포함)가 동시에 대상이라, 각자 머리 위로 하트가
+                // 떨어지는 연출(spawnHealingHeart)을 전원에게 띄운다. HP는 다른 배우 이벤트와의 역행을
+                // 막기 위해 먼저 전부 즉시 반영해두고(aoe_all_others_damage 등과 동일한 관례), 하트가
+                // 도착하는 시점엔 화면 갱신 + 오라만 얹는다. backend/skill_handlers.py가 이미 만피인
+                // 아군도 항상 heals에 넣어주므로(회복량 0), 만피여도 하트/오라는 똑같이 뜨고 로그에는
+                // "0 회복"으로 남는다 - 발동 자체가 항상 눈에 보이게.
+                const heals = event.detail.heals || [];
+                heals.forEach((heal) => {
+                    const healTargetKey = findUnitKey(event.side, heal.target);
+                    if (healTargetKey) units[healTargetKey].hp = heal.target_hp_after;
+                });
+                heals.forEach((heal) => {
                     const healTargetKey = findUnitKey(event.side, heal.target);
                     if (!healTargetKey) return;
-                    units[healTargetKey].hp = heal.target_hp_after;
-                    renderUnit(healTargetKey);
-                    flashEffectAura(healTargetKey, "heal");
-                    setStatusIcon(healTargetKey, "heal", { source: `${event.actor}:heal`, durationMs: MOMENT_ICON_MS });
+                    spawnHealingHeart(healTargetKey, () => {
+                        renderUnit(healTargetKey);
+                        flashEffectAura(healTargetKey, "heal");
+                        setStatusIcon(healTargetKey, "heal", { source: `${event.actor}:heal`, durationMs: MOMENT_ICON_MS });
+                    });
                 });
-                appendLog(`${event.actor}의 [Active] 발동! 아군 전체 체력 회복`, event.side);
+                appendLog(
+                    `${event.actor}의 [Active] 발동! ${heals.map((h) => `${h.target} ${h.amount} 회복`).join(", ")}`,
+                    event.side
+                );
             } else if (dispatchEffectType === "self_type_swap_heal" && actorKey) {
                 // 이의진 "염색체 변환" - isType2는 위에서 이미 토글해뒀다(playReturnFrames가 새 스프라이트로
                 // 재생되도록). 여기서는 자힐 반영 + 상태 아이콘/오라만 얹는다(투사체 없는 자기 대상 스킬).
@@ -2146,7 +2202,7 @@
                                 flashEffectAura(sKey, "cc");
                                 setStatusIcon(sKey, "stun", {
                                     source: `${event.actor}:stun`,
-                                    durationMs: (d.stun_seconds || 0) * 1000 * playbackSpeed,
+                                    untilSimTime: event.time + (d.stun_seconds || 0),
                                 });
                                 if (s.interrupted_cast) interruptCasting(sKey, s.target_side);
                             });
@@ -2296,7 +2352,7 @@
                         flashEffectAura(targetKey, "cc");
                         setStatusIcon(targetKey, "stun", {
                             source: `${event.actor}:stun`,
-                            durationMs: (event.stun_seconds || 0) * 1000 * playbackSpeed,
+                            untilSimTime: event.time + (event.stun_seconds || 0),
                         });
                         if (event.interrupted_cast) {
                             interruptCasting(targetKey, event.side === "attacker" ? "defender" : "attacker");
@@ -2379,6 +2435,7 @@
         // 다음 이벤트는 다시 정상적인(밀리지 않은) 상대 시간만큼만 기다리게 된다.
         playbackOriginWallMs = performance.now();
         playbackOriginEventTime = event.time;
+        rearmAllSimTimers();
 
         const nextEvent = data.events[eventIndex];
         let delayMs;
