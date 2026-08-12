@@ -391,6 +391,10 @@
     position: relative;
     flex: 1;
     min-height: 0;
+    /* img가 max-width:none이라 원본 비율상 프레임보다 넓게 그려질 수 있다(캐릭터 좌우 여백이
+       넉넉한 원본일수록 심함) - 그대로 두면 옆 카드나 패널 밖으로 흘러넘쳐서, 특히 맨 왼쪽 카드는
+       상반신이 통째로 안 보이는 식으로 잘려 보였다. 프레임 안에서만 보이도록 자른다. */
+    overflow: hidden;
 }
 
 .trade-standing-card-frame img {
