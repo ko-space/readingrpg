@@ -167,6 +167,21 @@
     align-self: center;
 }
 
+/* 거래 탭 전용 - "거래할 인물 선택"과 매물 수/최대치를 같은 세로 묶음 안에 두어야, 옆의 목록
+   갱신 버튼(32px로 더 큼)이 행 전체 높이를 벌려도 텍스트와 그 밑줄 사이 간격은 영향을 안 받고
+   항상 붙어 보인다. */
+.trade-section-heading-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.trade-market-count {
+    color: #806d4e;
+    font-size: 11px;
+    font-weight: 800;
+}
+
 .trade-grid-scroll {
     flex: 1;
     min-height: 0;

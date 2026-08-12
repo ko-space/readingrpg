@@ -2,7 +2,7 @@
     <div class="trade-header">
         <div>
             <h2 class="trade-title">인력 거래소</h2>
-            <p class="trade-subtitle">다른 학생과 캐릭터를 사고 팔 수 있어요. (자정에 미판매 매물 자동 반환)</p>
+            <p class="trade-subtitle">다른 학생과 인물을 매매할 수 있습니다. (자정에 미판매 매물 자동 반환)</p>
         </div>
 
         <div class="trade-header-controls">
@@ -19,7 +19,10 @@
         <div class="trade-layout">
             <section class="trade-list-panel">
                 <div class="trade-section-heading">
-                    <strong>거래할 인물 선택</strong>
+                    <div class="trade-section-heading-main">
+                        <strong>거래할 인물 선택</strong>
+                        <div class="trade-market-count" id="trade-market-count">거래 인물 -/10</div>
+                    </div>
                     <button class="trade-refresh-btn" id="trade-browse-refresh-btn" type="button" title="목록 갱신">
                         <span class="refresh-icon" aria-hidden="true">↻</span> 목록 갱신
                     </button>
@@ -96,8 +99,8 @@
 
 <div class="trade-result-overlay" id="trade-confirm-overlay" hidden>
     <div class="trade-result-box">
-        <div class="trade-result-title">정말 등록하시겠어요?</div>
-        <p class="trade-result-desc">등록한 캐릭터는 판매되거나 자정에 초기화되기 전까지 취소할 수 없습니다.</p>
+        <div class="trade-result-title" id="trade-confirm-title">정말 등록하시겠어요?</div>
+        <p class="trade-result-desc" id="trade-confirm-desc">등록한 캐릭터는 판매되거나 자정에 초기화되기 전까지 취소할 수 없습니다.</p>
         <div class="trade-confirm-actions">
             <button class="trade-confirm-cancel" id="trade-confirm-cancel" type="button">취소</button>
             <button class="trade-confirm-ok" id="trade-confirm-ok" type="button">확인</button>
