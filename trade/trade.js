@@ -97,7 +97,7 @@
         if (loaded || loading || !content) return;
         loading = true;
         try {
-            const res = await fetch(PARTIAL_URL);
+            const res = await fetch(PARTIAL_URL, { cache: "no-store" });
             if (!res.ok) throw new Error(`화면 파일 ${res.status}`);
             content.innerHTML = await res.text();
             bindInteractions();
