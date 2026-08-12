@@ -1656,6 +1656,11 @@ def seed_challenges():
                     db.delete(claim)
                 else:
                     claim.challenge_id = new_row.id
+            # UserChallengeClaim 쪽 UPDATE/DELETE를 먼저 DB에 반영해야, 뒤이은 challenges 행 삭제가
+            # "아직 이 행을 참조하는 수령 기록이 남아있다"는 외래키 위반 없이 통과한다(Challenge와
+            # UserChallengeClaim 사이엔 ORM relationship이 없어 flush 순서가 자동으로 안 맞춰짐 - 실제로
+            # 이 순서 문제 때문에 배포가 한 번 실패했었다).
+            db.flush()
             db.delete(old_row)
             rename_changed = True
         if rename_changed:
