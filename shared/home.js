@@ -18,7 +18,6 @@ const expText = document.getElementById('exp-text');
 const goldValue = document.getElementById('gold-value');
 const silverValue = document.getElementById('silver-value');
 const regionName = document.getElementById('region-name');
-const regionRate = document.getElementById('region-rate');
 const clockValue = document.getElementById('clock-value');
 
 // 크롭 설정(AVATAR_CROP_OVERRIDES, DEFAULT_AVATAR_CROP, applyAvatarCrop)은 shared/avatar-crop.js에 있음.
@@ -220,14 +219,10 @@ function renderProfile(data) {
 
     applyLobbyCharacterVisibility(user.hide_lobby_character);
 
-    if (region) {
-        regionName.textContent = region.name;
-        const expPer10Min = Math.round(region.exp_rate * 10);
-        regionRate.textContent = `${expPer10Min} EXP / 10분`;
-    } else {
-        regionName.textContent = "알 수 없음";
-        regionRate.textContent = "-";
-    }
+    // 요율(region-rate) 표시는 dungeon.js가 /regions/에서 받은 전체 정보(실버/골드 포함)로 전담한다 -
+    // 여기서 exp_rate만으로 다시 그리면(과거엔 그랬음) 두 스크립트가 같은 요소를 서로 다른 시점에
+    // 덮어써서, 어느 쪽이 나중에 끝나느냐에 따라 실버가 빠진 옛 문구가 잠깐씩 보이는 문제가 있었다.
+    regionName.textContent = region ? region.name : "알 수 없음";
 
 }
 
