@@ -340,6 +340,7 @@
     grid-template-rows: 1fr;
     height: 100%;
     gap: 18px 14px;
+    justify-content: center;
 }
 
 .trade-standing-grid.trade-standing-grid-count-3 {
@@ -391,19 +392,20 @@
     position: relative;
     flex: 1;
     min-height: 0;
-    /* img가 max-width:none이라 원본 비율상 프레임보다 넓게 그려질 수 있다(캐릭터 좌우 여백이
-       넉넉한 원본일수록 심함) - 그대로 두면 옆 카드나 패널 밖으로 흘러넘쳐서, 특히 맨 왼쪽 카드는
-       상반신이 통째로 안 보이는 식으로 잘려 보였다. 프레임 안에서만 보이도록 자른다. */
-    overflow: hidden;
 }
 
+/* max-width:none으로 프레임 폭을 무시하면(과거엔 그랬음) 원본 비율상 프레임보다 넓게 그려질 수 있어
+   옆 카드나 패널 밖으로 흘러넘쳤다(특히 맨 왼쪽 카드는 상반신이 안 보일 정도로). overflow:hidden으로
+   잘라내는 방식은 시도해봤지만, 좁은 화면처럼 프레임이 아주 좁아지면 캐릭터가 그려지는 부분 자체가
+   보이는 영역 밖으로 밀려나 아무것도 안 보이는 더 나쁜 결과가 났다 - 잘라내지 않고 프레임 폭 안으로
+   "줄어들도록"(max-width:100%) 바꿔서, 항상 전신이 다 보이되 필요하면 작게 그려지게 한다. */
 .trade-standing-card-frame img {
     position: absolute;
     left: 50%;
     bottom: 0;
     transform: translateX(-50%);
     z-index: 1;
-    max-width: none;
+    max-width: 100%;
     max-height: 100%;
     object-fit: contain;
     object-position: bottom center;
