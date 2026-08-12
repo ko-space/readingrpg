@@ -74,8 +74,24 @@
     color: #8a3131;
 }
 
-.shop-section-label-currency {
-    margin-top: 22px;
+/* "강화 아이템"/"티켓" 구분선 - inventory.css의 .inventory-unowned-divider와 같은 순수 CSS 방식
+   (양옆 선은 ::before/::after의 border-top, 텍스트는 가운데). 이 안에서는 wrap 그리드가 아니라
+   가로 스크롤 한 줄짜리 섹션들 사이에 놓이는 일반 블록이라 grid-column 지정은 필요 없다. */
+.shop-section-divider {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 22px 0 14px;
+    color: #8a3131;
+    font-weight: 900;
+    font-size: 15px;
+}
+
+.shop-section-divider::before,
+.shop-section-divider::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid rgba(138, 49, 49, .35);
 }
 
 .shop-empty-inline {
@@ -443,8 +459,9 @@
     cursor: pointer;
 }
 
-/* ── 골드 표시: 상점 모달이 열려도 어두워지지 않게 ── */
-body.shop-modal-open #gold-chip {
+/* ── 골드/실버 표시: 상점 모달이 열려도 어두워지지 않게 ── */
+body.shop-modal-open #gold-chip,
+body.shop-modal-open #silver-chip {
     position: relative;
     z-index: 101; /* .modal-overlay(z-index:100)보다 위에 그려서 어두워지는 레이어 밖으로 */
 }

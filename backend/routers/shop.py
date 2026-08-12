@@ -58,6 +58,7 @@ def get_shop_items(db: Session = Depends(get_db), user: User = Depends(get_curre
             "season": item.season,
             "rarity": item.rarity,
             "price": item.price,
+            "currency": item.currency,
             "source_character": item.source_character,
             "effect_type": item.effect_type,
             "effect_params": item.effect_params,
@@ -89,6 +90,7 @@ def get_my_items(
             "name": row.item.name,
             "quantity": row.quantity,
             "item_type": row.item.item_type,
+            "currency": row.item.currency,
             "outfit_file": row.item.outfit_file,
             "icon_file": row.item.icon_file,
             "description": row.item.description,
@@ -179,11 +181,19 @@ def purchase_item(
                 detail=f"이 아이템은 하루 최대 {item.daily_purchase_limit}개까지만 구매할 수 있습니다. (오늘 구매: {already_purchased_today}개)",
             )
 
+    # 재화 이원화 - item.currency에 따라 골드/실버 중 어느 잔액을 볼지 정한다(기본은 gold, 컬럼
+    # 기본값과 동일). 강화 아이템·티켓은 실버, 의상은 골드로 시딩돼있다(seed.py 참고).
     total_price = item.price * req.quantity
-    if user.gold < total_price:
-        raise HTTPException(status_code=400, detail="골드가 부족합니다.")
+    is_silver = item.currency == "silver"
+    balance = user.silver if is_silver else user.gold
+    currency_label = "실버" if is_silver else "골드"
+    if balance < total_price:
+        raise HTTPException(status_code=400, detail=f"{currency_label}가 부족합니다.")
 
-    user.gold -= total_price
+    if is_silver:
+        user.silver -= total_price
+    else:
+        user.gold -= total_price
 
     owned = db.query(UserItem).filter(
         UserItem.user_id == user.id, UserItem.item_id == item.id
@@ -223,6 +233,7 @@ def purchase_item(
         "item_name": item.name,
         "quantity": req.quantity,
         "left_gold": user.gold,
+        "left_silver": user.silver,
         "new_achievements": new_achievements,
     }
 

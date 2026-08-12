@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, Character, MarketListing, UserDailyMarketListing, MarketState, Mail
+from models import User, Character, MarketListing, UserDailyMarketListing, MarketState, Mail, MarketActivityLog
 from schemas import MarketRegisterRequest, MarketBuyRequest
 from security import get_current_user
 from achievements import check_and_grant_achievements
@@ -25,7 +25,8 @@ def _kst_date_of(dt_utc_naive: datetime):
     return dt_utc_naive.replace(tzinfo=timezone.utc).astimezone(KST).date()
 
 
-# 등록 하한(골드) - 표시가(구매자 실지불액)는 여기에 10% 수수료를 더해서 구한다.
+# 등록 하한(실버) - 표시가(구매자 실지불액)는 여기에 10% 수수료를 더해서 구한다. 재화 이원화
+# 이후 거래소는 실버로 거래된다(활용처: 강화·거래·상점 아이템 구매 = 실버).
 MARKET_STAR_MIN_PRICE = {1: 100, 2: 250, 3: 500, 4: 1000, 5: 1500, 6: 5000}
 MARKET_FEE_MULTIPLIER = 1.1
 MARKET_CAP = 10  # 거래소 전체 동시 매물 상한
@@ -158,7 +159,7 @@ def register_listing(
     if req.price < min_price:
         raise HTTPException(
             status_code=400,
-            detail=f"{req.star}★ 캐릭터는 최소 {min_price}G 이상으로 등록해야 합니다.",
+            detail=f"{req.star}★ 캐릭터는 최소 {min_price}실버 이상으로 등록해야 합니다.",
         )
 
     # 거래소 전체 매물 상한(10개) 체크는 서로 다른 판매자(=서로 다른 User 행)끼리 경합할 수 있어서,
@@ -229,6 +230,12 @@ def register_listing(
     db.add(listing)
     character.user_id = None  # 인벤토리/강화/PVP 편성 등 user_id 기준 조회 전부에서 자동으로 사라짐
 
+    # 퀘스트/도전과제("인물 등록 N회", "N성 이상 인물 등록" 등) 판정용 이력 - MarketListing 자체는
+    # 판매/만료 즉시 삭제되므로 이력이 따로 안 남는다.
+    db.add(MarketActivityLog(
+        user_id=locked_user.id, action="register", star=character.star, character_name=character.name,
+    ))
+
     if daily_record:
         daily_record.count += 1
     else:
@@ -272,8 +279,8 @@ def buy_listing(
     if buyer.id == listing.seller_id:
         raise HTTPException(status_code=400, detail="자신이 등록한 캐릭터는 구매할 수 없습니다.")
 
-    if buyer.gold < listing.display_price:
-        raise HTTPException(status_code=400, detail="골드가 부족합니다.")
+    if buyer.silver < listing.display_price:
+        raise HTTPException(status_code=400, detail="실버가 부족합니다.")
 
     character = (
         db.query(Character)
@@ -285,16 +292,20 @@ def buy_listing(
         # 리스팅이 살아있는 한 캐릭터의 user_id는 항상 NULL이어야 한다(이론상 도달 불가) - 방어적 체크.
         raise HTTPException(status_code=400, detail="이미 판매되었거나 만료된 매물입니다.")
 
-    buyer.gold -= listing.display_price
+    buyer.silver -= listing.display_price
     character.user_id = buyer.id
 
-    # 판매자 정산은 즉시 gold를 더하는 대신 우편함으로 보낸다 - pvp.py가 방어 승리 보상을 지급할 때와
+    db.add(MarketActivityLog(
+        user_id=buyer.id, action="buy", star=listing.star, character_name=listing.name,
+    ))
+
+    # 판매자 정산은 즉시 silver를 더하는 대신 우편함으로 보낸다 - pvp.py가 방어 승리 보상을 지급할 때와
     # 동일한 이유: 이 요청 안에서 구매자와 판매자 두 User 행을 동시에 잠그지 않기 위해서다.
     db.add(Mail(
         user_id=listing.seller_id,
         title="인력 거래소 판매 완료",
         body=f"'{listing.name}' 인물이 판매되었습니다.",
-        gold_amount=listing.register_price,
+        silver_amount=listing.register_price,
     ))
 
     listing_name = listing.name
@@ -309,7 +320,7 @@ def buy_listing(
         "message": f"{listing_name}을(를) 구매했습니다!",
         "character_name": listing_name,
         "star": listing_star,
-        "left_gold": buyer.gold,
+        "left_silver": buyer.silver,
         "new_achievements": new_achievements,
         "new_characters": new_characters,
     }

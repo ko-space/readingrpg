@@ -15,6 +15,7 @@
     let allItems = [];
     let myItemQuantities = {}; // item_id -> quantity
     let myGold = 0;
+    let mySilver = 0;
     let myCharacterNames = new Set();
     let selectedItem = null;
     let selectedQty = 1;
@@ -36,8 +37,16 @@
     }
 
     function itemImageSrc(item) {
-        if (item.item_type === "enhancement" || item.item_type === "currency") return item.icon_file || "";
+        if (item.item_type === "enhancement" || item.item_type === "ticket") return item.icon_file || "";
         return item.outfit_file ? `${OUTFIT_IMAGE_BASE}${item.outfit_file}/idle.png` : "";
+    }
+
+    // item.currency("gold"|"silver")에 맞는 단위(G/S)를 붙인다 - 가격 표시가 나오는 모든 곳(카드,
+    // 구매 확인 모달)이 이 함수 하나를 공유한다.
+    function formatPrice(item, amount) {
+        const value = amount != null ? amount : item.price;
+        const unit = item.currency === "silver" ? "S" : "G";
+        return `${Number(value).toLocaleString()}${unit}`;
     }
 
     // 강화 아이템의 effect_type/effect_params(데이터)를 사람이 읽을 문장으로 바꾼다. (재화 아이템은 effect_type이 없어 자연히 빈 문자열)
@@ -107,8 +116,11 @@
         if (meRes.ok) {
             const me = await meRes.json();
             myGold = Number(me.user_info.gold) || 0;
+            mySilver = Number(me.user_info.silver) || 0;
             const goldEl = document.getElementById("shop-my-gold");
             if (goldEl) goldEl.textContent = myGold.toLocaleString();
+            const silverEl = document.getElementById("shop-my-silver");
+            if (silverEl) silverEl.textContent = mySilver.toLocaleString();
         }
 
         if (invRes.ok) {
@@ -118,7 +130,7 @@
 
         renderOutfitRow();
         renderItemRow();
-        renderCurrencyRow();
+        renderTicketRow();
 
         // 확인 팝업이 이미 열려 있는 채로 refreshData가 다시 불릴 수도 있으니(구매 직후 등),
         // 열려 있으면 최신 조건으로 버튼 상태도 같이 갱신한다.
@@ -199,7 +211,7 @@
                     <img alt="${escapeHtml(item.name)}">
                 </div>
                 <div class="shop-outfit-name">${escapeHtml(item.name)}</div>
-                <div class="shop-outfit-price">${Number(item.price).toLocaleString()}G</div>
+                <div class="shop-outfit-price">${formatPrice(item)}</div>
             `;
             const img = card.querySelector("img");
             img.src = itemImageSrc(item);
@@ -235,7 +247,7 @@
                     <img alt="${escapeHtml(item.name)}">
                     ${owned > 0 ? `<span class="shop-card-owned">${owned}</span>` : ""}
                 </div>
-                <div class="shop-item-sq-price">${Number(item.price).toLocaleString()}G</div>
+                <div class="shop-item-sq-price">${formatPrice(item)}</div>
             `;
             const img = card.querySelector("img");
             img.src = itemImageSrc(item);
@@ -245,15 +257,15 @@
         });
     }
 
-    // ── 재화: 아이템 탭과 같은 정사각형 카드 레이아웃 재사용 ──
-    function renderCurrencyRow() {
+    // ── 티켓: 아이템 탭과 같은 정사각형 카드 레이아웃 재사용 ──
+    function renderTicketRow() {
         const row = document.getElementById("shop-currency-row");
         if (!row) return;
 
-        const items = allItems.filter((item) => item.item_type === "currency");
+        const items = allItems.filter((item) => item.item_type === "ticket");
 
         if (items.length === 0) {
-            row.innerHTML = `<p class="shop-empty-inline">판매 중인 재화가 없습니다.</p>`;
+            row.innerHTML = `<p class="shop-empty-inline">판매 중인 티켓이 없습니다.</p>`;
             return;
         }
 
@@ -269,7 +281,7 @@
                     <img alt="${escapeHtml(item.name)}">
                     ${owned > 0 ? `<span class="shop-card-owned">${owned}</span>` : ""}
                 </div>
-                <div class="shop-item-sq-price">${Number(item.price).toLocaleString()}G</div>
+                <div class="shop-item-sq-price">${formatPrice(item)}</div>
             `;
             const img = card.querySelector("img");
             img.src = itemImageSrc(item);
@@ -343,7 +355,8 @@
             max = Math.min(max, item.daily_purchase_limit - (item.daily_purchased_count || 0));
         }
         if (item.price > 0) {
-            max = Math.min(max, Math.floor(myGold / item.price));
+            const balance = item.currency === "silver" ? mySilver : myGold;
+            max = Math.min(max, Math.floor(balance / item.price));
         }
         return Number.isFinite(max) ? Math.max(0, max) : 99;
     }
@@ -378,8 +391,11 @@
                 reasons.push(`오늘은 최대 ${remainingToday}개까지만 구매할 수 있습니다.`);
             }
         }
-        if (myGold < totalPrice) {
-            reasons.push(`골드가 부족합니다. (${myGold.toLocaleString()}G / ${totalPrice.toLocaleString()}G)`);
+        const isSilver = selectedItem.currency === "silver";
+        const balance = isSilver ? mySilver : myGold;
+        if (balance < totalPrice) {
+            const label = isSilver ? "실버" : "골드";
+            reasons.push(`${label}가 부족합니다. (${formatPrice(selectedItem, balance)} / ${formatPrice(selectedItem, totalPrice)})`);
         }
 
         document.getElementById("shop-confirm-buy").disabled = reasons.length > 0;
@@ -392,7 +408,7 @@
     function updateQtyDisplay() {
         document.getElementById("shop-qty-value").textContent = selectedQty;
         document.getElementById("shop-confirm-total-price").textContent =
-            Number(selectedItem.price * selectedQty).toLocaleString();
+            formatPrice(selectedItem, selectedItem.price * selectedQty);
         updateBuyAvailability();
     }
 

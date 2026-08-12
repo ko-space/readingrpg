@@ -105,7 +105,8 @@ def seed_enhancement_items():
             {
                 "name": "송주헌의 독서대",
                 "source_character": "송주헌",
-                "price": 200,
+                "price": 1000,
+                "currency": "silver",
                 "icon_file": "assets/items/songjuheon_desk.png",
                 "description": "방치되어 있지만 존재는 합니다.",
                 "effect_type": "shift",
@@ -114,7 +115,8 @@ def seed_enhancement_items():
             {
                 "name": "김남옥의 크레파스",
                 "source_character": "김남옥",
-                "price": 100,
+                "price": 500,
+                "currency": "silver",
                 "icon_file": "assets/items/namok_crayon.png",
                 "description": "어린이가 사용하는 물건이니 조심히 다루세요.",
                 "effect_type": "shift",
@@ -123,7 +125,8 @@ def seed_enhancement_items():
             {
                 "name": "윤영준의 오페라 하우스",
                 "source_character": "윤영준",
-                "price": 500,
+                "price": 2500,
+                "currency": "silver",
                 "icon_file": "assets/items/youngjun_opera.png",
                 "description": "조심하세요. 윤영준의 수행평가는 복불복입니다.",
                 "effect_type": "redistribute",
@@ -132,7 +135,8 @@ def seed_enhancement_items():
             {
                 "name": "강 희의 파쇄기",
                 "source_character": "강 희",
-                "price": 50,
+                "price": 100,
+                "currency": "silver",
                 "icon_file": "assets/items/ganghee_shredder.png",
                 "description": "이것은 어디에다가 쓰는 걸까요?",
                 "effect_type": "force",
@@ -143,6 +147,7 @@ def seed_enhancement_items():
                 "source_character": None,
                 "purchase_limit": 1,
                 "price": 1500,
+                "currency": "gold",  # 재화 이원화 이후에도 골드로 유지(다른 8종과 달리 실버로 안 바뀜)
                 "icon_file": "assets/items/초심자의 행운.png",
                 "description": "어느 업적을 달성해야 살 수 있는 걸까요?",
                 "effect_type": "force",
@@ -151,7 +156,8 @@ def seed_enhancement_items():
             {
                 "name": "최재혁의 마법 영약",
                 "source_character": "최재혁",
-                "price": 150,
+                "price": 750,
+                "currency": "silver",
                 "icon_file": "assets/items/jaehyuk_elixir.png",
                 "description": "모든 것을 형태가 없는 재로 만들어버리는 영약입니다.",
                 # 별도 effect_type: 성공/유지/파괴 확률표를 통째로 대체한다(성급별 "먼지 생성" 확률).
@@ -164,6 +170,7 @@ def seed_enhancement_items():
                 "name": "먼지",
                 "source_character": None,
                 "price": 0,  # 상점에서 팔지 않음(마법 영약 성공 시에만 획득) - is_shop_active를 항상 False로 고정
+                "currency": "silver",
                 "icon_file": "assets/items/dust.png",
                 "description": "이 힘은, 대체 뭐지? 무언가... '뭔가'가 있다!",
                 # 강화 시 재료 카드 1장을 대신한다(material_substitute) - shift/redistribute/force처럼 확률에
@@ -175,7 +182,8 @@ def seed_enhancement_items():
             {
                 "name": "이의진의 연분홍색 크록스",
                 "source_character": "이의진",
-                "price": 300,
+                "price": 1500,
+                "currency": "silver",
                 "icon_file": "assets/items/eujin_crocs.png",
                 "description": "행운을 시험해볼까요?",
                 # 성공 확률 중 일부를 슈퍼 성공(2성치 강화)으로 옮긴다 - shift와 비슷하지만 "성공" 항목을
@@ -186,7 +194,8 @@ def seed_enhancement_items():
             {
                 "name": "강승유의 마우스피스",
                 "source_character": "강승유",
-                "price": 350,
+                "price": 1750,
+                "currency": "silver",
                 "icon_file": "assets/items/seungyu_piece.png",
                 "description": "일종의 보험이라고 생각하세요.",
                 # 이번 강화가 성공(슈퍼 성공 포함)하면, 그 카드의 "다음" 강화 시도에 파괴 -10%p/성공 +10%p를
@@ -207,6 +216,7 @@ def seed_enhancement_items():
                 # 서버 재시작만으로 반영되게 하기 위함 - 예전엔 "이미 있으면 건너뛰기"만 해서
                 # icon_file 같은 새 필드가 기존 행엔 절대 안 채워지는 문제가 있었다).
                 row.price = item["price"]
+                row.currency = item.get("currency", "silver")
                 row.icon_file = item["icon_file"]
                 row.description = item["description"]
                 row.source_character = item.get("source_character")
@@ -221,6 +231,7 @@ def seed_enhancement_items():
                     item_type="enhancement",
                     rarity="희귀",
                     price=item["price"],
+                    currency=item.get("currency", "silver"),
                     icon_file=item["icon_file"],
                     description=item["description"],
                     source_character=item.get("source_character"),
@@ -239,33 +250,38 @@ def seed_enhancement_items():
 
 
 def seed_currency_items():
-    """재화 아이템(강화/의상과 별개인 item_type="currency"). 강화 아이템과 동일한
-    upsert 패턴(existing_rows by name)을 그대로 따른다."""
+    """티켓 아이템(item_type="ticket"). 재화 이원화 이전엔 item_type="currency"(재화 취급)였는데,
+    인벤토리/상점에서 진짜 아이템처럼 보이고 관리되도록 "ticket"으로 재분류했다 - 이름 기준으로
+    조회해야 기존에 item_type="currency"로 심어져있던 행이 새 행으로 중복 생성되지 않고 그대로
+    갱신된다(강화 아이템과 동일한 upsert 패턴, 다만 필터를 item_type이 아니라 이름으로 건다)."""
     db = SessionLocal()
     try:
         items = [
             {
                 "name": "스토리모드 티켓",
-                "price": 25,
+                "price": 125,
                 "icon_file": "assets/items/story_ticket.png",
                 "description": "인연 스토리에서 씬을 하나 볼 때마다 1장씩 사용됩니다.",
-                "daily_purchase_limit": 5,
+                "daily_purchase_limit": 7,
             },
             {
                 "name": "투기장모드 티켓",
-                "price": 4,
+                "price": 20,
                 "icon_file": "assets/items/arena_ticket.png",
                 "description": "전술경연 대회에서 전투를 시도할 때마다 1장씩 사용됩니다.",
                 "daily_purchase_limit": 10,
             },
         ]
 
-        existing_rows = {row.name: row for row in db.query(Item).filter(Item.item_type == "currency").all()}
+        names = [item["name"] for item in items]
+        existing_rows = {row.name: row for row in db.query(Item).filter(Item.name.in_(names)).all()}
         changed = False
 
         for item in items:
             row = existing_rows.get(item["name"])
             if row:
+                row.item_type = "ticket"
+                row.currency = "silver"
                 row.price = item["price"]
                 row.icon_file = item["icon_file"]
                 row.description = item["description"]
@@ -274,7 +290,8 @@ def seed_currency_items():
             else:
                 db.add(Item(
                     name=item["name"],
-                    item_type="currency",
+                    item_type="ticket",
+                    currency="silver",
                     rarity="희귀",
                     price=item["price"],
                     icon_file=item["icon_file"],
@@ -290,60 +307,104 @@ def seed_currency_items():
         db.close()
 
 
+REGIONS = [
+    {
+        "name": "초심자의 평원",
+        "order": 1,
+        "required_level": 1,
+        "always_open": False,
+        "description": "평화로운 초원의 모습과 잔잔한 자연 백색소음이 들려온다.",
+        "exp_rate": 1.0,
+        "gold_rate": 0.0,
+        "silver_rate": 1.0,
+    },
+    {
+        "name": "잊혀진 서고",
+        "order": 2,
+        "required_level": 5,
+        "always_open": False,
+        "description": "먼지 쌓인 책장 사이로 은은한 종이 냄새가 감돈다.",
+        "exp_rate": 1.2,
+        "gold_rate": 0.0,
+        "silver_rate": 1.0,
+    },
+    {
+        "name": "안개 낀 협곡",
+        "order": 3,
+        "required_level": 10,
+        "always_open": False,
+        "description": "짙은 안개 속에서 무언가 부스럭거리는 소리가 들려온다.",
+        "exp_rate": 1.0,
+        "gold_rate": 0.0,
+        "silver_rate": 1.5,
+    },
+    {
+        "name": "지혜의 신전",
+        "order": 4,
+        "required_level": 25,
+        "always_open": False,
+        "description": "고요한 정적 속에 오래된 지혜가 깃들어 있는 듯하다.",
+        "exp_rate": 1.0,
+        "gold_rate": 0.0,
+        "silver_rate": 1.0,
+        "subject_bonus_rules": {"국어": 1.5, "영어": 1.5},
+    },
+    {
+        "name": "마법사의 은광",
+        "order": 5,
+        "required_level": 30,
+        "always_open": False,
+        "description": "은빛 광맥이 은은하게 빛나지만, 이곳에서는 지식이 쌓이는 감각이 느껴지지 않는다.",
+        "exp_rate": 0.0,
+        "gold_rate": 0.0,
+        "silver_rate": 3.0,
+    },
+    {
+        "name": "종말의 금광",
+        "order": 6,
+        "required_level": 30,
+        "always_open": False,
+        "description": "세상의 끝에서 채굴되는 황금은 그 무엇보다 무겁고 값지다.",
+        "exp_rate": 0.0,
+        "gold_rate": 0.1,
+        "silver_rate": 0.0,
+    },
+    {
+        "name": "투기장",
+        "order": None,
+        "required_level": 1,
+        "always_open": True,
+        "description": "거친 함성과 무기 부딪히는 소리로 가득한 전장이다.",
+        "exp_rate": 0.5,
+        "gold_rate": 1.0,
+        "silver_rate": 0.0,
+    },
+]
+
+
 def seed_regions():
     # 지역 = 던전. 하나의 장소가 곧 "레벨이 되면 열리는 지역"이자 "독서 세션을 진행하는 던전"이다.
+    # (예전엔 count()==0일 때만 시딩해서 REGIONS를 고쳐도 반영이 안 되는 버그가 있었다 - 다른 시더처럼
+    # 이름 기준 upsert로 교체)
     db = SessionLocal()
     try:
-        if db.query(Region).count() == 0:
-            REGIONS = [
-                {
-                    "name": "초심자의 평원",
-                    "order": 1,
-                    "required_level": 1,
-                    "always_open": False,
-                    "description": "평화로운 초원의 모습과 잔잔한 자연 백색소음이 들려온다.",
-                    "exp_rate": 1.0,
-                    "gold_rate": 0.0,
-                },
-                {
-                    "name": "잊혀진 서고",
-                    "order": 2,
-                    "required_level": 5,
-                    "always_open": False,
-                    "description": "먼지 쌓인 책장 사이로 은은한 종이 냄새가 감돈다.",
-                    "exp_rate": 1.2,
-                    "gold_rate": 0.0,
-                },
-                {
-                    "name": "안개 낀 협곡",
-                    "order": 3,
-                    "required_level": 10,
-                    "always_open": False,
-                    "description": "짙은 안개 속에서 무언가 부스럭거리는 소리가 들려온다.",
-                    "exp_rate": 1.4,
-                    "gold_rate": 0.0,
-                },
-                {
-                    "name": "지혜의 신전",
-                    "order": 4,
-                    "required_level": 25,
-                    "always_open": False,
-                    "description": "고요한 정적 속에 오래된 지혜가 깃들어 있는 듯하다.",
-                    "exp_rate": 1.8,
-                    "gold_rate": 0.0,
-                },
-                {
-                    "name": "투기장",
-                    "order": None,
-                    "required_level": 1,
-                    "always_open": True,
-                    "description": "거친 함성과 무기 부딪히는 소리로 가득한 전장이다.",
-                    "exp_rate": 0.5,
-                    "gold_rate": 1.0,
-                },
-            ]
-            for region in REGIONS:
-                db.add(Region(**region))
+        existing_rows = {row.name: row for row in db.query(Region).all()}
+        changed = False
+        for r in REGIONS:
+            row = existing_rows.get(r["name"])
+            if row:
+                row.order = r["order"]
+                row.required_level = r["required_level"]
+                row.always_open = r["always_open"]
+                row.description = r["description"]
+                row.exp_rate = r["exp_rate"]
+                row.gold_rate = r["gold_rate"]
+                row.silver_rate = r.get("silver_rate", 0.0)
+                row.subject_bonus_rules = r.get("subject_bonus_rules")
+            else:
+                db.add(Region(**r))
+            changed = True
+        if changed:
             db.commit()
     finally:
         db.close()
@@ -631,21 +692,21 @@ CHALLENGES = [
     # ── 스토리모드 도전과제: 인연 스토리 Episode 1 CG 갤러리 순서(story-engine.js의 CG_GALLERY_ITEMS)와
     # 1:1로 대응한다 ──────────────────────────────────────────
     {
-        "name": "도감 Episode 1 No.1 획득",
+        "name": "인연 스토리 도감 Episode 1 No.1 획득",
         "condition_type": "cg_unlocked",
         "condition_value": 1,
         "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "bad"},
         "reward_gold": 200,
     },
     {
-        "name": "도감 Episode 1 No.2 획득",
+        "name": "인연 스토리 도감 Episode 1 No.2 획득",
         "condition_type": "cg_unlocked",
         "condition_value": 1,
         "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "normal"},
         "reward_gold": 200,
     },
     {
-        "name": "도감 Episode 1 No.3 획득",
+        "name": "인연 스토리 도감 Episode 1 No.3 획득",
         "condition_type": "cg_unlocked",
         "condition_value": 1,
         "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "juheon"},
@@ -653,7 +714,7 @@ CHALLENGES = [
         "reward_items": [{"type": "character", "name": "송주헌", "quantity": 1}],
     },
     {
-        "name": "도감 Episode 1 No.4 획득",
+        "name": "인연 스토리 도감 Episode 1 No.4 획득",
         "condition_type": "cg_unlocked",
         "condition_value": 1,
         "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "seungyu"},
@@ -661,7 +722,7 @@ CHALLENGES = [
         "reward_items": [{"type": "character", "name": "강승유", "quantity": 1}],
     },
     {
-        "name": "도감 Episode 1 No.5 획득",
+        "name": "인연 스토리 도감 Episode 1 No.5 획득",
         "condition_type": "cg_unlocked",
         "condition_value": 1,
         "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "yeongwoong"},
@@ -669,7 +730,7 @@ CHALLENGES = [
         "reward_items": [{"type": "character", "name": "이영웅", "quantity": 1}],
     },
     {
-        "name": "도감 Episode 1 No.6 획득",
+        "name": "인연 스토리 도감 Episode 1 No.6 획득",
         "condition_type": "cg_unlocked",
         "condition_value": 1,
         "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "ganghee"},
@@ -677,7 +738,7 @@ CHALLENGES = [
         "reward_items": [{"type": "character", "name": "강 희", "quantity": 1}],
     },
     {
-        "name": "도감 Episode 1 No.7 획득",
+        "name": "인연 스토리 도감 Episode 1 No.7 획득",
         "condition_type": "cg_unlocked",
         "condition_value": 1,
         "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "true_seungyu"},
@@ -685,7 +746,7 @@ CHALLENGES = [
         "reward_items": [{"type": "character", "name": "송주헌", "quantity": 2}],
     },
     {
-        "name": "도감 Episode 1 No.8 획득",
+        "name": "인연 스토리 도감 Episode 1 No.8 획득",
         "condition_type": "cg_unlocked",
         "condition_value": 1,
         "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "true_ganghee"},
@@ -693,7 +754,7 @@ CHALLENGES = [
         "reward_items": [{"type": "character", "name": "강 희", "quantity": 2}],
     },
     {
-        "name": "도감 Episode 1 No.9 획득",
+        "name": "인연 스토리 도감 Episode 1 No.9 획득",
         "condition_type": "cg_unlocked",
         "condition_value": 1,
         "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "true_yeongwoong"},
@@ -701,7 +762,7 @@ CHALLENGES = [
         "reward_items": [{"type": "character", "name": "이영웅", "quantity": 2}],
     },
     {
-        "name": "도감 Episode 1 No.10 획득",
+        "name": "인연 스토리 도감 Episode 1 No.10 획득",
         "condition_type": "cg_unlocked",
         "condition_value": 1,
         "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "true_juheon"},
@@ -709,12 +770,68 @@ CHALLENGES = [
         "reward_items": [{"type": "character", "name": "송주헌", "quantity": 2}],
     },
     {
-        "name": "도감 Episode 1 No.11 획득",
+        "name": "인연 스토리 도감 Episode 1 No.11 획득",
         "condition_type": "cg_unlocked",
         "condition_value": 1,
         "condition_params": {"story_id": STORY_ID_EP1, "cg_id": "hidden"},
         "reward_gold": 200,
         "reward_items": [{"type": "character", "name": "송주헌", "quantity": 3}],
+    },
+    {
+        "name": "인연 스토리 누적 100회 플레이",
+        "condition_type": "activity_total",
+        "condition_value": 100,
+        "condition_params": {"activity_type": "story_ticket_use"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인연 스토리 누적 150회 플레이",
+        "condition_type": "activity_total",
+        "condition_value": 150,
+        "condition_params": {"activity_type": "story_ticket_use"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인연 스토리 누적 200회 플레이",
+        "condition_type": "activity_total",
+        "condition_value": 200,
+        "condition_params": {"activity_type": "story_ticket_use"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인연 스토리 앤딩 5회 보기",
+        "condition_type": "activity_total",
+        "condition_value": 5,
+        "condition_params": {"activity_type": "ep1_ending_reached"},
+        "reward_gold": 300,
+    },
+    {
+        "name": "인연 스토리 앤딩 10회 보기",
+        "condition_type": "activity_total",
+        "condition_value": 10,
+        "condition_params": {"activity_type": "ep1_ending_reached"},
+        "reward_gold": 300,
+    },
+    {
+        "name": "인연 스토리 앤딩 30회 보기",
+        "condition_type": "activity_total",
+        "condition_value": 30,
+        "condition_params": {"activity_type": "ep1_ending_reached"},
+        "reward_gold": 300,
+    },
+    {
+        "name": "인연 스토리 앤딩 50회 보기",
+        "condition_type": "activity_total",
+        "condition_value": 50,
+        "condition_params": {"activity_type": "ep1_ending_reached"},
+        "reward_gold": 300,
+    },
+    {
+        "name": "인연 스토리 앤딩 100회 보기",
+        "condition_type": "activity_total",
+        "condition_value": 100,
+        "condition_params": {"activity_type": "ep1_ending_reached"},
+        "reward_gold": 300,
     },
 
     # ── 도전과제(일반) ──────────────────────────────────────────
@@ -747,6 +864,48 @@ CHALLENGES = [
         "reward_gold": 200,
     },
     {
+        "name": "강화 성공 누적 50회 달성",
+        "condition_type": "activity_total",
+        "condition_value": 50,
+        "condition_params": {"activity_type": "character_enhance_success"},
+        "reward_gold": 500,
+    },
+    {
+        "name": "강화 파괴 누적 50회 달성",
+        "condition_type": "activity_total",
+        "condition_value": 50,
+        "condition_params": {"activity_type": "character_enhance_destroy"},
+        "reward_gold": 500,
+    },
+    {
+        "name": "아이템 누적 50회 구매",
+        "condition_type": "activity_total",
+        "condition_value": 50,
+        "condition_params": {"activity_type": "shop_purchase_enhancement"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "아이템 누적 50회 사용",
+        "condition_type": "activity_total",
+        "condition_value": 50,
+        "condition_params": {"activity_type": "item_use"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "강화 슈퍼 성공 누적 1회 달성",
+        "condition_type": "activity_total",
+        "condition_value": 1,
+        "condition_params": {"activity_type": "character_enhance_super_success"},
+        "reward_gold": 500,
+    },
+    {
+        "name": "강화 슈퍼 성공 누적 3회 달성",
+        "condition_type": "activity_total",
+        "condition_value": 3,
+        "condition_params": {"activity_type": "character_enhance_super_success"},
+        "reward_gold": 500,
+    },
+    {
         "name": "인연 스토리 누적 10회 플레이",
         "condition_type": "activity_total",
         "condition_value": 10,
@@ -771,7 +930,7 @@ CHALLENGES = [
         "condition_type": "activity_total",
         "condition_value": 50,
         "condition_params": {"activity_type": "story_ticket_use"},
-        "reward_gold": 500,
+        "reward_gold": 200,
     },
     {
         "name": "지역 입장 30분 이상 누적 50회 플레이",
@@ -796,7 +955,7 @@ CHALLENGES = [
         "reward_gold": 200,
     },
     {
-        "name": "★5 이상 캐릭터로 전술대회 전투 참여 1회",
+        "name": "★5 이상 인물로 전술대회 전투 참여 1회",
         "condition_type": "pvp_battle_with_star",
         "condition_value": 1,
         "condition_params": {"min_star": 5},
@@ -850,6 +1009,274 @@ CHALLENGES = [
         "condition_value": 80,
         "reward_gold": 100,
     },
+    {
+        "name": "전술대회 누적 100승 달성",
+        "condition_type": "pvp_wins",
+        "condition_value": 100,
+        "reward_gold": 100,
+    },
+    {
+        "name": "전술대회 누적 150승 달성",
+        "condition_type": "pvp_wins",
+        "condition_value": 150,
+        "reward_gold": 100,
+    },
+    {
+        "name": "전술대회 누적 200승 달성",
+        "condition_type": "pvp_wins",
+        "condition_value": 200,
+        "reward_gold": 100,
+    },
+    {
+        "name": "전술대회 누적 250승 달성",
+        "condition_type": "pvp_wins",
+        "condition_value": 250,
+        "reward_gold": 100,
+    },
+    {
+        "name": "전술대회 누적 300승 달성",
+        "condition_type": "pvp_wins",
+        "condition_value": 300,
+        "reward_gold": 100,
+    },
+    {
+        "name": "전술대회 누적 350승 달성",
+        "condition_type": "pvp_wins",
+        "condition_value": 350,
+        "reward_gold": 100,
+    },
+    {
+        "name": "전술대회 누적 400승 달성",
+        "condition_type": "pvp_wins",
+        "condition_value": 400,
+        "reward_gold": 100,
+    },
+    {
+        "name": "전술대회 누적 450승 달성",
+        "condition_type": "pvp_wins",
+        "condition_value": 450,
+        "reward_gold": 100,
+    },
+    {
+        "name": "전술대회 누적 500승 달성",
+        "condition_type": "pvp_wins",
+        "condition_value": 500,
+        "reward_gold": 100,
+    },
+    {
+        "name": "전술대회 1회 접속",
+        "condition_type": "pvp_battle_total",
+        "condition_value": 1,
+        "reward_gold": 50,
+    },
+
+    # ── 거래 도전과제 ──────────────────────────────────────────
+    {
+        "name": "인력 거래소에서 인물 등록 5회",
+        "condition_type": "market_activity_count",
+        "condition_value": 5,
+        "condition_params": {"action": "register"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인력 거래소에서 인물 등록 10회",
+        "condition_type": "market_activity_count",
+        "condition_value": 10,
+        "condition_params": {"action": "register"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인력 거래소에서 인물 등록 20회",
+        "condition_type": "market_activity_count",
+        "condition_value": 20,
+        "condition_params": {"action": "register"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인력 거래소에서 인물 구매 1회",
+        "condition_type": "market_activity_count",
+        "condition_value": 1,
+        "condition_params": {"action": "buy"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인력 거래소에서 인물 구매 3회",
+        "condition_type": "market_activity_count",
+        "condition_value": 3,
+        "condition_params": {"action": "buy"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인력 거래소에서 인물 구매 5회",
+        "condition_type": "market_activity_count",
+        "condition_value": 5,
+        "condition_params": {"action": "buy"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인력 거래소에서 인물 구매 10회",
+        "condition_type": "market_activity_count",
+        "condition_value": 10,
+        "condition_params": {"action": "buy"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인력 거래소에서 ★4 이상 인물 구매 1회",
+        "condition_type": "market_activity_count",
+        "condition_value": 1,
+        "condition_params": {"action": "buy", "min_star": 4},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인력 거래소에서 ★3 이상 인물 구매 3회",
+        "condition_type": "market_activity_count",
+        "condition_value": 3,
+        "condition_params": {"action": "buy", "min_star": 3},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인력 거래소에서 ★5 이상 인물 구매 1회",
+        "condition_type": "market_activity_count",
+        "condition_value": 1,
+        "condition_params": {"action": "buy", "min_star": 5},
+        "reward_gold": 200,
+    },
+
+    # ── 랭킹 도전과제 ──────────────────────────────────────────
+    {
+        "name": "오늘의 독서시간 랭킹 1위 달성 1회",
+        "condition_type": "ranking_top1_count",
+        "condition_value": 1,
+        "condition_params": {"category": "reading_daily"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "주간 독서시간 랭킹 1위 달성 1회",
+        "condition_type": "ranking_top1_count",
+        "condition_value": 1,
+        "condition_params": {"category": "reading_weekly"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "보유 골드 랭킹 1위 달성 1회",
+        "condition_type": "ranking_top1_live",
+        "condition_value": 1,
+        "condition_params": {"metric": "gold"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "칭호 수 랭킹 1위 달성 1회",
+        "condition_type": "ranking_top1_live",
+        "condition_value": 1,
+        "condition_params": {"metric": "titles"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "PvP 승수 랭킹 1위 달성 1회",
+        "condition_type": "ranking_top1_live",
+        "condition_value": 1,
+        "condition_params": {"metric": "pvp_wins"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "오늘의 독서시간 랭킹 1위 달성 3회",
+        "condition_type": "ranking_top1_count",
+        "condition_value": 3,
+        "condition_params": {"category": "reading_daily"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "주간 독서시간 랭킹 1위 달성 3회",
+        "condition_type": "ranking_top1_count",
+        "condition_value": 3,
+        "condition_params": {"category": "reading_weekly"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "오늘의 독서시간 랭킹 1위 달성 5회",
+        "condition_type": "ranking_top1_count",
+        "condition_value": 5,
+        "condition_params": {"category": "reading_daily"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "오늘의 독서시간 랭킹 1위 달성 10회",
+        "condition_type": "ranking_top1_count",
+        "condition_value": 10,
+        "condition_params": {"category": "reading_daily"},
+        "reward_gold": 200,
+    },
+
+    # ── 모집 도전과제 ──────────────────────────────────────────
+    {
+        "name": "모집 10회",
+        "condition_type": "activity_total",
+        "condition_value": 10,
+        "condition_params": {"activity_type": "gacha_pull"},
+        "reward_gold": 100,
+    },
+    {
+        "name": "모집 50회",
+        "condition_type": "activity_total",
+        "condition_value": 50,
+        "condition_params": {"activity_type": "gacha_pull"},
+        "reward_gold": 100,
+    },
+    {
+        "name": "모집 100회",
+        "condition_type": "activity_total",
+        "condition_value": 100,
+        "condition_params": {"activity_type": "gacha_pull"},
+        "reward_gold": 100,
+    },
+    {
+        "name": "★1, ★2, ★3, ★4, ★5 인물 전부 모집",
+        "condition_type": "gacha_pull_all_rarities",
+        "condition_value": 5,
+        "reward_gold": 500,
+    },
+    {
+        "name": "★3 이상 픽업 인물 모집 1회",
+        "condition_type": "gacha_pull_pickup_count",
+        "condition_value": 1,
+        "condition_params": {"min_star": 3},
+        "reward_gold": 200,
+    },
+    {
+        "name": "★3 이상 픽업 인물 모집 3회",
+        "condition_type": "gacha_pull_pickup_count",
+        "condition_value": 3,
+        "condition_params": {"min_star": 3},
+        "reward_gold": 200,
+    },
+    {
+        "name": "★5 인물 모집 1회",
+        "condition_type": "gacha_pull_rarity_count",
+        "condition_value": 1,
+        "condition_params": {"rarity": "신화"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "★4 인물 모집 2회",
+        "condition_type": "gacha_pull_rarity_count",
+        "condition_value": 2,
+        "condition_params": {"rarity": "전설"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "★3 인물 모집 3회",
+        "condition_type": "gacha_pull_rarity_count",
+        "condition_value": 3,
+        "condition_params": {"rarity": "영웅"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "★3 이상 인물 2번 연속으로 모집",
+        "condition_type": "gacha_pull_star_streak",
+        "condition_value": 1,
+        "condition_params": {"min_star": 3, "streak": 2},
+        "reward_gold": 500,
+    },
 
     # ── 메인 게임 도전과제 ──────────────────────────────────────────
     {
@@ -869,21 +1296,21 @@ CHALLENGES = [
         "reward_items": [{"type": "character", "name": "청년", "quantity": 9}],
     },
     {
-        "name": "직업:학생과 함께 과목으로 누적 1000exp 획득",
+        "name": "전부 직업이 학생인 인물과 함께 과목으로 누적 1000exp 획득",
         "condition_type": "job_class_subject_exp",
         "condition_value": 1000,
         "condition_params": {"job_class": "학생"},
         "reward_gold": 500,
     },
     {
-        "name": "직업:마법사를 사용해 과목으로 누적 1000exp 획득",
+        "name": "전부 직업이 마법사인 인물과 함께 과목으로 누적 1000exp 획득",
         "condition_type": "job_class_subject_exp",
         "condition_value": 1000,
         "condition_params": {"job_class": "마법사"},
         "reward_gold": 500,
     },
     {
-        "name": "여성 캐릭터를 사용해 과목으로 누적 1000exp 획득",
+        "name": "여성 인물과 함께 과목으로 누적 1000exp 획득",
         "condition_type": "gender_subject_exp",
         "condition_value": 1000,
         "condition_params": {"gender": "여"},
@@ -922,6 +1349,76 @@ CHALLENGES = [
         "condition_type": "daily_full_mock_exam_set",
         "condition_value": 1,
         "reward_gold": 1000,
+    },
+    {
+        "name": "하루에 국어·영어·수학·탐구를 각각 1시간 이상 공부하기 1회",
+        "condition_type": "daily_all_subjects_study_days",
+        "condition_value": 1,
+        "condition_params": {"min_minutes": 60},
+        "reward_gold": 200,
+    },
+    {
+        "name": "하루에 국어·영어·수학·탐구를 각각 1시간 이상 공부하기 3회",
+        "condition_type": "daily_all_subjects_study_days",
+        "condition_value": 3,
+        "condition_params": {"min_minutes": 60},
+        "reward_gold": 200,
+    },
+    {
+        "name": "하루에 국어·영어·수학·탐구를 각각 1시간 이상 공부하기 7회",
+        "condition_type": "daily_all_subjects_study_days",
+        "condition_value": 7,
+        "condition_params": {"min_minutes": 60},
+        "reward_gold": 200,
+    },
+    {
+        "name": "사진 작가, 화백, 가정 교사 중 하나와 함께 누적 1000exp 획득",
+        "condition_type": "character_filter_exp",
+        "condition_value": 1000,
+        "condition_params": {"job_classes": ["사진 작가", "화백", "가정 교사"]},
+        "reward_gold": 500,
+    },
+    {
+        "name": "동남아 유학생, 영웅 직업 중 하나와 함께 누적 1000exp 획득",
+        "condition_type": "character_filter_exp",
+        "condition_value": 1000,
+        "condition_params": {"job_classes": ["동남아 유학생", "영웅"]},
+        "reward_gold": 500,
+    },
+    {
+        "name": "★1 인물과 함께 누적 200exp 획득",
+        "condition_type": "character_filter_exp",
+        "condition_value": 200,
+        "condition_params": {"rarity": "일반"},
+        "reward_gold": 500,
+    },
+    {
+        "name": "★1 인물과 함께 누적 500exp 획득",
+        "condition_type": "character_filter_exp",
+        "condition_value": 500,
+        "condition_params": {"rarity": "일반"},
+        "reward_gold": 500,
+    },
+    {
+        "name": "전부 직업이 학생인 인물과 함께 과목으로 누적 2000exp 획득",
+        "condition_type": "job_class_subject_exp",
+        "condition_value": 2000,
+        "condition_params": {"job_class": "학생"},
+        "reward_gold": 500,
+    },
+    {
+        "name": "전부 직업이 마법사인 인물과 함께 과목으로 누적 2000exp 획득",
+        "condition_type": "job_class_subject_exp",
+        "condition_value": 2000,
+        "condition_params": {"job_class": "마법사"},
+        "reward_gold": 500,
+    },
+    {
+        "name": "여성 인물과 함께 과목으로 누적 2000exp 획득",
+        "condition_type": "gender_subject_exp",
+        "condition_value": 2000,
+        "condition_params": {"gender": "여"},
+        "reward_gold": 500,
     },
     # ── 레벨업 도전과제(Lv. 2~30, 만렙 30) ──────────────────────────
     {
@@ -1137,17 +1634,36 @@ def seed_challenges():
 
 
 QUESTS = [
-    # ── 일일 퀘스트 (KST 자정에 초기화) ──────────────────────────────────────────
+    # ── 일일 퀘스트 (KST 자정에 초기화) - 재화 시스템 개편으로 전면 교체됨 ──────────────
     {
         "name": "독서 문학/비문학 30분",
         "period": "daily",
         "condition_type": "session_minutes",
         "condition_params": {"session_type": "reading"},
         "condition_target": 30,
-        "reward_type": "item",
-        "reward_amount": 2,
-        "reward_item_name": "스토리모드 티켓",
+        "reward_type": "silver",
+        "reward_amount": 300,
         "sort_order": 1,
+    },
+    {
+        "name": "과목 공부 1시간",
+        "period": "daily",
+        "condition_type": "session_minutes",
+        "condition_params": {"session_type": "subject"},
+        "condition_target": 120,
+        "reward_type": "silver",
+        "reward_amount": 500,
+        "sort_order": 2,
+    },
+    {
+        "name": "과목 공부 4시간",
+        "period": "daily",
+        "condition_type": "session_minutes",
+        "condition_params": {"session_type": "subject"},
+        "condition_target": 240,
+        "reward_type": "gold",
+        "reward_amount": 30,
+        "sort_order": 3,
     },
     {
         "name": "모의고사 1회",
@@ -1156,28 +1672,17 @@ QUESTS = [
         "condition_params": {"session_type": "mock_exam"},
         "condition_target": 1,
         "reward_type": "gold",
-        "reward_amount": 90,
-        "sort_order": 2,
+        "reward_amount": 20,
+        "sort_order": 4,
     },
     {
         "name": "투기장 입장 3회",
         "period": "daily",
         "condition_type": "pvp_battle_count",
         "condition_target": 3,
-        "reward_type": "exp",
-        "reward_amount": 10,
-        "sort_order": 3,
-    },
-    {
-        "name": "과목 공부 1시간",
-        "period": "daily",
-        "condition_type": "session_minutes",
-        "condition_params": {"session_type": "subject"},
-        "condition_target": 60,
-        "reward_type": "item",
-        "reward_amount": 5,
-        "reward_item_name": "투기장모드 티켓",
-        "sort_order": 4,
+        "reward_type": "silver",
+        "reward_amount": 500,
+        "sort_order": 5,
     },
     {
         "name": "모집 1회",
@@ -1185,9 +1690,10 @@ QUESTS = [
         "condition_type": "activity_count",
         "condition_params": {"activity_type": "gacha_pull"},
         "condition_target": 1,
-        "reward_type": "exp",
-        "reward_amount": 10,
-        "sort_order": 5,
+        "reward_type": "item",
+        "reward_amount": 2,
+        "reward_item_name": "스토리모드 티켓",
+        "sort_order": 6,
     },
     {
         "name": "강화 아이템 구매 1회",
@@ -1195,9 +1701,10 @@ QUESTS = [
         "condition_type": "activity_count",
         "condition_params": {"activity_type": "shop_purchase_enhancement"},
         "condition_target": 1,
-        "reward_type": "exp",
-        "reward_amount": 10,
-        "sort_order": 6,
+        "reward_type": "item",
+        "reward_amount": 5,
+        "reward_item_name": "투기장모드 티켓",
+        "sort_order": 7,
     },
     {
         "name": "스토리모드 티켓 사용 1회",
@@ -1205,9 +1712,9 @@ QUESTS = [
         "condition_type": "activity_count",
         "condition_params": {"activity_type": "story_ticket_use"},
         "condition_target": 1,
-        "reward_type": "gold",
-        "reward_amount": 60,
-        "sort_order": 7,
+        "reward_type": "silver",
+        "reward_amount": 500,
+        "sort_order": 8,
     },
     {
         "name": "일일 접속",
@@ -1215,9 +1722,9 @@ QUESTS = [
         "condition_type": "activity_count",
         "condition_params": {"activity_type": "login"},
         "condition_target": 1,
-        "reward_type": "exp",
-        "reward_amount": 10,
-        "sort_order": 8,
+        "reward_type": "silver",
+        "reward_amount": 200,
+        "sort_order": 9,
     },
     {
         "name": "일일 퀘스트 6개 달성",
@@ -1225,48 +1732,47 @@ QUESTS = [
         "condition_type": "quest_claims_in_period",
         "condition_target": 6,
         "reward_type": "gold",
-        "reward_amount": 150,
-        "sort_order": 9,
+        "reward_amount": 50,
+        "sort_order": 10,
     },
-    # ── 주간 퀘스트 (KST 월요일 자정에 초기화) ────────────────────────────────────
+    # ── 주간 퀘스트 (KST 월요일 자정에 초기화) - 재화 시스템 개편으로 전면 교체됨 ─────────
     {
         "name": "독서 문학/비문학 200분",
         "period": "weekly",
         "condition_type": "session_minutes",
         "condition_params": {"session_type": "reading"},
-        "condition_target": 200,
-        "reward_type": "item",
-        "reward_amount": 3,
-        "reward_item_name": "스토리모드 티켓",
+        "condition_target": 180,
+        "reward_type": "silver",
+        "reward_amount": 1400,
         "sort_order": 1,
-    },
-    {
-        "name": "영어 모의고사 2회",
-        "period": "weekly",
-        "condition_type": "session_count",
-        "condition_params": {"session_type": "mock_exam", "difficulties": ["영어", "영어(하프)"]},
-        "condition_target": 2,
-        "reward_type": "gold",
-        "reward_amount": 150,
-        "sort_order": 2,
-    },
-    {
-        "name": "투기장 입장 10회",
-        "period": "weekly",
-        "condition_type": "pvp_battle_count",
-        "condition_target": 10,
-        "reward_type": "exp",
-        "reward_amount": 30,
-        "sort_order": 3,
     },
     {
         "name": "과목 공부 24시간",
         "period": "weekly",
         "condition_type": "session_minutes",
         "condition_params": {"session_type": "subject"},
-        "condition_target": 1440,
-        "reward_type": "exp",
-        "reward_amount": 50,
+        "condition_target": 2160,
+        "reward_type": "silver",
+        "reward_amount": 1400,
+        "sort_order": 2,
+    },
+    {
+        "name": "모의고사 10회",
+        "period": "weekly",
+        "condition_type": "session_count",
+        "condition_params": {"session_type": "mock_exam"},
+        "condition_target": 10,
+        "reward_type": "gold",
+        "reward_amount": 90,
+        "sort_order": 3,
+    },
+    {
+        "name": "투기장 입장 10회",
+        "period": "weekly",
+        "condition_type": "pvp_battle_count",
+        "condition_target": 15,
+        "reward_type": "gold",
+        "reward_amount": 60,
         "sort_order": 4,
     },
     {
@@ -1275,9 +1781,8 @@ QUESTS = [
         "condition_type": "activity_count",
         "condition_params": {"activity_type": "gacha_pull"},
         "condition_target": 5,
-        "reward_type": "item",
-        "reward_amount": 10,
-        "reward_item_name": "투기장모드 티켓",
+        "reward_type": "silver",
+        "reward_amount": 1400,
         "sort_order": 5,
     },
     {
@@ -1285,9 +1790,10 @@ QUESTS = [
         "period": "weekly",
         "condition_type": "activity_count",
         "condition_params": {"activity_type": "shop_purchase_enhancement"},
-        "condition_target": 5,
-        "reward_type": "exp",
-        "reward_amount": 30,
+        "condition_target": 10,
+        "reward_type": "item",
+        "reward_amount": 4,
+        "reward_item_name": "스토리모드 티켓",
         "sort_order": 6,
     },
     {
@@ -1296,9 +1802,20 @@ QUESTS = [
         "condition_type": "activity_count",
         "condition_params": {"activity_type": "story_ticket_use"},
         "condition_target": 10,
-        "reward_type": "gold",
-        "reward_amount": 150,
+        "reward_type": "item",
+        "reward_amount": 10,
+        "reward_item_name": "투기장모드 티켓",
         "sort_order": 7,
+    },
+    {
+        "name": "거래 구매 1회",
+        "period": "weekly",
+        "condition_type": "market_activity_count",
+        "condition_params": {"action": "buy"},
+        "condition_target": 1,
+        "reward_type": "silver",
+        "reward_amount": 1400,
+        "sort_order": 8,
     },
     {
         "name": "접속 5회",
@@ -1306,9 +1823,9 @@ QUESTS = [
         "condition_type": "activity_count",
         "condition_params": {"activity_type": "login"},
         "condition_target": 5,
-        "reward_type": "exp",
-        "reward_amount": 30,
-        "sort_order": 8,
+        "reward_type": "silver",
+        "reward_amount": 1000,
+        "sort_order": 9,
     },
     {
         "name": "주간 퀘스트 6개 달성",
@@ -1316,8 +1833,8 @@ QUESTS = [
         "condition_type": "quest_claims_in_period",
         "condition_target": 6,
         "reward_type": "gold",
-        "reward_amount": 300,
-        "sort_order": 9,
+        "reward_amount": 150,
+        "sort_order": 10,
     },
 ]
 

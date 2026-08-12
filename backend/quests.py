@@ -12,7 +12,7 @@ compute_progress()의 if/elif 사슬에 분기 하나를 추가한다.
 from datetime import datetime, timezone, timedelta, date, time
 from sqlalchemy.orm import Session
 
-from models import ReadingLog, PvpBattleLog, ActivityLog, UserQuestClaim, Mail
+from models import ReadingLog, PvpBattleLog, ActivityLog, UserQuestClaim, Mail, MarketActivityLog
 
 KST = timezone(timedelta(hours=9))
 
@@ -117,6 +117,17 @@ def compute_progress(db: Session, user, quest, period_key: str) -> dict:
             UserQuestClaim.period_key == period_key,
             UserQuestClaim.quest_id != quest.id,
         ).count()
+    elif ctype == "market_activity_count":
+        # 거래소 등록/구매 이력(MarketActivityLog) 기준 - params.action이 "register"|"buy".
+        q = db.query(MarketActivityLog).filter(
+            MarketActivityLog.user_id == user.id,
+            MarketActivityLog.action == params.get("action"),
+            MarketActivityLog.created_at >= start,
+            MarketActivityLog.created_at < end,
+        )
+        if params.get("min_star"):
+            q = q.filter(MarketActivityLog.star >= params["min_star"])
+        current = q.count()
 
     return {"current": max(0, min(current, target)), "target": target}
 

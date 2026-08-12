@@ -15,6 +15,7 @@ class User(Base):
     total_exp = Column(Integer, default=0)      # 현재 레벨 내 진행도(레벨업마다 초기화됨)
     lifetime_exp = Column(Integer, default=0)   # 절대 감소하지 않는 진짜 누적 경험치. 업적 판정용
     gold = Column(Integer, default=0)
+    silver = Column(Integer, default=0)  # 재화 이원화(2026-08) - 일상적으로 벌고 쓰는 재화. gold는 더 희귀한 재화로 유지
     gacha_points = Column(Integer, default=0)   # 모집 포인트. 가챠 1회당 적립, 인물 선택에서 소모
     daily_reading_minutes = Column(Integer, default=0)  # 오늘 누적 독서 분. 자정(KST) 지나면 logs.py에서 0으로 리셋
     daily_reading_date = Column(Date, nullable=True)     # daily_reading_minutes가 마지막으로 누적된 날짜(KST 기준)
@@ -109,6 +110,7 @@ class ReadingLog(Base):
     equipped_character_name = Column(String, nullable=True)  # 세션 시작 시점에 장착 중이던 캐릭터명 스냅샷(도전과제용, 과거 기록엔 없음)
     earned_exp = Column(Integer)
     earned_gold = Column(Integer, default=0)
+    earned_silver = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     owner = relationship("User", back_populates="logs")
@@ -120,7 +122,7 @@ class Item(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    item_type = Column(String, default="outfit")  # "outfit" 또는 "enhancement"
+    item_type = Column(String, default="outfit")  # "outfit" | "enhancement" | "ticket"
     icon_file = Column(String, nullable=True)      # 의상이 아닌 아이템(강화 아이템 등)의 아이콘 이미지. assets/items/ 안의 파일명
     outfit_file = Column(String, nullable=True)    # 의상 아이템만 사용
     season = Column(String, nullable=True)         # 의상 아이템만 사용
@@ -128,6 +130,7 @@ class Item(Base):
     description = Column(String, nullable=True)     # 아이템 묘사(플레이버 텍스트)
     rarity = Column(String, default="일반")
     price = Column(Integer, nullable=False)
+    currency = Column(String, nullable=False, default="gold")  # "gold" | "silver" - price가 어느 재화 기준인지
     source_character = Column(String, nullable=True)  # "이 캐릭터 보유해야 구매 가능" (의상/강화 아이템 공통)
     is_shop_active = Column(Boolean, default=True)  # 상점에 지금 노출할지 여부. 의상은 한정판매라 기본 False로 시드됨
     required_achievement = Column(String, nullable=True)  # 이 업적(Achievement.name)을 달성해야 구매 가능. source_character와 별개 조건
@@ -215,6 +218,22 @@ class Region(Base):
     description = Column(String, default="")           # 던전 입장 시 보여줄 플레이버 텍스트
     exp_rate = Column(Float, default=1.0)               # 분당 획득 경험치 배율
     gold_rate = Column(Float, default=0.0)              # 분당 획득 골드 배율 (대부분 0, 투기장류만 존재)
+    silver_rate = Column(Float, default=0.0)            # 분당 획득 실버 배율 - 재화 시스템 개편 4단계
+    subject_bonus_rules = Column(JSON, nullable=True)   # 지역별 과목 보너스: {"국어": 1.5, "영어": 1.5} 형태로
+    # 그 과목(difficulty) 공부 시 exp_rate에 곱해지는 배율(실버에는 적용 안 됨). 캐릭터별 과목 보너스와는
+    # 별개 메커니즘 - routers/logs.py에서 곱연산으로 함께 적용된다.
+
+
+class UserRegionUnlock(Base):
+    """구매로 해금하는 지역(예: 종말의 금광) 기록. (user_id, region_id) 조합마다 한 행 - UserCgUnlock과
+    같은 "존재 여부"패턴. 소모품이 아니라 영구 해금이라 상점의 Item 구매 흐름은 쓰지 않는다."""
+    __tablename__ = "user_region_unlocks"
+    __table_args__ = (UniqueConstraint("user_id", "region_id", name="uq_user_region_unlock"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    region_id = Column(Integer, ForeignKey("regions.id"))
+    unlocked_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Achievement(Base):
@@ -303,6 +322,21 @@ class GachaBannerPickup(Base):
     rate_up = Column(Float, default=0.5)                 # 이 캐릭터의 등급이 걸렸을 때 확정될 확률 (0~1)
 
     banner = relationship("GachaBanner", back_populates="pickups")
+
+
+class GachaPullLog(Base):
+    """모집(가챠) 뽑기 이력 - 재화 시스템 개편 도전과제("1,2,3,4,5성 인물 전부 모집", "픽업 인물 모집 N회"
+    등) 판정용. 기존 ActivityLog(activity_type="gacha_pull")는 "뽑았다"는 사실만 남고 등급/픽업 여부가
+    없고, 뽑힌 Character 행 자체도 나중에 강화 실패로 파괴되거나 거래소에서 팔릴 수 있어(현재 보유 등급
+    ≠ 뽑은 이력) 별도로 남긴다."""
+    __tablename__ = "gacha_pull_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    character_name = Column(String, nullable=False)
+    rarity = Column(String, nullable=False)
+    was_pickup = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class CharacterVisibility(Base):
@@ -417,6 +451,7 @@ class Mail(Base):
     title = Column(String, nullable=False)
     body = Column(String, nullable=True)
     gold_amount = Column(Integer, default=0)
+    silver_amount = Column(Integer, default=0)  # 재화 이원화(2026-08) - 거래소 판매 정산 등 실버로 지급되는 우편용
     created_at = Column(DateTime, default=datetime.utcnow)
     claimed_at = Column(DateTime, nullable=True)
 
@@ -466,3 +501,47 @@ class MarketState(Base):
     __tablename__ = "market_state"
 
     id = Column(Integer, primary_key=True)
+
+
+class MarketActivityLog(Base):
+    """거래소 등록/구매 이력 - 재화 시스템 개편(퀘스트 "거래 구매 1회", 도전과제 "인물 등록/구매 N회",
+    "N성 이상 인물 구매" 등) 판정용. MarketListing은 판매 성사/만료 즉시 삭제되므로(market.py) 이력이
+    남지 않는다 - PvpBattleLog처럼 실제 컬럼(성급 등)을 갖는 전용 로그를 따로 둔다(ActivityLog의
+    activity_type 문자열에 "star:N"처럼 끼워넣는 방식 대신 - 성급 조건이 여러 개 필요해질 수 있어서
+    처음부터 실제 컬럼으로 두는 쪽이 더 정확하고 확장하기 쉽다)."""
+    __tablename__ = "market_activity_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    action = Column(String, nullable=False)  # "register" | "buy"
+    star = Column(Integer, nullable=False)
+    character_name = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class RankingTop1Log(Base):
+    """"오늘의 독서시간"/"주간 독서시간" 랭킹 1위 도전과제용 - 이 두 랭킹만 "그 기간이 끝난 시점"의
+    순위를 봐야 하는데(실시간 조회가 아니라), 랭킹 자체는 스냅샷이 없는 실시간 계산이라(ranking.py)
+    기간이 끝나는 순간을 감지해서(RankingPeriodCursor) 그때의 1위를 여기 한 번만 기록해둔다. 동점자는
+    전원 인정 - 같은 (category, period_key)에 여러 user_id가 각자 한 행씩 남을 수 있다."""
+    __tablename__ = "ranking_top1_logs"
+    __table_args__ = (UniqueConstraint("user_id", "category", "period_key", name="uq_ranking_top1"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    category = Column(String, nullable=False)  # "reading_daily" | "reading_weekly"
+    period_key = Column(String, nullable=False)  # quests.py와 동일한 형식("2026-07-20" / "W2026-07-20")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class RankingPeriodCursor(Base):
+    """category별로 "마지막으로 마감 처리를 끝낸 기간"을 기록해두는 단일 커서. 예약 스케줄러가
+    없어서(이 프로젝트 전체 컨벤션), 아무 유저나 요청을 보낼 때(users.py의 지연 리셋과 같은 방식)
+    "지금 기간이 커서에 적힌 기간보다 지나 있으면" 막 끝난 기간의 1위를 RankingTop1Log에 기록하고
+    커서를 갱신한다 - 유저별이 아니라 category당 딱 한 행이면 된다(랭킹 1위 판정은 전체 유저를
+    한꺼번에 훑어야 하는 연산이라 유저 한 명 요청에 묶일 이유가 없음)."""
+    __tablename__ = "ranking_period_cursors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    category = Column(String, nullable=False, unique=True)  # "reading_daily" | "reading_weekly"
+    last_processed_period_key = Column(String, nullable=True)

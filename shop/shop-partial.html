@@ -1,5 +1,5 @@
 <h2 class="screen-title">상점</h2>
-<div class="shop-gold-row">보유 골드 <span id="shop-my-gold">-</span>G</div>
+<div class="shop-gold-row">보유 실버 <span id="shop-my-silver">-</span>S · 보유 골드 <span id="shop-my-gold">-</span>G</div>
 
 <div class="shop-scroll-outer" id="shop-scroll-outer">
     <section class="shop-section shop-section-outfit" id="shop-section-outfit">
@@ -8,17 +8,17 @@
     </section>
 
     <section class="shop-section shop-section-item" id="shop-section-item">
-        <h3 class="shop-section-label">아이템</h3>
+        <h3 class="shop-section-label">강화 아이템</h3>
         <div class="shop-item-row" id="shop-item-row"></div>
 
-        <h3 class="shop-section-label shop-section-label-currency">재화</h3>
+        <div class="shop-section-divider"><span>티켓</span></div>
         <div class="shop-item-row" id="shop-currency-row"></div>
     </section>
 </div>
 
 <nav class="shop-index-nav">
     <button class="shop-index-btn active" data-section="shop-section-outfit" type="button">의상</button>
-    <button class="shop-index-btn" data-section="shop-section-item" type="button">아이템/재화</button>
+    <button class="shop-index-btn" data-section="shop-section-item" type="button">아이템</button>
 </nav>
 
 <div class="shop-confirm-overlay" id="shop-confirm-overlay" hidden>
@@ -44,7 +44,7 @@
         <p class="shop-confirm-blocked-reason" id="shop-confirm-blocked-reason" hidden></p>
 
         <button class="shop-confirm-buy" id="shop-confirm-buy" type="button">
-            구매 · <span id="shop-confirm-total-price">-</span>G
+            구매 · <span id="shop-confirm-total-price">-</span>
         </button>
     </div>
 </div>

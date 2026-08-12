@@ -51,7 +51,7 @@
 
     function rewardText(quest) {
         if (quest.reward_type === "item") return `${quest.reward_item_name} ${Number(quest.reward_amount).toLocaleString()}개`;
-        const label = quest.reward_type === "exp" ? "EXP" : "골드";
+        const label = quest.reward_type === "exp" ? "EXP" : quest.reward_type === "silver" ? "실버" : "골드";
         return `${label} ${Number(quest.reward_amount).toLocaleString()}`;
     }
 
@@ -63,6 +63,7 @@
             if (item.type === "character") parts.push(`${item.name} x${item.quantity}`);
             else if (item.type === "item") parts.push(`${item.name} ${item.quantity}개`);
             else if (item.type === "gacha_points") parts.push(`모집 포인트 ${item.quantity}`);
+            else if (item.type === "silver") parts.push(`실버 ${Number(item.quantity).toLocaleString()}`);
         });
         return parts.join(" · ") || "보상 없음";
     }

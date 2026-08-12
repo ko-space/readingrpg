@@ -2,13 +2,15 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
 from database import get_db
-from models import User, ReadingLog, Region
+from models import User, ReadingLog, Region, UserRegionUnlock
 from schemas import LogCreate
 from security import get_current_user
 from leveling import apply_exp
 from achievements import check_and_grant_achievements, get_character_catalog
 
 router = APIRouter(prefix="/logs", tags=["logs"])
+
+GOLD_MINE_REGION_NAME = "종말의 금광"  # 레벨 조건 외에 구매(UserRegionUnlock) 여부도 확인해야 하는 유일한 지역
 
 DIFFICULTY_MULTIPLIER = {"문학": 1.0, "비문학": 1.5}
 SUBJECT_SET = {"국어", "수학", "영어", "탐구", "기타"}
@@ -120,6 +122,13 @@ def add_reading_log(
             detail=f"'{region.name}'은(는) 레벨 {region.required_level} 이상부터 입장할 수 있습니다."
         )
 
+    if region.name == GOLD_MINE_REGION_NAME:
+        unlocked = db.query(UserRegionUnlock).filter(
+            UserRegionUnlock.user_id == user.id, UserRegionUnlock.region_id == region.id,
+        ).first()
+        if not unlocked:
+            raise HTTPException(status_code=403, detail=f"'{region.name}'은(는) 먼저 구매해야 입장할 수 있습니다.")
+
     if log_data.session_type == "reading":
         if log_data.difficulty not in DIFFICULTY_MULTIPLIER:
             raise HTTPException(status_code=400, detail=f"존재하지 않는 장르입니다: {log_data.difficulty}")
@@ -172,11 +181,24 @@ def add_reading_log(
     matched_subject = _resolve_matched_subject(log_data.session_type, log_data.difficulty)
     character_exp_multiplier = _equipped_character_exp_multiplier(equipped, matched_subject)
 
-    gained_exp = int(reading_minutes * region.exp_rate * difficulty_multiplier * character_exp_multiplier)
+    # 지역별 과목 보너스(예: 지혜의 신전의 국어/영어) - exp에만 적용되고 실버에는 적용되지 않는다.
+    # 캐릭터별 과목 보너스(character_exp_multiplier)와는 별개로 곱연산으로 함께 적용된다.
+    region_subject_multiplier = 1.0
+    for subject_key, multiplier in (region.subject_bonus_rules or {}).items():
+        if log_data.difficulty and log_data.difficulty.startswith(subject_key):
+            region_subject_multiplier = multiplier
+            break
+
+    gained_exp = int(
+        reading_minutes * region.exp_rate * difficulty_multiplier
+        * character_exp_multiplier * region_subject_multiplier
+    )
     gained_gold = int(reading_minutes * region.gold_rate)
+    gained_silver = int(reading_minutes * region.silver_rate)
 
     user.gold += gained_gold
     user.lifetime_gold += gained_gold
+    user.silver += gained_silver
 
     # 일일 독서시간 누적 (리셋은 위 상한 계산 때 이미 처리됨)
     user.daily_reading_minutes += reading_minutes
@@ -198,6 +220,7 @@ def add_reading_log(
         equipped_character_name=equipped.name if equipped else None,
         earned_exp=gained_exp,
         earned_gold=gained_gold,
+        earned_silver=gained_silver,
         is_auto_complete=log_data.is_auto_complete and log_data.session_type == "mock_exam",
     )
     db.add(new_log)
@@ -216,6 +239,7 @@ def add_reading_log(
         "message": "독서 기록이 성공적으로 저장되었습니다!",
         "gained_exp": gained_exp,
         "gained_gold": gained_gold,
+        "gained_silver": gained_silver,
         "start_level": start_level,
         "start_exp": start_exp,
         "current_level": user.level,
