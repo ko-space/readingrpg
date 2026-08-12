@@ -419,3 +419,50 @@ class Mail(Base):
     gold_amount = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     claimed_at = Column(DateTime, nullable=True)
+
+
+class MarketListing(Base):
+    """인력 거래소 매물 1건. 등록되는 순간 해당 Character 행의 user_id를 NULL로 비워서(이 컬럼은
+    원래 nullable) 인벤토리/강화/PVP 편성 등 "user_id로 캐릭터를 조회하는" 기존 코드 전부가 손대지
+    않고도 자동으로 "그 유저 소유가 아님" 취급하게 만든다 - 등록 중엔 아무 데서도 안 보이고 쓸 수
+    없다는 요구사항이 이걸로 저절로 충족된다.
+    name/rarity/star/outfit/job_class는 Character 원본에서 스냅샷을 떠서 저장한다 - 매물로 떠있는
+    동안은 원본 Character 행을 직접 조회/조인하지 않고 이 스냅샷만으로 목록을 그릴 수 있게 하기 위함
+    (다른 스냅샷 필드들, 예: ReadingLog.equipped_character_name과 같은 이유)."""
+    __tablename__ = "market_listings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    seller_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    character_id = Column(Integer, ForeignKey("characters.id"), nullable=False, unique=True)
+    name = Column(String, nullable=False)
+    rarity = Column(String, nullable=False)
+    star = Column(Integer, nullable=False)
+    outfit = Column(String, nullable=False)
+    job_class = Column(String, nullable=True)
+    register_price = Column(Integer, nullable=False)  # 판매 성사 시 판매자가 받는 금액
+    display_price = Column(Integer, nullable=False)    # 구매자가 실제로 내는 금액 (register_price + 수수료 10%)
+    listed_at = Column(DateTime, default=datetime.utcnow)  # 이 시각의 KST 날짜가 지나면(자정 기준) 다음 조회 때 자동 만료 처리됨
+
+
+class UserDailyMarketListing(Base):
+    """하루 등록 한도(인당 최대 2개, KST 기준)를 판정하기 위한 일일 카운터.
+    UserDailyItemPurchase와 동일한 (user_id, date) 유니크 카운터 패턴."""
+    __tablename__ = "user_daily_market_listings"
+    __table_args__ = (UniqueConstraint("user_id", "listing_date", name="uq_user_market_daily"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    listing_date = Column(Date, nullable=False)  # KST 기준 날짜
+    count = Column(Integer, default=0)
+
+
+class MarketState(Base):
+    """거래소 전체 매물 상한(10개) 체크 전용 단일 행 잠금 장치. 등록은 서로 다른 유저(User 행)가
+    동시에 시도할 수 있어서, 각자 자기 User 행만 잠그는 걸로는 "거래소 전체 매물 수"라는 공유
+    자원의 경합을 못 막는다(서로 다른 행을 잠그니 서로 안 막아줌) - 그래서 등록 시도끼리를
+    직렬화하는 이 행 하나를 항상 먼저 잠그고, 그 상태에서 MarketListing을 다시 COUNT해서 판정한다.
+    개수 자체를 이 행에 저장하지 않는 이유: 구매/자정 만료 등 여러 지점에서 증감을 손으로 맞추면
+    어긋날 위험이 있어서, 매번 실제 행 수를 다시 세는 쪽이 항상 정확하다."""
+    __tablename__ = "market_state"
+
+    id = Column(Integer, primary_key=True)

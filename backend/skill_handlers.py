@@ -150,16 +150,17 @@ def _skill_heal_ally_percent_max_hp(caster, own_team, enemy_team, params, time_e
     # 이영웅 "청진기 진료": 아군 한 명이 아니라 전체(시전자 자신 포함)를 동시에 회복시킨다 - 여러
     # 명을 동시에 회복시키는 다른 효과(death_heal_ally 등)와 동일하게 heals 배열로 반환한다. 각
     # 대상은 자기 자신의 최대 체력 기준으로 회복(팀 전체가 같은 % 회복률을 받되, 절대량은 다를 수 있음).
+    # 이미 만피라 실제로는 안 깎여도(amount=0) 항상 heals에 넣는다 - 프론트가 "발동은 했는데 아무
+    # 반응도 없다"가 되지 않도록 만피인 아군에게도 하트 연출 + "0 회복" 로그를 보여줄 수 있어야 한다.
     heals = []
     for ally in _alive_units(own_team):
         heal = round(ally["max_hp"] * params["percent"] / 100)
         before = ally["hp"]
         ally["hp"] = min(ally["max_hp"], ally["hp"] + heal)
-        if ally["hp"] != before:
-            heals.append({
-                "target": ally["name"], "amount": ally["hp"] - before,
-                "target_hp_after": ally["hp"], "target_max_hp": ally["max_hp"],
-            })
+        heals.append({
+            "target": ally["name"], "amount": ally["hp"] - before,
+            "target_hp_after": ally["hp"], "target_max_hp": ally["max_hp"],
+        })
     return {"healed": bool(heals), "heals": heals}
 
 

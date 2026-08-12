@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="inventory/inventory.css">
     <link rel="stylesheet" href="enhancement/enhancement.css">
     <link rel="stylesheet" href="shop/shop.css">
+    <link rel="stylesheet" href="trade/trade.css">
     <link rel="stylesheet" href="achievements/achievements.css">
     <link rel="stylesheet" href="shared/achievement-toast.css">
     <link rel="stylesheet" href="ranking/ranking.css">
@@ -56,11 +57,8 @@
                 <img src="assets/icons/shop.png" alt="" class="rail-icon" onerror="this.style.display='none'">
                 <span>상점</span>
             </button>
-            <button class="rail-btn rail-btn-locked" type="button" disabled title="준비 중">
-                <div class="rail-icon-frame">
-                    <img src="assets/icons/trade.png" alt="" class="rail-icon" onerror="this.style.display='none'">
-                    <img src="assets/icons/lock_white.png" alt="" class="rail-lock-icon" onerror="this.outerHTML='🔒'">
-                </div>
+            <button class="rail-btn" data-modal-target="modal-trade">
+                <img src="assets/icons/trade.png" alt="" class="rail-icon" onerror="this.style.display='none'">
                 <span>거래</span>
             </button>
             <button class="rail-btn" data-modal-target="modal-help">
@@ -242,6 +240,15 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="modal-trade">
+        <div class="modal-box trade-modal-box">
+            <button class="modal-close" data-modal-close>✕</button>
+            <div id="trade-content">
+                <p class="screen-placeholder">불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+
     <div class="modal-overlay" id="modal-gacha">
         <div class="modal-box">
             <button class="modal-close" data-modal-close>✕</button>
@@ -415,6 +422,7 @@
     <script src="inventory/inventory.js" defer></script>
     <script src="enhancement/enhancement.js" defer></script>
     <script src="shop/shop.js" defer></script>
+    <script src="trade/trade.js" defer></script>
     <script src="achievements/achievements.js" defer></script>
     <script src="ranking/ranking.js" defer></script>
     <script src="quests/quests.js" defer></script>

@@ -80,6 +80,20 @@ class EnhancementRequest(BaseModel):
     item_ids: list[int] = []  # 이번 강화에 사용할 UserItem id 목록 (같은 아이템 중복 선택 불가)
 
 
+class MarketRegisterRequest(BaseModel):
+    # character_id를 직접 안 받는 이유: 인벤토리는 같은 이름+성급 캐릭터를 대표 카드 1장으로 묶어서
+    # 보여주는데(_build_inventory_rows), 그 대표 카드는 장착 중인 사본을 우선으로 고른다 - 프론트가
+    # 이 대표 character_id를 그대로 보내면 장착 중인 카드를 등록하려다 매번 막히기 쉽다. 그래서
+    # 이름+성급만 받고, 서버가 그 조합의 보유 카드 중 등록 가능한(미장착/방어 미편성) 사본을 직접 고른다.
+    character_name: str
+    star: int
+    price: int
+
+
+class MarketBuyRequest(BaseModel):
+    listing_id: int
+
+
 class EquipTitleRequest(BaseModel):
     achievement_id: int | None = None  # None이면 칭호를 해제(미착용)한다.
 

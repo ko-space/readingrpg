@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>게임 칭호 UI</title>
+<style>
+  * { box-sizing: border-box; }
+
+  :root {
+    --panel: rgba(255,255,255,.92);
+    --line: rgba(20,24,32,.12);
+    --text: #16181d;
+    --muted: #777d88;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family:
+      Pretendard, "Noto Sans KR", "Malgun Gothic",
+      system-ui, -apple-system, sans-serif;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(255,218,92,.15), transparent 24rem),
+      linear-gradient(145deg, #eef1f6 0%, #d8dde7 100%);
+    color: var(--text);
+    display: grid;
+    place-items: center;
+    padding: 32px;
+  }
+
+  .demo {
+    width: min(920px, 100%);
+    background: var(--panel);
+    border: 1px solid rgba(255,255,255,.75);
+    box-shadow: 0 28px 70px rgba(27,35,55,.16);
+    border-radius: 28px;
+    padding: 30px;
+    backdrop-filter: blur(18px);
+  }
+
+  .header {
+    margin-bottom: 24px;
+  }
+
+  .header h1 {
+    margin: 0 0 7px;
+    font-size: clamp(24px, 4vw, 36px);
+    letter-spacing: -.04em;
+  }
+
+  .header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .preview {
+    border-radius: 22px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    background:
+      linear-gradient(rgba(9,12,18,.34), rgba(9,12,18,.60)),
+      radial-gradient(circle at 50% 25%, #667486, #202630 70%);
+    padding: 34px 24px;
+    display: grid;
+    gap: 18px;
+  }
+
+  .player-row {
+    display: grid;
+    grid-template-columns: 72px 1fr 72px;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 18px;
+    background: rgba(0,0,0,.18);
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 18px;
+  }
+
+  .avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 17px;
+    display: grid;
+    place-items: center;
+    font-size: 30px;
+    background:
+      linear-gradient(145deg, rgba(255,255,255,.24), rgba(255,255,255,.04));
+    border: 1px solid rgba(255,255,255,.18);
+  }
+
+  .player-info {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .name {
+    width: 100%;
+    color: white;
+    font-weight: 900;
+    font-size: 18px;
+    line-height: 1.1;
+    margin-bottom: 8px;
+    text-align: center;
+    text-shadow: 0 2px 8px rgba(0,0,0,.55);
+  }
+
+  .title-shell {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: fit-content;
+    max-width: min(100%, 430px);
+    min-height: 32px;
+    padding: 0 16px;
+    isolation: isolate;
+  }
+
+  /* 양 끝 장식 */
+  .title-shell::before,
+  .title-shell::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 13px;
+    height: 13px;
+    transform: translateY(-50%) rotate(45deg);
+    z-index: 0;
+  }
+
+  .title-shell::before { left: 1px; }
+  .title-shell::after  { right: 1px; }
+
+  .title {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 31px;
+    padding: 6px 15px 7px;
+    font-weight: 900;
+    font-size: 14px;
+    line-height: 1;
+    letter-spacing: -.02em;
+    white-space: nowrap;
+    text-align: center;
+  }
+
+  /* ───────────── 일반 칭호 ───────────── */
+  .title-shell.normal::before,
+  .title-shell.normal::after {
+    background: linear-gradient(145deg, #f8f8f8, #8e939a 72%);
+    border: 1px solid #31343a;
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,.28);
+  }
+
+  .title.normal {
+    color: #111317;
+    background:
+      linear-gradient(180deg, #fafafa 0%, #e3e5e8 45%, #c9ccd1 100%);
+    border-top: 1px solid rgba(255,255,255,.95);
+    border-bottom: 1px solid #484b50;
+    box-shadow:
+      inset 0 0 0 1px rgba(20,22,26,.28),
+      0 2px 5px rgba(0,0,0,.20);
+    clip-path: polygon(
+      8px 0,
+      calc(100% - 8px) 0,
+      100% 50%,
+      calc(100% - 8px) 100%,
+      8px 100%,
+      0 50%
+    );
+    text-shadow: 0 1px 0 rgba(255,255,255,.9);
+  }
+
+  .title.normal::before,
+  .title.normal::after {
+    content: "◆";
+    font-size: 7px;
+    color: #404349;
+    opacity: .7;
+  }
+
+  .title.normal::before { margin-right: 8px; }
+  .title.normal::after  { margin-left: 8px; }
+
+  /* ───────────── 히든 칭호 ───────────── */
+  .title-shell.hidden::before,
+  .title-shell.hidden::after {
+    background:
+      linear-gradient(145deg, #fff2a7 0%, #e7ad31 38%, #755018 100%);
+    border: 1px solid #6f4a11;
+    box-shadow:
+      inset 0 0 0 2px rgba(255,245,181,.22),
+      0 1px 2px rgba(0,0,0,.32);
+  }
+
+  .title.hidden {
+    background:
+      linear-gradient(180deg, #252117 0%, #12110d 55%, #090908 100%);
+    border-top: 1px solid #f1c75b;
+    border-bottom: 1px solid #725018;
+    box-shadow:
+      inset 0 1px 0 rgba(255,236,149,.14),
+      inset 0 0 0 1px rgba(154,105,22,.48),
+      0 2px 5px rgba(0,0,0,.28);
+    clip-path: polygon(
+      9px 0,
+      calc(100% - 9px) 0,
+      100% 50%,
+      calc(100% - 9px) 100%,
+      9px 100%,
+      0 50%
+    );
+  }
+
+  /* 상자는 정적. 반짝임은 글자에만 적용 */
+  .title.hidden .gold-text {
+    position: relative;
+    display: inline-block;
+    padding: 0 1px;
+    background:
+      linear-gradient(
+        95deg,
+        #8f5900 0%,
+        #d89c18 14%,
+        #ffe36c 29%,
+        #fff9c7 40%,
+        #e6aa20 54%,
+        #fff1a0 69%,
+        #bd7b08 82%,
+        #ffdc52 100%
+      );
+    background-size: 250% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter:
+      drop-shadow(0 1px 0 #5d3900)
+      drop-shadow(0 0 2px rgba(255,219,91,.45));
+    animation: goldTextFlow 2.8s linear infinite;
+  }
+
+  .title.hidden::before,
+  .title.hidden::after {
+    content: "✦";
+    color: #e9bd49;
+    font-size: 9px;
+    text-shadow: 0 1px 0 #533200;
+  }
+
+  .title.hidden::before { margin-right: 9px; }
+  .title.hidden::after  { margin-left: 9px; }
+
+  @keyframes goldTextFlow {
+    from { background-position: 210% 0; }
+    to   { background-position: -35% 0; }
+  }
+
+  .guide {
+    margin-top: 22px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .card {
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: rgba(255,255,255,.68);
+  }
+
+  .card b {
+    display: block;
+    margin-bottom: 7px;
+  }
+
+  .card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.65;
+  }
+
+  .code {
+    margin-top: 18px;
+    padding: 15px 17px;
+    border-radius: 15px;
+    background: #17191e;
+    color: #e8ebf0;
+    font: 13px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
+    overflow-x: auto;
+  }
+
+  @media (max-width: 650px) {
+    body { padding: 14px; }
+    .demo { padding: 18px; border-radius: 20px; }
+    .guide { grid-template-columns: 1fr; }
+
+    .player-row {
+      grid-template-columns: 58px 1fr 58px;
+      gap: 10px;
+      padding: 13px;
+    }
+
+    .avatar {
+      width: 58px;
+      height: 58px;
+    }
+
+    .title {
+      font-size: 12px;
+      padding-inline: 12px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .title.hidden .gold-text {
+      animation: none;
+    }
+  }
+</style>
+</head>
+<body>
+  <main class="demo">
+    <section class="header">
+      <h1>칭호 UI 디자인</h1>
+      <p>닉네임과 칭호가 한 중앙축에 오도록 정렬한 게임용 칭호 예시입니다.</p>
+    </section>
+
+    <section class="preview">
+      <div class="player-row">
+        <div class="avatar">📘</div>
+
+        <div class="player-info">
+          <div class="name">PLAYER_01</div>
+
+          <div class="title-shell normal">
+            <div class="title normal">평원의 독서가</div>
+          </div>
+        </div>
+
+        <div aria-hidden="true"></div>
+      </div>
+
+      <div class="player-row">
+        <div class="avatar">👑</div>
+
+        <div class="player-info">
+          <div class="name">PLAYER_02</div>
+
+          <div class="title-shell hidden">
+            <div class="title hidden">
+              <span class="gold-text">???</span>
+            </div>
+          </div>
+        </div>
+
+        <div aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <section class="guide">
+      <article class="card">
+        <b>일반 칭호</b>
+        <p>
+          검은 글씨와 은빛 금속 프레임을 사용했습니다.
+          중앙의 육각형 실루엣과 양끝 마름모 장식으로 기존보다 게임 UI다운 형태입니다.
+        </p>
+      </article>
+
+      <article class="card">
+        <b>히든 칭호</b>
+        <p>
+          상자는 움직이지 않고 검정·금색 금속 프레임으로 고정됩니다.
+          오직 칭호 글자 표면의 금빛만 천천히 흐르므로 일반 칭호와 확실히 구분됩니다.
+        </p>
+      </article>
+    </section>
+
+    <div class="code">
+&lt;div class="title-shell normal"&gt;<br>
+&nbsp;&nbsp;&lt;div class="title normal"&gt;평원의 독서가&lt;/div&gt;<br>
+&lt;/div&gt;<br><br>
+&lt;div class="title-shell hidden"&gt;<br>
+&nbsp;&nbsp;&lt;div class="title hidden"&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&lt;span class="gold-text"&gt;???&lt;/span&gt;<br>
+&nbsp;&nbsp;&lt;/div&gt;<br>
+&lt;/div&gt;
+    </div>
+  </main>
+</body>
+</html>

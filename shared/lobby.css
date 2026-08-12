@@ -197,7 +197,7 @@ body, html {
     overflow: hidden;
     border: 3px solid #c9a86a;
     box-shadow: var(--gold-glow);
-    background: #fff;
+    background: white;
     flex-shrink: 0;
     cursor: pointer; /* 클릭하면 인벤토리 인물 목록으로 이동(inventory.js) */
 }
@@ -288,7 +288,7 @@ body, html {
     position: relative;
     flex: 1;
     height: 18px;
-    background: #fff;
+    background: white;
     border: 2px solid #c9a86a;
     border-radius: 9px;
     overflow: hidden;
@@ -386,7 +386,7 @@ body, html {
     border-radius: 999px;
     background: #d64545;
     border: 2px solid #fff6e8;
-    color: #fff;
+    color: white;
     font-size: 11px;
     font-weight: 800;
     display: flex;
@@ -526,7 +526,7 @@ body, html {
     z-index: 2;
     background: rgba(0, 0, 0, 0.28);
     border: none;
-    color: #fff;
+    color: white;
     font-size: 18px;
     font-weight: bold;
     cursor: pointer;
@@ -605,7 +605,7 @@ body, html {
     overflow: hidden;
     display: flex; align-items: center; justify-content: center; gap: 6px;
     background: linear-gradient(160deg, #59a852, #2c5c26);
-    color: #fff;
+    color: white;
     border: 2px solid #ffe9a8;
     border-radius: 8px;
     padding: 10px;
@@ -761,10 +761,11 @@ body, html {
     position: fixed;
     bottom: 8px;
     right: 12px;
-    color: rgba(74, 60, 42, 0.55);
+    color: white;
     font-size: 11px;
     font-weight: bold;
-    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+    -webkit-text-stroke: 0.5px black;
+    text-shadow: 1px 1px 0px black;
     z-index: 5;
     pointer-events: none;
 }
@@ -887,7 +888,7 @@ body, html {
     position: fixed;
     inset: 0;
     z-index: 9999;
-    background: #000;
+    background: white;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -900,7 +901,7 @@ body, html {
 }
 
 .lobby-entering-text {
-    color: #fff;
+    color: white;
     font-size: 22px;
     font-weight: 900;
     letter-spacing: .5px;
@@ -913,7 +914,7 @@ body, html {
 }
 
 .lobby-entering-tip {
-    color: #fff;
+    color: white;
     font-size: 14px;
     opacity: .8;
     max-width: 70vw;

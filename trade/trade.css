@@ -1,0 +1,757 @@
+/* 인력 거래소 UI - 강화(enhancement.css) 모달과 같은 톤/구조를 그대로 따른다(로비 공용 변수
+   --panel-bg/--panel-border/--gold-glow/--text-dark 사용). */
+
+#modal-trade .trade-modal-box {
+    width: min(94vw, 1080px);
+    max-width: none;
+    height: min(88vh, 720px);
+    max-height: 92vh;
+    padding: 0;
+    overflow: hidden;
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 14px;
+    background: var(--panel-bg, linear-gradient(160deg, #fdf6e8, #f0dcae));
+    box-shadow:
+        0 18px 55px rgba(50, 36, 18, .38),
+        var(--gold-glow, 0 0 10px rgba(232, 184, 75, .55));
+}
+
+#modal-trade .modal-close {
+    z-index: 30;
+    color: var(--text-dark, #4a3c2a);
+}
+
+#trade-content,
+.trade-shell {
+    width: 100%;
+    height: 100%;
+}
+
+.trade-shell {
+    display: flex;
+    flex-direction: column;
+    color: var(--text-dark, #4a3c2a);
+    background:
+        radial-gradient(circle at 75% 20%, rgba(255,255,255,.72), transparent 34%),
+        linear-gradient(145deg, #fffaf0 0%, #f4e7c8 58%, #e6cea0 100%);
+}
+
+/* ── 상단 헤더: 제목 + 보유 GOLD, 아래(구분선) ── */
+.trade-header {
+    flex: 0 0 auto;
+    min-height: 82px;
+    padding: 17px 64px 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    border-bottom: 2px solid var(--panel-border, #c9a86a);
+    background: rgba(255, 249, 233, .82);
+}
+
+.trade-title {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 900;
+}
+
+.trade-subtitle {
+    margin: 5px 0 0;
+    color: #725e3e;
+    font-size: 12.5px;
+    font-weight: 700;
+}
+
+/* 탭(거래/등록)이 골드 칩 바로 왼쪽에 붙도록 둘을 한 그룹으로 묶는다 - 헤더 전체를
+   space-between으로 3등분하면 탭이 중앙 쪽으로 떠 보여서, 제목 블록 vs (탭+골드) 두 그룹으로만 나눈다. */
+.trade-header-controls {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* enhancement.css의 .enhancement-gold-chip과 동일한 문구 형식("G 1,234") */
+.trade-gold-chip {
+    flex-shrink: 0;
+    min-width: 120px;
+    padding: 10px 15px;
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 9px;
+    background: #fffdf6;
+    color: #8a5a1a;
+    font-size: 17px;
+    font-weight: 900;
+    text-align: center;
+    box-shadow: var(--gold-glow, 0 0 10px rgba(232, 184, 75, .55));
+}
+
+/* inventory.css의 .inventory-tabs/.inventory-tab과 동일한 알약형 탭 그룹 - 골드 칩 바로
+   왼쪽에 오도록 헤더 안에 배치(순서: 제목 → 탭 → 골드). */
+.trade-tab-nav {
+    flex-shrink: 0;
+    display: flex;
+    min-width: 200px;
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.trade-tab-btn {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    border: 0;
+    padding: 11px 18px;
+    background: rgba(255,255,255,.6);
+    color: #806d4e;
+    font-weight: 900;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.trade-tab-btn.active {
+    background: linear-gradient(160deg, #d89928, #8a4f0e);
+    color: #fff;
+}
+
+.trade-view {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+}
+
+.trade-view[hidden] {
+    display: none !important;
+}
+
+.trade-layout {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(420px, 1fr) minmax(320px, .82fr);
+}
+
+/* ── 왼쪽: 인물 목록 ── */
+.trade-list-panel {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 2px solid rgba(201, 168, 106, .72);
+}
+
+.trade-section-heading {
+    flex: 0 0 auto;
+    padding: 14px 20px 11px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid rgba(201, 168, 106, .55);
+    background: rgba(255,255,255,.38);
+}
+
+.trade-section-heading strong {
+    font-size: 16px;
+}
+
+.trade-section-heading span {
+    color: #806d4e;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+/* heading이 align-items:baseline이라 텍스트가 아닌 버튼은 위아래로 어긋나 보인다 - 버튼만 따로 정렬. */
+.trade-section-heading .trade-refresh-btn {
+    align-self: center;
+}
+
+.trade-grid-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 18px;
+    scrollbar-color: #c9a86a transparent;
+}
+
+.trade-character-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px 12px;
+}
+
+.trade-empty {
+    padding: 60px 10px;
+    text-align: center;
+    color: #7d6744;
+    font-weight: 900;
+}
+
+/* enhancement.css의 .enhancement-character-card와 동일하게, 등장 애니메이션 없이 hover
+   transition만 준다(카드 자체에 opacity를 애니메이션하지 않으니 아래 .unavailable의
+   opacity가 그대로 유지된다). */
+.trade-character-card {
+    min-width: 0;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+    text-align: center;
+    color: var(--text-dark, #4a3c2a);
+    transition: transform .17s ease, filter .17s ease;
+}
+
+.trade-character-card:hover {
+    transform: translateY(-4px);
+    filter: brightness(1.025);
+}
+
+/* 보유 사본이 1장뿐이고 그게 장착 중이거나 전술대회 방어 편성 중이라 등록할 수 없는 경우 -
+   enhancement.css의 .enhancement-character-card.unavailable과 동일(호버 애니메이션도 그대로 유지). */
+.trade-character-card.unavailable {
+    opacity: .62;
+}
+
+/* inventory.css의 .inventory-card-equipped와 동일한 배지 스타일 - 텍스트만 "장착 중"/"출전 중"으로 바뀜 */
+.trade-card-badge {
+    position: absolute;
+    top: 7px;
+    left: 7px;
+    z-index: 1;
+    padding: 4px 7px;
+    border-radius: 12px;
+    background: #ffcf37;
+    color: #574100;
+    font-size: 10px;
+    font-weight: 900;
+}
+
+/* enhancement.css의 .enhancement-card-portrait와 동일 - 인벤토리처럼 희귀도별 배경 이미지를
+   깔지 않고, 캐릭터 종류와 무관한 단색 그라디언트 배경만 쓴다. */
+.trade-card-portrait {
+    position: relative;
+    aspect-ratio: 1 / 1.04;
+    overflow: hidden;
+    border: 3px solid var(--panel-border, #c9a86a);
+    border-radius: 9px;
+    background: linear-gradient(145deg, #f9efda, #d9bd82);
+    box-shadow:
+        0 5px 11px rgba(87, 60, 23, .2),
+        0 0 0 2px rgba(255,255,255,.64) inset;
+}
+
+.trade-card-portrait img {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.trade-card-star-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    min-height: 27px;
+    padding: 4px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1px;
+    color: #ffd33c;
+    font-size: clamp(12px, 1.3vw, 18px);
+    letter-spacing: -2px;
+    text-shadow: 0 1px 2px #705000;
+    background: linear-gradient(to top, rgba(41, 34, 25, .88), rgba(41, 34, 25, .3), transparent);
+}
+
+.trade-card-name {
+    margin-top: 7px;
+    font-size: 14px;
+    font-weight: 900;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.trade-card-meta {
+    margin-top: 2px;
+    color: #7d6744;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+/* ── 거래 탭 목록 갱신 버튼 - arena.css의 .pvp-refresh-btn-sm/.refresh-icon과 동일(이 화면은
+   arena.css를 로드하지 않아 클래스만 이 파일에 그대로 복제). ── */
+.trade-refresh-btn {
+    min-width: 0;
+    height: 32px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: #fff;
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 999px;
+    color: var(--text-dark, #4a3c2a);
+    font-size: 12.5px;
+    font-weight: 900;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+
+.trade-refresh-btn:hover {
+    box-shadow: 0 0 8px rgba(232, 184, 75, 0.6);
+}
+
+.trade-refresh-btn:active .refresh-icon {
+    transform: rotate(45deg);
+}
+
+.refresh-icon {
+    display: inline-block;
+    font-size: 14px;
+    line-height: 1;
+    transition: transform 0.15s ease;
+}
+
+/* ── 거래(구매) 탭 목록 카드 - 상자 없이 스탠딩 일러스트를 그대로 보여준다. 한 줄로만 배치하고,
+   그 한 줄이 목록 패널 세로 전체를 꽉 채운다(grid-template-rows:1fr + 카드 height:100%) - 이름/
+   가격이 모달의 그 아래 끝에 자연히 나란히 붙고, 일러스트(프레임 flex:1)가 그 위 남는 공간을
+   전부 차지한다. 열 구성은 실제로 보이는 매물 개수(trade.js pickRandomSubset, 최대 3개)에 따라
+   달라진다 - 1개는 가운데 하나만, 2개는 절반씩, 3개는 기존처럼 3등분. */
+.trade-standing-grid {
+    grid-template-rows: 1fr;
+    height: 100%;
+    gap: 18px 14px;
+}
+
+.trade-standing-grid.trade-standing-grid-count-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.trade-standing-grid.trade-standing-grid-count-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* 1개일 땐 열 하나가 패널 전체 폭을 다 차지하되, 카드 자체는 가운데 오도록 폭을 제한한다
+   ("가운데 크게" - 좌우로 쭉 늘어나지 않고 3장일 때의 중앙 카드처럼 가운데 정렬). */
+.trade-standing-grid.trade-standing-grid-count-1 {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+}
+
+.trade-standing-grid.trade-standing-grid-count-1 .trade-standing-card {
+    width: min(100%, 340px);
+}
+
+/* 매물이 하나도 없을 때 JS가 hidden을 건다 - height:100%가 그대로면 밑에 있는 안내 문구가
+   화면 밖으로 밀려 보이지 않는다(.trade-view/.trade-detail-content와 동일한 기존 관례). */
+.trade-standing-grid[hidden] {
+    display: none !important;
+}
+
+.trade-standing-card {
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+    color: var(--text-dark, #4a3c2a);
+    transition: transform .17s ease, filter .17s ease;
+}
+
+.trade-standing-card:hover {
+    transform: translateY(-4px);
+    filter: brightness(1.025);
+}
+
+.trade-standing-card-frame {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+/* 캐릭터 크기는 오직 높이(max-height)로만 정한다 - max-width를 아예 두지 않는다. 100%로 프레임
+   폭 안에 가두면, idle.png처럼 캐릭터 좌우로 여백이 있는 이미지는 그 여백까지 폭에 맞추려다
+   object-fit:contain의 스케일이 가로 기준으로 정해져버려서(가로가 더 빡빡한 제약이 되어) 세로가
+   100%까지 못 크고 작아 보였다. 폭 제한을 없애면 항상 높이만으로 스케일이 정해지므로 캐릭터
+   키(세로)는 항상 프레임을 꽉 채우고, 대신 여백이 있는 이미지는 그 폭만큼 옆 카드 쪽으로
+   자연스럽게 넘칠 수 있다(의도적으로 허용 - 프레임/그리드에 overflow:hidden을 안 걸어둔 이유).
+   overflow가 하나라도 hidden이면 이 넘침이 그대로 잘려버리니 조상 요소에 새로 추가하지 말 것. */
+.trade-standing-card-frame img {
+    position: relative;
+    z-index: 1;
+    max-width: none;
+    max-height: 100%;
+    object-fit: contain;
+    object-position: bottom center;
+    filter: drop-shadow(0 6px 6px rgba(76, 51, 19, .28));
+}
+
+/* 3장이 나란히 있을 때 중앙이 가장 크게, 양옆은 살짝 작게. max-height만 줄이는 방식은 이미지마다
+   달라서 신뢰할 수 없었다 - object-fit:contain은 (프레임 대비) 가로/세로 중 "더 빡빡한 쪽"으로
+   스케일이 정해지는데, idle.png처럼 캐릭터 좌우로 여백이 넉넉한 이미지는 애초에 가로 쪽이 그
+   빡빡한 쪽이라 max-height를 아무리 줄여도 크기가 전혀 안 변했다(반대로 여백이 거의 없는
+   model.png는 세로가 빡빡한 쪽이라 max-height 조절이 그대로 먹혔다 - 그래서 이미지마다 중앙/양옆
+   차이가 있다 없다 했다). object-fit이 이미 정한 크기를 transform:scale로 균일하게 한 번 더
+   축소하면 어느 쪽이 빡빡했든 상관없이 항상 84%로 작아진다. transform-origin을 발밑에 둬서
+   줄어드는 방향이 위쪽뿐이도록(그림자/바닥 기준선은 그대로) 고정한다. */
+.trade-standing-card-side .trade-standing-card-frame img {
+    transform: scale(0.9);
+    transform-origin: bottom center;
+}
+
+/* 큰 상세 패널의 .trade-standing-shadow와 동일한 방식 - 폭은 trade.js가 img.clientWidth로 맞춘다. */
+.trade-standing-card-shadow {
+    position: absolute;
+    bottom: -3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60%;
+    height: 10px;
+    background: radial-gradient(ellipse at center, rgba(76, 51, 19, .38) 0%, rgba(76, 51, 19, 0) 70%);
+    z-index: 0;
+}
+
+/* 이전 디자인(어두운 배지)으로 되돌림 - 위치만 프레임 상단이 아니라 발쪽(캐릭터와 겹치도록)으로
+   내렸다. position:absolute라 플로우 공간을 안 차지하므로, 그만큼(예전에 이 표시가 쓰던 한 줄)
+   프레임(flex:1)이 자동으로 더 늘어나 캐릭터 세로 길이가 커진다. */
+.trade-standing-card-star {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(41, 34, 25, .72);
+    color: #ffd33c;
+    font-size: 11px;
+    letter-spacing: -1.5px;
+    text-shadow: 0 1px 2px #705000;
+}
+
+.trade-standing-card .trade-card-name,
+.trade-standing-card .trade-card-meta {
+    flex: 0 0 auto;
+}
+
+/* ── 오른쪽: 상세/구매·등록 패널 ── */
+.trade-detail-panel {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 22px 24px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    text-align: center;
+    background:
+        radial-gradient(circle at center 20%, rgba(255,255,255,.85), transparent 42%),
+        rgba(255, 250, 238, .52);
+}
+
+.trade-detail-empty {
+    color: #7d6744;
+    font-weight: 900;
+}
+
+.trade-detail-content {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.trade-detail-content[hidden] {
+    display: none !important;
+}
+
+.trade-standing-wrap {
+    position: relative; /* 아래 그림자를 캐릭터 발밑에 절대위치로 고정하기 위한 기준점 */
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+/* shared/lobby.css의 .ground-shadow와 동일한 방식(발밑 타원형 그림자) - 폭은 trade.js가 이미지
+   로드/리사이즈 때마다 실제 렌더 너비(img.clientWidth)를 재서 인라인 style.width로 정확히
+   맞춰준다(아래 width는 그 전까지 잠깐 보이는 값 + JS를 못 탈 때의 대비용 기본값일 뿐). */
+.trade-standing-shadow {
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 70%;
+    height: 18px;
+    background: radial-gradient(ellipse at center, rgba(76, 51, 19, .38) 0%, rgba(76, 51, 19, 0) 70%);
+    z-index: 0;
+}
+
+.trade-standing-image {
+    position: relative;
+    z-index: 1;
+    max-width: 88%;
+    max-height: 40vh;
+    object-fit: contain;
+    object-position: bottom center;
+    filter: drop-shadow(0 14px 16px rgba(76, 51, 19, .3));
+}
+
+.trade-detail-name {
+    font-size: 19px;
+    font-weight: 900;
+}
+
+.trade-detail-stars {
+    color: #a96b10;
+    font-size: 15px;
+    letter-spacing: -1px;
+}
+
+.trade-detail-seller {
+    font-size: 12.5px;
+    color: #725e3e;
+    font-weight: 700;
+}
+
+.trade-detail-seller strong {
+    color: var(--text-dark, #4a3c2a);
+}
+
+.trade-blocked-reason {
+    margin: 4px 0 0;
+    font-size: 12px;
+    font-weight: 800;
+    color: #a33c34;
+}
+
+.trade-blocked-reason[hidden] {
+    display: none !important;
+}
+
+.trade-action-button {
+    width: 100%;
+    min-height: 46px;
+    margin-top: 10px;
+    border: 2px solid #ffd76a;
+    border-radius: 9px;
+    background: linear-gradient(160deg, #d89928, #8a4f0e);
+    color: #fff;
+    font-weight: 900;
+    font-size: 15px;
+    cursor: pointer;
+    box-shadow: 0 0 13px rgba(232, 184, 75, .55);
+}
+
+.trade-action-button:disabled {
+    cursor: not-allowed;
+    opacity: .5;
+    filter: grayscale(.4);
+    box-shadow: none;
+}
+
+/* ── 등록 탭 가격 입력 ── */
+.trade-price-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.trade-price-row label {
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.trade-price-row input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 7px;
+    background: rgba(255,255,255,.7);
+    color: var(--text-dark, #4a3c2a);
+    font-weight: 800;
+    font-size: 14px;
+    text-align: right;
+}
+
+.trade-price-hint {
+    margin: 4px 0 0;
+    font-size: 11px;
+    color: #806d4e;
+    line-height: 1.5;
+}
+
+/* 등록 불가(잠긴 캐릭터 선택 / 최소가 미만) 상태 - 같은 자리를 빨간 경고 문구로 대체 */
+.trade-price-hint.is-blocked {
+    color: #a33c34;
+    font-weight: 800;
+}
+
+.trade-price-preview {
+    margin-top: 6px;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.trade-price-preview strong {
+    color: #a96b10;
+    font-size: 16px;
+}
+
+.trade-fee-note {
+    font-weight: 600;
+    color: #806d4e;
+}
+
+/* ── 완료 결과 팝업 (enhancement-inner-overlay/box와 동일 톤) ── */
+.trade-result-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(31, 24, 16, .52);
+    backdrop-filter: blur(3px);
+}
+
+.trade-result-overlay[hidden] {
+    display: none !important;
+}
+
+@keyframes trade-result-enter {
+    from { opacity: 0; transform: translateY(14px) scale(.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.trade-result-box {
+    width: min(90%, 390px);
+    padding: 30px 26px 24px;
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 13px;
+    background: var(--panel-bg, linear-gradient(160deg, #fdf6e8, #f0dcae));
+    text-align: center;
+    color: var(--text-dark, #4a3c2a);
+    box-shadow:
+        0 18px 48px rgba(0,0,0,.35),
+        var(--gold-glow, 0 0 10px rgba(232,184,75,.55));
+    animation: trade-result-enter .24s ease-out both;
+}
+
+.trade-result-title {
+    margin: 0 0 12px;
+    font-size: 22px;
+    font-weight: 900;
+}
+
+.trade-result-desc {
+    margin: 0;
+    color: #705d3f;
+    font-weight: 800;
+    line-height: 1.55;
+}
+
+.trade-result-confirm {
+    min-width: 150px;
+    margin-top: 20px;
+    min-height: 46px;
+    border: 2px solid #ffd76a;
+    border-radius: 9px;
+    background: linear-gradient(160deg, #d89928, #8a4f0e);
+    color: white;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+/* ── 등록 취소 불가 경고(#trade-confirm-overlay) 확인/취소 버튼 ── */
+.trade-confirm-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.trade-confirm-cancel,
+.trade-confirm-ok {
+    flex: 1;
+    min-height: 46px;
+    border-radius: 9px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.trade-confirm-cancel {
+    border: 2px solid var(--panel-border, #c9a86a);
+    background: rgba(255,255,255,.6);
+    color: var(--text-dark, #4a3c2a);
+}
+
+.trade-confirm-ok {
+    border: 2px solid #ffd76a;
+    background: linear-gradient(160deg, #d89928, #8a4f0e);
+    color: white;
+}
+
+@media (max-width: 900px) {
+    #modal-trade .trade-modal-box {
+        width: min(96vw, 760px);
+        height: min(92vh, 850px);
+    }
+
+    .trade-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(270px, .9fr) auto;
+        overflow-y: auto;
+    }
+
+    .trade-list-panel {
+        border-right: 0;
+        border-bottom: 2px solid rgba(201, 168, 106, .72);
+    }
+
+    .trade-character-grid {
+        grid-template-columns: repeat(5, minmax(90px, 1fr));
+    }
+
+    /* 등록 탭(정사각형)과 달리 거래 탭은 3장만 보여주는 세로로 긴 스탠딩 카드라, 5열로
+       욱여넣지 않고 desktop과 같은 3열을 유지한다. */
+    .trade-standing-grid {
+        grid-template-columns: repeat(3, minmax(80px, 1fr));
+    }
+
+    .trade-detail-panel {
+        padding: 18px;
+    }
+}
+
+@media (max-width: 650px) {
+    .trade-header {
+        padding: 14px 54px 12px 18px;
+    }
+
+    .trade-character-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}

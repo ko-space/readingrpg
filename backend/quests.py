@@ -85,8 +85,10 @@ def compute_progress(db: Session, user, quest, period_key: str) -> dict:
             ReadingLog.created_at >= start,
             ReadingLog.created_at < end,
         )
-        if params.get("difficulty"):
-            q = q.filter(ReadingLog.difficulty == params["difficulty"])
+        if params.get("difficulties"):
+            # 리스트로 받아서 "영어"뿐 아니라 "영어(하프)"처럼 같은 과목의 다른 난이도도 함께
+            # 인정할 수 있게 한다(예: "영어 모의고사 2회" 주간 퀘스트).
+            q = q.filter(ReadingLog.difficulty.in_(params["difficulties"]))
         rows = q.all()
         if params.get("session_type") == "mock_exam":
             # 모의고사는 "풀었다"로 인정되려면 그 난이도의 지정 시간 이상 기록됐어야 한다 - is_auto_complete

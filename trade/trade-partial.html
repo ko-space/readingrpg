@@ -1,0 +1,106 @@
+<div class="trade-shell">
+    <div class="trade-header">
+        <div>
+            <h2 class="trade-title">인력 거래소</h2>
+            <p class="trade-subtitle">다른 학생과 캐릭터를 사고 팔 수 있어요. (자정에 미판매 매물 자동 반환)</p>
+        </div>
+
+        <div class="trade-header-controls">
+            <nav class="trade-tab-nav" role="tablist">
+                <button class="trade-tab-btn active" data-trade-tab="browse" type="button">거래</button>
+                <button class="trade-tab-btn" data-trade-tab="register" type="button">등록</button>
+            </nav>
+
+            <div class="trade-gold-chip">G <span id="trade-my-gold">-</span></div>
+        </div>
+    </div>
+
+    <div class="trade-view" id="trade-browse-view">
+        <div class="trade-layout">
+            <section class="trade-list-panel">
+                <div class="trade-section-heading">
+                    <strong>거래할 인물 선택</strong>
+                    <button class="trade-refresh-btn" id="trade-browse-refresh-btn" type="button" title="목록 갱신">
+                        <span class="refresh-icon" aria-hidden="true">↻</span> 목록 갱신
+                    </button>
+                </div>
+                <div class="trade-grid-scroll">
+                    <div class="trade-character-grid trade-standing-grid" id="trade-browse-grid"></div>
+                    <p class="trade-empty" id="trade-browse-empty" hidden>지금은 거래 중인 인물이 없습니다.</p>
+                </div>
+            </section>
+
+            <section class="trade-detail-panel">
+                <p class="trade-detail-empty" id="trade-browse-detail-empty">인물을 선택해주세요.</p>
+                <div class="trade-detail-content" id="trade-browse-detail-content" hidden>
+                    <div class="trade-standing-wrap">
+                        <div class="trade-standing-shadow" id="trade-browse-standing-shadow"></div>
+                        <img class="trade-standing-image" id="trade-browse-standing" src="" alt="">
+                    </div>
+                    <div class="trade-detail-name" id="trade-browse-name">-</div>
+                    <div class="trade-detail-stars" id="trade-browse-stars">-</div>
+                    <div class="trade-detail-seller">판매자: <strong id="trade-browse-seller">-</strong></div>
+                    <p class="trade-blocked-reason" id="trade-buy-blocked-reason" hidden></p>
+                    <button class="trade-action-button" id="trade-buy-button" type="button">
+                        구매 <span id="trade-buy-price">-</span>G
+                    </button>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <div class="trade-view" id="trade-register-view" hidden>
+        <div class="trade-layout">
+            <section class="trade-list-panel">
+                <div class="trade-section-heading">
+                    <strong>등록할 인물 선택</strong>
+                    <span id="trade-daily-count">오늘 등록: - / -</span>
+                </div>
+                <div class="trade-grid-scroll">
+                    <div class="trade-character-grid" id="trade-register-grid"></div>
+                    <p class="trade-empty" id="trade-register-empty" hidden>등록 가능한 인물이 없습니다.</p>
+                </div>
+            </section>
+
+            <section class="trade-detail-panel">
+                <p class="trade-detail-empty" id="trade-register-detail-empty">인물을 선택해주세요.</p>
+                <div class="trade-detail-content" id="trade-register-detail-content" hidden>
+                    <div class="trade-standing-wrap">
+                        <div class="trade-standing-shadow" id="trade-register-standing-shadow"></div>
+                        <img class="trade-standing-image" id="trade-register-standing" src="" alt="">
+                    </div>
+                    <div class="trade-detail-name" id="trade-register-name">-</div>
+                    <div class="trade-detail-stars" id="trade-register-stars">-</div>
+
+                    <div class="trade-price-row">
+                        <label for="trade-price-input">등록 가격(G)</label>
+                        <input type="number" id="trade-price-input" min="0" step="1">
+                    </div>
+                    <p class="trade-price-hint" id="trade-price-hint"></p>
+                    <div class="trade-price-preview">구매자 실지불액 <strong id="trade-display-price-preview">-</strong>G <span class="trade-fee-note">(수수료 10% 포함)</span></div>
+
+                    <button class="trade-action-button" id="trade-register-button" type="button">등록하기</button>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
+<div class="trade-result-overlay" id="trade-result-overlay" hidden>
+    <div class="trade-result-box">
+        <div class="trade-result-title" id="trade-result-title">완료!</div>
+        <p class="trade-result-desc" id="trade-result-desc"></p>
+        <button class="trade-result-confirm" id="trade-result-confirm" type="button">확인</button>
+    </div>
+</div>
+
+<div class="trade-result-overlay" id="trade-confirm-overlay" hidden>
+    <div class="trade-result-box">
+        <div class="trade-result-title">정말 등록하시겠어요?</div>
+        <p class="trade-result-desc">등록한 캐릭터는 판매되거나 자정에 초기화되기 전까지 취소할 수 없습니다.</p>
+        <div class="trade-confirm-actions">
+            <button class="trade-confirm-cancel" id="trade-confirm-cancel" type="button">취소</button>
+            <button class="trade-confirm-ok" id="trade-confirm-ok" type="button">확인</button>
+        </div>
+    </div>
+</div>
