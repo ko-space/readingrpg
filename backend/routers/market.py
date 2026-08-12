@@ -25,12 +25,21 @@ def _kst_date_of(dt_utc_naive: datetime):
     return dt_utc_naive.replace(tzinfo=timezone.utc).astimezone(KST).date()
 
 
-# 등록 하한(실버) - 표시가(구매자 실지불액)는 여기에 10% 수수료를 더해서 구한다. 재화 이원화
-# 이후 거래소는 실버로 거래된다(활용처: 강화·거래·상점 아이템 구매 = 실버).
-MARKET_STAR_MIN_PRICE = {1: 100, 2: 250, 3: 500, 4: 1000, 5: 1500, 6: 5000}
+# 표시가(구매자 실지불액)는 등록가에 10% 수수료를 더해서 구한다(단, 수수료가 MARKET_MIN_FEE보다
+# 낮으면 MARKET_MIN_FEE로 올려붙인다) - 재화 이원화 이후 거래소는 실버로 거래된다(활용처: 강화·거래·
+# 상점 아이템 구매 = 실버). 성급별 등록 하한은 거래제도 개편으로 폐지 - 이제 1실버 이상이면 성급과
+# 무관하게 등록할 수 있다(범위 체크만 VALID_MARKET_STARS로 유지).
+VALID_MARKET_STARS = {1, 2, 3, 4, 5, 6}
+MARKET_PRICE_CAP = 1_000_000  # 등록가(수수료 붙기 전) 상한
 MARKET_FEE_MULTIPLIER = 1.1
+MARKET_MIN_FEE = 500  # 수수료 하한 - 계산된 수수료가 이보다 낮으면 이 값으로 올려붙인다
 MARKET_CAP = 10  # 거래소 전체 동시 매물 상한
 DAILY_REGISTER_LIMIT = 2  # 인당 하루 최대 등록 개수(KST 기준)
+
+
+def _compute_display_price(register_price: int) -> int:
+    fee = max(math.ceil(register_price * (MARKET_FEE_MULTIPLIER - 1)), MARKET_MIN_FEE)
+    return register_price + fee
 
 
 def _expire_stale_listings(db: Session) -> None:
@@ -152,14 +161,16 @@ def register_listing(
 ):
     _expire_stale_listings(db)
 
-    if req.star not in MARKET_STAR_MIN_PRICE:
+    if req.star not in VALID_MARKET_STARS:
         raise HTTPException(status_code=400, detail="1성부터 6성 캐릭터까지만 등록할 수 있습니다.")
 
-    min_price = MARKET_STAR_MIN_PRICE[req.star]
-    if req.price < min_price:
+    if req.price < 1:
+        raise HTTPException(status_code=400, detail="가격은 1실버 이상이어야 합니다.")
+
+    if req.price > MARKET_PRICE_CAP:
         raise HTTPException(
             status_code=400,
-            detail=f"{req.star}★ 캐릭터는 최소 {min_price}실버 이상으로 등록해야 합니다.",
+            detail=f"가격은 최대 {MARKET_PRICE_CAP:,}실버까지 등록할 수 있습니다.",
         )
 
     # 거래소 전체 매물 상한(10개) 체크는 서로 다른 판매자(=서로 다른 User 행)끼리 경합할 수 있어서,
@@ -213,7 +224,7 @@ def register_listing(
             detail="장착 중이거나 전술대회 방어 편성에 사용 중인 캐릭터라 등록할 수 있는 카드가 없습니다.",
         )
 
-    display_price = math.ceil(req.price * MARKET_FEE_MULTIPLIER)
+    display_price = _compute_display_price(req.price)
 
     listing = MarketListing(
         seller_id=locked_user.id,

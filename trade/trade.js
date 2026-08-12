@@ -4,10 +4,16 @@
     // API_BASE_URL은 shared/api-config.js가 이 스크립트보다 먼저 로드되어 전역으로 제공한다.
     const OUTFIT_IMAGE_BASE = `${API_BASE_URL}/static/outfits/`;
 
-    // backend/routers/market.py의 MARKET_STAR_MIN_PRICE와 동일한 값 - 서버가 최종 판정하지만,
+    // backend/routers/market.py의 상수들과 동일한 값 - 서버가 최종 판정하지만,
     // 입력하는 즉시 "이 가격은 안 된다"를 보여주기 위한 프론트 쪽 미리보기용 사본.
-    const MARKET_STAR_MIN_PRICE = { 1: 100, 2: 250, 3: 500, 4: 1000, 5: 1500, 6: 5000 };
+    const MARKET_PRICE_CAP = 1_000_000;
     const MARKET_FEE_MULTIPLIER = 1.1;
+    const MARKET_MIN_FEE = 500;
+
+    function computeDisplayPrice(price) {
+        const fee = Math.max(Math.ceil(price * (MARKET_FEE_MULTIPLIER - 1)), MARKET_MIN_FEE);
+        return price + fee;
+    }
 
     const modal = document.getElementById("modal-trade");
     const content = document.getElementById("trade-content");
@@ -436,10 +442,10 @@
         document.getElementById("trade-register-name").textContent = group.name;
         document.getElementById("trade-register-stars").textContent = stars(group.star);
 
-        const minPrice = MARKET_STAR_MIN_PRICE[group.star] || 0;
         const priceInput = document.getElementById("trade-price-input");
-        priceInput.min = minPrice;
-        priceInput.value = minPrice;
+        priceInput.min = 1;
+        priceInput.max = MARKET_PRICE_CAP;
+        priceInput.value = 1;
 
         updateRegisterPreview();
     }
@@ -457,8 +463,7 @@
     function updateRegisterPreview() {
         if (!selectedGroup) return;
         const price = getEnteredPrice();
-        const minPrice = MARKET_STAR_MIN_PRICE[selectedGroup.star] || 0;
-        const displayPrice = Math.ceil(price * MARKET_FEE_MULTIPLIER);
+        const displayPrice = computeDisplayPrice(price);
         document.getElementById("trade-display-price-preview").textContent = displayPrice.toLocaleString();
 
         const hintEl = document.getElementById("trade-price-hint");
@@ -489,13 +494,17 @@
             return;
         }
 
-        if (price < minPrice) {
+        if (price < 1) {
             hintEl.classList.add("is-blocked");
-            hintEl.textContent = `${selectedGroup.star}★ 캐릭터는 최소 ${minPrice.toLocaleString()}실버 이상으로 등록해야 합니다.`;
+            hintEl.textContent = "가격은 1실버 이상이어야 합니다.";
+            btn.disabled = true;
+        } else if (price > MARKET_PRICE_CAP) {
+            hintEl.classList.add("is-blocked");
+            hintEl.textContent = `가격은 최대 ${MARKET_PRICE_CAP.toLocaleString()}실버까지 등록할 수 있습니다.`;
             btn.disabled = true;
         } else {
             hintEl.classList.remove("is-blocked");
-            hintEl.textContent = `${selectedGroup.star}★ 캐릭터는 최소 ${minPrice.toLocaleString()}실버부터 등록할 수 있습니다.`;
+            hintEl.textContent = `수수료 ${(displayPrice - price).toLocaleString()}실버가 붙어 구매자는 ${displayPrice.toLocaleString()}실버를 지불하게 됩니다.`;
             btn.disabled = false;
         }
     }
