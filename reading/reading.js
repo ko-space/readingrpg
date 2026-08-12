@@ -597,6 +597,7 @@
         return runSequence([
             () => revealStatRow("stat-row-time", "stat-value-time", elapsedSeconds, formatHMS),
             () => revealStatRow("stat-row-exp", "stat-value-exp", data.gained_exp, String),
+            () => revealStatRow("stat-row-silver", "stat-value-silver", data.gained_silver, String),
             () => revealStatRow("stat-row-gold", "stat-value-gold", data.gained_gold, String),
             () => revealLevelBar(data),
         ]);
