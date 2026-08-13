@@ -7,7 +7,7 @@
     // backend/routers/market.py의 상수들과 동일한 값 - 서버가 최종 판정하지만,
     // 입력하는 즉시 "이 가격은 안 된다"를 보여주기 위한 프론트 쪽 미리보기용 사본.
     const MARKET_PRICE_CAP = 1_000_000;
-    const MARKET_FEE_MULTIPLIER = 1.1;
+    const MARKET_FEE_MULTIPLIER = 1.2;
     const MARKET_MIN_FEE = 500;
 
     function computeDisplayPrice(price) {
