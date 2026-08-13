@@ -15,6 +15,35 @@
         return price + fee;
     }
 
+    // 여름/겨울 시즌 의상은 model.png는 물론 idle.png조차 아직 없는 경우가 많다(캐릭터당 기본 의상
+    // 사진만 먼저 준비되는 경우가 흔함) - 그 상태로 캐릭터가 시즌 의상을 입은 채 등록/보유되면 두
+    // 포즈 다 실패해서 완전히 안 보이는 캐릭터가 된다. 마지막 안전망으로 그 캐릭터의 "기본" 의상
+    // 사진까지 시도한 뒤에야 포기한다(완전히 다른 옷이지만, 아예 안 보이는 것보다는 낫다).
+    function outfitFallbackChain(outfit, poses) {
+        const [character] = outfit.split("/");
+        const candidates = poses.map((pose) => `${outfit}/${pose}`);
+        if (!outfit.endsWith("/basic")) {
+            poses.forEach((pose) => candidates.push(`${character}/basic/${pose}`));
+        }
+        return candidates;
+    }
+
+    // imgEl.src를 candidates 순서대로 시도하다가, 전부 실패하면 onAllFailed를 부른다(기본은 숨김).
+    function loadImageWithFallback(imgEl, outfit, poses, onAllFailed) {
+        const candidates = outfitFallbackChain(outfit, poses);
+        let index = 0;
+        const tryNext = () => {
+            if (index >= candidates.length) {
+                imgEl.onerror = null;
+                (onAllFailed || (() => { imgEl.style.visibility = "hidden"; }))();
+                return;
+            }
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${candidates[index++]}`;
+        };
+        imgEl.onerror = tryNext;
+        tryNext();
+    }
+
     const modal = document.getElementById("modal-trade");
     const content = document.getElementById("trade-content");
     const openButton = document.querySelector('[data-modal-target="modal-trade"]');
@@ -322,12 +351,8 @@
             `;
             const img = card.querySelector("img");
             // reading.js가 reading.png를 쓰는 것과 같은 방식 - "인물 선택" 목록 전용 포즈(model.png).
-            // 아직 그 포즈가 없는 캐릭터는 idle.png로 자연스럽게 대체된다.
-            img.src = `${OUTFIT_IMAGE_BASE}${listing.outfit}/model.png`;
-            img.onerror = () => {
-                img.onerror = null; // 무한 루프 방지
-                img.src = `${OUTFIT_IMAGE_BASE}${listing.outfit}/idle.png`;
-            };
+            // 아직 그 포즈가 없는 캐릭터는 idle.png로, 그것도 없으면(시즌 의상 등) 기본 의상으로 대체된다.
+            loadImageWithFallback(img, listing.outfit, ["model.png", "idle.png"]);
             bindStandingCardImageBox(img);
             bindStandingShadow(img, card.querySelector(".trade-standing-card-shadow"));
             card.addEventListener("click", () => selectListing(listing));
@@ -349,9 +374,8 @@
         document.getElementById("trade-browse-detail-content").hidden = false;
 
         const standing = document.getElementById("trade-browse-standing");
-        standing.src = `${OUTFIT_IMAGE_BASE}${listing.outfit}/idle.png`;
-        standing.onerror = () => { standing.style.visibility = "hidden"; };
         standing.style.visibility = "visible";
+        loadImageWithFallback(standing, listing.outfit, ["idle.png"], () => { standing.style.visibility = "hidden"; });
         bindStandingShadow(standing, document.getElementById("trade-browse-standing-shadow"));
 
         document.getElementById("trade-browse-name").textContent = listing.name;
@@ -433,8 +457,7 @@
                 <div class="trade-card-meta">${group.count}명 보유</div>
             `;
             const img = card.querySelector("img");
-            img.src = `${OUTFIT_IMAGE_BASE}${group.outfit}/idle.png`;
-            img.onerror = () => { img.style.visibility = "hidden"; };
+            loadImageWithFallback(img, group.outfit, ["idle.png"]);
             applyCrop(img, group.outfit);
             // 등록 불가 캐릭터도 선택은 가능하게 둔다(흐린 채로 클릭은 되고, 대신 아래 등록하기
             // 버튼이 비활성화되고 사유가 빨간 글씨로 표시된다).
@@ -459,9 +482,8 @@
         document.getElementById("trade-register-detail-content").hidden = false;
 
         const standing = document.getElementById("trade-register-standing");
-        standing.src = `${OUTFIT_IMAGE_BASE}${group.outfit}/idle.png`;
-        standing.onerror = () => { standing.style.visibility = "hidden"; };
         standing.style.visibility = "visible";
+        loadImageWithFallback(standing, group.outfit, ["idle.png"], () => { standing.style.visibility = "hidden"; });
         bindStandingShadow(standing, document.getElementById("trade-register-standing-shadow"));
 
         document.getElementById("trade-register-name").textContent = group.name;
