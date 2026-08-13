@@ -223,6 +223,11 @@ def compute_unit_stats(character_name, star, owner_level, slot="front", override
         "gendered_damage_bonus": None,  # damage_to_gender_bonus 성급 효과가 있으면 배틀 시작 때 채워짐
         "status": _new_status(),
         "is_clone": False,
+        # 이벤트 로그에 actor_slot으로 실려나가 프론트가 이름만으로(findUnitKey) 배우를 특정하는 대신
+        # 슬롯으로 정확히 특정하게 해준다 - 강승유가 "호"를 복제하면 한 팀에 같은 이름("호")의 유닛이
+        # 두 개(원본 소환수 + 복제된 소환수) 동시에 존재할 수 있어서, 이름만으로는 어느 쪽 행동인지
+        # 구분이 안 된다(항상 먼저 찾아지는 쪽으로 잘못 귀속됨 - 아래 _skill_summon_clone도 참고).
+        "slot": slot,
         "melee_speed": melee_speed,
         # position/is_attacker_team은 아직 모른다(이 시점엔 이 유닛이 공격자 팀인지 방어자 팀인지도
         # 정해지지 않음) - simulate_battle 시작 시 실제 값으로 채워진다.

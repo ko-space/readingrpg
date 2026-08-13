@@ -1044,6 +1044,16 @@
     }
 
     function eventActorKey(event) {
+        // actor_slot(백엔드가 붙여주는 실제 슬롯)이 있으면 이름 대신 그걸로 특정한다 - 강승유가 윤&호의
+        // "호 출격!"을 복제하면 한 팀에 이름이 "호"인 유닛이 두 개(원본 소환수 + 강승유의 복제 소환수)
+        // 동시에 존재할 수 있는데, findUnitKey는 이름만 보고 항상 앞쪽 슬롯(summon-front)을 먼저
+        // 찾아버려서 강승유의 복제 소환수가 실제로 공격/자폭해도 원본 소환수가 대신 반응하고, 정작
+        // 강승유의 복제 소환수는 죽지도 않은 채 화면에 영원히 남아있는 버그가 있었다. actor_slot이
+        // 없는(옛 저장된 전투 로그 등) 경우에만 기존 이름 기반 조회로 대체한다.
+        if (event.actor_slot) {
+            const slotKey = `${event.side}-${event.actor_slot.replace(/_/g, "-")}`;
+            if (units[slotKey]) return slotKey;
+        }
         return findUnitKey(event.side, event.actor);
     }
 
