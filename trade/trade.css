@@ -406,8 +406,14 @@
 .trade-standing-card-frame img {
     position: relative;
     z-index: 1;
-    max-width: 100%;
-    max-height: 100%;
+    /* max-width/height(=width/height:auto)는 이미지의 실제 크기를 알아야 레이아웃 박스가 확정된다 -
+       그리드 안에서 새로 그려질 때 이미지 로드가 비동기로 늦게 끝나면, 일부 브라우저(특히 iOS
+       Safari)가 로드 완료 후 리레이아웃을 안 해서 계속 안 보이는 상태로 남는 문제가 있었다(등록 탭에
+       갔다 오면 다른 이유로 강제 리플로우가 나서 그제서야 보였음). width/height를 100%로 고정해
+       이미지 로드 여부와 무관하게 박스 크기가 즉시 확정되도록 한다(object-fit이 그 안에서 비율 맞춰
+       그려주는 건 순수 페인트 단계라 이 문제와 무관). */
+    width: 100%;
+    height: 100%;
     object-fit: contain;
     object-position: bottom center;
     filter: drop-shadow(0 6px 6px rgba(76, 51, 19, .28));
