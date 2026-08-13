@@ -1532,6 +1532,14 @@
     // 정렬되고, 순서가 바뀌면 두 줄이 부드럽게 자리를 서로 바꾼다. 죽은 유닛은 항상 맨 아래로 보낸다.
     const lastRosterOrder = { attacker: "", defender: "" };
     let rosterOrderTimer = null;
+    // battle_core.py의 position_settled_at 타이브레이커와 동일한 목적 - 화면 좌표만으로 정렬하면
+    // 어떤 유닛이 다른 유닛의 자리로 걸어 들어와 위치가 같아지는 순간, 실제로는 그쪽이 "더 늦게
+    // 도착"했음에도 픽셀 비교 결과에 따라 전방으로 표시될 수 있다(예: 후방 유닛이 전방 유닛 자리로
+    // 걸어오면 후방이 되어야 하는데 전방으로 뜨는 버그). 유닛별로 화면 중심 좌표가 마지막으로 "바뀐"
+    // 시각을 기록해두고, 좌표가 사실상 같은 두 유닛끼리는 더 늦게 자리 잡은 쪽을 후방으로 정렬한다.
+    const ROSTER_POSITION_TIE_EPSILON = 2; // px
+    const lastCenter = {};
+    const settledAt = {};
 
     function computeFrontToBackOrder(side) {
         const keys = Object.keys(units).filter((key) => {
@@ -1545,14 +1553,22 @@
         keys.forEach((key) => {
             const el = document.querySelector(`[data-unit="${key}"]`);
             const rect = el ? el.getBoundingClientRect() : null;
-            centers[key] = rect ? rect.left + rect.width / 2 : 0;
+            const center = rect ? rect.left + rect.width / 2 : 0;
+            centers[key] = center;
+            if (lastCenter[key] === undefined || Math.abs(lastCenter[key] - center) > ROSTER_POSITION_TIE_EPSILON) {
+                lastCenter[key] = center;
+                settledAt[key] = performance.now();
+            }
         });
 
         keys.sort((a, b) => {
             const deadA = units[a].hp <= 0 ? 1 : 0;
             const deadB = units[b].hp <= 0 ? 1 : 0;
             if (deadA !== deadB) return deadA - deadB;
-            return side === "attacker" ? centers[b] - centers[a] : centers[a] - centers[b];
+            const posDiff = side === "attacker" ? centers[b] - centers[a] : centers[a] - centers[b];
+            if (Math.abs(posDiff) > ROSTER_POSITION_TIE_EPSILON) return posDiff;
+            // 위치가 사실상 같으면(같은 자리로 걸어옴) 더 늦게 도착한 쪽이 후방(나중 정렬)이 되도록.
+            return (settledAt[a] || 0) - (settledAt[b] || 0);
         });
         return keys;
     }
