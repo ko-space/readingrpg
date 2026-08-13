@@ -83,6 +83,30 @@
         shadowEl.style.width = `${imgEl.clientWidth}px`;
     }
 
+    // 카드 프레임 안 스탠딩 이미지는 "폭이 얼마가 됐든 세로를 꽉 채운다"가 항상 맞아야 한다(폭까지
+    // CSS로 제한해버리면 세로 여백이 넉넉한 원본일수록 캐릭터가 작게 보인다) - 그런데 height:100%;
+    // width:auto만으로는 브라우저가 원본 크기를 알아야 박스가 확정되는데, 이미지 로드가 비동기로
+    // 늦게 끝나면 일부 브라우저(특히 iOS Safari)가 로드 후 다시 그리기를 안 해서 계속 안 보이는
+    // 문제가 있었다. 로드가 끝나는 즉시 프레임 높이 기준으로 폭을 직접 픽셀로 계산해 박아 넣는다 -
+    // style을 명시적으로 바꾸는 동작은 모든 브라우저가 확실히 다시 그리므로, 이미지 자체의 암묵적인
+    // 리사이즈 타이밍에 기대지 않게 된다.
+    function applyStandingCardImageBox(imgEl) {
+        if (!imgEl || !imgEl.naturalWidth || !imgEl.naturalHeight) return;
+        const frame = imgEl.parentElement;
+        if (!frame || !frame.clientHeight) return;
+        const height = frame.clientHeight;
+        const width = height * (imgEl.naturalWidth / imgEl.naturalHeight);
+        imgEl.style.height = `${height}px`;
+        imgEl.style.width = `${width}px`;
+    }
+
+    function bindStandingCardImageBox(imgEl) {
+        if (!imgEl) return;
+        const apply = () => applyStandingCardImageBox(imgEl);
+        imgEl.addEventListener("load", apply);
+        if (imgEl.complete) apply();
+    }
+
     // 이미지가 로드될 때마다(포즈/캐릭터가 바뀔 때) 다시 재고, 창 크기가 바뀌어도(max-height:40vh라
     // 뷰포트에 따라 크기가 변함) 다시 잰다. 같은 URL을 다시 선택해 onload가 안 뜨는 경우를 대비해
     // 지금 즉시 한 번도 시도해둔다.
@@ -304,6 +328,7 @@
                 img.onerror = null; // 무한 루프 방지
                 img.src = `${OUTFIT_IMAGE_BASE}${listing.outfit}/idle.png`;
             };
+            bindStandingCardImageBox(img);
             bindStandingShadow(img, card.querySelector(".trade-standing-card-shadow"));
             card.addEventListener("click", () => selectListing(listing));
             grid.appendChild(card);
