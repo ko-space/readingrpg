@@ -180,7 +180,7 @@
 
             const avatarEl = document.getElementById("pvp-my-avatar");
             if (me.character_info?.outfit && avatarEl) {
-                avatarEl.src = `${OUTFIT_IMAGE_BASE}${me.character_info.outfit}/idle.png`;
+                avatarEl.src = `${OUTFIT_IMAGE_BASE}${me.character_info.outfit}/idle.webp`;
                 if (typeof applyAvatarCrop === "function") applyAvatarCrop(avatarEl, me.character_info.outfit);
             }
             document.getElementById("pvp-my-nickname").textContent = me.user_info.nickname;
@@ -205,7 +205,7 @@
             const slotEl = imgEl.closest(".defense-standing-slot");
 
             if (unit) {
-                imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.png`;
+                imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.webp`;
                 imgEl.style.display = "";
                 if (typeof applyStandingCrop === "function") applyStandingCrop(imgEl, unit.outfit);
                 slotEl.classList.remove("defense-standing-empty");
@@ -228,7 +228,7 @@
         }
         return `
             <div class="opp-unit-thumb">
-                <img src="${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.png" data-outfit="${unit.outfit}" alt="">
+                <img src="${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.webp" data-outfit="${unit.outfit}" alt="">
                 <span class="opp-unit-star">★${unit.star}</span>
             </div>
         `;
@@ -263,7 +263,7 @@
                 card.innerHTML = `
                     <div class="opponent-main-row">
                         <div class="pvp-opponent-avatar-frame">
-                            <img class="pvp-opponent-avatar" src="${opp.lobby_outfit ? OUTFIT_IMAGE_BASE + opp.lobby_outfit + '/idle.png' : ''}" data-outfit="${opp.lobby_outfit || ''}" alt="">
+                            <img class="pvp-opponent-avatar" src="${opp.lobby_outfit ? OUTFIT_IMAGE_BASE + opp.lobby_outfit + '/idle.webp' : ''}" data-outfit="${opp.lobby_outfit || ''}" alt="">
                         </div>
                         <div class="pvp-opponent-rank">${opp.pvp_rank}등</div>
                         <div class="formation-preview">

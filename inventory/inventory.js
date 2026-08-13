@@ -170,7 +170,7 @@
             <div class="inventory-card-meta">${escapeHtml(metaText)}</div>
         `;
         const img = card.querySelector("img");
-        img.src = `${OUTFIT_IMAGE_BASE}${group.outfit}/idle.png`;
+        img.src = `${OUTFIT_IMAGE_BASE}${group.outfit}/idle.webp`;
         img.onerror = () => { img.style.visibility = "hidden"; };
         applyCrop(img, group.outfit);
         card.addEventListener("click", () => openDetail(group, isUnowned));
@@ -316,7 +316,7 @@
         }
 
         const standing = document.getElementById("inventory-standing-image");
-        standing.src = `${OUTFIT_IMAGE_BASE}${g.outfit}/idle.png`;
+        standing.src = `${OUTFIT_IMAGE_BASE}${g.outfit}/idle.webp`;
         standing.alt = unowned ? "???" : g.name;
         standing.onerror = () => { standing.style.visibility = "hidden"; };
         standing.style.visibility = "visible";
@@ -474,7 +474,7 @@
             <span class="inventory-ability-name">${escapeHtml(label)}</span>
             ${!available ? `
                 <div class="inventory-lock-overlay">
-                    <img class="inventory-skill-trait-lock" src="assets/icons/lock_white.png" alt="" onerror="this.outerHTML='🔒'">
+                    <img class="inventory-skill-trait-lock" src="assets/icons/lock_white.webp" alt="" onerror="this.outerHTML='🔒'">
                     ${unlockStar ? `<span class="inventory-lock-star">★${unlockStar}</span>` : ""}
                 </div>
             ` : ""}

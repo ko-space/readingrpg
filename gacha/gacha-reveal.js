@@ -205,7 +205,7 @@
         overlay.querySelector("#reveal-bg").className = `reveal-bg rarity-${character.rarity}`;
         overlay.querySelector("#reveal-character-glow").className = `reveal-character-glow rarity-${character.rarity}`;
         overlay.querySelector("#reveal-character-img").className = `reveal-character-img rarity-${character.rarity}`;
-        overlay.querySelector("#reveal-character-img").src = `${OUTFIT_IMAGE_BASE}${character.outfit}/idle.png`;
+        overlay.querySelector("#reveal-character-img").src = `${OUTFIT_IMAGE_BASE}${character.outfit}/idle.webp`;
         overlay.querySelector("#reveal-rarity-value").textContent = character.rarity;
         overlay.querySelector("#reveal-job-value").textContent = character.job_class || "-";
         overlay.querySelector("#reveal-gender-value").textContent = character.gender || "-";

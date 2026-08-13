@@ -206,7 +206,7 @@ function renderProfile(data) {
     // 아바타: 작은 원형(상단)과 큰 전신(중앙) 둘 다 같은 이미지를 사용
     let avatarSrc = DEFAULT_AVATAR;
     if (character && character.outfit) {
-        avatarSrc = `${OUTFIT_IMAGE_BASE}${character.outfit}/idle.png`;
+        avatarSrc = `${OUTFIT_IMAGE_BASE}${character.outfit}/idle.webp`;
     }
     avatarImg.src = avatarSrc;
     avatarImg.onerror = () => { avatarImg.src = DEFAULT_AVATAR; };

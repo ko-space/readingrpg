@@ -107,9 +107,7 @@
       "job_class": "사진 작가",
       "gender": "남",
       "outfits": {
-        "기본": "photographer/basic",
-        "여름": "photographer/summer",
-        "겨울": "photographer/winter"
+        "기본": "photographer/basic"
       },
       "description": "카메라를 수집하고 다닙니다. [nex5r + 삼양 85.4]를 특히 애용합니다.",
       "range": "원거리",
@@ -205,9 +203,7 @@
       "job_class": "가정 교사",
       "gender": "남",
       "outfits": {
-        "기본": "tutor/basic",
-        "여름": "tutor/summer",
-        "겨울": "tutor/winter"
+        "기본": "tutor/basic"
       },
       "description": "TinkerCAD로 자동차도 만들고 아기도 씻깁니다.",
       "range": "근거리",
@@ -302,9 +298,7 @@
       "job_class": "크레파스 회사 사장",
       "gender": "여",
       "outfits": {
-        "기본": "ceo/basic",
-        "여름": "ceo/summer",
-        "겨울": "ceo/winter"
+        "기본": "ceo/basic"
       },
       "description": "크레파스를 좋아합니다. 박보검 팬클럽 회장입니다.",
       "range": "원거리",
@@ -522,9 +516,7 @@
       "job_class": "마법사",
       "gender": "남",
       "outfits": {
-        "기본": "mage/basic",
-        "여름": "mage/summer",
-        "겨울": "mage/winter"
+        "기본": "mage/basic"
       },
       "description": "수백 년간 교무실에서 상주해 온 대마법사입니다.",
       "range": "원거리",
@@ -621,9 +613,7 @@
       "job_class": "마법사",
       "gender": "여",
       "outfits": {
-        "기본": "sj/basic",
-        "여름": "sj/summer",
-        "겨울": "sj/winter"
+        "기본": "sj/basic"
       },
       "description": "수백 년간 교무실을 지켜온 대마법사입니다.",
       "range": "원거리",
@@ -725,9 +715,7 @@
       "job_class": "타자",
       "gender": "남",
       "outfits": {
-        "기본": "batter/basic",
-        "여름": "batter/summer",
-        "겨울": "batter/winter"
+        "기본": "batter/basic"
       },
       "description": "쉬는 시간에 클래식 듣기를 거부하는 학생들에게 홈런을 몸소 보여줍니다.",
       "range": "근거리",
@@ -820,9 +808,7 @@
       "job_class": "영웅",
       "gender": "남",
       "outfits": {
-        "기본": "hero/basic",
-        "여름": "hero/summer",
-        "겨울": "hero/winter"
+        "기본": "hero/basic"
       },
       "description": "건국대 의대에 영웅이 등장합니다. 말 그대로 영웅이었습니다.",
       "range": "근거리",
@@ -1008,9 +994,7 @@
       "job_class": "학생",
       "gender": "남",
       "outfits": {
-        "기본": "ksy/basic",
-        "여름": "ksy/summer",
-        "겨울": "ksy/winter"
+        "기본": "ksy/basic"
       },
       "description": "성대모사 장인입니다. 그 누구도 될 수 있습니다.",
       "range": "근거리",
@@ -1110,9 +1094,7 @@
       "job_class": "학생",
       "gender": "남",
       "outfits": {
-        "기본": "sms/basic",
-        "여름": "sms/summer",
-        "겨울": "sms/winter"
+        "기본": "sms/basic"
       },
       "description": "책 읽는 모습이 정서적 귀감이 됩니다.",
       "range": "원거리",
@@ -1213,8 +1195,7 @@
       "gender": "남",
       "outfits": {
         "기본": "sjh/basic",
-        "수영복": "sjh/swimsuit",
-        "겨울": "sjh/winter"
+        "수영복": "sjh/swimsuit"
       },
       "description": "쓸모가 많습니다. 물론 인게임 내에서요.",
       "range": "근거리",
@@ -1314,9 +1295,7 @@
       "job_class": "1반 학생",
       "gender": "여",
       "outfits": {
-        "기본": "student/basic",
-        "여름": "student/summer",
-        "겨울": "student/winter"
+        "기본": "student/basic"
       },
       "description": "직접 찾아가보세요.",
       "range": "근거리",
@@ -1408,8 +1387,7 @@
       "gender": "남",
       "outfits": {
         "기본": "beginner/basic",
-        "수영복": "beginner/swimsuit",
-        "겨울": "beginner/winter"
+        "수영복": "beginner/swimsuit"
       },
       "description": "있는 그대로의 모습이 아름다운 초심자 청년입니다.",
       "range": "근거리",
@@ -1501,9 +1479,7 @@
       "job_class": "마법사",
       "gender": "남",
       "outfits": {
-        "기본": "mage_weak/basic",
-        "여름": "mage_weak/summer",
-        "겨울": "mage_weak/winter"
+        "기본": "mage_weak/basic"
       },
       "description": "미디어실에 상주하는 최약체 마법사입니다.",
       "range": "근거리",

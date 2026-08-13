@@ -304,7 +304,7 @@
             card.innerHTML = `
                 <div class="gacha-pickup-top">
                     <div class="gacha-pickup-photo-frame">
-                        <img class="gacha-pickup-photo" src="${pickup.outfit ? OUTFIT_IMAGE_BASE + pickup.outfit + '/idle.png' : ''}"
+                        <img class="gacha-pickup-photo" src="${pickup.outfit ? OUTFIT_IMAGE_BASE + pickup.outfit + '/idle.webp' : ''}"
                              alt="${pickup.character_name}" onerror="this.removeAttribute('src');this.style.background='#ddd';">
                     </div>
                     <div class="gacha-pickup-info">

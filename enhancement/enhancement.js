@@ -68,7 +68,7 @@
 
         imgEl.style.visibility = "visible";
         imgEl.alt = altText || "";
-        imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.png`;
+        imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.webp`;
         imgEl.onerror = () => {
             imgEl.style.visibility = "hidden";
         };

@@ -14,7 +14,7 @@
     const PROJECTILE_TRAVEL_MS = 220;
     const MAX_ATTACK_FRAMES = 6;
     const MAX_SKILL_FRAMES = 9; // 스킬 시전 전용 사진은 캐릭터당 총 9장까지 넣기로 확정됨(arena-battle.js와 동일)
-    const MAX_WALK_FRAMES = 6; // 걷기 전용 사진(walk_N.png), attack_N.png와 같은 최대 장수(arena-battle.js와 동일)
+    const MAX_WALK_FRAMES = 6; // 걷기 전용 사진(walk_N.webp), attack_N.webp와 같은 최대 장수(arena-battle.js와 동일)
     const ATTACK_FRAME_DURATION_MS = 60;
     const WALK_FRAME_DURATION_MS = 220;
     const EFFECT_LAUNCH_DELAY_MS = ATTACK_FRAME_DURATION_MS * 3; // 원거리 공격: 애니메이션 3프레임쯤 재생된 뒤 이펙트 발사
@@ -294,7 +294,7 @@
 
 
 
-    // 사망 시: 로그 한 줄 + 사망 디폴트 사진(death${variant}.png, 아직 없으면 idle 사진을 흑백으로
+    // 사망 시: 로그 한 줄 + 사망 디폴트 사진(death${variant}.webp, 아직 없으면 idle 사진을 흑백으로
     // 임시 대체) + 투명해지면서 가로 실선 무늬로 스캔되듯 사라지는 연출. (arena-battle.js의
     // playDeathSequence와 동일 - variant는 spriteVariantSuffix로, 윤의 "호" 같은 소환수도 전용
     // 사망 그림을 따로 쓸 수 있다.)
@@ -315,10 +315,10 @@
         imgEl.classList.remove("death-fallback-filter");
         imgEl.onerror = () => {
             imgEl.onerror = null;
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.webp`;
             imgEl.classList.add("death-fallback-filter");
         };
-        imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/death${variant}.png`;
+        imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/death${variant}.webp`;
 
         imgEl.classList.add("dying");
     }
@@ -353,9 +353,9 @@
                     const variant = spriteVariantSuffix(slot);
                     imgEl.onerror = () => {
                         imgEl.onerror = null;
-                        imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.png`;
+                        imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.webp`;
                     };
-                    imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.png`;
+                    imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.webp`;
                     imgEl.classList.toggle("flipped", isFacingFlipped(slot)); // 방향은 전투 중 동적으로 바뀔 수 있음
                 }
             }
@@ -811,7 +811,7 @@
         if (frameCountCache[cacheKey] !== undefined) return frameCountCache[cacheKey];
         let count = 0;
         for (let i = 1; i <= MAX_ATTACK_FRAMES; i += 1) {
-            const exists = await checkImageExists(`${OUTFIT_IMAGE_BASE}${outfit}/attack${variant}_${i}.png`);
+            const exists = await checkImageExists(`${OUTFIT_IMAGE_BASE}${outfit}/attack${variant}_${i}.webp`);
             if (!exists) break;
             count = i;
         }
@@ -819,13 +819,13 @@
         return count;
     }
 
-    // 시전 전용 프레임(skill_N.png)이 있는지 확인 - attack_N.png와 같은 규칙, outfit당 한 번만 확인 후 캐시.
+    // 시전 전용 프레임(skill_N.webp)이 있는지 확인 - attack_N.webp와 같은 규칙, outfit당 한 번만 확인 후 캐시.
     async function getSkillFrameCount(outfit, variant = "") {
         const cacheKey = `${outfit}${variant}`;
         if (skillFrameCountCache[cacheKey] !== undefined) return skillFrameCountCache[cacheKey];
         let count = 0;
         for (let i = 1; i <= MAX_SKILL_FRAMES; i += 1) {
-            const exists = await checkImageExists(`${OUTFIT_IMAGE_BASE}${outfit}/skill${variant}_${i}.png`);
+            const exists = await checkImageExists(`${OUTFIT_IMAGE_BASE}${outfit}/skill${variant}_${i}.webp`);
             if (!exists) break;
             count = i;
         }
@@ -833,13 +833,13 @@
         return count;
     }
 
-    // 걷기 전용 프레임(walk_N.png)이 있는지 확인 - attack_N.png와 같은 규칙(arena-battle.js와 동일).
+    // 걷기 전용 프레임(walk_N.webp)이 있는지 확인 - attack_N.webp와 같은 규칙(arena-battle.js와 동일).
     async function getWalkFrameCount(outfit, variant = "") {
         const cacheKey = `${outfit}${variant}`;
         if (walkFrameCountCache[cacheKey] !== undefined) return walkFrameCountCache[cacheKey];
         let count = 0;
         for (let i = 1; i <= MAX_WALK_FRAMES; i += 1) {
-            const exists = await checkImageExists(`${OUTFIT_IMAGE_BASE}${outfit}/walk${variant}_${i}.png`);
+            const exists = await checkImageExists(`${OUTFIT_IMAGE_BASE}${outfit}/walk${variant}_${i}.webp`);
             if (!exists) break;
             count = i;
         }
@@ -864,7 +864,7 @@
 
         let frameIndex = 1;
         while (walkAnimTokens[slot] === myToken) {
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/walk${variant}_${frameIndex}.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/walk${variant}_${frameIndex}.webp`;
             await sleep(WALK_FRAME_DURATION_MS);
             frameIndex = (frameIndex % frameCount) + 1;
         }
@@ -898,24 +898,24 @@
 
         for (let i = 1; i <= frameCount; i += 1) {
             if (attackAnimTokens[slot] !== myToken) return;
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/attack${variant}_${i}.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/attack${variant}_${i}.webp`;
             await sleep(ATTACK_FRAME_DURATION_MS);
         }
 
         if (attackAnimTokens[slot] === myToken) {
-            // battle_idle 파일이 없는 캐릭터/의상 조합이면 idle.png로 대체한다(arena-battle.js와 동일).
+            // battle_idle 파일이 없는 캐릭터/의상 조합이면 idle.webp로 대체한다(arena-battle.js와 동일).
             imgEl.onerror = () => {
                 imgEl.onerror = null;
-                imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.png`;
+                imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.webp`;
             };
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.webp`;
             attackAnimActive[slot] = false;
         }
     }
 
     /*
-     * 시전(캐스팅) 중 재생되는 프레임 애니메이션. 스킬 전용 프레임(skill_N.png)이 있으면 그걸 우선 쓰고,
-     * 없으면 기본공격 프레임(attack_N.png)을 그대로 돌려쓴다. 짧은 프레임 묶음을 빠르게 반복 재생하는
+     * 시전(캐스팅) 중 재생되는 프레임 애니메이션. 스킬 전용 프레임(skill_N.webp)이 있으면 그걸 우선 쓰고,
+     * 없으면 기본공격 프레임(attack_N.webp)을 그대로 돌려쓴다. 짧은 프레임 묶음을 빠르게 반복 재생하는
      * 대신, 가진 프레임 수만큼을 시전 시간(durationMs) 전체에 고르게 늘려서 "한 번만" 재생한다 -
      * 그래서 시전이 길수록 프레임 하나하나가 더 천천히 넘어가고, 루프하는 느낌 없이 시전 시작부터
      * 끝까지 이어지는 애니메이션처럼 보인다.
@@ -965,7 +965,7 @@
         // 시전 시간보다 점점 길어지고 skill_resolve 처리가 늦어진다.
         for (let i = 1; i <= frameCount; i += 1) {
             if (attackAnimTokens[slot] !== myToken) return; // 다른 호출이 이미 새 토큰을 발급함 - 그쪽 상태를 건드리지 않는다
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/${framePrefix}${variant}_${i}.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/${framePrefix}${variant}_${i}.webp`;
             const remainingMs = castStartMs + perFrameMs * i - performance.now();
             // remainingMs가 0 이하라고 await를 아예 건너뛰면 브라우저에 제어권이 한 번도 안 넘어가서
             // (=페인트 기회 없이) 여러 프레임의 src가 연달아 덮어써진다 - 호 폭발처럼 메인 스레드가
@@ -994,7 +994,7 @@
         if (imgEl) {
             imgEl.classList.remove("casting", "casting-rainbow");
             imgEl.onerror = null;
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${units[slot].outfit}/battle_idle${spriteVariantSuffix(slot)}.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${units[slot].outfit}/battle_idle${spriteVariantSuffix(slot)}.webp`;
         }
         flashEffectAura(slot, "cc");
         log(`[특성] ${units[slot].name}의 시전이 기절로 취소됐다!`);
@@ -1049,16 +1049,16 @@
     // ===== 상태 아이콘(체력바 위, 왼쪽부터 채워짐) - arena-battle.js와 동일한 source-map 방식 =====
     // xN 배지는 서로 다른 원인이 동시에 겹칠 때만 오르고, 같은 원인의 반복(갱신)은 카운트를 늘리지 않는다.
     const STATUS_ICON_FILES = {
-        atk_up: "Combat_Icon_Buff_ATK.png", maxhp_up: "Combat_Icon_Buff_MAXHP.png",
-        atk_speed_up: "Combat_Icon_Buff_AttackSpeed.png", crit_up: "Combat_Icon_Buff_CriticalDamage.png",
-        crit_chance_up: "Combat_Icon_Buff_CriticalChance.png", rear_priority: "Combat_Icon_Special_AttackRear.png",
-        atk_down: "Combat_Icon_Debuff_ATK.png",
-        maxhp_down: "Combat_Icon_Debuff_MAXHP.png", stun: "Combat_Icon_CC_Stunned.png",
-        knockback: "Combat_Icon_CC_Knockback.png", heal: "Combat_Icon_Recovery_Heal.png",
-        immune: "Combat_Icon_Special_ImmuneDamage.png",
-        paint_red: "Combat_Icon_Special_InkRed.png", paint_blue: "Combat_Icon_Special_InkBlue.png",
-        paint_yellow: "Combat_Icon_Special_InkYellow.png", damage_reduction: "Combat_Icon_Buff_DamageRatio.png",
-        lifesteal: "Combat_Icon_Special_Lifesteal.png", // 윤 "선생 고혈" - 공격 대상이 선생 타입인 동안(흡혈)
+        atk_up: "Combat_Icon_Buff_ATK.webp", maxhp_up: "Combat_Icon_Buff_MAXHP.webp",
+        atk_speed_up: "Combat_Icon_Buff_AttackSpeed.webp", crit_up: "Combat_Icon_Buff_CriticalDamage.webp",
+        crit_chance_up: "Combat_Icon_Buff_CriticalChance.webp", rear_priority: "Combat_Icon_Special_AttackRear.webp",
+        atk_down: "Combat_Icon_Debuff_ATK.webp",
+        maxhp_down: "Combat_Icon_Debuff_MAXHP.webp", stun: "Combat_Icon_CC_Stunned.webp",
+        knockback: "Combat_Icon_CC_Knockback.webp", heal: "Combat_Icon_Recovery_Heal.webp",
+        immune: "Combat_Icon_Special_ImmuneDamage.webp",
+        paint_red: "Combat_Icon_Special_InkRed.webp", paint_blue: "Combat_Icon_Special_InkBlue.webp",
+        paint_yellow: "Combat_Icon_Special_InkYellow.webp", damage_reduction: "Combat_Icon_Buff_DamageRatio.webp",
+        lifesteal: "Combat_Icon_Special_Lifesteal.webp", // 윤 "선생 고혈" - 공격 대상이 선생 타입인 동안(흡혈)
     };
     const MOMENT_ICON_MS = 1200;
     const statusIconState = {}; // slot -> { iconId: { el, sources: Map<sourceKey, {weight, timer}> } }
@@ -1222,9 +1222,9 @@
             const variant = spriteVariantSuffix(slot);
             imgEl.onerror = () => {
                 imgEl.onerror = null;
-                imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.png`;
+                imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.webp`;
             };
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.webp`;
         }
         if (targetKey) faceToward(slot, targetKey);
         (pendingArrivalResolvers[slot] || []).forEach((resolve) => resolve());
@@ -1263,7 +1263,7 @@
                 }
                 meleeArrived[slot] = false;
                 imgEl?.classList.add("walking");
-                // 걷기 전용 사진(walk_N.png)이 있으면 그 프레임을 순환 재생(arena-battle.js와 동일).
+                // 걷기 전용 사진(walk_N.webp)이 있으면 그 프레임을 순환 재생(arena-battle.js와 동일).
                 if (!walkAnimActive[slot]) {
                     walkAnimActive[slot] = true;
                     playWalkFrames(slot);
@@ -1417,7 +1417,7 @@
                 const handler = MANUAL_SKILL_HANDLERS[skillMech.effect_type];
                 const result = handler ? handler(actorSlot, params) : { text: "(이 효과 타입은 아직 수동 시뮬레이션이 없습니다)" };
                 if (imgEl && units[actorSlot]) {
-                    imgEl.src = `${OUTFIT_IMAGE_BASE}${units[actorSlot].outfit}/battle_idle${spriteVariantSuffix(actorSlot)}.png`;
+                    imgEl.src = `${OUTFIT_IMAGE_BASE}${units[actorSlot].outfit}/battle_idle${spriteVariantSuffix(actorSlot)}.webp`;
                 }
 
                 // 강승유(copy_target_skill)가 실제로 복제한 스킬은 result.copiedEffectType에 담겨온다 -
@@ -1658,7 +1658,7 @@
         if (imgEl && units[slot]) {
             imgEl.classList.remove("casting", "casting-rainbow", "attacking");
             imgEl.onerror = null;
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${units[slot].outfit}/battle_idle${spriteVariantSuffix(slot)}.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${units[slot].outfit}/battle_idle${spriteVariantSuffix(slot)}.webp`;
         }
     }
 
@@ -1915,7 +1915,7 @@
                         attackAnimTokens[actorSlot] = (attackAnimTokens[actorSlot] || 0) + 1;
                         attackAnimActive[actorSlot] = false;
                         if (imgEl && units[actorSlot]) {
-                            imgEl.src = `${OUTFIT_IMAGE_BASE}${units[actorSlot].outfit}/battle_idle${spriteVariantSuffix(actorSlot)}.png`;
+                            imgEl.src = `${OUTFIT_IMAGE_BASE}${units[actorSlot].outfit}/battle_idle${spriteVariantSuffix(actorSlot)}.webp`;
                         }
                         // 청년(밀쳐내기): 이 배우 자신의 시전 자세가 "실제로" 끝난 이 시점에야 밀쳐내기를
                         // 실행한다(arena-battle.js와 동일한 이유 - HP는 아래 동기 분기에서 여전히 즉시 반영).

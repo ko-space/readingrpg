@@ -38,7 +38,7 @@
 
     function itemImageSrc(item) {
         if (item.item_type === "enhancement" || item.item_type === "ticket") return item.icon_file || "";
-        return item.outfit_file ? `${OUTFIT_IMAGE_BASE}${item.outfit_file}/idle.png` : "";
+        return item.outfit_file ? `${OUTFIT_IMAGE_BASE}${item.outfit_file}/idle.webp` : "";
     }
 
     // item.currency("gold"|"silver")에 맞는 단위(G/S)를 붙인다 - 가격 표시가 나오는 모든 곳(카드,
