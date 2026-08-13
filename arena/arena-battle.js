@@ -625,6 +625,13 @@
     const meleeArrived = {};                // key -> 그 타겟에 이미 도착했는지
     const pendingArrivalResolvers = {};     // key -> 도착을 기다리고 있는 Promise resolve 함수들
     const walkerSuspended = {};             // key -> 이동 루프를 잠깐 멈춰둘지(넉백 트랜지션 중 tick()과 충돌 방지)
+    // 근접 유닛이 겹쳐 보일 때 누가 앞/뒤인지는 순전히 DOM 순서(z-index 미지정 = auto)로 정해져서,
+    // 나중에 걸어와 겹친 유닛이 오히려 원래 있던 유닛보다 앞으로(위로) 그려지는 문제가 있었다 - "걷기를
+    // 시작하는" 순간(정지 -> walking 전환) 이 카운터를 하나씩 늘려 그 유닛의 z-index로 찍어두면, 더
+    // 나중에 걷기 시작한 유닛일수록 더 높은 값을 받아 항상 앞선 유닛보다... 앞이 아니라 뒤에 있어야
+    // 하므로 z-index는 거꾸로(=낮게) 준다. .battle-unit.render-on-top(50)보다는 항상 낮게 유지한다.
+    let meleeWalkZCounter = 0;
+    const MELEE_WALK_Z_BASE = 40; // .render-on-top(50)보다 낮게, auto(0 취급)보다는 높게
     let walkerRunning = false;
     // startMeleeWalker가 다시 호출될 때마다 증가 - attackAnimTokens와 동일한 이유(재시작 시 이전 세대의
     // tick() 루프가 확실히 멈추도록). walkerRunning 하나만 보면, 리셋(false) 직후 아주 짧은 틈에 새
@@ -787,6 +794,14 @@
                 }
 
                 meleeArrived[key] = false;
+                if (imgEl && !imgEl.classList.contains("walking")) {
+                    // 지금 막 정지 상태에서 걷기로 전환되는 순간(=새로 움직이기 시작)에만 z-index를
+                    // 새로 찍는다 - 매 프레임 덮어쓰면 의미가 없다. 값을 점점 낮춰서, 더 나중에
+                    // 걷기 시작한 유닛일수록 먼저 있던(또는 먼저 걷기 시작한) 유닛보다 뒤(아래)로
+                    // 그려지게 한다(겹쳤을 때 나중에 온 쪽이 앞을 가리는 버그 수정).
+                    meleeWalkZCounter += 1;
+                    el.style.zIndex = String(Math.max(1, MELEE_WALK_Z_BASE - meleeWalkZCounter));
+                }
                 if (imgEl) imgEl.classList.add("walking");
                 // 걷기 전용 사진(walk_N.png)이 있으면 그 프레임을 순환 재생 - 없는 캐릭터는 위의 walking
                 // 클래스(bob 애니메이션)만 적용된 채로 원래처럼 걷는다(playWalkFrames 내부 폴백).
