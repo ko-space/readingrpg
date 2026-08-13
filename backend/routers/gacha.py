@@ -17,7 +17,7 @@ with open("characters.json", "r", encoding="utf-8") as f:
 
 GACHA_COST = 100
 GACHA_POINTS_PER_PULL = 1   # 모집 1회당 적립되는 모집 포인트 (성공/중복 여부와 무관)
-DEFAULT_PICKUP_RATE_UP = 0.5  # gacha_banner_pickups.rate_up이 비어있을 때 쓰는 기본값
+DEFAULT_PICKUP_RATE_UP = 0.5  # gacha_banner_pickups.rate_up이 비어있을 때 쓰는 기본값 / rate_up = 2 / (N - 1)
 RARITY_START_STAR = {"신화": 5, "전설": 4, "영웅": 3, "희귀": 2, "일반": 1}  # 모집 시 시작 성(星)
 ADMIN_USER_ID = 1  # ranking.py/pvp.py와 동일한 관리자 계정 - is_hidden 캐릭터(예: 이의진)도 테스트로 뽑을 수 있는 예외
 KST = timezone(timedelta(hours=9))
@@ -41,7 +41,7 @@ PICKUP_SCHEDULE = [
         "start_at": datetime(2026, 8, 11, 21, 20, tzinfo=KST),  
         "banner_name": "픽업모집",
         "image_file": "pickup-banner-new3.png",
-        "characters": [{"character_name": "윤 & 호", "point_cost": 40, "rate_up": 0.75}],
+        "characters": [{"character_name": "윤 & 호", "point_cost": 40, "rate_up": 0.6666}],
     },
     {
         "start_at": datetime(2026, 8, 18, 21, 20, tzinfo=KST),  
