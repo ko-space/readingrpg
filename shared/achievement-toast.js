@@ -13,7 +13,7 @@
             <div class="ach-toast-box">
                 <div class="ach-toast-banner">업적 달성!</div>
                 <div class="ach-toast-icon">
-                    <img src="assets/icons/trophy.png" alt="" onerror="this.outerHTML='🏆'">
+                    <img src="assets/icons/trophy.webp" alt="" onerror="this.outerHTML='🏆'">
                 </div>
                 <div class="ach-toast-name" id="ach-toast-name">-</div>
                 <p class="ach-toast-desc" id="ach-toast-desc"></p>

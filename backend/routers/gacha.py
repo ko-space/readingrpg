@@ -28,25 +28,25 @@ PICKUP_SCHEDULE = [
     {
         "start_at": datetime(2025, 1, 1, 0, 0, tzinfo=KST),  # 과거 날짜 = 이미 활성화된 최초 픽업
         "banner_name": "픽업모집",
-        "image_file": "pickup-banner.png",
+        "image_file": "pickup-banner.webp",
         "characters": [{"character_name": "송주헌", "point_cost": 20, "rate_up": 0.99}],
     },
     {
         "start_at": datetime(2026, 8, 4, 21, 20, tzinfo=KST),
         "banner_name": "픽업모집",
-        "image_file": "pickup-banner-new2.png",
+        "image_file": "pickup-banner-new2.webp",
         "characters": [{"character_name": "방임석", "point_cost": 50, "rate_up": 0.99}], 
     },
     {
         "start_at": datetime(2026, 8, 11, 21, 20, tzinfo=KST),  
         "banner_name": "픽업모집",
-        "image_file": "pickup-banner-new3.png",
+        "image_file": "pickup-banner-new3.webp",
         "characters": [{"character_name": "윤 & 호", "point_cost": 40, "rate_up": 0.6666}],
     },
     {
         "start_at": datetime(2026, 8, 18, 21, 20, tzinfo=KST),  
         "banner_name": "픽업모집",
-        "image_file": "pickup-banner.png",
+        "image_file": "pickup-banner.webp",
         "characters": [{"character_name": "송주헌", "point_cost": 20, "rate_up": 0.99}],
     },    
   
@@ -118,8 +118,11 @@ def _sync_pickup_banner(db: Session):
             u.gacha_points = 0
         db.commit()
     else:
-        # 캐릭터 구성은 그대로고 rate_up만 바뀌었을 수 있다 - "새 픽업"이 아니라 지금 픽업의 세부
-        # 조정이므로 포인트 골드 전환 없이 값만 맞춘다.
+        # 캐릭터 구성은 그대로고 rate_up/이미지 파일명만 바뀌었을 수 있다 - "새 픽업"이 아니라 지금
+        # 픽업의 세부 조정이므로 포인트 골드 전환 없이 값만 맞춘다.
+        image_changed = banner.image_file != scheduled["image_file"]
+        if image_changed:
+            banner.image_file = scheduled["image_file"]
         rate_by_name = {c["character_name"]: c["rate_up"] for c in scheduled["characters"] if "rate_up" in c}
         row_changed = False
         for row in existing_rows:
@@ -127,7 +130,7 @@ def _sync_pickup_banner(db: Session):
             if target_rate is not None and row.rate_up != target_rate:
                 row.rate_up = target_rate
                 row_changed = True
-        if row_changed or dates_changed:
+        if row_changed or dates_changed or image_changed:
             db.commit()
 
 

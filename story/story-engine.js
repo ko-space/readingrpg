@@ -144,18 +144,18 @@ const CHAR_IMG = {
 Object.values(CHAR_IMG).forEach((src) => { new Image().src = src; });
 
 const BG = {
-  true_seungyu_cg: ASSET_BASE + "backgrounds/true_seungyu_cg.png",
-  true_ganghee_cg: ASSET_BASE + "backgrounds/true_ganghee_cg.png",
-  true_yeongwoong_cg: ASSET_BASE + "backgrounds/true_yeongwoong_cg.png",
-  true_juheon_cg: ASSET_BASE + "backgrounds/true_juheon_cg.png",
-  collector_cafe: ASSET_BASE + "backgrounds/collector_cafe.png",
-  collector_boxing_gym: ASSET_BASE + "backgrounds/collector_boxing_gym.png",
-  collector_spring: ASSET_BASE + "backgrounds/collector_spring.png",
-  juheon_hidden_end_photo: ASSET_BASE + "backgrounds/juheon_hidden_end_photo.png",
-  ganghee_end_photo: ASSET_BASE + "backgrounds/ganghee_end_photo.png",
-  normal_end_photo: ASSET_BASE + "backgrounds/normal_end_photo.png",
-  juheon_end_photo: ASSET_BASE + "backgrounds/juheon_end_photo.png",
-  yeongwoong_end_photo: ASSET_BASE + "backgrounds/yeongwoong_end_photo.png",
+  true_seungyu_cg: ASSET_BASE + "backgrounds/true_seungyu_cg.webp",
+  true_ganghee_cg: ASSET_BASE + "backgrounds/true_ganghee_cg.webp",
+  true_yeongwoong_cg: ASSET_BASE + "backgrounds/true_yeongwoong_cg.webp",
+  true_juheon_cg: ASSET_BASE + "backgrounds/true_juheon_cg.webp",
+  collector_cafe: ASSET_BASE + "backgrounds/collector_cafe.webp",
+  collector_boxing_gym: ASSET_BASE + "backgrounds/collector_boxing_gym.webp",
+  collector_spring: ASSET_BASE + "backgrounds/collector_spring.webp",
+  juheon_hidden_end_photo: ASSET_BASE + "backgrounds/juheon_hidden_end_photo.webp",
+  ganghee_end_photo: ASSET_BASE + "backgrounds/ganghee_end_photo.webp",
+  normal_end_photo: ASSET_BASE + "backgrounds/normal_end_photo.webp",
+  juheon_end_photo: ASSET_BASE + "backgrounds/juheon_end_photo.webp",
+  yeongwoong_end_photo: ASSET_BASE + "backgrounds/yeongwoong_end_photo.webp",
   classroom: ASSET_BASE + "backgrounds/classroom.jpg",
   hagutgil: ASSET_BASE + "backgrounds/hagutgil.jpg",
   gym: ASSET_BASE + "backgrounds/gym.jpg",
@@ -2921,7 +2921,7 @@ function buildGalleryCard(item){
     const lock = document.createElement('div');
     lock.className = 'gallery-lock';
     const lockImg = document.createElement('img');
-    lockImg.src = 'assets/icons/lock.png';
+    lockImg.src = 'assets/icons/lock.webp';
     lockImg.alt = '';
     lockImg.className = 'gallery-lock-icon';
     lockImg.onerror = () => { lock.textContent = '🔒'; };

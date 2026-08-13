@@ -44,7 +44,7 @@ body {
     padding: 22px 26px;
     background-image:
         linear-gradient(rgba(18, 25, 45, 0.18), rgba(18, 25, 45, 0.32)),
-        url('../assets/arena/battle-bg.png'),
+        url('../assets/arena/battle-bg.webp'),
         linear-gradient(160deg, #2a3550 0%, #1a2038 60%, #0f1424 100%);
     background-size: cover, cover, cover;
     background-position: center, center, center;
@@ -855,7 +855,7 @@ body {
     animation: death-dissolve 1.1s ease-in forwards;
 }
 
-/* 아직 캐릭터별 death.png가 준비되지 않았을 때 idle 사진으로 대체 - 흑백+어둡게 필터링해 임시 표시 */
+/* 아직 캐릭터별 death.webp가 준비되지 않았을 때 idle 사진으로 대체 - 흑백+어둡게 필터링해 임시 표시 */
 .battle-unit-img.death-fallback-filter {
     filter: grayscale(1) brightness(0.55) contrast(1.1);
 }

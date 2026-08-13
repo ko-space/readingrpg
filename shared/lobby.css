@@ -59,7 +59,7 @@ body, html {
     height: 100vh;
     overflow: hidden;
     /* 이미지가 있으면 이미지가 보이고, 없거나 로드 실패하면 그라데이션이 자동으로 대신 보임 */
-    background-image: url('../backgroundloginimssage.png'), linear-gradient(to bottom, #bfe3f7 0%, #d9f0c9 55%, #a8d98c 100%);
+    background-image: url('../backgroundloginimssage.webp'), linear-gradient(to bottom, #bfe3f7 0%, #d9f0c9 55%, #a8d98c 100%);
     background-size: cover, cover;
     background-position: bottom center, center;
     background-repeat: no-repeat, no-repeat;
@@ -509,7 +509,7 @@ body, html {
 }
 
 #arena-thumb{
-    background-image: url(../assets/regions/arena.png), linear-gradient(to bottom, #bfe3f7, #a8d98c);
+    background-image: url(../assets/regions/arena.webp), linear-gradient(to bottom, #bfe3f7, #a8d98c);
 }
 
 #story-thumb{

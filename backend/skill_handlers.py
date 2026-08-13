@@ -102,7 +102,7 @@ def _skill_summon_clone(caster, own_team, enemy_team, params, time_elapsed):
         detail["caster_hp_after"] = caster["hp"]
         detail["caster_max_hp"] = caster["max_hp"]
     # 윤(호): 소환수 전용 스프라이트를 시전자와 같은 outfit 폴더 안에서 접미사로만 구분해 쓰는 경우
-    # (예: battle_idle_ho.png, attack_ho_1.png - 이의진 type2의 battle_idle_type2.png와 같은 방식).
+    # (예: battle_idle_ho.webp, attack_ho_1.webp - 이의진 type2의 battle_idle_type2.webp와 같은 방식).
     # 없으면 프론트는 기존처럼 시전자 스프라이트를 그대로 물려받는다(윤영준의 복제체 등).
     clone_sprite_variant = params.get("clone_sprite_variant")
     if clone_sprite_variant:
