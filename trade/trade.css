@@ -406,22 +406,22 @@
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    /* 폭은 강제로 줄이지 않는다(원본 비율상 넓은 이미지라도 세로를 꽉 채우는 크기를 그대로 씀) -
-       trade.js의 applyStandingCardImageBox()가 로드 즉시 프레임 높이 기준으로 폭을 px로 계산해
-       박아 넣으므로, 프레임보다 넓게 그려질 수 있다. overflow를 hidden으로 자르면 캐릭터 옆이
-       잘려 보이므로 visible로 둔다(양옆 카드와 살짝 겹칠 수 있지만 잘리거나 작아지는 것보다 낫다). */
-    overflow: visible;
+    /* trade.js의 applyStandingCardImageBox()가 로드 즉시 "세로를 채우되 카드 폭은 절대 안 넘게"
+       계산한 px 값을 박아 넣으므로 정상적으로는 넘칠 일이 없다 - 혹시 JS가 아직 못 돈 아주 짧은
+       순간(아래 img 기본값 max-width:100%)에도 넘치지 않도록 안전망으로 hidden을 둔다. */
+    overflow: hidden;
 }
 
 .trade-standing-card-frame img {
     position: relative;
     z-index: 1;
-    /* 폭은 trade.js가 로드 직후 px로 직접 계산해서 박아 넣는다(아래는 그 전까지 잠깐 보이는
-       값 + JS를 못 탈 때의 대비용 기본값). height:100%만으로는 이미지 로드가 늦게 끝났을 때 일부
-       브라우저(특히 iOS Safari)가 로드 후 다시 그리기를 안 해서 계속 안 보이는 문제가 있었는데,
-       trade.js 쪽에서 명시적으로 style을 바꿔주면 모든 브라우저가 확실히 다시 그린다. */
+    /* 정확한 크기는 trade.js가 로드 직후 px로 직접 계산해서 박아 넣는다(아래는 그 전까지 잠깐
+       보이는 값 + JS를 못 탈 때의 대비용 기본값 - object-fit:contain이 height/max-width 중 더
+       빡빡한 쪽에 맞춰 카드 폭을 넘지 않게 알아서 줄여준다). height:100%만으로는 이미지 로드가
+       늦게 끝났을 때 일부 브라우저(특히 iOS Safari)가 로드 후 다시 그리기를 안 해서 계속 안 보이는
+       문제가 있었는데, trade.js 쪽에서 명시적으로 style을 바꿔주면 모든 브라우저가 확실히 다시 그린다. */
     height: 100%;
-    width: auto;
+    max-width: 100%;
     object-fit: contain;
     object-position: bottom center;
     filter: drop-shadow(0 6px 6px rgba(76, 51, 19, .28));
