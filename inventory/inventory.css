@@ -244,11 +244,11 @@
     filter: blur(1.5px);
 }
 
-.inventory-card-portrait.rarity-신화::before { background-image: url('../assets/gacha/bg-신화.png'), linear-gradient(160deg, #ff8a4c 0%, #ff3c6a 35%, #7a1fa2 70%, #180530 100%); }
-.inventory-card-portrait.rarity-전설::before { background-image: url('../assets/gacha/bg-전설.png'), linear-gradient(160deg, #fff2c0 0%, #ffcf5c 35%, #ff8f2c 70%, #7a3c00 100%); }
-.inventory-card-portrait.rarity-영웅::before { background-image: url('../assets/gacha/bg-영웅.png'), linear-gradient(160deg, #e2c8ff 0%, #b06af0 35%, #6a2ea8 70%, #1f0f38 100%); }
-.inventory-card-portrait.rarity-희귀::before { background-image: url('../assets/gacha/bg-희귀.png'), linear-gradient(160deg, #cfe8ff 0%, #7ab0f0 35%, #3c6ab8 70%, #0f2748 100%); }
-.inventory-card-portrait.rarity-일반::before { background-image: url('../assets/gacha/bg-일반.png'), linear-gradient(160deg, #e6f0df 0%, #a8c49a 35%, #6a8060 70%, #1f281c 100%); }
+.inventory-card-portrait.rarity-신화::before { background-image: url('../assets/gacha/bg-신화.webp'), linear-gradient(160deg, #ff8a4c 0%, #ff3c6a 35%, #7a1fa2 70%, #180530 100%); }
+.inventory-card-portrait.rarity-전설::before { background-image: url('../assets/gacha/bg-전설.webp'), linear-gradient(160deg, #fff2c0 0%, #ffcf5c 35%, #ff8f2c 70%, #7a3c00 100%); }
+.inventory-card-portrait.rarity-영웅::before { background-image: url('../assets/gacha/bg-영웅.webp'), linear-gradient(160deg, #e2c8ff 0%, #b06af0 35%, #6a2ea8 70%, #1f0f38 100%); }
+.inventory-card-portrait.rarity-희귀::before { background-image: url('../assets/gacha/bg-희귀.webp'), linear-gradient(160deg, #cfe8ff 0%, #7ab0f0 35%, #3c6ab8 70%, #0f2748 100%); }
+.inventory-card-portrait.rarity-일반::before { background-image: url('../assets/gacha/bg-일반.webp'), linear-gradient(160deg, #e6f0df 0%, #a8c49a 35%, #6a8060 70%, #1f281c 100%); }
 
 .inventory-card-portrait img {
     width: 100%;
@@ -465,17 +465,17 @@
     pointer-events: none;
 }
 
-.inventory-detail-view.rarity-신화::before { background-image: url('../assets/gacha/bg-신화.png'), linear-gradient(160deg, #ff8a4c 0%, #ff3c6a 35%, #7a1fa2 70%, #180530 100%); }
-.inventory-detail-view.rarity-전설::before { background-image: url('../assets/gacha/bg-전설.png'), linear-gradient(160deg, #fff2c0 0%, #ffcf5c 35%, #ff8f2c 70%, #7a3c00 100%); }
-.inventory-detail-view.rarity-영웅::before { background-image: url('../assets/gacha/bg-영웅.png'), linear-gradient(160deg, #e2c8ff 0%, #b06af0 35%, #6a2ea8 70%, #1f0f38 100%); }
-.inventory-detail-view.rarity-희귀::before { background-image: url('../assets/gacha/bg-희귀.png'), linear-gradient(160deg, #cfe8ff 0%, #7ab0f0 35%, #3c6ab8 70%, #0f2748 100%); }
-.inventory-detail-view.rarity-일반::before { background-image: url('../assets/gacha/bg-일반.png'), linear-gradient(160deg, #e6f0df 0%, #a8c49a 35%, #6a8060 70%, #1f281c 100%); }
+.inventory-detail-view.rarity-신화::before { background-image: url('../assets/gacha/bg-신화.webp'), linear-gradient(160deg, #ff8a4c 0%, #ff3c6a 35%, #7a1fa2 70%, #180530 100%); }
+.inventory-detail-view.rarity-전설::before { background-image: url('../assets/gacha/bg-전설.webp'), linear-gradient(160deg, #fff2c0 0%, #ffcf5c 35%, #ff8f2c 70%, #7a3c00 100%); }
+.inventory-detail-view.rarity-영웅::before { background-image: url('../assets/gacha/bg-영웅.webp'), linear-gradient(160deg, #e2c8ff 0%, #b06af0 35%, #6a2ea8 70%, #1f0f38 100%); }
+.inventory-detail-view.rarity-희귀::before { background-image: url('../assets/gacha/bg-희귀.webp'), linear-gradient(160deg, #cfe8ff 0%, #7ab0f0 35%, #3c6ab8 70%, #0f2748 100%); }
+.inventory-detail-view.rarity-일반::before { background-image: url('../assets/gacha/bg-일반.webp'), linear-gradient(160deg, #e6f0df 0%, #a8c49a 35%, #6a8060 70%, #1f281c 100%); }
 
-.inventory-detail-view.is-unowned.rarity-신화::before { background-image: linear-gradient(rgba(18,24,28,.32), rgba(18,24,28,.32)), url('../assets/gacha/bg-신화.png'), linear-gradient(160deg, #ff8a4c 0%, #ff3c6a 35%, #7a1fa2 70%, #180530 100%); }
-.inventory-detail-view.is-unowned.rarity-전설::before { background-image: linear-gradient(rgba(18,24,28,.32), rgba(18,24,28,.32)), url('../assets/gacha/bg-전설.png'), linear-gradient(160deg, #fff2c0 0%, #ffcf5c 35%, #ff8f2c 70%, #7a3c00 100%); }
-.inventory-detail-view.is-unowned.rarity-영웅::before { background-image: linear-gradient(rgba(18,24,28,.32), rgba(18,24,28,.32)), url('../assets/gacha/bg-영웅.png'), linear-gradient(160deg, #e2c8ff 0%, #b06af0 35%, #6a2ea8 70%, #1f0f38 100%); }
-.inventory-detail-view.is-unowned.rarity-희귀::before { background-image: linear-gradient(rgba(18,24,28,.32), rgba(18,24,28,.32)), url('../assets/gacha/bg-희귀.png'), linear-gradient(160deg, #cfe8ff 0%, #7ab0f0 35%, #3c6ab8 70%, #0f2748 100%); }
-.inventory-detail-view.is-unowned.rarity-일반::before { background-image: linear-gradient(rgba(18,24,28,.32), rgba(18,24,28,.32)), url('../assets/gacha/bg-일반.png'), linear-gradient(160deg, #e6f0df 0%, #a8c49a 35%, #6a8060 70%, #1f281c 100%); }
+.inventory-detail-view.is-unowned.rarity-신화::before { background-image: linear-gradient(rgba(18,24,28,.32), rgba(18,24,28,.32)), url('../assets/gacha/bg-신화.webp'), linear-gradient(160deg, #ff8a4c 0%, #ff3c6a 35%, #7a1fa2 70%, #180530 100%); }
+.inventory-detail-view.is-unowned.rarity-전설::before { background-image: linear-gradient(rgba(18,24,28,.32), rgba(18,24,28,.32)), url('../assets/gacha/bg-전설.webp'), linear-gradient(160deg, #fff2c0 0%, #ffcf5c 35%, #ff8f2c 70%, #7a3c00 100%); }
+.inventory-detail-view.is-unowned.rarity-영웅::before { background-image: linear-gradient(rgba(18,24,28,.32), rgba(18,24,28,.32)), url('../assets/gacha/bg-영웅.webp'), linear-gradient(160deg, #e2c8ff 0%, #b06af0 35%, #6a2ea8 70%, #1f0f38 100%); }
+.inventory-detail-view.is-unowned.rarity-희귀::before { background-image: linear-gradient(rgba(18,24,28,.32), rgba(18,24,28,.32)), url('../assets/gacha/bg-희귀.webp'), linear-gradient(160deg, #cfe8ff 0%, #7ab0f0 35%, #3c6ab8 70%, #0f2748 100%); }
+.inventory-detail-view.is-unowned.rarity-일반::before { background-image: linear-gradient(rgba(18,24,28,.32), rgba(18,24,28,.32)), url('../assets/gacha/bg-일반.webp'), linear-gradient(160deg, #e6f0df 0%, #a8c49a 35%, #6a8060 70%, #1f281c 100%); }
 
 .inventory-detail-back {
     position: absolute;

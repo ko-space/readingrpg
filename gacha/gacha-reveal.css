@@ -83,11 +83,11 @@
 }
 
 /* 등급별 배경. 이미지가 있으면 이미지가 우선 보이고, 없으면 그라데이션이 대신 보임(레이어링) */
-.reveal-bg.rarity-신화 { background-image: url('../assets/gacha/bg-신화.png'), linear-gradient(160deg, #ff8a4c 0%, #ff3c6a 35%, #7a1fa2 70%, #180530 100%); }
-.reveal-bg.rarity-전설 { background-image: url('../assets/gacha/bg-전설.png'), linear-gradient(160deg, #fff2c0 0%, #ffcf5c 35%, #ff8f2c 70%, #7a3c00 100%); }
-.reveal-bg.rarity-영웅 { background-image: url('../assets/gacha/bg-영웅.png'), linear-gradient(160deg, #e2c8ff 0%, #b06af0 35%, #6a2ea8 70%, #1f0f38 100%); }
-.reveal-bg.rarity-희귀 { background-image: url('../assets/gacha/bg-희귀.png'), linear-gradient(160deg, #cfe8ff 0%, #7ab0f0 35%, #3c6ab8 70%, #0f2748 100%); }
-.reveal-bg.rarity-일반 { background-image: url('../assets/gacha/bg-일반.png'), linear-gradient(160deg, #e6f0df 0%, #a8c49a 35%, #6a8060 70%, #1f281c 100%); }
+.reveal-bg.rarity-신화 { background-image: url('../assets/gacha/bg-신화.webp'), linear-gradient(160deg, #ff8a4c 0%, #ff3c6a 35%, #7a1fa2 70%, #180530 100%); }
+.reveal-bg.rarity-전설 { background-image: url('../assets/gacha/bg-전설.webp'), linear-gradient(160deg, #fff2c0 0%, #ffcf5c 35%, #ff8f2c 70%, #7a3c00 100%); }
+.reveal-bg.rarity-영웅 { background-image: url('../assets/gacha/bg-영웅.webp'), linear-gradient(160deg, #e2c8ff 0%, #b06af0 35%, #6a2ea8 70%, #1f0f38 100%); }
+.reveal-bg.rarity-희귀 { background-image: url('../assets/gacha/bg-희귀.webp'), linear-gradient(160deg, #cfe8ff 0%, #7ab0f0 35%, #3c6ab8 70%, #0f2748 100%); }
+.reveal-bg.rarity-일반 { background-image: url('../assets/gacha/bg-일반.webp'), linear-gradient(160deg, #e6f0df 0%, #a8c49a 35%, #6a8060 70%, #1f281c 100%); }
 
 /* 캐릭터+오라를 감싸는 wrap - 확대(3번)와 슬라이드(4번)는 배경이 아니라 여기에만 적용됨 */
 .reveal-character-wrap {

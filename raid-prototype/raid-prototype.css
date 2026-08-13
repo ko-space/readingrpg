@@ -358,7 +358,7 @@ html, body {
     margin-bottom: 2px;
 }
 .boss-top-status-row:empty { margin-bottom: 0; }
-/* 실제 게임(arena-battle.js의 STATUS_ICON_FILES, assets/arena/Combat_Icon_*.png)과 동일한 아이콘
+/* 실제 게임(arena-battle.js의 STATUS_ICON_FILES, assets/arena/Combat_Icon_*.webp)과 동일한 아이콘
    이미지를 그대로 가져다 쓴다 - 텍스트 대신 진짜 아이콘이 보여야 해서, 라벨은 title(hover 툴팁)로만 남긴다. */
 .status-badge {
     display: flex;

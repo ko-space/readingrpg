@@ -100,7 +100,7 @@
             const current = Math.max(0, Math.min(ach.progress_current || 0, target));
             const percent = Math.round((current / target) * 100);
 
-            const iconFile = ach.earned ? "trophy.png" : lockedHidden ? "lock.png" : "book.png";
+            const iconFile = ach.earned ? "trophy.webp" : lockedHidden ? "lock.webp" : "book.webp";
             const iconFallback = ach.earned ? "🏆" : lockedHidden ? "🔒" : "📖";
 
             const card = document.createElement("div");

@@ -41,11 +41,11 @@
     // 상태 효과 배지는 텍스트가 아니라 이 아이콘으로 표시된다(assets/arena/에 이미 있는 파일들).
     const STATUS_ICON_BASE = "../assets/arena/";
     const STATUS_ICON_FILES = {
-        stun: "Combat_Icon_CC_Stunned.png",
-        knockback: "Combat_Icon_CC_Knockback.png",
-        groggy: "Combat_Icon_CC_Stunned.png", // 그로기 전용 아이콘은 따로 없어서 같은 "기절"류 아이콘 재사용
-        debuff: "Combat_Icon_Debuff_ATK.png",
-        buff: "Combat_Icon_Buff_ATK.png",
+        stun: "Combat_Icon_CC_Stunned.webp",
+        knockback: "Combat_Icon_CC_Knockback.webp",
+        groggy: "Combat_Icon_CC_Stunned.webp", // 그로기 전용 아이콘은 따로 없어서 같은 "기절"류 아이콘 재사용
+        debuff: "Combat_Icon_Debuff_ATK.webp",
+        buff: "Combat_Icon_Buff_ATK.webp",
     };
 
     // cardMultiplier = Active(스킬카드), specialMultiplier = Special(trait) - 실제 게임의 skill_effects(Active)/

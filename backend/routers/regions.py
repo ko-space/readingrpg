@@ -9,12 +9,12 @@ router = APIRouter(prefix="/regions", tags=["regions"])
 # 지역별 이미지 파일명. 새 지역을 추가할 땐 seed.py에 지역 추가하고, 여기에 한 줄만 추가
 # (assets/regions/ 폴더에 이 파일명으로 이미지를 넣으면 프론트가 자동으로 씀 - 없으면 그라데이션으로 대체됨)
 REGION_IMAGES = {
-    "초심자의 평원": "region-beginner-plains.png",
-    "잊혀진 서고": "region-forgotten-archive.png",
-    "안개 낀 협곡": "region-misty-canyon.png",
-    "지혜의 신전": "region-temple-wisdom.png",
-    "마법사의 은광": "region-mage-silver-mine.png",
-    "종말의 금광": "region-doomsday-gold-mine.png",
+    "초심자의 평원": "region-beginner-plains.webp",
+    "잊혀진 서고": "region-forgotten-archive.webp",
+    "안개 낀 협곡": "region-misty-canyon.webp",
+    "지혜의 신전": "region-temple-wisdom.webp",
+    "마법사의 은광": "region-mage-silver-mine.webp",
+    "종말의 금광": "region-doomsday-gold-mine.webp",
     "투기장": "투기장.png",
 }
 

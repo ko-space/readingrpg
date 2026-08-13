@@ -107,7 +107,7 @@ def seed_enhancement_items():
                 "source_character": "송주헌",
                 "price": 1000,
                 "currency": "silver",
-                "icon_file": "assets/items/songjuheon_desk.png",
+                "icon_file": "assets/items/songjuheon_desk.webp",
                 "description": "방치되어 있지만 존재는 합니다.",
                 "effect_type": "shift",
                 "effect_params": {"from": "maintain", "to": "success", "amount": 10},
@@ -117,7 +117,7 @@ def seed_enhancement_items():
                 "source_character": "김남옥",
                 "price": 500,
                 "currency": "silver",
-                "icon_file": "assets/items/namok_crayon.png",
+                "icon_file": "assets/items/namok_crayon.webp",
                 "description": "어린이가 사용하는 물건이니 조심히 다루세요.",
                 "effect_type": "shift",
                 "effect_params": {"from": "destroy", "to": "maintain", "amount": 10},
@@ -127,7 +127,7 @@ def seed_enhancement_items():
                 "source_character": "윤영준",
                 "price": 2500,
                 "currency": "silver",
-                "icon_file": "assets/items/youngjun_opera.png",
+                "icon_file": "assets/items/youngjun_opera.webp",
                 "description": "조심하세요. 윤영준의 수행평가는 복불복입니다.",
                 "effect_type": "redistribute",
                 "effect_params": {"remove": "maintain", "ratio": {"success": 1.5, "destroy": 1}},
@@ -137,7 +137,7 @@ def seed_enhancement_items():
                 "source_character": "강 희",
                 "price": 100,
                 "currency": "silver",
-                "icon_file": "assets/items/ganghee_shredder.png",
+                "icon_file": "assets/items/ganghee_shredder.webp",
                 "description": "이것은 어디에다가 쓰는 걸까요?",
                 "effect_type": "force",
                 "effect_params": {"outcome": "destroy"},
@@ -148,7 +148,7 @@ def seed_enhancement_items():
                 "purchase_limit": 1,
                 "price": 1500,
                 "currency": "gold",  # 재화 이원화 이후에도 골드로 유지(다른 8종과 달리 실버로 안 바뀜)
-                "icon_file": "assets/items/초심자의 행운.png",
+                "icon_file": "assets/items/초심자의 행운.webp",
                 "description": "어느 업적을 달성해야 살 수 있는 걸까요?",
                 "effect_type": "force",
                 "effect_params": {"outcome": "success"},
@@ -158,7 +158,7 @@ def seed_enhancement_items():
                 "source_character": "최재혁",
                 "price": 750,
                 "currency": "silver",
-                "icon_file": "assets/items/jaehyuk_elixir.png",
+                "icon_file": "assets/items/jaehyuk_elixir.webp",
                 "description": "모든 것을 형태가 없는 재로 만들어버리는 영약입니다.",
                 # 별도 effect_type: 성공/유지/파괴 확률표를 통째로 대체한다(성급별 "먼지 생성" 확률).
                 # 성공하면 재료 3장이 전부 소모되고 먼지 1개를 얻는다. 실패하면 아무 카드도 소모되지 않는다
@@ -171,7 +171,7 @@ def seed_enhancement_items():
                 "source_character": None,
                 "price": 0,  # 상점에서 팔지 않음(마법 영약 성공 시에만 획득) - is_shop_active를 항상 False로 고정
                 "currency": "silver",
-                "icon_file": "assets/items/dust.png",
+                "icon_file": "assets/items/dust.webp",
                 "description": "이 힘은, 대체 뭐지? 무언가... '뭔가'가 있다!",
                 # 강화 시 재료 카드 1장을 대신한다(material_substitute) - shift/redistribute/force처럼 확률에
                 # 관여하지 않고, _choose_enhancement_cards가 필요로 하는 실제 캐릭터 카드 수를 1장 줄여준다.
@@ -184,7 +184,7 @@ def seed_enhancement_items():
                 "source_character": "이의진",
                 "price": 1500,
                 "currency": "silver",
-                "icon_file": "assets/items/eujin_crocs.png",
+                "icon_file": "assets/items/eujin_crocs.webp",
                 "description": "행운을 시험해볼까요?",
                 # 성공 확률 중 일부를 슈퍼 성공(2성치 강화)으로 옮긴다 - shift와 비슷하지만 "성공" 항목을
                 # 두 종류(success/super_success)로 쪼갠다는 점이 달라서 별도 effect_type으로 둔다.
@@ -196,7 +196,7 @@ def seed_enhancement_items():
                 "source_character": "강승유",
                 "price": 1750,
                 "currency": "silver",
-                "icon_file": "assets/items/seungyu_piece.png",
+                "icon_file": "assets/items/seungyu_piece.webp",
                 "description": "일종의 보험이라고 생각하세요.",
                 # 이번 강화가 성공(슈퍼 성공 포함)하면, 그 카드의 "다음" 강화 시도에 파괴 -10%p/성공 +10%p를
                 # 1회 예약해둔다(CharacterEnhanceBuff 테이블). 이번 판정 자체에는 영향 없음.
@@ -260,14 +260,14 @@ def seed_currency_items():
             {
                 "name": "스토리모드 티켓",
                 "price": 125,
-                "icon_file": "assets/items/story_ticket.png",
+                "icon_file": "assets/items/story_ticket.webp",
                 "description": "인연 스토리에서 씬을 하나 볼 때마다 1장씩 사용됩니다.",
                 "daily_purchase_limit": 7,
             },
             {
                 "name": "투기장모드 티켓",
                 "price": 20,
-                "icon_file": "assets/items/arena_ticket.png",
+                "icon_file": "assets/items/arena_ticket.webp",
                 "description": "전술경연 대회에서 전투를 시도할 때마다 1장씩 사용됩니다.",
                 "daily_purchase_limit": 10,
             },
@@ -1959,25 +1959,32 @@ def seed_gacha_banners():
     db = SessionLocal()
     try:
         changed = False
-        if db.query(GachaBanner).filter(GachaBanner.banner_type == "pickup").first() is None:
+        pickup = db.query(GachaBanner).filter(GachaBanner.banner_type == "pickup").first()
+        if pickup is None:
             db.add(GachaBanner(
                 name="픽업모집",
                 banner_type="pickup",
-                image_file="pickup-banner.png",
+                image_file="pickup-banner.webp",
                 start_date=None,
                 end_date=None,
                 is_active=True,
             ))
             changed = True
-        if db.query(GachaBanner).filter(GachaBanner.banner_type == "standard").first() is None:
+        # "상시모집" 배너는 pickup과 달리 _sync_pickup_banner가 갱신해주지 않는 정적 행이라,
+        # image_file 등 필드가 바뀌면(예: 확장자 변경) 재시작만으로 반영되도록 매번 값을 맞춰둔다.
+        standard = db.query(GachaBanner).filter(GachaBanner.banner_type == "standard").first()
+        if standard is None:
             db.add(GachaBanner(
                 name="상시모집",
                 banner_type="standard",
-                image_file="standard-banner.png",
+                image_file="standard-banner.webp",
                 start_date=None,
                 end_date=None,
                 is_active=True,
             ))
+            changed = True
+        elif standard.image_file != "standard-banner.webp":
+            standard.image_file = "standard-banner.webp"
             changed = True
         if changed:
             db.commit()
@@ -1988,7 +1995,7 @@ def seed_gacha_banners():
 NOTICES = [
     {
         "title": "독서 RPG 정식 출시!",
-        "image_file": "assets/notices/launch.png",
+        "image_file": "assets/notices/launch.webp",
         "body": (
             "안녕하세요, 독서 RPG 개발진입니다.\n\n"
             "오랜 준비 끝에 독서 RPG가 정식으로 출시되었습니다!\n"
@@ -2016,7 +2023,7 @@ NOTICES = [
     },
     {
         "title": "인연 스토리 Episode 1 '우정의 시작' OPEN!",
-        "image_file": "assets/notices/relationship1.png",
+        "image_file": "assets/notices/relationship1.webp",
         "body": (
             "안녕하세요, 독서RPG입니다.\n\n"
             "인연 스토리 Episode 1이 공개되었습니다.\n"
@@ -2028,7 +2035,7 @@ NOTICES = [
     },
     {
         "title": "전술대회 시즌1 OPEN!",
-        "image_file": "assets/notices/competition1.png",
+        "image_file": "assets/notices/competition1.webp",
         "body": (
             "안녕하세요, 독서RPG입니다.\n\n"
             "전술대회 시즌1이 시작되었습니!.\n"
@@ -2040,7 +2047,7 @@ NOTICES = [
     },
     {
         "title": "7.24 패치노트",
-        "image_file": "assets/notices/7.24note.png",
+        "image_file": "assets/notices/7.24note.webp",
         "body": (
             "안녕하세요, 독서RPG입니다.\n\n"
             "7.24 패치내역을 알려드리겠습니다.\n"
@@ -2066,7 +2073,7 @@ NOTICES = [
     },
     {
         "title": "[인물 소개 - 이의진]",
-        "image_file": "assets/notices/eujin.png",
+        "image_file": "assets/notices/eujin.webp",
         "body": (
             "\"나는 이의진이라고 해. 왜 눈을 뜨지 않냐고? 묻지마. 다쳐.\"\n\n"
             "연분홍색 크록스가 매력 포인트입니다. 그는 왜 눈을 뜨지 않는 걸까요?"
@@ -2074,7 +2081,7 @@ NOTICES = [
     },
     {
         "title": "7.27 패치노트",
-        "image_file": "assets/notices/7.27note.png",
+        "image_file": "assets/notices/7.27note.webp",
         "body": (
             "안녕하세요, 독서RPG입니다.\n\n"
             "7.27 패치내역을 알려드리겠습니다.\n"
@@ -2100,7 +2107,7 @@ NOTICES = [
     },
     {
             "title": "[인물 소개 - 방임석]",
-            "image_file": "assets/notices/imseok.png",
+            "image_file": "assets/notices/imseok.webp",
             "body": (
                 "\"오임석입니다. 지도는 하지 않습니다. 재능은 간섭받지 않을 때 가장 아름답게 피어나거든요.\"\n\n"
                 "그는 학생의 자율성을 존중했을 뿐. 방치한 것이 아닙니다.\n\n"
@@ -2110,7 +2117,7 @@ NOTICES = [
         },
     {
             "title": "[인물 소개 - 윤 & 호]",
-            "image_file": "assets/notices/y&h.png",
+            "image_file": "assets/notices/y&h.webp",
             "body": (
                 "\"사람들은 의견을 모을 때 머리를 맞댄다던데, 우리는 배를 맞대는 쪽이 더 잘 맞는 것 같아.\"\n\n"
                 "둘은 절대 떨어지지 않습니다.\n\n"
