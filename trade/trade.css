@@ -186,6 +186,12 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    /* overflow-y만 정하면 CSS 스펙상 overflow-x도 자동으로 auto 취급돼서(둘 중 하나가 visible이
+       아니면 나머지도 그렇게 됨) 옆으로 스크롤/드래그가 생겨버린다 - 캐릭터가 폭 제한 없이
+       그려지게 되면서(trade-standing-card-frame img) 실제로 이 가로 스크롤이 발동했다. 가로는
+       스크롤하지 않고 그냥 패널 경계에서 잘리도록 명시적으로 막는다(카드 자체는 항상 가운데
+       정렬이라 잘려도 중심은 안 흔들림). */
+    overflow-x: hidden;
     padding: 18px;
     scrollbar-color: #c9a86a transparent;
 }
