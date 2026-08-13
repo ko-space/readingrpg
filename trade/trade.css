@@ -400,20 +400,22 @@
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    overflow: hidden;
+    /* 폭은 강제로 줄이지 않는다(원본 비율상 넓은 이미지라도 세로를 꽉 채우는 크기를 그대로 씀) -
+       trade.js의 applyStandingCardImageBox()가 로드 즉시 프레임 높이 기준으로 폭을 px로 계산해
+       박아 넣으므로, 프레임보다 넓게 그려질 수 있다. overflow를 hidden으로 자르면 캐릭터 옆이
+       잘려 보이므로 visible로 둔다(양옆 카드와 살짝 겹칠 수 있지만 잘리거나 작아지는 것보다 낫다). */
+    overflow: visible;
 }
 
 .trade-standing-card-frame img {
     position: relative;
     z-index: 1;
-    /* max-width/height(=width/height:auto)는 이미지의 실제 크기를 알아야 레이아웃 박스가 확정된다 -
-       그리드 안에서 새로 그려질 때 이미지 로드가 비동기로 늦게 끝나면, 일부 브라우저(특히 iOS
-       Safari)가 로드 완료 후 리레이아웃을 안 해서 계속 안 보이는 상태로 남는 문제가 있었다(등록 탭에
-       갔다 오면 다른 이유로 강제 리플로우가 나서 그제서야 보였음). width/height를 100%로 고정해
-       이미지 로드 여부와 무관하게 박스 크기가 즉시 확정되도록 한다(object-fit이 그 안에서 비율 맞춰
-       그려주는 건 순수 페인트 단계라 이 문제와 무관). */
-    width: 100%;
+    /* 폭은 trade.js가 로드 직후 px로 직접 계산해서 박아 넣는다(아래는 그 전까지 잠깐 보이는
+       값 + JS를 못 탈 때의 대비용 기본값). height:100%만으로는 이미지 로드가 늦게 끝났을 때 일부
+       브라우저(특히 iOS Safari)가 로드 후 다시 그리기를 안 해서 계속 안 보이는 문제가 있었는데,
+       trade.js 쪽에서 명시적으로 style을 바꿔주면 모든 브라우저가 확실히 다시 그린다. */
     height: 100%;
+    width: auto;
     object-fit: contain;
     object-position: bottom center;
     filter: drop-shadow(0 6px 6px rgba(76, 51, 19, .28));
