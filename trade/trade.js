@@ -330,6 +330,7 @@
             // 아직 그 포즈가 없는 캐릭터는 idle.webp로, 그것도 없으면(시즌 의상 등) 기본 의상으로 대체된다.
             loadImageWithFallback(img, listing.outfit, ["model.webp", "idle.webp"]);
             bindStandingShadow(img, card.querySelector(".trade-standing-card-shadow"));
+            card.dataset.listingId = listing.id;
             card.addEventListener("click", () => selectListing(listing));
             grid.appendChild(card);
         });
@@ -345,6 +346,9 @@
 
     function selectListing(listing) {
         selectedListing = listing;
+        document.getElementById("trade-browse-grid").querySelectorAll(".trade-standing-card").forEach((el) => {
+            el.classList.toggle("trade-standing-card-selected", el.dataset.listingId === String(listing.id));
+        });
         document.getElementById("trade-browse-detail-empty").hidden = true;
         document.getElementById("trade-browse-detail-content").hidden = false;
 
