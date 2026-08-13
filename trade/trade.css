@@ -413,33 +413,23 @@
     transition: none; /* 테두리는 트랜지션 없이 즉각 나타나고 사라져야 한다 */
 }
 
-/* 이미지가 투명 배경이라 일반 border로는 캐릭터 실루엣을 못 두르므로, drop-shadow를 8방향으로
-   겹쳐 쌓아 실루엣을 따라가는 테두리를 흉내낸다. 호버는 은색(즉시 표시, 선택된 카드에서는 안 뜸),
-   선택 상태는 금색(선택이 바뀌기 전까지 계속 유지). */
+/* 이미지가 투명 배경이라 일반 border로는 캐릭터 실루엣을 못 두르므로 drop-shadow로 흉내낸다.
+   처음엔 방향별로 8개를 겹쳐 쌓았는데, drop-shadow는 하나하나가 레이어를 다시 래스터라이즈하는
+   무거운 연산이라 9개(그림자 1 + 테두리 8)를 매 호버마다 계산하면서 눈에 띄게 렉이 걸렸다.
+   블러 있는 drop-shadow 1개만 써도 실루엣 전체에 고르게 얇은 테두리처럼 번지므로, 총 2개(기존
+   그림자 + 테두리 1개)로 줄여서 성능 문제를 없앤다. 얇고 연하게 하려면 blur 반경과 색 alpha를
+   낮추면 된다. 호버는 은색(즉시 표시, 선택된 카드에서는 안 뜸), 선택 상태는 금색(선택이 바뀌기
+   전까지 계속 유지). */
 .trade-standing-card:not(.trade-standing-card-selected):hover .trade-standing-card-frame img {
     filter:
         drop-shadow(0 6px 6px rgba(76, 51, 19, .28))
-        drop-shadow(2px 0 0 #c9c9c9)
-        drop-shadow(-2px 0 0 #c9c9c9)
-        drop-shadow(0 2px 0 #c9c9c9)
-        drop-shadow(0 -2px 0 #c9c9c9)
-        drop-shadow(2px 2px 0 #c9c9c9)
-        drop-shadow(-2px -2px 0 #c9c9c9)
-        drop-shadow(2px -2px 0 #c9c9c9)
-        drop-shadow(-2px 2px 0 #c9c9c9);
+        drop-shadow(0 0 1.5px rgba(220, 220, 220, .55));
 }
 
 .trade-standing-card-selected .trade-standing-card-frame img {
     filter:
         drop-shadow(0 6px 6px rgba(76, 51, 19, .28))
-        drop-shadow(2px 0 0 #d4af37)
-        drop-shadow(-2px 0 0 #d4af37)
-        drop-shadow(0 2px 0 #d4af37)
-        drop-shadow(0 -2px 0 #d4af37)
-        drop-shadow(2px 2px 0 #d4af37)
-        drop-shadow(-2px -2px 0 #d4af37)
-        drop-shadow(2px -2px 0 #d4af37)
-        drop-shadow(-2px 2px 0 #d4af37);
+        drop-shadow(0 0 1.5px rgba(212, 175, 55, .55));
 }
 
 /* 3장이 나란히 있을 때 중앙이 가장 크게, 양옆은 살짝 작게. transform-origin을 발밑에 둬서 줄어드는
