@@ -41,6 +41,7 @@ def get_regions(db: Session = Depends(get_db)):
             "exp_rate": r.exp_rate,
             "silver_rate": r.silver_rate,
             "gold_rate": r.gold_rate,
+            "subject_bonus_rules": r.subject_bonus_rules,
             "unlock_price_silver": PURCHASABLE_REGIONS.get(r.name),
             "image_file": REGION_IMAGES.get(r.name),
         }

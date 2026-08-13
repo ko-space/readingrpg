@@ -588,6 +588,13 @@ body, html {
     font-size: 12px;
     color: #4a3c2a;
     font-weight: bold;
+    text-align: center;
+}
+
+/* 지혜의 신전처럼 특정 과목에만 붙는 배율 보너스 - 기본 요율과 헷갈리지 않도록 줄을 바꾸고 붉은
+   글씨로 강조한다(dungeon.js formatSubjectBonusText 참고). */
+.dungeon-rate-bonus {
+    color: #c0392b;
 }
 
 .region-name-row {
