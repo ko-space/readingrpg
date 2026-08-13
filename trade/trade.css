@@ -385,12 +385,6 @@
     align-items: center;
     text-align: center;
     color: var(--text-dark, #4a3c2a);
-    transition: transform .17s ease, filter .17s ease;
-}
-
-.trade-standing-card:hover {
-    transform: translateY(-4px);
-    filter: brightness(1.025);
 }
 
 .trade-standing-card-frame {
@@ -416,6 +410,36 @@
     object-fit: contain;
     object-position: bottom center;
     filter: drop-shadow(0 6px 6px rgba(76, 51, 19, .28));
+    transition: none; /* 테두리는 트랜지션 없이 즉각 나타나고 사라져야 한다 */
+}
+
+/* 이미지가 투명 배경이라 일반 border로는 캐릭터 실루엣을 못 두르므로, drop-shadow를 8방향으로
+   겹쳐 쌓아 실루엣을 따라가는 테두리를 흉내낸다. 호버는 은색(즉시 표시, 선택된 카드에서는 안 뜸),
+   선택 상태는 금색(선택이 바뀌기 전까지 계속 유지). */
+.trade-standing-card:not(.trade-standing-card-selected):hover .trade-standing-card-frame img {
+    filter:
+        drop-shadow(0 6px 6px rgba(76, 51, 19, .28))
+        drop-shadow(2px 0 0 #c9c9c9)
+        drop-shadow(-2px 0 0 #c9c9c9)
+        drop-shadow(0 2px 0 #c9c9c9)
+        drop-shadow(0 -2px 0 #c9c9c9)
+        drop-shadow(2px 2px 0 #c9c9c9)
+        drop-shadow(-2px -2px 0 #c9c9c9)
+        drop-shadow(2px -2px 0 #c9c9c9)
+        drop-shadow(-2px 2px 0 #c9c9c9);
+}
+
+.trade-standing-card-selected .trade-standing-card-frame img {
+    filter:
+        drop-shadow(0 6px 6px rgba(76, 51, 19, .28))
+        drop-shadow(2px 0 0 #d4af37)
+        drop-shadow(-2px 0 0 #d4af37)
+        drop-shadow(0 2px 0 #d4af37)
+        drop-shadow(0 -2px 0 #d4af37)
+        drop-shadow(2px 2px 0 #d4af37)
+        drop-shadow(-2px -2px 0 #d4af37)
+        drop-shadow(2px -2px 0 #d4af37)
+        drop-shadow(-2px 2px 0 #d4af37);
 }
 
 /* 3장이 나란히 있을 때 중앙이 가장 크게, 양옆은 살짝 작게. transform-origin을 발밑에 둬서 줄어드는
