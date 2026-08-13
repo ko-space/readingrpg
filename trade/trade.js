@@ -119,13 +119,20 @@
     // 문제가 있었다. 로드가 끝나는 즉시 프레임 높이 기준으로 폭을 직접 픽셀로 계산해 박아 넣는다 -
     // style을 명시적으로 바꾸는 동작은 모든 브라우저가 확실히 다시 그리므로, 이미지 자체의 암묵적인
     // 리사이즈 타이밍에 기대지 않게 된다.
-    function applyStandingCardImageBox(imgEl) {
-        if (!imgEl || !imgEl.naturalWidth || !imgEl.naturalHeight) return;
+    function applyStandingCardImageBox(imgEl, attemptsLeft = 20) {
+        if (!imgEl || !imgEl.isConnected) return; // 그리드가 이미 다시 그려져 DOM에서 빠졌으면 그만둔다
+        if (!imgEl.naturalWidth || !imgEl.naturalHeight) return; // 아직 이미지 자체가 로드 전 - onload가 다시 부름
         const frame = imgEl.parentElement;
-        if (!frame || !frame.clientHeight) return;
-        const height = frame.clientHeight;
-        const width = height * (imgEl.naturalWidth / imgEl.naturalHeight);
-        imgEl.style.height = `${height}px`;
+        const frameHeight = frame ? frame.clientHeight : 0;
+        if (!frameHeight) {
+            // 모달이 막 열리는 순간처럼 프레임이 아직 실제 레이아웃 높이를 못 받은 상태일 수 있다(캐시된
+            // 이미지는 onload가 반박자 빠르게 뜬다) - 이때 그냥 포기하면 그 카드만 계속 크기가 안 잡혀서
+            // 안 보이는 상태로 남았다. 다음 프레임에 다시 시도한다(최대 20프레임, 약 0.3초).
+            if (attemptsLeft > 0) requestAnimationFrame(() => applyStandingCardImageBox(imgEl, attemptsLeft - 1));
+            return;
+        }
+        const width = frameHeight * (imgEl.naturalWidth / imgEl.naturalHeight);
+        imgEl.style.height = `${frameHeight}px`;
         imgEl.style.width = `${width}px`;
     }
 
