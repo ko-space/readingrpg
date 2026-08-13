@@ -134,7 +134,8 @@
 
     // 지혜의 신전처럼 특정 과목 공부 시에만 배율이 붙는 지역(subject_bonus_rules) 전용 문구 -
     // 기본 요율(exp_rate/silver_rate)만 봐서는 초심자의 평원과 완전히 같은 문구가 떠서 유저가 이
-    // 지역만의 특전을 놓칠 수 있었다. 배율이 같은 과목끼리는 묶어서("국어·영어 공부 시 1.5배") 보여준다.
+    // 지역만의 특전을 놓칠 수 있었다. 배율이 같은 과목끼리는 묶어서("국어·영어 공부 시 EXP 1.5배")
+    // 보여준다 - 실버에는 적용 안 되고 EXP에만 적용되므로(logs.py 참고) 명시적으로 "EXP"를 붙인다.
     function formatSubjectBonusText(region) {
         const rules = region.subject_bonus_rules;
         if (!rules || Object.keys(rules).length === 0) return null;
@@ -144,7 +145,7 @@
             subjectsByMultiplier[multiplier].push(subject);
         });
         return Object.entries(subjectsByMultiplier)
-            .map(([multiplier, subjects]) => `${subjects.join("·")} 공부 시 ${multiplier}배`)
+            .map(([multiplier, subjects]) => `${subjects.join("·")} 공부 시 EXP ${multiplier}배`)
             .join(", ");
     }
 
