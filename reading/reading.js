@@ -167,10 +167,10 @@
             applyRegionEffectsVisibility(data.user_info?.hide_region_effects);
             if (!outfit) return;
 
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/reading.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/reading.webp`;
             imgEl.onerror = () => {
                 imgEl.onerror = null; // 무한 루프 방지
-                imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.png`;
+                imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.webp`;
             };
         } catch (err) {
             console.error("캐릭터 정보를 불러오지 못했어요.", err);

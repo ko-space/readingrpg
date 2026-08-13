@@ -15,7 +15,7 @@
         return price + fee;
     }
 
-    // 여름/겨울 시즌 의상은 model.png는 물론 idle.png조차 아직 없는 경우가 많다(캐릭터당 기본 의상
+    // 여름/겨울 시즌 의상은 model.webp는 물론 idle.webp조차 아직 없는 경우가 많다(캐릭터당 기본 의상
     // 사진만 먼저 준비되는 경우가 흔함) - 그 상태로 캐릭터가 시즌 의상을 입은 채 등록/보유되면 두
     // 포즈 다 실패해서 완전히 안 보이는 캐릭터가 된다. 마지막 안전망으로 그 캐릭터의 "기본" 의상
     // 사진까지 시도한 뒤에야 포기한다(완전히 다른 옷이지만, 아예 안 보이는 것보다는 낫다).
@@ -326,9 +326,9 @@
                 <div class="trade-card-meta">${listing.display_price.toLocaleString()}S</div>
             `;
             const img = card.querySelector("img");
-            // reading.js가 reading.png를 쓰는 것과 같은 방식 - "인물 선택" 목록 전용 포즈(model.png).
-            // 아직 그 포즈가 없는 캐릭터는 idle.png로, 그것도 없으면(시즌 의상 등) 기본 의상으로 대체된다.
-            loadImageWithFallback(img, listing.outfit, ["model.png", "idle.png"]);
+            // reading.js가 reading.webp를 쓰는 것과 같은 방식 - "인물 선택" 목록 전용 포즈(model.webp).
+            // 아직 그 포즈가 없는 캐릭터는 idle.webp로, 그것도 없으면(시즌 의상 등) 기본 의상으로 대체된다.
+            loadImageWithFallback(img, listing.outfit, ["model.webp", "idle.webp"]);
             bindStandingShadow(img, card.querySelector(".trade-standing-card-shadow"));
             card.addEventListener("click", () => selectListing(listing));
             grid.appendChild(card);
@@ -350,7 +350,7 @@
 
         const standing = document.getElementById("trade-browse-standing");
         standing.style.visibility = "visible";
-        loadImageWithFallback(standing, listing.outfit, ["idle.png"], () => { standing.style.visibility = "hidden"; });
+        loadImageWithFallback(standing, listing.outfit, ["idle.webp"], () => { standing.style.visibility = "hidden"; });
         bindStandingShadow(standing, document.getElementById("trade-browse-standing-shadow"));
 
         document.getElementById("trade-browse-name").textContent = listing.name;
@@ -432,7 +432,7 @@
                 <div class="trade-card-meta">${group.count}명 보유</div>
             `;
             const img = card.querySelector("img");
-            loadImageWithFallback(img, group.outfit, ["idle.png"]);
+            loadImageWithFallback(img, group.outfit, ["idle.webp"]);
             applyCrop(img, group.outfit);
             // 등록 불가 캐릭터도 선택은 가능하게 둔다(흐린 채로 클릭은 되고, 대신 아래 등록하기
             // 버튼이 비활성화되고 사유가 빨간 글씨로 표시된다).
@@ -458,7 +458,7 @@
 
         const standing = document.getElementById("trade-register-standing");
         standing.style.visibility = "visible";
-        loadImageWithFallback(standing, group.outfit, ["idle.png"], () => { standing.style.visibility = "hidden"; });
+        loadImageWithFallback(standing, group.outfit, ["idle.webp"], () => { standing.style.visibility = "hidden"; });
         bindStandingShadow(standing, document.getElementById("trade-register-standing-shadow"));
 
         document.getElementById("trade-register-name").textContent = group.name;

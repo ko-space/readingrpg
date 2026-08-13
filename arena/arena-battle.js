@@ -33,8 +33,8 @@
     const PROJECTILE_TRAVEL_MS = 220;
     const MAX_ATTACK_FRAMES = 6;
     const MAX_SKILL_FRAMES = 9; // 스킬 시전 전용 사진은 캐릭터당 총 9장까지 넣기로 확정됨
-    const MAX_RETURN_FRAMES = 9; // 시전 종료 후 원래 모습으로 복귀하는 전용 사진(return_N.png), 최대 9장
-    const MAX_WALK_FRAMES = 6; // 걷기 전용 사진(walk_N.png), attack_N.png와 같은 최대 장수
+    const MAX_RETURN_FRAMES = 9; // 시전 종료 후 원래 모습으로 복귀하는 전용 사진(return_N.webp), 최대 9장
+    const MAX_WALK_FRAMES = 6; // 걷기 전용 사진(walk_N.webp), attack_N.webp와 같은 최대 장수
     const ATTACK_FRAME_DURATION_MS = 60;
     const WALK_FRAME_DURATION_MS = 220;
     const RETURN_FRAME_DURATION_MS = 60; // 복귀 프레임은 서버가 시간을 안 주므로(시전 시간과 무관) 공격 프레임과 같은 고정 속도로 재생
@@ -130,7 +130,7 @@
         });
     }
 
-    // variant("" 또는 "_type2")는 이의진처럼 상태별로 다른 프레임 세트(attack_type2_N.png 등)를 쓰는
+    // variant("" 또는 "_type2")는 이의진처럼 상태별로 다른 프레임 세트(attack_type2_N.webp 등)를 쓰는
     // 캐릭터를 위한 것 - 캐시 키도 variant별로 따로 둬서 type1/type2 프레임 수를 혼동하지 않는다.
     async function getAttackFrameCount(outfit, variant = "") {
         const cacheKey = `${outfit}${variant}`;
@@ -142,7 +142,7 @@
 
         for (let i = 1; i <= MAX_ATTACK_FRAMES; i += 1) {
             const exists = await checkImageExists(
-                `${OUTFIT_IMAGE_BASE}${outfit}/attack${variant}_${i}.png`
+                `${OUTFIT_IMAGE_BASE}${outfit}/attack${variant}_${i}.webp`
             );
 
             if (!exists) break;
@@ -153,7 +153,7 @@
         return count;
     }
 
-    // 시전(캐스팅) 전용 프레임(skill_N.png)이 있는지 확인 - attack_N.png와 같은 규칙으로 캐릭터 outfit
+    // 시전(캐스팅) 전용 프레임(skill_N.webp)이 있는지 확인 - attack_N.webp와 같은 규칙으로 캐릭터 outfit
     // 폴더 안에서 순서대로 찾는다. 없는 캐릭터는 outfit당 한 번만 404를 확인하고 캐시해서 재확인하지 않는다.
     async function getSkillFrameCount(outfit, variant = "") {
         const cacheKey = `${outfit}${variant}`;
@@ -165,7 +165,7 @@
 
         for (let i = 1; i <= MAX_SKILL_FRAMES; i += 1) {
             const exists = await checkImageExists(
-                `${OUTFIT_IMAGE_BASE}${outfit}/skill${variant}_${i}.png`
+                `${OUTFIT_IMAGE_BASE}${outfit}/skill${variant}_${i}.webp`
             );
 
             if (!exists) break;
@@ -176,7 +176,7 @@
         return count;
     }
 
-    // 시전 종료 후 원래 모습으로 복귀하는 전용 프레임(return_N.png)이 있는지 확인 - skill_N.png와 같은 규칙.
+    // 시전 종료 후 원래 모습으로 복귀하는 전용 프레임(return_N.webp)이 있는지 확인 - skill_N.webp와 같은 규칙.
     async function getReturnFrameCount(outfit, variant = "") {
         const cacheKey = `${outfit}${variant}`;
         if (returnFrameCountCache[cacheKey] !== undefined) {
@@ -187,7 +187,7 @@
 
         for (let i = 1; i <= MAX_RETURN_FRAMES; i += 1) {
             const exists = await checkImageExists(
-                `${OUTFIT_IMAGE_BASE}${outfit}/return${variant}_${i}.png`
+                `${OUTFIT_IMAGE_BASE}${outfit}/return${variant}_${i}.webp`
             );
 
             if (!exists) break;
@@ -198,7 +198,7 @@
         return count;
     }
 
-    // 걷는 동안 재생되는 전용 프레임(walk_N.png)이 있는지 확인 - attack_N.png와 같은 규칙. 근거리
+    // 걷는 동안 재생되는 전용 프레임(walk_N.webp)이 있는지 확인 - attack_N.webp와 같은 규칙. 근거리
     // 캐릭터 전용(원거리는 애초에 걷지 않음). 없는 캐릭터는 0이 캐시되고, 그러면 기존처럼 걷기 중에도
     // 사진은 그대로 두고 CSS bob 애니메이션(walking 클래스)만 적용된다(호출부의 폴백).
     async function getWalkFrameCount(outfit, variant = "") {
@@ -211,7 +211,7 @@
 
         for (let i = 1; i <= MAX_WALK_FRAMES; i += 1) {
             const exists = await checkImageExists(
-                `${OUTFIT_IMAGE_BASE}${outfit}/walk${variant}_${i}.png`
+                `${OUTFIT_IMAGE_BASE}${outfit}/walk${variant}_${i}.webp`
             );
 
             if (!exists) break;
@@ -312,14 +312,14 @@
     }
 
     // 윤처럼 전투 로스터 "프로필"(idle 사진) 하나만 별도 그림을 쓰고 싶은 캐릭터용 - battle_idle/
-    // attack 등 실제 전투 스프라이트는 그대로 두고 이 로스터 초상화만 idle${variant}.png로 바꾼다.
+    // attack 등 실제 전투 스프라이트는 그대로 두고 이 로스터 초상화만 idle${variant}.webp로 바꾼다.
     // 호는 별도 표에 넣지 않는다 - 이미 units[cloneKey].spriteVariant("_ho")가 있어서 그걸 그대로 쓴다.
     const PROFILE_SPRITE_VARIANT_OVERRIDES = { "윤 & 호": "_yoon" };
 
     /*
      * 로비와 동일한 avatar-crop.js 규칙을 대표 프로필과 로스터 프로필에 적용한다.
      * HTML의 frame/thumb 요소가 overflow:hidden이므로 확대된 사진이 카드 밖으로 나오지 않는다.
-     * variant가 있으면 idle${variant}.png를 먼저 시도하고, 없으면(파일 미준비 등) 평소 idle.png로 대체한다.
+     * variant가 있으면 idle${variant}.webp를 먼저 시도하고, 없으면(파일 미준비 등) 평소 idle.webp로 대체한다.
      */
     function setPortraitImage(imgEl, outfit, variant = "") {
         if (!imgEl || !outfit) return;
@@ -327,12 +327,12 @@
         if (variant) {
             imgEl.onerror = () => {
                 imgEl.onerror = null;
-                imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.png`;
+                imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.webp`;
             };
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle${variant}.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle${variant}.webp`;
         } else {
             imgEl.onerror = null;
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.webp`;
         }
 
         if (typeof applyAvatarCrop === "function") {
@@ -354,7 +354,7 @@
     }
 
     // 이의진처럼 상태(type1/type2)에 따라 다른 스프라이트 파일을 쓰는 캐릭터용 - 평소엔 빈 문자열,
-    // isType2가 true면 "_type2"를 붙여서 attack_N_type2.png가 아니라 attack_type2_N.png 규칙을 맞춘다.
+    // isType2가 true면 "_type2"를 붙여서 attack_N_type2.webp가 아니라 attack_type2_N.webp 규칙을 맞춘다.
     // 윤의 "호"처럼 소환수가 시전자와 같은 outfit 폴더를 공유하면서 접미사로만 구분되는 경우엔
     // units[key].spriteVariant(백엔드 clone_sprite_variant, 예: "_ho")가 우선한다 - summon_clone
     // 처리부에서 설정. 둘 다 없으면(대부분의 캐릭터, 윤영준의 복제체 등) 기존처럼 접미사 없음.
@@ -474,10 +474,10 @@
         setFacing(key, targetIsLeft);
     }
 
-    // 사망 시: 로그 한 줄 + 사망 디폴트 사진(death${variant}.png, 아직 없으면 idle 사진을 흑백으로
+    // 사망 시: 로그 한 줄 + 사망 디폴트 사진(death${variant}.webp, 아직 없으면 idle 사진을 흑백으로
     // 임시 대체) + 투명해지면서 가로 실선 무늬로 스캔되듯 사라지는 연출. variant는 battle_idle/attack과
     // 동일하게 spriteVariantSuffix로 정한다 - 윤의 "호"처럼 시전자와 outfit 폴더를 공유하는 소환수도
-    // 이걸로 자기 전용 사망 그림(예: death_ho.png)을 따로 쓸 수 있다.
+    // 이걸로 자기 전용 사망 그림(예: death_ho.webp)을 따로 쓸 수 있다.
     function playDeathSequence(key) {
         const unit = units[key];
         const imgEl = document.querySelector(`[data-unit="${key}"] .battle-unit-img`);
@@ -489,17 +489,17 @@
         setTimeout(() => appendLog(`${unit.name} 사망!`, null), 0);
 
         // 호(자폭 소환수): playGoldenSelfDestruct가 이미 캐릭터 자체의 소멸(스케일/빛/페이드)을 맡고
-        // 있으므로, 여기서 death.png로 바꾸거나 .dying 페이드를 얹지 않는다 - 로그만 남기고 끝낸다.
+        // 있으므로, 여기서 death.webp로 바꾸거나 .dying 페이드를 얹지 않는다 - 로그만 남기고 끝낸다.
         if (goldenSelfDestructActive[key]) return;
 
         const variant = spriteVariantSuffix(key);
         imgEl.classList.remove("death-fallback-filter");
         imgEl.onerror = () => {
             imgEl.onerror = null;
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.webp`;
             imgEl.classList.add("death-fallback-filter"); // 전용 사망 그림이 없는 캐릭터는 idle을 흑백으로 임시 대체
         };
-        imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/death${variant}.png`;
+        imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/death${variant}.webp`;
 
         imgEl.classList.add("dying");
     }
@@ -557,12 +557,12 @@
                 const variant = spriteVariantSuffix(key);
                 imgEl.onerror = () => {
                     imgEl.onerror = null;
-                    // type2 전용 idle 사진은 없음(변신은 전투 중 상태라 로비 초상화 idle.png는 안 바뀜) -
-                    // battle_idle_type2.png가 없는 캐릭터/오타 등으로 로드 실패해도 평상시 idle로 대체된다.
-                    imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.png`;
+                    // type2 전용 idle 사진은 없음(변신은 전투 중 상태라 로비 초상화 idle.webp는 안 바뀜) -
+                    // battle_idle_type2.webp가 없는 캐릭터/오타 등으로 로드 실패해도 평상시 idle로 대체된다.
+                    imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.webp`;
                 };
 
-                imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.png`;
+                imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.webp`;
                 imgEl.classList.toggle("flipped", isFacingFlipped(key)); // 방향은 전투 중 동적으로 바뀔 수 있음
             }
         }
@@ -742,9 +742,9 @@
             const variant = spriteVariantSuffix(key);
             imgEl.onerror = () => {
                 imgEl.onerror = null;
-                imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.png`;
+                imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.webp`;
             };
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/battle_idle${variant}.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/battle_idle${variant}.webp`;
         }
         if (targetKey) faceToward(key, targetKey); // 도착하면 대상 쪽을 확실히 바라본다(등 뒤 대상 포함)
         (pendingArrivalResolvers[key] || []).forEach((resolve) => resolve());
@@ -803,7 +803,7 @@
                     el.style.zIndex = String(Math.max(1, MELEE_WALK_Z_BASE - meleeWalkZCounter));
                 }
                 if (imgEl) imgEl.classList.add("walking");
-                // 걷기 전용 사진(walk_N.png)이 있으면 그 프레임을 순환 재생 - 없는 캐릭터는 위의 walking
+                // 걷기 전용 사진(walk_N.webp)이 있으면 그 프레임을 순환 재생 - 없는 캐릭터는 위의 walking
                 // 클래스(bob 애니메이션)만 적용된 채로 원래처럼 걷는다(playWalkFrames 내부 폴백).
                 if (!walkAnimActive[key]) {
                     walkAnimActive[key] = true;
@@ -861,7 +861,7 @@
     //
     // fx/fy는 그 그림(현재 표시된 attack 프레임 원본 픽셀 기준) 안에서 눈이 있는 비율(0~1, 왼쪽위 기준).
     // ▶ 레이저가 엉뚱한 위치에서 나가면 여기 두 값만 고치면 된다 - fx를 늘리면 오른쪽으로,
-    //   fy를 늘리면 아래쪽으로 발사 지점이 이동한다. type1은 attack_1.png, type2는 attack_type2_1.png
+    //   fy를 늘리면 아래쪽으로 발사 지점이 이동한다. type1은 attack_1.webp, type2는 attack_type2_1.webp
     //   기준으로 눈금을 맞췄다(공격 프레임 3번째 즈음에 발사되므로 attack_3 기준으로 다시 맞춰도 된다).
 
     function playRangedAttack(actorKey, targetKey, onArrive) {
@@ -998,7 +998,7 @@
         if (imgEl && units[key]) {
             imgEl.classList.remove("casting", "casting-rainbow", "attacking");
             imgEl.onerror = null;
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${units[key].outfit}/battle_idle${spriteVariantSuffix(key)}.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${units[key].outfit}/battle_idle${spriteVariantSuffix(key)}.webp`;
         }
     }
 
@@ -1100,7 +1100,7 @@
 
         let frameIndex = 1;
         while (walkAnimTokens[key] === myToken) {
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/walk${variant}_${frameIndex}.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/walk${variant}_${frameIndex}.webp`;
             await sleep(WALK_FRAME_DURATION_MS);
             frameIndex = (frameIndex % frameCount) + 1;
         }
@@ -1146,25 +1146,25 @@
             if (attackAnimTokens[key] !== myToken) return;
 
             imgEl.src =
-                `${OUTFIT_IMAGE_BASE}${outfit}/attack${variant}_${i}.png`;
+                `${OUTFIT_IMAGE_BASE}${outfit}/attack${variant}_${i}.webp`;
             await sleep(ATTACK_FRAME_DURATION_MS);
         }
 
         if (attackAnimTokens[key] === myToken) {
             imgEl.onerror = () => {
                 imgEl.onerror = null;
-                imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.png`;
+                imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.webp`;
             };
 
             imgEl.src =
-                `${OUTFIT_IMAGE_BASE}${outfit}/battle_idle${variant}.png`;
+                `${OUTFIT_IMAGE_BASE}${outfit}/battle_idle${variant}.webp`;
             attackAnimActive[key] = false;
         }
     }
 
     /*
-     * 시전(캐스팅) 중 재생되는 프레임 애니메이션. 스킬 전용 프레임(skill_N.png)이 있으면 그걸 우선 쓰고,
-     * 없으면 기본공격 프레임(attack_N.png)을 그대로 돌려쓴다. 짧은 프레임 묶음을 빠르게 반복 재생하는
+     * 시전(캐스팅) 중 재생되는 프레임 애니메이션. 스킬 전용 프레임(skill_N.webp)이 있으면 그걸 우선 쓰고,
+     * 없으면 기본공격 프레임(attack_N.webp)을 그대로 돌려쓴다. 짧은 프레임 묶음을 빠르게 반복 재생하는
      * 대신, 가진 프레임 수만큼을 시전 시간(durationMs) 전체에 고르게 늘려서 "한 번만" 재생한다 -
      * 그래서 시전이 길수록 프레임 하나하나가 더 천천히 넘어가고, 루프하는 느낌 없이 시전 시작부터
      * 끝까지 이어지는 애니메이션처럼 보인다.
@@ -1228,7 +1228,7 @@
         for (let i = 1; i <= frameCount; i += 1) {
             if (attackAnimTokens[key] !== myToken) return; // 다른 호출이 이미 새 토큰을 발급함 - 그쪽 상태를 건드리지 않는다
 
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/${framePrefix}${variant}_${i}.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/${framePrefix}${variant}_${i}.webp`;
             const remainingMs = castStartMs + perFrameMs * i - performance.now();
             // remainingMs가 0 이하(이미 이 프레임의 목표 시각을 지남)라고 await 자체를 건너뛰면, 뒤이은
             // 프레임들의 remainingMs도 연쇄로 계속 음수라 반복문이 한 번도 브라우저에 제어권을 넘기지
@@ -1266,17 +1266,17 @@
         if (imgEl) {
             imgEl.classList.remove("casting", "casting-rainbow");
             imgEl.onerror = null;
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${units[key].outfit}/battle_idle${spriteVariantSuffix(key)}.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${units[key].outfit}/battle_idle${spriteVariantSuffix(key)}.webp`;
         }
         flashEffectAura(key, "cc");
         appendLog(`${units[key].name}의 [Active] 시전이 기절로 취소됐다!`, side);
     }
 
     /*
-     * 시전 종료 직후 재생되는 복귀 애니메이션. 전용 프레임(return_N.png)이 있는 캐릭터만 이 프레임들을
-     * 순서대로(1→N) 한 번 재생한 뒤 battle_idle.png로 정착한다. 서버가 이 동작의 시간을 따로 주지 않으므로
+     * 시전 종료 직후 재생되는 복귀 애니메이션. 전용 프레임(return_N.webp)이 있는 캐릭터만 이 프레임들을
+     * 순서대로(1→N) 한 번 재생한 뒤 battle_idle.webp로 정착한다. 서버가 이 동작의 시간을 따로 주지 않으므로
      * (시전 시간과 무관하게) 공격 프레임과 같은 고정 속도(RETURN_FRAME_DURATION_MS)로 재생한다.
-     * 전용 프레임이 없는 캐릭터는 호출부가 기존처럼 battle_idle.png로 바로 스냅한다(폴백, 이 함수는 안 씀).
+     * 전용 프레임이 없는 캐릭터는 호출부가 기존처럼 battle_idle.webp로 바로 스냅한다(폴백, 이 함수는 안 씀).
      */
     async function playReturnFrames(key) {
         const el = document.querySelector(`[data-unit="${key}"]`);
@@ -1299,17 +1299,17 @@
         for (let i = 1; i <= frameCount; i += 1) {
             if (attackAnimTokens[key] !== myToken) return;
 
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/return${variant}_${i}.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/return${variant}_${i}.webp`;
             await sleep(RETURN_FRAME_DURATION_MS);
         }
 
         if (attackAnimTokens[key] === myToken) {
             imgEl.onerror = () => {
                 imgEl.onerror = null;
-                imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.png`;
+                imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/idle.webp`;
             };
 
-            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/battle_idle${variant}.png`;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${outfit}/battle_idle${variant}.webp`;
             attackAnimActive[key] = false;
         }
     }
@@ -1347,23 +1347,23 @@
     // 그 source의 타이머만 리셋(갱신)하고, 처음 보는 source면 새로 추가(중첩)한다. 표시 카운트 = 활성
     // source 수의 합(윤대웅의 자가 중첩 스킬처럼 "한 source가 자체적으로 커지는" 경우는 weight로 반영).
     const STATUS_ICON_FILES = {
-        atk_up: "Combat_Icon_Buff_ATK.png",
-        maxhp_up: "Combat_Icon_Buff_MAXHP.png",
-        atk_speed_up: "Combat_Icon_Buff_AttackSpeed.png",
-        crit_up: "Combat_Icon_Buff_CriticalDamage.png",
-        crit_chance_up: "Combat_Icon_Buff_CriticalChance.png",
-        rear_priority: "Combat_Icon_Special_AttackRear.png",
-        atk_down: "Combat_Icon_Debuff_ATK.png",
-        maxhp_down: "Combat_Icon_Debuff_MAXHP.png",
-        stun: "Combat_Icon_CC_Stunned.png",
-        knockback: "Combat_Icon_CC_Knockback.png",
-        heal: "Combat_Icon_Recovery_Heal.png",
-        immune: "Combat_Icon_Special_ImmuneDamage.png",
-        paint_red: "Combat_Icon_Special_InkRed.png",     // 방임석 보유 물감(빨강) - weight로 개수 표시
-        paint_blue: "Combat_Icon_Special_InkBlue.png",   // 방임석 보유 물감(파랑)
-        paint_yellow: "Combat_Icon_Special_InkYellow.png", // 방임석 보유 물감(노랑)
-        damage_reduction: "Combat_Icon_Buff_DamageRatio.png", // 방임석 "방임" - 받는 피해 감소
-        lifesteal: "Combat_Icon_Special_Lifesteal.png", // 윤 "선생 고혈" - 공격 대상이 선생 타입인 동안(고혈)
+        atk_up: "Combat_Icon_Buff_ATK.webp",
+        maxhp_up: "Combat_Icon_Buff_MAXHP.webp",
+        atk_speed_up: "Combat_Icon_Buff_AttackSpeed.webp",
+        crit_up: "Combat_Icon_Buff_CriticalDamage.webp",
+        crit_chance_up: "Combat_Icon_Buff_CriticalChance.webp",
+        rear_priority: "Combat_Icon_Special_AttackRear.webp",
+        atk_down: "Combat_Icon_Debuff_ATK.webp",
+        maxhp_down: "Combat_Icon_Debuff_MAXHP.webp",
+        stun: "Combat_Icon_CC_Stunned.webp",
+        knockback: "Combat_Icon_CC_Knockback.webp",
+        heal: "Combat_Icon_Recovery_Heal.webp",
+        immune: "Combat_Icon_Special_ImmuneDamage.webp",
+        paint_red: "Combat_Icon_Special_InkRed.webp",     // 방임석 보유 물감(빨강) - weight로 개수 표시
+        paint_blue: "Combat_Icon_Special_InkBlue.webp",   // 방임석 보유 물감(파랑)
+        paint_yellow: "Combat_Icon_Special_InkYellow.webp", // 방임석 보유 물감(노랑)
+        damage_reduction: "Combat_Icon_Buff_DamageRatio.webp", // 방임석 "방임" - 받는 피해 감소
+        lifesteal: "Combat_Icon_Special_Lifesteal.webp", // 윤 "선생 고혈" - 공격 대상이 선생 타입인 동안(고혈)
     };
     const MOMENT_ICON_MS = 1200; // 순간 효과(회복, 넉백)는 이 시간만 표시됐다가 사라짐
 
@@ -1787,8 +1787,8 @@
                 // 무관한 다른 배우가 같은 대상을 먼저/나중에 때리는 이벤트가 끼어들 때 체력이 과거
                 // 값으로 되돌아가는 회귀가 생길 수 있다. cast_start 때 이미 같은 체인에 playCastFrames가
                 // 매달려 있으므로, 체인 순서 자체가 "그게 끝나야 복귀 애니메이션 시작"을 보장한다 -
-                // 복귀 전용 프레임(return_N.png)이 있으면 그걸 재생하고, 없는 캐릭터는 playReturnFrames
-                // 내부에서 프레임 0장으로 판정되어 곧바로 battle_idle.png로 스냅한다(기존과 동일).
+                // 복귀 전용 프레임(return_N.webp)이 있으면 그걸 재생하고, 없는 캐릭터는 playReturnFrames
+                // 내부에서 프레임 0장으로 판정되어 곧바로 battle_idle.webp로 스냅한다(기존과 동일).
                 if (units[actorKey]) {
                     chainActorAnim(actorKey, async () => {
                         const castImgEl = document.querySelector(`[data-unit="${actorKey}"] .battle-unit-img`);

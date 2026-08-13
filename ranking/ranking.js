@@ -127,7 +127,7 @@
                 item.innerHTML = `
                     <div class="rank-badge">${row.rank}</div>
                     <div class="rank-avatar-frame">
-                        <img class="rank-avatar" src="${row.lobby_outfit ? OUTFIT_IMAGE_BASE + row.lobby_outfit + "/idle.png" : ""}" alt="">
+                        <img class="rank-avatar" src="${row.lobby_outfit ? OUTFIT_IMAGE_BASE + row.lobby_outfit + "/idle.webp" : ""}" alt="">
                     </div>
                     <div class="rank-info">
                         <div class="rank-nickname">${escapeHtml(row.nickname)}</div>

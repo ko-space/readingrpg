@@ -613,7 +613,7 @@
         let count = 0;
         for (let i = 1; i <= max; i++) {
             // eslint-disable-next-line no-await-in-loop
-            const exists = await checkImageExists(`${OUTFIT_BASE}${outfit}/${prefix}_${i}.png`);
+            const exists = await checkImageExists(`${OUTFIT_BASE}${outfit}/${prefix}_${i}.webp`);
             if (!exists) break;
             count = i;
         }
@@ -626,18 +626,18 @@
         if (count === 0 || isStale()) return false;
         for (let i = 1; i <= count; i++) {
             if (isStale()) return false;
-            imgEl.src = `${OUTFIT_BASE}${outfit}/${prefix}_${i}.png`;
+            imgEl.src = `${OUTFIT_BASE}${outfit}/${prefix}_${i}.webp`;
             // eslint-disable-next-line no-await-in-loop
             await sleep(frameMs);
         }
         return !isStale();
     }
 
-    // 배틀 전용 스프라이트만 쓴다 - 로비/프로필용 idle.png 대신 battle_idle.png를 우선 쓰고,
-    // 그 outfit에 battle_idle.png가 없을 때만 idle.png로 폴백한다.
+    // 배틀 전용 스프라이트만 쓴다 - 로비/프로필용 idle.webp 대신 battle_idle.webp를 우선 쓰고,
+    // 그 outfit에 battle_idle.webp가 없을 때만 idle.webp로 폴백한다.
     async function setIdleSprite(imgEl, outfit) {
-        const hasBattleIdle = await checkImageExists(`${OUTFIT_BASE}${outfit}/battle_idle.png`);
-        imgEl.src = `${OUTFIT_BASE}${outfit}/${hasBattleIdle ? "battle_idle" : "idle"}.png`;
+        const hasBattleIdle = await checkImageExists(`${OUTFIT_BASE}${outfit}/battle_idle.webp`);
+        imgEl.src = `${OUTFIT_BASE}${outfit}/${hasBattleIdle ? "battle_idle" : "idle"}.webp`;
     }
 
     // 기본공격/스킬 모션을 실제로 재생한다(피해 판정 로직과는 독립적으로 병행) - 스킬은 재생이 끝나면
