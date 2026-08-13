@@ -31,7 +31,7 @@ def _kst_date_of(dt_utc_naive: datetime):
 # 무관하게 등록할 수 있다(범위 체크만 VALID_MARKET_STARS로 유지).
 VALID_MARKET_STARS = {1, 2, 3, 4, 5, 6}
 MARKET_PRICE_CAP = 1_000_000  # 등록가(수수료 붙기 전) 상한
-MARKET_FEE_MULTIPLIER = 1.1
+MARKET_FEE_MULTIPLIER = 1.2
 MARKET_MIN_FEE = 500  # 수수료 하한 - 계산된 수수료가 이보다 낮으면 이 값으로 올려붙인다
 MARKET_CAP = 10  # 거래소 전체 동시 매물 상한
 DAILY_REGISTER_LIMIT = 2  # 인당 하루 최대 등록 개수(KST 기준)
