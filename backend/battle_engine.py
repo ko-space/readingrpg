@@ -60,7 +60,7 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events, res
             stun_seconds, interrupted_cast = _apply_type2_stun_if_active(unit, target, time_elapsed)
             events.append({
                 "time": time_elapsed, "event_type": "basic_attack", "side": side, "type_multiplier": type_mult,
-                "actor": unit["name"], "target": target["name"], "damage": dealt,
+                "actor": unit["name"], "actor_slot": unit.get("slot"), "target": target["name"], "damage": dealt,
                 "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit,
                 "target_stunned": bool(stun_seconds), "stun_seconds": stun_seconds,
                 "interrupted_cast": interrupted_cast,
@@ -118,7 +118,7 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events, res
 
         events.append({
             "time": time_elapsed, "event_type": "basic_attack", "side": side, "type_multiplier": type_mult,
-            "actor": unit["name"], "target": target["name"], "damage": dealt,
+            "actor": unit["name"], "actor_slot": unit.get("slot"), "target": target["name"], "damage": dealt,
             "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit,
             "target_stunned": bool(stun_seconds), "stun_seconds": stun_seconds,
             "interrupted_cast": interrupted_cast,
@@ -151,7 +151,7 @@ def _apply_death_triggers(team, side, events, time_elapsed):
         if heals:
             events.append({
                 "time": time_elapsed, "event_type": "death_trigger_resolve", "side": side,
-                "actor": unit["name"], "effect_type": "death_heal_ally",
+                "actor": unit["name"], "actor_slot": unit.get("slot"), "effect_type": "death_heal_ally",
                 "detail": {"heals": heals},
             })
 
@@ -180,12 +180,12 @@ def _apply_neglect_status(team, enemy_team, side, events, time_elapsed):
             interrupted = _interrupt_cast_if_casting(unit, time_elapsed)
             events.append({
                 "time": time_elapsed, "event_type": "neglect_status_resolve", "side": side,
-                "actor": unit["name"], "detail": {"active": True, "interrupted_cast": interrupted},
+                "actor": unit["name"], "actor_slot": unit.get("slot"), "detail": {"active": True, "interrupted_cast": interrupted},
             })
         elif not has_qualifying_ally and was_active:
             events.append({
                 "time": time_elapsed, "event_type": "neglect_status_resolve", "side": side,
-                "actor": unit["name"], "detail": {"active": False},
+                "actor": unit["name"], "actor_slot": unit.get("slot"), "detail": {"active": False},
             })
 
             # 방임이 풀리는 바로 그 틱에, 그동안 쌓아온 것을 곧바로 발동한다(정상적인 "기본공격 3회 ->
@@ -204,7 +204,7 @@ def _apply_neglect_status(team, enemy_team, side, events, time_elapsed):
                     detail["neglect_release_trigger"] = True
                     events.append({
                         "time": time_elapsed, "event_type": "skill_resolve", "side": side,
-                        "actor": unit["name"], "effect_type": unit["skill_effect_type"], "detail": detail,
+                        "actor": unit["name"], "actor_slot": unit.get("slot"), "effect_type": unit["skill_effect_type"], "detail": detail,
                     })
                     attacker_team, defender_team = (team, enemy_team) if side == "attacker" else (enemy_team, team)
                     used_effect_type = detail.get("copied_effect_type") or unit["skill_effect_type"]
@@ -225,7 +225,7 @@ def _apply_neglect_status(team, enemy_team, side, events, time_elapsed):
                 unit["status"][paint_key] += 1
                 events.append({
                     "time": time_elapsed, "event_type": "paint_gain_resolve", "side": side,
-                    "actor": unit["name"],
+                    "actor": unit["name"], "actor_slot": unit.get("slot"),
                     "detail": {"color": color, "amount": 1, "total": unit["status"][paint_key], "source_actor": unit["name"]},
                 })
 
@@ -249,7 +249,7 @@ def _update_lifesteal_status(unit, resolved_target, side, events, time_elapsed):
     if is_active != was_active:
         events.append({
             "time": time_elapsed, "event_type": "lifesteal_status_resolve", "side": side,
-            "actor": unit["name"], "detail": {"active": is_active},
+            "actor": unit["name"], "actor_slot": unit.get("slot"), "detail": {"active": is_active},
         })
 
 
@@ -273,7 +273,7 @@ def _apply_paint_gain(caster, effect_type, attacker_team, defender_team, side_na
                 unit["status"][paint_key] += amount
                 events.append({
                     "time": time_elapsed, "event_type": "paint_gain_resolve", "side": team_side,
-                    "actor": unit["name"],
+                    "actor": unit["name"], "actor_slot": unit.get("slot"),
                     "detail": {
                         "color": category, "amount": amount, "total": unit["status"][paint_key],
                         "source_actor": caster["name"], "source_side": side_name,
@@ -418,7 +418,7 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
                         detail = _tag_target_sides(detail, side_name, own_team, enemy_team)
                         events.append({
                             "time": time_elapsed, "event_type": "skill_resolve", "side": side_name,
-                            "actor": unit["name"], "effect_type": unit["skill_effect_type"], "detail": detail,
+                            "actor": unit["name"], "actor_slot": unit.get("slot"), "effect_type": unit["skill_effect_type"], "detail": detail,
                         })
                         # 방임석(예술가의 혼): 방금 발동한 [Active]를 전장의 다른 관찰자들에게 알린다 -
                         # 강승유가 복제한 스킬이면 실제로 복제된 원본 효과 타입(copied_effect_type)을 기준으로
@@ -452,7 +452,7 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
                 if resolved_target is not None and resolved_target is not locked_before:
                     events.append({
                         "time": time_elapsed, "event_type": "target_lock_resolve", "side": side_name,
-                        "actor": unit["name"], "target": resolved_target["name"],
+                        "actor": unit["name"], "actor_slot": unit.get("slot"), "target": resolved_target["name"],
                         "target_side": "defender" if side_name == "attacker" else "attacker",
                     })
                 if unit.get("melee_speed") is not None and resolved_target is not None:
@@ -486,7 +486,7 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
                     unit["cast_end_time"] = time_elapsed + SKILL_CAST_INTERVAL_MULTIPLIER * interval
                     events.append({
                         "time": time_elapsed, "event_type": "cast_start", "side": side_name,
-                        "actor": unit["name"], "effect_type": unit["skill_effect_type"],
+                        "actor": unit["name"], "actor_slot": unit.get("slot"), "effect_type": unit["skill_effect_type"],
                         "duration": SKILL_CAST_INTERVAL_MULTIPLIER * interval,
                     })
                 else:

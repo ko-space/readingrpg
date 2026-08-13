@@ -59,6 +59,11 @@ def _skill_summon_clone(caster, own_team, enemy_team, params, time_elapsed):
         "skill_effect_type": None, "skill_params": None,
         "trait_effect_type": None, "trait_params": None, "trait_partner_name": None,
         "status": _new_status(), "is_clone": True,
+        # 이벤트의 actor_slot으로 실려나가 프론트가 이름이 아니라 슬롯으로 이 유닛을 특정하게 해준다 -
+        # 강승유가 "호"를 복제하면 한 팀에 이름이 "호"인 유닛이 두 개(시전자 본인의 소환수 + 강승유의
+        # 복제 소환수) 동시에 존재할 수 있어서, 이름만으로는(findUnitKey) 항상 먼저 찾아지는 쪽으로
+        # 잘못 귀속된다(예: 강승유의 복제 소환수가 공격/자폭해도 원본 소환수가 대신 반응해버림).
+        "slot": target_key,
         # 복제체는 시전자가 원래 서 있던 바로 그 자리에 나타난다(caster의 "지금" 위치를 그대로 물려받음 -
         # 아래에서 caster 본인의 position을 바꾸기 전에 미리 읽어두는 것). melee_speed도 caster가 이미
         # 자기 슬롯에 맞게 캘리브레이션된 값을 그대로 복사한다(원거리면 None).
