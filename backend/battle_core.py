@@ -250,6 +250,18 @@ def _exposure(unit):
     return unit["position"] if unit["is_attacker_team"] else -unit["position"]
 
 
+def _exposure_sort_key(unit):
+    """_alive_units 정렬 키 - 노출도가 같을 때(예: 윤영준이 복제체 소환 넉백 후 다시 걸어와 복제체와
+    거의 같은 좌표로 수렴하는 경우) 그 동률을 어떻게 깨는지가 중요하다. 예전엔 그냥 _all_slots의
+    고정 순서(front가 항상 먼저)로 깨져서, 넉백당했다가 나중에 그 자리로 "다시 돌아온" 쪽이 원래
+    거기 계속 있던 쪽(또는 방금 소환된 복제체)보다 오히려 전방으로 판정되는 문제가 있었다 - 실제로는
+    더 늦게 그 위치에 도달한 쪽이 후방이어야 자연스럽다. position_settled_at(그 좌표에 마지막으로
+    "도착"한 시각 - _advance_melee_position/넉백 계열 스킬이 갱신)을 2차 키로 써서, 노출도가 같으면
+    더 일찍부터 그 자리를 지키고 있던 쪽(settled_at이 더 이른 쪽)이 전방을 유지하고, 더 늦게 도착한
+    쪽이 후방으로 밀리게 한다."""
+    return (_exposure(unit), -unit.get("position_settled_at", 0.0))
+
+
 def _alive_units(team):
     """생존 유닛을 "더 전진(노출)한 순서"로 반환한다. 예전엔 항상 front->back 고정 슬롯 순서였지만,
     이제 실제 시뮬레이션된 물리적 position 기준으로 매 순간 다시 정렬된다 - 근접 유닛이 슬롯상
@@ -259,9 +271,10 @@ def _alive_units(team):
     복제체(클론)도 front/back과 완전히 동일하게 이 노출도 순서에 함께 정렬된다 - "전방/후방이 모두
     죽어야 비로소 대상이 됨"이라는 예전 고정 규칙은 폐지됐다. 클론은 시전자의 그 순간 position을
     물려받아 시작하고(_skill_summon_clone), 근접이면 이후에도 다른 유닛과 동일하게 자기 target을
-    쫓아 계속 움직이므로, 노출도 계산에 그대로 섞여 들어가도 값이 항상 유효하다."""
+    쫓아 계속 움직이므로, 노출도 계산에 그대로 섞여 들어가도 값이 항상 유효하다. 노출도가 동률일 때의
+    타이브레이커는 _exposure_sort_key 참고."""
     units = [u for u in (team["front"], team["back"], team.get("summon_front"), team.get("summon_back")) if u and u["hp"] > 0]
-    units.sort(key=_exposure, reverse=True)
+    units.sort(key=_exposure_sort_key, reverse=True)
     return units
 
 

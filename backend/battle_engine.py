@@ -297,21 +297,28 @@ def _init_unit_positions(team, is_attacker):
             continue
         unit["is_attacker_team"] = is_attacker
         unit["position"] = _home_position(is_attacker, slot)
+        unit["position_settled_at"] = 0.0  # battle_core._exposure_sort_key의 동률 타이브레이커용
 
 
-def _advance_melee_position(unit, target_position, tick):
+def _advance_melee_position(unit, target_position, tick, time_elapsed):
     """근접 유닛의 position을 target_position 쪽으로 최대 melee_speed*tick만큼 옮긴다. 매 틱 현재
     position에서 다시 거리를 계산하므로(누적 오차 없음), 도착 조건을 만족하면 정확히 target_position으로
-    스냅한다 - 그래야 부동소수 오차가 여러 틱에 걸쳐 쌓이지 않는다."""
+    스냅한다 - 그래야 부동소수 오차가 여러 틱에 걸쳐 쌓이지 않는다.
+    position이 실제로 바뀔 때마다 position_settled_at을 지금 시각으로 갱신한다(battle_core.
+    _exposure_sort_key 참고) - 노출도가 우연히 같아지는 순간(예: 넉백당한 유닛이 다시 걸어와 자기
+    복제체와 거의 같은 좌표로 수렴)에 "더 늦게 그 자리에 도착한 쪽"이 후방으로 판정되게 하기 위함."""
     delta = target_position - unit["position"]
     if abs(delta) <= ARRIVAL_EPSILON:
-        unit["position"] = target_position
+        if unit["position"] != target_position:
+            unit["position"] = target_position
+            unit["position_settled_at"] = time_elapsed
         return
     step = unit["melee_speed"] * tick
     if abs(delta) <= step:
         unit["position"] = target_position
     else:
         unit["position"] += step if delta > 0 else -step
+    unit["position_settled_at"] = time_elapsed
 
 
 def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
@@ -449,7 +456,7 @@ def simulate_battle(attacker_team: dict, defender_team: dict) -> dict:
                         "target_side": "defender" if side_name == "attacker" else "attacker",
                     })
                 if unit.get("melee_speed") is not None and resolved_target is not None:
-                    _advance_melee_position(unit, resolved_target["position"], TICK)
+                    _advance_melee_position(unit, resolved_target["position"], TICK, time_elapsed)
 
                 # 윤(선생 고혈): 공격 쿨다운/도착 게이트와 무관하게, "지금 확정된 공격 대상"이 바뀔
                 # 때마다("잠긴" 상태라 매 틱 갱신은 아니지만 target_lock_resolve와 같은 빈도) 흡혈

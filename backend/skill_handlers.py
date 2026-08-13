@@ -64,6 +64,10 @@ def _skill_summon_clone(caster, own_team, enemy_team, params, time_elapsed):
         # 자기 슬롯에 맞게 캘리브레이션된 값을 그대로 복사한다(원거리면 None).
         "melee_speed": caster.get("melee_speed"),
         "position": caster["position"],
+        # 지금 이 순간 그 자리에 "새로 나타난" 것이므로 settled_at도 지금 시각으로 시작한다 -
+        # battle_core._exposure_sort_key가 노출도 동률(예: caster가 나중에 다시 이 자리 근처로
+        # 걸어 돌아왔을 때)을 깨는 기준으로 쓴다.
+        "position_settled_at": time_elapsed,
         "is_attacker_team": caster["is_attacker_team"],
         # 윤의 "호"(자폭 소환수)처럼 첫 기본공격 한 번을 명중시키자마자 스스로 죽는 소환수(선택
         # 파라미터) - 실제 자폭 판정은 _do_basic_attack이 매 기본공격마다 이 필드를 확인해서 처리한다.
@@ -83,6 +87,10 @@ def _skill_summon_clone(caster, own_team, enemy_team, params, time_elapsed):
         caster["position"] = max(AXIS_ATTACKER_BACK, caster["position"] - KNOCKBACK_POSITION_DISTANCE)
     else:
         caster["position"] = min(AXIS_DEFENDER_BACK, caster["position"] + KNOCKBACK_POSITION_DISTANCE)
+    # caster도 지금 막 이 위치로 밀려났으니 settled_at을 갱신한다 - 안 그러면 근접 caster가 이후 다시
+    # 이 자리 근처로 걸어 돌아왔을 때(노출도가 복제체와 동률이 되는 순간), 위 clone보다 caster의
+    # settled_at이 더 오래된 값(전투 시작 시각 등)으로 남아있어서 caster가 부당하게 전방으로 판정된다.
+    caster["position_settled_at"] = time_elapsed
 
     detail = {
         "summoned": True, "clone_name": clone["name"], "clone_hp": clone_max_hp, "clone_atk": clone_atk,
@@ -217,6 +225,9 @@ def _skill_bonus_damage_knockback(caster, own_team, enemy_team, params, time_ela
         target["position"] = max(AXIS_ATTACKER_BACK, target["position"] - KNOCKBACK_POSITION_DISTANCE)
     else:
         target["position"] = min(AXIS_DEFENDER_BACK, target["position"] + KNOCKBACK_POSITION_DISTANCE)
+    # target도 지금 막 이 위치로 밀려났다 - battle_core._exposure_sort_key의 동률 타이브레이커용
+    # (밀려난 뒤 다시 걸어와 노출도가 누군가와 같아지는 순간, 더 늦게 도착한 쪽이 후방으로 판정되게 함).
+    target["position_settled_at"] = time_elapsed
 
     return {
         "hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
