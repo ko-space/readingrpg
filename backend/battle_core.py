@@ -324,6 +324,40 @@ def _tag_target_sides(detail, side_name, own_team, enemy_team):
     return detail
 
 
+def build_stat_change_dicts(changes, side_name, enemy_side):
+    """성급 효과(star_handlers.py)/특성(trait_handlers.py) 핸들러가 공통으로 돌려주는
+    "누가 어떤 방향으로 스탯이 바뀌었는지" 튜플 목록을,
+    프론트가 상태 아이콘을 켜는 데 쓰는 change_dicts로 변환한다(star_effect_resolve/trait_resolve가
+    공유하는 프론트 로직 - arena-battle.js의 changes 처리 참고).
+
+    각 튜플은 (rel, target, atk_sign, hp_sign, crit_sign=0, crit_chance_sign=0, rear_sign=0, haste_sign=0) -
+    rel은 "own"(own_team 소속) 또는 "enemy". 부호는 +1(증가)/-1(감소)/0(변화 없음)만 쓴다(정확한 수치는
+    아이콘 표시에 필요 없음 - 정확한 수치가 필요한 문구는 각 핸들러가 별도로 만드는 detail에 담는다).
+
+    특성 쪽은 원래 effect_type마다 프론트에 개별 분기를 하나씩 손으로 추가해야 했는데(캐릭터가
+    늘어날 때마다 아이콘 처리를 깜빡하기 쉬운 구조였음 - 실제로 5개나 빠져 있었다), 성급 효과와
+    똑같은 이 범용 목록을 쓰게 통일하면 앞으로 새 캐릭터를 추가해도 이 목록만 제대로 채우면
+    아이콘 처리가 구조적으로 자동 보장된다."""
+    change_dicts = []
+    for change in changes:
+        rel, target, atk_sign, hp_sign, *extra = change
+        extra = list(extra) + [0, 0, 0, 0]
+        crit_sign, crit_chance_sign, rear_sign, haste_sign = extra[0], extra[1], extra[2], extra[3]
+        if not (atk_sign or hp_sign or crit_sign or crit_chance_sign or rear_sign or haste_sign):
+            continue
+        change_dicts.append({
+            "target": target["name"],
+            "target_side": side_name if rel == "own" else enemy_side,
+            "atk": atk_sign,
+            "hp": hp_sign,
+            "crit": crit_sign,
+            "crit_chance": crit_chance_sign,
+            "rear_priority": rear_sign,
+            "haste": haste_sign,
+        })
+    return change_dicts
+
+
 def _team_alive(team):
     return bool(_alive_target(team))
 
