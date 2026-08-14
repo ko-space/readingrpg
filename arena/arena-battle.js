@@ -1736,6 +1736,41 @@
                 // 동일한 패턴). 로그 텍스트(traitLogText)는 이미 떴었지만 아이콘 갱신이 빠져 있었다.
                 flashEffectAura(traitActorKey, "buff");
                 setStatusIcon(traitActorKey, "atk_speed_up", { source: `${traitActorKey}:${event.effect_type}` });
+            } else if (
+                event.effect_type === "ally_job_conditional_team_buff"
+                || event.effect_type === "ally_type_conditional_team_buff"
+            ) {
+                // 강승유(친근감)/김남옥(자애심)/강 희(광역 도발): 조건 충족 시 아군 전체(자신 포함) 버프 -
+                // 팀 내 살아있는 유닛 전원에게 개별적으로 아이콘을 켠다(위 두 건과 달리 이 방들은 지금까지
+                // 아무도 아이콘을 못 받고 있었다).
+                [`${event.side}-front`, `${event.side}-back`].forEach((key) => {
+                    if (!units[key] || units[key].hp <= 0) return;
+                    flashEffectAura(key, "buff");
+                    if (event.detail?.atk_percent) setStatusIcon(key, "atk_up", { source: `${key}:${event.effect_type}` });
+                    if (event.detail?.hp_percent) setStatusIcon(key, "maxhp_up", { source: `${key}:${event.effect_type}` });
+                });
+            } else if (event.effect_type === "team_teacher_hp_buff" && event.detail?.targets?.length) {
+                // 불빠따 김어진(교권 보호): 팀 내 선생 타입 대상 전원에게 체력 버프 - 백엔드가 대상 이름
+                // 목록(detail.targets)을 그대로 알려준다.
+                event.detail.targets.forEach((name) => {
+                    const targetKey = findUnitKey(event.side, name);
+                    if (!targetKey) return;
+                    flashEffectAura(targetKey, "buff");
+                    setStatusIcon(targetKey, "maxhp_up", { source: `${targetKey}:${event.effect_type}` });
+                });
+            } else if (event.effect_type === "teammate_hp_buff_self_cost") {
+                // 송주헌(페이스 메이커): 파트너 체력 증가 + 자신 체력 감소(대가) - 둘 다 아이콘이 없었다.
+                if (traitActorKey) {
+                    flashEffectAura(traitActorKey, "debuff");
+                    setStatusIcon(traitActorKey, "maxhp_down", { source: `${traitActorKey}:${event.effect_type}` });
+                }
+                if (event.detail?.partner) {
+                    const partnerKey = findUnitKey(event.side, event.detail.partner);
+                    if (partnerKey) {
+                        flashEffectAura(partnerKey, "buff");
+                        setStatusIcon(partnerKey, "maxhp_up", { source: `${partnerKey}:${event.effect_type}` });
+                    }
+                }
             }
             appendLog(traitLogText(event), "trait");
         } else if (eventType === "cast_start") {
