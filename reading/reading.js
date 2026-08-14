@@ -5,6 +5,7 @@
     const OUTFIT_IMAGE_BASE = `${API_BASE_URL}/static/outfits/`;
     const REGION_IMAGE_BASE = "assets/regions/";
     const FIREFLY_COUNT = 18;
+    const MAX_LEVEL = 30; // backend/leveling.py의 MAX_LEVEL과 반드시 같은 값으로 유지
 
     // 모의고사 탭의 과목별 소요시간(분). dungeon.js가 duration을 실어 보내지만, 값이 비거나 이상하면 여기서도 검증한다.
     const MOCK_EXAM_MINUTES = {
@@ -652,10 +653,19 @@
             let exp = data.start_exp;
             let remaining = data.gained_exp;
 
-            levelChip.textContent = `Lv. ${level}`;
-            setBarWidthInstant(fillEl, (exp / (level * 100)) * 100);
+            levelChip.textContent = level >= MAX_LEVEL ? `Lv. ${level} MAX` : `Lv. ${level}`;
+            setBarWidthInstant(fillEl, level >= MAX_LEVEL ? 100 : (exp / (level * 100)) * 100);
 
             function step() {
+                // 이미 만렙이면(백엔드도 이 이상 total_exp를 안 채움) 게이지를 그대로 가득 찬 채로 끝낸다 -
+                // 안 그러면 남은 remaining을 계속 다음 레벨 요구치에 채워나가다 만렙을 넘어(Lv.31 등)
+                // 잠깐 표시되는 버그가 있었다(로비로 돌아가면 서버 값으로 다시 그려져서 안 보일 뿐).
+                if (level >= MAX_LEVEL) {
+                    setBarWidthInstant(fillEl, 100);
+                    finish();
+                    return;
+                }
+
                 const needed = level * 100;
                 const spaceLeft = needed - exp;
 
@@ -668,6 +678,16 @@
                     setTimeout(() => {
                         level += 1;
                         exp = 0;
+
+                        if (level >= MAX_LEVEL) {
+                            levelChip.textContent = `Lv. ${level} MAX`;
+                            levelChip.classList.add("level-flash");
+                            setTimeout(() => levelChip.classList.remove("level-flash"), 500);
+                            setBarWidthInstant(fillEl, 100);
+                            finish();
+                            return;
+                        }
+
                         levelChip.textContent = `Lv. ${level}`;
                         levelChip.classList.add("level-flash");
                         setTimeout(() => levelChip.classList.remove("level-flash"), 500);

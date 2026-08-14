@@ -1,4 +1,5 @@
 // API_BASE_URL/GOOGLE_CLIENT_ID는 shared/api-config.js가 이 스크립트보다 먼저 로드되어 전역으로 제공한다.
+const MAX_LEVEL = 30; // backend/leveling.py의 MAX_LEVEL과 반드시 같은 값으로 유지
 
 // 독서 중 탭을 실수로 닫아서 끝내지 못한 세션이 남아있으면, 로비를 그릴 필요 없이 곧장 독서
 // 화면으로 돌려보낸다 - index.html이 로그인된 사용자를 항상 home.html로 보내므로(script.js 참고),
@@ -197,11 +198,17 @@ function renderProfile(data) {
     titleValue.textContent = user.equipped_title || "칭호 없음";
     titleValue.classList.toggle("title-hidden-shine", !!user.equipped_title_is_hidden);
 
-    // 다음 레벨까지 필요한 경험치는 백엔드 규칙상 level * 100
-    const expNeeded = user.level * 100;
-    const expPercent = Math.min(100, Math.max(0, (user.total_exp / expNeeded) * 100));
-    expFill.style.width = `${expPercent}%`;
-    expText.textContent = `${user.total_exp} / ${expNeeded} EXP`;
+    // 다음 레벨까지 필요한 경험치는 백엔드 규칙상 level * 100. 만렙(leveling.py MAX_LEVEL)이면
+    // total_exp가 항상 그 레벨 요구치로 고정돼있어 "3000 / 3000 EXP"처럼 숫자가 무의미해지므로 MAX로 표시.
+    if (user.level >= MAX_LEVEL) {
+        expFill.style.width = "100%";
+        expText.textContent = "MAX";
+    } else {
+        const expNeeded = user.level * 100;
+        const expPercent = Math.min(100, Math.max(0, (user.total_exp / expNeeded) * 100));
+        expFill.style.width = `${expPercent}%`;
+        expText.textContent = `${user.total_exp} / ${expNeeded} EXP`;
+    }
 
     // 아바타: 작은 원형(상단)과 큰 전신(중앙) 둘 다 같은 이미지를 사용
     let avatarSrc = DEFAULT_AVATAR;
