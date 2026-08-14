@@ -1219,14 +1219,14 @@ const SCENE_COLLECTOR_ENDING = [
     type:'narration',
     text:'치열하고 다사다난했던 그 수많은 사건들을 지나, 어느덧 1년하고도 조금 넘는 시간이 흐른 지금.',
     clearBg:true,
-    chars:{left:null, centerLeft:null, centerRight:null, right:null},
+    chars:{left:null, center:null, right:null},
     bgm:'Messenger of Midnight'
   },
   {
     type:'narration',
     text:'교정에 흩날리던 봄꽃과 무더운 여름날의 녹음, 붉게 물들던 가을을 지나 마침내 차가운 입시의 계절이 찾아왔다.',
     showBg:'schoolgate',
-    chars:{left:null, centerLeft:null, centerRight:null, right:null}
+    chars:{left:null, center:null, right:null}
   },
   {type:'narration', text:'그리고 오늘, 내 인생의 가장 커다란 결전이었던 수능 시험이 마침내 끝이 났다.'},
   {type:'thought', text:'시험장에 들어서기 직전까지만 해도 심장이 터질 듯이 긴장되고 두려웠지만…… 문득 돌아본 내 곁에는 언제나 나를 받쳐주는 승유와 주헌이, 그리고 희가 함께 있었기에 견뎌낼 수 있었다.'},
@@ -1237,12 +1237,12 @@ const SCENE_COLLECTOR_ENDING = [
     type:'narration',
     text:'우리는 차가운 겨울 바람을 피해 학교 근처의 작고 따스한 카페로 모였다.',
     showBg:'collector_cafe',
-    chars:{left:null, centerLeft:null, centerRight:null, right:null}
+    chars:{left:null, center:null, right:null}
   },
   {
     type:'narration',
     text:'주황빛 조명 아래, 김이 모락모락 피어오르는 음료를 사이에 두고 마주 앉은 네 사람.',
-    chars:{left:'seungyu_true_stand', centerLeft:'juheon', centerRight:null, right:'ganghee_true_stand'}
+    chars:{left:'seungyu_true_stand', center:'juheon', right:'ganghee_true_stand'}
   },
   {type:'line', speaker:SEUNGYU, text:'아아~! 드디어 이 빌어먹을 수능이 끝났다!! 야, 너네들 오늘 시험 어땠어? 난 국어 비문학 지문 읽다가 뇌 누수 오는 줄 알았는데…… 좀 어렵지 않았냐?'},
   {type:'line', speaker:GANGHEE, text:'글쎄? 난 생각보다 꽤 잘 본 것 같은데? 내가 예측했던 출제 경향이랑 딱 맞아떨어지더라고. 후후, 너네는 어때?'},
@@ -1261,42 +1261,45 @@ const SCENE_COLLECTOR_ENDING = [
   {
     type:'narration',
     text:'딸랑거리는 맑은 종소리와 함께, 바깥의 차가운 겨울 바람을 한껏 머금은 누군가가 문을 열고 안으로 걸어 들어왔다.',
-    // 강 희는 계속 right 슬롯에 그대로 둔다 - 예전엔 이 자리에 영웅(senior_sil)을 넣고 강 희를
-    // centerRight로 옮겼는데, tryPlayCharacterHandoff 입장에선 "right의 강 희가 완전히 새 인물로
-    // 교체됨"으로 보여서 강 희가 통째로 퇴장했다가(500ms) 뒤늦게 centerRight에서 재등장하는 것처럼
-    // 보였다(그 사이 화면에서 강 희가 아예 사라짐). 새로 합류하는 영웅만 centerRight의 새 슬롯으로
-    // 들어오게 하면 강 희는 한 번도 안 건드려져서 계속 제자리에 남아있는다.
-    chars:{left:'seungyu_true_stand', centerLeft:'juheon', centerRight:'senior_sil', right:'ganghee_true_stand'},
+    // 이영웅은 승유/주헌/강 희 그룹에 절대 섞이지 않는다 - 영웅이 있을 땐 항상 그룹 셋이 전부 퇴장하고
+    // center에 영웅 혼자만 미끄러져 등장한다(반대도 마찬가지). 그래서 "누군가 들어왔다" 순간부터 이미
+    // 그룹은 물러나고, 아직 정체를 숨긴 실루엣(senior_sil)이 혼자 center로 들어온다 - 다음 줄의 정체
+    // 공개(center:'yeongwoong')는 같은 center 자리 안에서의 인물 교체라 senior_sil<->yeongwoong이
+    // CHAR_IDENTITY_ALIASES로 "같은 사람"으로 묶여 있어(아래 참고) 살짝 내려갔다 올라오는 dip 연출로
+    // 자연스럽게 이어진다.
+    chars:{left:null, center:'senior_sil', right:null},
     stopBgm:true
   },
   {
     type:'narration',
     text:'시원시원한 체구와 익숙하고 미더운 얼굴…… 바로 영웅이 형이었다.',
-    chars:{left:'seungyu_true_stand', centerLeft:'juheon', centerRight:'yeongwoong', right:'ganghee_true_stand'},
+    // left/right를 여기서 다시 선언하지 않는다 - center만 바뀌는 갱신이어야 tryPlayCharacterHandoff가
+    // "그룹<->솔로 전환"이 아니라 "같은 자리에서의 인물 교체"로 보고 dip 연출을 태운다.
+    chars:{center:'yeongwoong'},
     clearDim:true,
     bgm: 'Daily Routine'
   },
-  // 영웅의 대사 차례엔 혼자만 가운데로 미끄러져 등장하고(다른 셋은 퇴장), 다른 사람 차례가 오면
-  // 영웅은 다시 자기 자리(centerRight)로 미끄러져 물러나며 나머지가 등장하는 식으로 반복한다
-  // (playSlotsEnterBatched/두 종류의 연출은 #char-center 전용 CSS가 처리 - story-engine.js 상단 참고).
+  // 영웅의 대사 차례엔 혼자만 center로 미끄러져 등장하고(다른 셋은 퇴장), 다른 사람 차례가 오면 영웅은
+  // 퇴장하고 나머지 셋이 등장하는 식으로 반복한다(setChars의 center 모드 판정 + playSlotsEnterBatched -
+  // story-engine.js 상단 참고).
   {
     type:'line', speaker:YEONGWOONG,
     text:'어이! 너네들 그동안 잘 지냈냐? 승유 이 녀석이 수능 끝난 기념으로 형 얼굴 좀 보러 오라고 난리를 치길래 바쁜 시간 쪼개서 달려왔더니…… 크, 이렇게 다 모여 있었구만!',
-    chars:{left:null, centerLeft:null, center:'yeongwoong', centerRight:null, right:null},
+    chars:{left:null, center:'yeongwoong', right:null},
   },
   {
     type:'line', speaker:SEUNGYU, text:'오~! 형 진짜 오셨네요! 안녕하세요~!',
-    chars:{left:'seungyu_true_stand', centerLeft:'juheon', center:null, centerRight:'yeongwoong', right:'ganghee_true_stand'},
+    chars:{left:'seungyu_true_stand', center:'juheon', right:'ganghee_true_stand'},
   },
   {type:'line', speaker:PLAYER, text:'영웅이 형! 진짜 오랜만이에요, 보고 싶었어요!'},
   {
     type:'line', speaker:YEONGWOONG,
     text:'하하! 이 새끼, 형 보고 싶었단 말은 잘해요. 오늘 다들 고생 많았다! 가자, 형이 오늘 수능 끝난 기념으로 고기 원 없이 쏜다!',
-    chars:{left:null, centerLeft:null, center:'yeongwoong', centerRight:null, right:null},
+    chars:{left:null, center:'yeongwoong', right:null},
   },
   {
     type:'narration', text:'반가운 고함과 왁자지껄한 인사가 카페 안을 가득 채웠다.',
-    chars:{left:'seungyu_true_stand', centerLeft:'juheon', center:null, centerRight:'yeongwoong', right:'ganghee_true_stand'},
+    chars:{left:'seungyu_true_stand', center:'juheon', right:'ganghee_true_stand'},
   },
   {type:'narration', text:'우리는 카페를 나와 가벼운 발걸음으로 근처 고깃집으로 자리를 옮겼다.'},
   {type:'narration', text:'지글지글 소리를 내며 불판 위에서 노릇하게 익어가는 고기 냄새, 모락모락 피어오르는 연기 사이로 끊임없이 오가는 술잔과 음료수 잔의 마찰음.'},
@@ -1316,7 +1319,7 @@ const SCENE_COLLECTOR_ENDING = [
   {
     type:'narration',
     text:'수능날 밤, 뜨거운 고깃집에서 서로의 미래를 축하하며 잔을 부딪쳤던 그날로부터 어느덧 10년이라는 긴 세월이 흘렀다.',
-    chars:{left:null, centerLeft:null, centerRight:null, right:null}
+    chars:{left:null, center:null, right:null}
   },
   {type:'narration', text:'각자의 꿈을 향해 거칠게 달려간 우리들은 어느새 번듯한 사회인이 되었고, 나는 오랜만에 옛 친구들의 얼굴을 하나씩 직접 확인하기 위해 발걸음을 옮겼다.'},
 
@@ -1324,12 +1327,12 @@ const SCENE_COLLECTOR_ENDING = [
     type:'narration',
     text:'가장 먼저 찾아간 곳은 수천 명의 함성으로 쿠쿵거리며 흔들리는 거대한 실내 체육관이었다.',
     showBg:'collector_boxing_gym',
-    chars:{left:null, centerLeft:null, centerRight:null, right:null}
+    chars:{left:null, center:null, right:null}
   },
   {type:'narration', text:'화려한 조명 아래, 사각의 링 위에서 땀방울을 흩뿌리며 상대의 가드를 폭발적인 콤비네이션으로 부수는 녀석이 보였다.'},
   {type:'narration', text:'땡! 경기 종료를 알리는 벨 소리와 함께 심판이 녀석의 손을 높이 들어 올렸다.'},
   {type:'narration', text:'‘동급 최연소 세계 챔피언 타이틀 방어 성공’이라는 전광판의 문구와 함께, 승유가 챔피언 벨트를 어깨에 걸쳐 메고 링 아래의 나를 발견했다.'},
-  {type:'line', speaker:SEUNGYU_ADULT, text:'야! 너 왔냐?! 봤지? 이 형님이 세계 최연소 챔피언 타이틀 또 지켜내는 거! 나 아직 안 죽었다니까!', showBg:'true_seungyu_cg', chars:{left:null, centerLeft:null, centerRight:null, right:null}, bgm:'Hello SY'},
+  {type:'line', speaker:SEUNGYU_ADULT, text:'야! 너 왔냐?! 봤지? 이 형님이 세계 최연소 챔피언 타이틀 또 지켜내는 거! 나 아직 안 죽었다니까!', showBg:'true_seungyu_cg', chars:{left:null, center:null, right:null}, bgm:'Hello SY'},
   {type:'narration', text:'링을 딛고 가볍게 뛰어내린 승유가 땀에 젖은 얼굴로 해맑게 웃으며 내 어깨를 툭 쳤다.'},
   {type:'narration', text:'학창 시절 복싱 선수 출신이라고 까불던 녀석은 마침내 주먹 하나로 세계 정상에 섰지만, 나를 바라보는 그 순수하고 뜨거운 눈빛만큼은 10년 전 교문 앞에서 손을 흔들던 그 시절 그대로였다.'},
 
@@ -1337,7 +1340,7 @@ const SCENE_COLLECTOR_ENDING = [
     type:'narration',
     text:'두 번째로 발걸음을 옮긴 곳은 서늘한 소독약 냄새가 진동하는 한 대학병원의 흉부외과 동이었다.',
     clearBg:true,
-    chars:{left:null, centerLeft:null, centerRight:null, right:null},
+    chars:{left:null, center:null, right:null},
     stopBgm:true
   },
   {type:'narration', text:'녹색 수술복을 입고 청진기를 목에 걸은 채, 수많은 차트와 모니터 사이를 바쁘게 오가는 녀석.', showBg:'true_ganghee_cg', bgm:'Kurumi BGM'},
@@ -1351,7 +1354,7 @@ const SCENE_COLLECTOR_ENDING = [
     type:'narration',
     text:'세 번째로 도착한 곳은 강남 한복판, 세련되고 화려한 인테리어가 돋보이는 대형 성형외과 의원이었다.',
     clearBg:true,
-    chars:{left:null, centerLeft:null, centerRight:null, right:null},
+    chars:{left:null, center:null, right:null},
     stopBgm:true
   },
   {type:'narration', text:'원장실 문을 열고 들어가자, 고급스러운 원목 책상 뒤에서 맞춤 정장을 차려입은 영웅이 형이 나를 반갑게 맞이해 주었다.', showBg:'true_yeongwoong_cg', bgm:'Static in the Static'},
@@ -1366,7 +1369,7 @@ const SCENE_COLLECTOR_ENDING = [
     type:'narration',
     text:'그리고 마침내, 나는 도시의 가장 높은 빌딩 마천루에 위치한 마지막 장소로 향했다.',
     clearBg:true,
-    chars:{left:null, centerLeft:null, centerRight:null, right:null},
+    chars:{left:null, center:null, right:null},
     stopBgm:true
   },
   {type:'narration', text:'‘ester CAD’ — 수면 아래 숨겨진 세계의 미학과 비밀을 탐구하던 그 조그만 팀은, 어느덧 세상을 뒤흔드는 거대한 혁신 기업으로 거듭나 있었다.'},
@@ -1551,12 +1554,8 @@ const el = {
   nameSub: document.getElementById('name-sub'),
   charLeft: document.getElementById('char-left'),
   charLeftImg: document.getElementById('char-left-img'),
-  charCenterLeft: document.getElementById('char-center-left'),
-  charCenterLeftImg: document.getElementById('char-center-left-img'),
   charCenter: document.getElementById('char-center'),
   charCenterImg: document.getElementById('char-center-img'),
-  charCenterRight: document.getElementById('char-center-right'),
-  charCenterRightImg: document.getElementById('char-center-right-img'),
   charRight: document.getElementById('char-right'),
   charRightImg: document.getElementById('char-right-img'),
   choiceLayer: document.getElementById('choice-layer'),
@@ -1578,9 +1577,10 @@ const el = {
 };
 
 let curLeftKey = null;
-let curCenterLeftKey = null;
-let curCenterKey = null; // 인물이 "혼자"만 등장할 때 전용(예: 컬렉터 엔딩에서 영웅이 말할 때만 혼자 등장) - 나머지 4개(left/centerLeft/centerRight/right)와 완전히 별개 슬롯
-let curCenterRightKey = null;
+let curCenterKey = null;
+// center 슬롯은 "혼자 등장" 스포트라이트와 그룹(트리오)의 가운데 자리를 겸한다 - 이번 setChars 갱신에
+// left/right가 함께 채워지면 'group'(세로 fade+rise), center만 있으면 'solo'(가로 slide)로 정해진다.
+let curCenterMode = 'solo';
 let curRightKey = null;
 
 /* ---- 모모톡 스타일 채팅 UI ---- */
@@ -1728,16 +1728,16 @@ let castLayoutAppliedCount = 0; // 마지막으로 실제 화면에 반영된(�
 
 // curXKey들은 setChars가 exit를 시작하는 바로 그 순간 이미 null로 바뀌지만(퇴장 애니메이션은 아직
 // SPRITE_EXIT_MS 동안 진행 중), left/right/height는 트랜지션 대상이 아니라서(opacity/transform/filter만
-// 트랜지션됨) 인원수가 줄어드는 순간 stage 클래스(trio-cast/quad-cast)를 곧바로 떼면 아직 페이드아웃 중인
+// 트랜지션됨) 인원수가 줄어드는 순간 stage 클래스(trio-cast)를 곧바로 떼면 아직 페이드아웃 중인
 // 캐릭터들이 다음 인원수의(더 좁은/기본) 위치·크기로 화면에서 순간이동해버린 뒤에야 흐려지는 것처럼
 // 보인다("사라질 때 부자연스럽다"의 원인). 인원이 줄 때만 실제 퇴장 트랜지션이 끝나는 시점까지 클래스
 // 전환을 미루고, 인원이 늘 때(새 캐릭터 등장)는 기존 인원도 곧바로 새 배치로 자연스럽게 모여들도록 즉시
-// 반영한다.
+// 반영한다. center는 'group' 모드일 때만(그룹의 가운데 자리로 쓰일 때만) 인원수에 포함 - 'solo'
+// 스포트라이트는 항상 혼자이므로 트리오 배치 대상이 아니다.
 function updateCastLayout(){
   const presentCount = [
     curLeftKey,
-    curCenterLeftKey,
-    curCenterRightKey,
+    curCenterMode === 'group' ? curCenterKey : null,
     curRightKey,
   ].filter(Boolean).length;
 
@@ -1749,7 +1749,6 @@ function updateCastLayout(){
   const apply = (count) => {
     castLayoutAppliedCount = count;
     el.stage.classList.toggle('trio-cast', count === 3);
-    el.stage.classList.toggle('quad-cast', count >= 4);
   };
 
   if(presentCount < castLayoutAppliedCount){
@@ -1845,9 +1844,7 @@ function setCharacterSlot(container, image, key, instant, pendingEnters){
 
 const CHAR_SLOT_DEFS = [
   {name:'left', container:()=>el.charLeft, image:()=>el.charLeftImg, get:()=>curLeftKey, set:(k)=>{curLeftKey=k;}},
-  {name:'centerLeft', container:()=>el.charCenterLeft, image:()=>el.charCenterLeftImg, get:()=>curCenterLeftKey, set:(k)=>{curCenterLeftKey=k;}},
   {name:'center', container:()=>el.charCenter, image:()=>el.charCenterImg, get:()=>curCenterKey, set:(k)=>{curCenterKey=k;}},
-  {name:'centerRight', container:()=>el.charCenterRight, image:()=>el.charCenterRightImg, get:()=>curCenterRightKey, set:(k)=>{curCenterRightKey=k;}},
   {name:'right', container:()=>el.charRight, image:()=>el.charRightImg, get:()=>curRightKey, set:(k)=>{curRightKey=k;}},
 ];
 
@@ -1857,8 +1854,20 @@ const CHAR_SLOT_DEFS = [
 // 끝나면 renderCurrent()를 다시 불러서(같은 idx) 이어서 진행한다. 처리할 게 없으면 false를 반환해서
 // 호출부가 곧바로 setChars로 넘어가게 한다(등장/퇴장만 있는 보통의 경우).
 function tryPlayCharacterHandoff(chars){
+  // center는 그룹(트리오)의 가운데 자리와 "혼자 등장" 스포트라이트를 겸하는 슬롯이라, left/right가
+  // 같은 chars 갱신 안에서 함께 바뀐다는 건 "그룹<->솔로 전체가 한꺼번에 전환되는 중"이라는 뜻이다.
+  // 이때 center의 인물 교체까지 같은 자리에서 페이드 스왑(handoff)으로 처리해버리면 좌우 캐릭터의
+  // 퇴장/등장과 타이밍이 어긋난다(handoff는 별도의 renderCurrent 재귀 패스로 좌우 처리를 한 박자 뒤로
+  // 미룬다) - "셋이 동시에 사라지고 혼자 등장"이 아니라 두 박자로 나뉘어 보이게 된다. 그래서 이 경우엔
+  // center도 일반 setChars 경로로 넘겨서 좌/우 퇴장·등장과 같은 타이밍에 한 번에 처리되게 한다(같은
+  // 자리 안에서의 인물 교체 자체는 playSlotsEnterBatched의 remove->reflow->add 트릭으로 여전히
+  // 매끄럽게 전환된다 - setChars/setCharacterSlot 참고). left/right 없이 center만 바뀌는 경우(예:
+  // 솔로 상태에서의 표정 교체)는 지금처럼 dip/handoff로 부드럽게 처리한다.
+  const centerEligible = !('left' in chars || 'right' in chars);
+
   const changing = CHAR_SLOT_DEFS
     .filter(def => def.name in chars)
+    .filter(def => def.name !== 'center' || centerEligible)
     .map(def => ({def, newKey:chars[def.name], curKey:def.get(), container:def.container(), image:def.image()}))
     .filter(s => s.newKey && s.newKey !== s.curKey && s.curKey && s.container.classList.contains('show'));
 
@@ -1905,29 +1914,18 @@ function setChars(chars, instant){
     curLeftKey = chars.left;
     setCharacterSlot(el.charLeft, el.charLeftImg, chars.left, instant, pendingEnters);
   }
-  if('centerLeft' in chars){
-    curCenterLeftKey = chars.centerLeft;
-    setCharacterSlot(
-      el.charCenterLeft,
-      el.charCenterLeftImg,
-      chars.centerLeft,
-      instant,
-      pendingEnters
-    );
-  }
   if('center' in chars){
+    // center는 그룹의 가운데 자리와 솔로 스포트라이트를 겸한다 - 같은 갱신에 left/right가 함께
+    // 채워지면 그룹의 일원(세로 fade+rise), center만 있으면 혼자 등장(가로 slide)이다. .show를 붙이기
+    // 전에 모드 클래스를 먼저 맞춰둬야 등장 트랜지션이 올바른 방향으로 재생된다(story-relationship.css
+    // #char-center.mode-group 참고). 퇴장(chars.center가 null)일 때는 모드를 새로 판단할 근거가 없으니
+    // 마지막으로 등장했을 때의 모드를 그대로 유지한 채 퇴장한다.
+    if(chars.center){
+      curCenterMode = (chars.left || chars.right) ? 'group' : 'solo';
+      el.charCenter.classList.toggle('mode-group', curCenterMode === 'group');
+    }
     curCenterKey = chars.center;
     setCharacterSlot(el.charCenter, el.charCenterImg, chars.center, instant, pendingEnters);
-  }
-  if('centerRight' in chars){
-    curCenterRightKey = chars.centerRight;
-    setCharacterSlot(
-      el.charCenterRight,
-      el.charCenterRightImg,
-      chars.centerRight,
-      instant,
-      pendingEnters
-    );
   }
   if('right' in chars){
     curRightKey = chars.right;
@@ -1942,9 +1940,7 @@ function setChars(chars, instant){
 function clearAllCharacterDim(){
   [
     el.charLeft,
-    el.charCenterLeft,
     el.charCenter,
-    el.charCenterRight,
     el.charRight,
   ].forEach(slot => slot.classList.remove('dim'));
 }
@@ -1952,9 +1948,7 @@ function clearAllCharacterDim(){
 function hideAllCharacters(){
   setChars({
     left:null,
-    centerLeft:null,
     center:null,
-    centerRight:null,
     right:null,
   });
 }
@@ -2021,9 +2015,7 @@ function applySpeakingDim(speakerKey){
 
   const slots = [
     {key:curLeftKey, element:el.charLeft},
-    {key:curCenterLeftKey, element:el.charCenterLeft},
     {key:curCenterKey, element:el.charCenter},
-    {key:curCenterRightKey, element:el.charCenterRight},
     {key:curRightKey, element:el.charRight},
   ].filter(slot => slot.key);
 
@@ -2186,9 +2178,7 @@ function renderCurrent(){
     if(Array.isArray(line.dimSlots)){
       const dimTargets = {
         left:el.charLeft,
-        centerLeft:el.charCenterLeft,
         center:el.charCenter,
-        centerRight:el.charCenterRight,
         right:el.charRight,
       };
       line.dimSlots.forEach(slot => {
@@ -2706,9 +2696,7 @@ function showScene6JuheonHighInput(){
         hideAllCharacters();
         clearAllCharacterDim();
         el.charLeftImg.removeAttribute('src');
-        el.charCenterLeftImg.removeAttribute('src');
         el.charCenterImg.removeAttribute('src');
-        el.charCenterRightImg.removeAttribute('src');
         el.charRightImg.removeAttribute('src');
 
         playQueue(SCENE6_JUHEON_HIDDEN_INTRO.slice(), ()=>{
@@ -2716,9 +2704,7 @@ function showScene6JuheonHighInput(){
           hideAllCharacters();
           clearAllCharacterDim();
           el.charLeftImg.removeAttribute('src');
-          el.charCenterLeftImg.removeAttribute('src');
           el.charCenterImg.removeAttribute('src');
-          el.charCenterRightImg.removeAttribute('src');
           el.charRightImg.removeAttribute('src');
 
           playQueue(SCENE6_JUHEON_HIDDEN_ENDING.slice(), ()=>{

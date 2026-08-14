@@ -433,40 +433,14 @@ html,body{
   user-select:none;
 }
 
-#char-center-left, #char-center-right{
-  position:absolute;
-  bottom:0;
-  height:92%;
-  display:flex;
-  align-items:flex-end;
-  transition:opacity .5s ease, transform .5s ease, filter .35s ease;
-  opacity:0;
-  pointer-events:none;
-}
-#char-center-left{ left:38%; transform: translate(-50%, 18px); }
-#char-center-right{ right:38%; transform: translate(50%, 18px); }
-#char-center-left.show{ opacity:1; transform: translate(-50%, 0); }
-#char-center-right.show{ opacity:1; transform: translate(50%, 0); }
-#char-center-left.dim, #char-center-right.dim{
-  filter:brightness(.5) saturate(.65);
-}
-#char-center-left.sprite-dip, #char-center-right.sprite-dip{
-  transition: opacity .24s ease, transform .24s ease;
-}
-#char-center-left.sprite-dip.sprite-dip-down{ opacity:.55; transform: translate(-50%, 14px); }
-#char-center-right.sprite-dip.sprite-dip-down{ opacity:.55; transform: translate(50%, 14px); }
-#char-center-left img, #char-center-right img{
-  height:100%;
-  object-fit:contain;
-  -webkit-user-drag:none;
-  user-select:none;
-}
-
-/* 인물이 "혼자"만 등장하는 전용 슬롯 - 다른 4개(left/centerLeft/centerRight/right)는 세로로
-   내려갔다 올라오는(fade+rise) 연출인데, 여기는 오른쪽에서 가운데로 미끄러져 들어오는(slide) 연출을
-   쓴다. 숨은 상태(hidden)/보이는 상태(.show)가 각각 "살짝 오른쪽" <-> "정확히 가운데" 위치라서,
-   같은 트랜지션 규칙 하나로 등장(오른쪽->가운데)과 퇴장(가운데->오른쪽, 즉 자기 그룹 자리인
-   centerRight 방향으로 밀려나는 느낌) 둘 다 자동으로 좌우 슬라이드가 된다. */
+/* 인물이 "혼자"만 등장하는 스포트라이트 자리 겸, 셋이 함께 나오는 그룹(트리오)의 가운데 자리 - 이
+   DOM 하나가 두 역할을 겸한다. 기본(혼자 등장)은 오른쪽에서 가운데로 미끄러져 들어오는(slide) 연출,
+   .mode-group 클래스가 붙으면 left/right와 같은 세로 내려갔다 올라오는(fade+rise) 연출로 바뀐다 -
+   story-engine.js의 setChars가 매 갱신마다 "left/right가 같이 채워지는 갱신인지"로 모드를 정해서
+   .show를 붙이기 전에 미리 이 클래스를 맞춰둔다. 그룹<->솔로 전환처럼 이 자리의 인물 자체가 바뀔 때는
+   remove('show')->강제 리플로우->add('show') 트릭(playSlotsEnterBatched)이 좌우 캐릭터의 실제
+   퇴장/등장과 같은 타이밍에 한 번에 실행돼서, 트랜지션 규칙 하나만으로 등장/퇴장/같은 자리에서의
+   인물 교체가 전부 자동으로 매끄럽게 재생된다. */
 #char-center{
   position:absolute;
   bottom:0;
@@ -490,18 +464,18 @@ html,body{
   user-select:none;
 }
 
-/* 카페에서 세 명이 함께 보이는 배치 - 가운데 축 기준으로 균등 3등분(이 씬에서 centerRight는 항상
-   비어있다 - left/centerLeft/right 세 슬롯만 쓴다). 전에는 right를 기본(2인용) 가장자리 위치에 가깝게만
-   둬서 셋 중 하나(right)만 나머지 둘과 유독 멀리 떨어져 보였다. */
-#stage.trio-cast #char-left{ left:18%; height:82%; }
-#stage.trio-cast #char-center-left{ left:50%; height:82%; }
-#stage.trio-cast #char-right{ right:18%; height:82%; }
+#char-center.mode-group{ transform: translate(-50%, 18px); }
+#char-center.mode-group.show{ transform: translate(-50%, 0); }
+#char-center.mode-group.sprite-dip.sprite-dip-down{ transform: translate(-50%, 14px); }
 
-/* 영웅까지 합류한 네 명 배치 - 가운데 축 기준으로 균등 4등분 */
-#stage.quad-cast #char-left{ left:14%; height:72%; }
-#stage.quad-cast #char-center-left{ left:38%; height:72%; }
-#stage.quad-cast #char-center-right{ right:38%; height:72%; }
-#stage.quad-cast #char-right{ right:14%; height:72%; }
+/* 셋이 함께 보이는 배치(예: 컬렉터 엔딩 카페) - 가운데 축 기준으로 균등 3등분. left/right는 기본
+   2인용 가장자리 위치(20%)보다 살짝 안쪽으로 모이고(18%), 셋 다 높이도 살짝 줄어든다(82%). 넷이 동시에
+   나오는 배치(예전의 quad-cast)는 이제 없다 - 그룹에 속하지 않는 인물(예: 컬렉터 엔딩의 이영웅)은
+   항상 center 스포트라이트로 혼자만 등장하고 그룹과 절대 겹치지 않으므로, 3명을 넘는 동시 등장 자체가
+   필요 없어졌다. */
+#stage.trio-cast #char-left{ left:18%; height:82%; }
+#stage.trio-cast #char-right{ right:18%; height:82%; }
+#stage.trio-cast #char-center{ height:82%; }
 
 #dialogue-wrap{
   position:absolute;
