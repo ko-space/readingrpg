@@ -391,19 +391,23 @@ html,body{
   opacity:0;
   pointer-events:none;
 }
-#char-left{ left:2%; transform: translateY(18px); }
-#char-right{ right:2%; transform: translateY(18px); }
-#char-left.show, #char-right.show{ opacity:1; transform:translateY(0); }
+/* 캐릭터마다 스프라이트 가로폭이 달라서(예: 송주헌처럼 유독 옆으로 긴 스프라이트) 컨테이너 자체는
+   내용물 크기에 맞춰 줄어드는데(shrink-to-fit), left/right를 "가장자리" 기준으로만 두면 폭이 넓은
+   캐릭터일수록 반대쪽(안쪽) 가장자리가 더 안쪽까지 밀고 들어와서 옆 캐릭터와의 실제 간격이 캐릭터마다
+   달라져 보였다. translateX(-50%/50%)로 각 슬롯의 "가운데 축"이 항상 지정한 위치에 오도록 고정하면,
+   스프라이트 폭이 얼마든 간격은 항상 축 사이 거리로만 정해진다(아래 sprite-dip/show도 전부 동일). */
+#char-left{ left:20%; transform: translate(-50%, 18px); }
+#char-right{ right:20%; transform: translate(50%, 18px); }
+#char-left.show{ opacity:1; transform: translate(-50%, 0); }
+#char-right.show{ opacity:1; transform: translate(50%, 0); }
 #char-left.dim, #char-right.dim{ filter:brightness(0.5) saturate(0.65); }
 /* 같은 인물의 표정/모습만 바뀔 때(예: 강희 -> 강희2) 살짝 내려갔다 올라오는 연출.
    기본 트랜지션(.5s)보다 짧게 override해서 "살짝" 느낌을 내고, 올라올 때도 같은 속도를 쓴다. */
 #char-left.sprite-dip, #char-right.sprite-dip{
   transition: opacity .24s ease, transform .24s ease;
 }
-#char-left.sprite-dip.sprite-dip-down, #char-right.sprite-dip.sprite-dip-down{
-  opacity:.55;
-  transform:translateY(14px);
-}
+#char-left.sprite-dip.sprite-dip-down{ opacity:.55; transform: translate(-50%, 14px); }
+#char-right.sprite-dip.sprite-dip-down{ opacity:.55; transform: translate(50%, 14px); }
 #char-left.mystery-silhouette,
 #char-right.mystery-silhouette{
   filter:brightness(0) !important;
@@ -439,28 +443,18 @@ html,body{
   opacity:0;
   pointer-events:none;
 }
-#char-center-left{
-  left:28%;
-  transform:translateY(18px);
-}
-#char-center-right{
-  right:28%;
-  transform:translateY(18px);
-}
-#char-center-left.show, #char-center-right.show{
-  opacity:1;
-  transform:translateY(0);
-}
+#char-center-left{ left:38%; transform: translate(-50%, 18px); }
+#char-center-right{ right:38%; transform: translate(50%, 18px); }
+#char-center-left.show{ opacity:1; transform: translate(-50%, 0); }
+#char-center-right.show{ opacity:1; transform: translate(50%, 0); }
 #char-center-left.dim, #char-center-right.dim{
   filter:brightness(.5) saturate(.65);
 }
 #char-center-left.sprite-dip, #char-center-right.sprite-dip{
   transition: opacity .24s ease, transform .24s ease;
 }
-#char-center-left.sprite-dip.sprite-dip-down, #char-center-right.sprite-dip.sprite-dip-down{
-  opacity:.55;
-  transform:translateY(14px);
-}
+#char-center-left.sprite-dip.sprite-dip-down{ opacity:.55; transform: translate(-50%, 14px); }
+#char-center-right.sprite-dip.sprite-dip-down{ opacity:.55; transform: translate(50%, 14px); }
 #char-center-left img, #char-center-right img{
   height:100%;
   object-fit:contain;
@@ -468,37 +462,18 @@ html,body{
   user-select:none;
 }
 
-/* 카페에서 세 명이 함께 보이는 배치 */
-#stage.trio-cast #char-left{
-  left:-3%;
-  height:82%;
-}
-#stage.trio-cast #char-center-left{
-  left:29%;
-  height:82%;
-}
-#stage.trio-cast #char-right{
-  right:-3%;
-  height:82%;
-}
+/* 카페에서 세 명이 함께 보이는 배치 - 가운데 축 기준으로 균등 3등분(이 씬에서 centerRight는 항상
+   비어있다 - left/centerLeft/right 세 슬롯만 쓴다). 전에는 right를 기본(2인용) 가장자리 위치에 가깝게만
+   둬서 셋 중 하나(right)만 나머지 둘과 유독 멀리 떨어져 보였다. */
+#stage.trio-cast #char-left{ left:18%; height:82%; }
+#stage.trio-cast #char-center-left{ left:50%; height:82%; }
+#stage.trio-cast #char-right{ right:18%; height:82%; }
 
-/* 영웅까지 합류한 네 명 배치 */
-#stage.quad-cast #char-left{
-  left:1%;
-  height:72%;
-}
-#stage.quad-cast #char-center-left{
-  left:18%;
-  height:72%;
-}
-#stage.quad-cast #char-center-right{
-  right:18%;
-  height:72%;
-}
-#stage.quad-cast #char-right{
-  right:1%;
-  height:72%;
-}
+/* 영웅까지 합류한 네 명 배치 - 가운데 축 기준으로 균등 4등분 */
+#stage.quad-cast #char-left{ left:14%; height:72%; }
+#stage.quad-cast #char-center-left{ left:38%; height:72%; }
+#stage.quad-cast #char-center-right{ right:38%; height:72%; }
+#stage.quad-cast #char-right{ right:14%; height:72%; }
 
 #dialogue-wrap{
   position:absolute;
