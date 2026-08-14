@@ -1727,6 +1727,15 @@
                 if (partnerKey) {
                     setStatusIcon(partnerKey, "rear_priority", { source: `${partnerKey}:${event.effect_type}` });
                 }
+            } else if (
+                (event.effect_type === "female_count_haste" || event.effect_type === "battlefield_presence_haste")
+                && traitActorKey
+            ) {
+                // 서민석(본능)/이의진(복수): 전투 끝까지 유지되는 영구 공격속도 증가 - 만료 시각이 없어서
+                // untilSimTime 없이 켜두기만 하면 된다(끄는 이벤트 자체가 없음, ally_synergy_atk_buff와
+                // 동일한 패턴). 로그 텍스트(traitLogText)는 이미 떴었지만 아이콘 갱신이 빠져 있었다.
+                flashEffectAura(traitActorKey, "buff");
+                setStatusIcon(traitActorKey, "atk_speed_up", { source: `${traitActorKey}:${event.effect_type}` });
             }
             appendLog(traitLogText(event), "trait");
         } else if (eventType === "cast_start") {
