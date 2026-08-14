@@ -1439,6 +1439,27 @@
         renderStatusIconTotal(unitKey, iconId);
     }
 
+    // star_effect_resolve(성급 효과)/trait_resolve(특성) 이벤트가 공유하는 범용 아이콘 처리 - 백엔드
+    // build_stat_change_dicts가 만들어주는 changes[] 목록(대상/atk/hp/crit/crit_chance/rear_priority/haste
+    // 부호)을 그대로 읽어서 상태 아이콘을 켠다. effect_type마다 여기 손으로 분기를 하나씩 추가하지
+    // 않아도 되게 하기 위함 - 예전엔 trait_resolve만 이런 분기가 없어서(성급 효과는 처음부터 이 방식)
+    // 새 캐릭터를 추가할 때마다 프론트 아이콘 처리를 깜빡하기 쉬웠다(실제로 5개나 빠져 있었음).
+    function applyStatChangeIcons(changes, source) {
+        (changes || []).forEach((change) => {
+            const changedKey = findUnitKey(change.target_side, change.target);
+            if (!changedKey) return;
+            if (change.atk > 0) setStatusIcon(changedKey, "atk_up", { source });
+            if (change.atk < 0) setStatusIcon(changedKey, "atk_down", { source });
+            if (change.hp > 0) setStatusIcon(changedKey, "maxhp_up", { source });
+            if (change.hp < 0) setStatusIcon(changedKey, "maxhp_down", { source });
+            if (change.crit > 0) setStatusIcon(changedKey, "crit_up", { source });
+            if (change.crit_chance > 0) setStatusIcon(changedKey, "crit_chance_up", { source });
+            if (change.rear_priority > 0) setStatusIcon(changedKey, "rear_priority", { source });
+            if (change.haste > 0) setStatusIcon(changedKey, "atk_speed_up", { source });
+            flashEffectAura(changedKey, (change.atk < 0 || change.hp < 0) ? "debuff" : "buff");
+        });
+    }
+
     // 이벤트 재생 원점(playbackOriginWallMs/-EventTime)이 갱신될 때마다(playNext) 호출 - 지금까지의
     // 실제 재생 지연(애니메이션 대기 등)을 반영한 최신 환산으로 모든 시뮬레이션 시각 기반 아이콘
     // 타이머를 다시 잡는다. 앞서 확인한 버그(김남옥 공격속도 버프 아이콘이 실제 상태보다 먼저 사라짐)의
@@ -1678,100 +1699,24 @@
         if (eventType === "star_effect_resolve") {
             // 성급별 효과(전투 시작 시 1회) - 스탯이 오르내린 대상마다 해당 상태 아이콘을 켠다.
             // 전투 내내 유지되는 영구 효과라 지속시간 없이 전투가 끝날 때까지(사망 전까지) 계속 떠 있는다.
-            (event.detail?.changes || []).forEach((change) => {
-                const changedKey = findUnitKey(change.target_side, change.target);
-                if (!changedKey) return;
-                // source = "시전자:효과타입" - 성급 효과는 전투 시작 시 1회만 발동하므로 재적용(갱신)은
-                // 없고, 서로 다른 캐릭터의 성급 효과가 같은 대상에게 겹칠 때만(source가 달라짐) 중첩된다.
-                const source = `${event.actor}:${event.effect_type}`;
-                if (change.atk > 0) setStatusIcon(changedKey, "atk_up", { source });
-                if (change.atk < 0) setStatusIcon(changedKey, "atk_down", { source });
-                if (change.hp > 0) setStatusIcon(changedKey, "maxhp_up", { source });
-                if (change.hp < 0) setStatusIcon(changedKey, "maxhp_down", { source });
-                // 이의진: 치명타 피해량/확률 증가(self_crit_multiplier) - 스탯 변화는 아니지만 같은
-                // 방식(전투 끝까지 유지)으로 아이콘을 띄운다.
-                if (change.crit > 0) setStatusIcon(changedKey, "crit_up", { source });
-                if (change.crit_chance > 0) setStatusIcon(changedKey, "crit_chance_up", { source });
-                // 최재혁(또는 "마법사 아카데미"로 부여받은 아군): 후방 적 우선 공격 - 마찬가지로 스탯
-                // 변화는 아니지만 전투 내내 유지되는 상태라 같은 방식으로 아이콘만 띄운다.
-                if (change.rear_priority > 0) setStatusIcon(changedKey, "rear_priority", { source });
-                flashEffectAura(changedKey, (change.atk < 0 || change.hp < 0) ? "debuff" : "buff");
-            });
+            // source = "시전자:효과타입" - 성급 효과는 전투 시작 시 1회만 발동하므로 재적용(갱신)은
+            // 없고, 서로 다른 캐릭터의 성급 효과가 같은 대상에게 겹칠 때만(source가 달라짐) 중첩된다.
+            applyStatChangeIcons(event.detail?.changes, `${event.actor}:${event.effect_type}`);
         } else if (eventType === "trait_resolve") {
-            // 전투 시작과 동시에 1회만 판정되는 특성 - 파트너 제거(도플갱어) 등은 즉시 반영한다.
-            const traitActorKey = eventActorKey(event);
+            // 전투 시작과 동시에 1회만 판정되는 특성. 아이콘은 star_effect_resolve와 완전히 같은 방식으로
+            // event.detail.changes(백엔드 build_stat_change_dicts)를 범용 처리한다(applyStatChangeIcons) -
+            // 캐릭터별 effect_type 분기를 프론트에 손으로 추가할 필요가 없어서, 새 캐릭터를 추가해도
+            // 백엔드 changes만 제대로 채워지면 아이콘 누락이 구조적으로 생기지 않는다. 스탯 변화가 아닌
+            // 특수 처리(파트너 제거)만 effect_type별로 남겨둔다.
             if (event.effect_type === "ally_synergy_remove_absorb" && event.detail?.removed) {
+                // 윤대웅(도플갱어): 파트너를 제거(사망 처리) - 흡수 버프 자체는 changes로 아이콘화됨.
                 const removedKey = findUnitKey(event.side, event.detail.removed);
                 if (removedKey) {
                     units[removedKey].hp = 0;
                     renderUnit(removedKey);
                 }
-                if (traitActorKey) {
-                    // 흡수 = 공격력·최대체력 증가 버프를 받은 것
-                    flashEffectAura(traitActorKey, "buff");
-                    setStatusIcon(traitActorKey, "atk_up", { source: `${traitActorKey}:${event.effect_type}` });
-                    setStatusIcon(traitActorKey, "maxhp_up", { source: `${traitActorKey}:${event.effect_type}` });
-                }
-            } else if (event.effect_type === "ally_synergy_atk_buff" && traitActorKey) {
-                // stat이 "hp"면(청년 - 송주헌과의 시너지) 체력 버프, 그 외(기본값)는 공격력 버프.
-                flashEffectAura(traitActorKey, "buff");
-                if (event.detail?.hp_percent !== undefined) {
-                    setStatusIcon(traitActorKey, "maxhp_up", { source: `${traitActorKey}:${event.effect_type}` });
-                } else {
-                    setStatusIcon(traitActorKey, "atk_up", { source: `${traitActorKey}:${event.effect_type}` });
-                }
-            } else if (event.effect_type === "dynamic_grant_rear_priority" && event.detail?.partner) {
-                // 최재혁 "마법사 아카데미": 파트너(아군 마법사)도 후방 우선 타겟팅을 받는다 - 캐스터 본인의
-                // 아이콘은 star_effect_resolve(self_rear_priority)가 이미 띄우므로, 여기선 파트너 몫만 켠다.
-                const partnerKey = findUnitKey(event.side, event.detail.partner);
-                if (partnerKey) {
-                    setStatusIcon(partnerKey, "rear_priority", { source: `${partnerKey}:${event.effect_type}` });
-                }
-            } else if (
-                (event.effect_type === "female_count_haste" || event.effect_type === "battlefield_presence_haste")
-                && traitActorKey
-            ) {
-                // 서민석(본능)/이의진(복수): 전투 끝까지 유지되는 영구 공격속도 증가 - 만료 시각이 없어서
-                // untilSimTime 없이 켜두기만 하면 된다(끄는 이벤트 자체가 없음, ally_synergy_atk_buff와
-                // 동일한 패턴). 로그 텍스트(traitLogText)는 이미 떴었지만 아이콘 갱신이 빠져 있었다.
-                flashEffectAura(traitActorKey, "buff");
-                setStatusIcon(traitActorKey, "atk_speed_up", { source: `${traitActorKey}:${event.effect_type}` });
-            } else if (
-                event.effect_type === "ally_job_conditional_team_buff"
-                || event.effect_type === "ally_type_conditional_team_buff"
-            ) {
-                // 강승유(친근감)/김남옥(자애심)/강 희(광역 도발): 조건 충족 시 아군 전체(자신 포함) 버프 -
-                // 팀 내 살아있는 유닛 전원에게 개별적으로 아이콘을 켠다(위 두 건과 달리 이 방들은 지금까지
-                // 아무도 아이콘을 못 받고 있었다).
-                [`${event.side}-front`, `${event.side}-back`].forEach((key) => {
-                    if (!units[key] || units[key].hp <= 0) return;
-                    flashEffectAura(key, "buff");
-                    if (event.detail?.atk_percent) setStatusIcon(key, "atk_up", { source: `${key}:${event.effect_type}` });
-                    if (event.detail?.hp_percent) setStatusIcon(key, "maxhp_up", { source: `${key}:${event.effect_type}` });
-                });
-            } else if (event.effect_type === "team_teacher_hp_buff" && event.detail?.targets?.length) {
-                // 불빠따 김어진(교권 보호): 팀 내 선생 타입 대상 전원에게 체력 버프 - 백엔드가 대상 이름
-                // 목록(detail.targets)을 그대로 알려준다.
-                event.detail.targets.forEach((name) => {
-                    const targetKey = findUnitKey(event.side, name);
-                    if (!targetKey) return;
-                    flashEffectAura(targetKey, "buff");
-                    setStatusIcon(targetKey, "maxhp_up", { source: `${targetKey}:${event.effect_type}` });
-                });
-            } else if (event.effect_type === "teammate_hp_buff_self_cost") {
-                // 송주헌(페이스 메이커): 파트너 체력 증가 + 자신 체력 감소(대가) - 둘 다 아이콘이 없었다.
-                if (traitActorKey) {
-                    flashEffectAura(traitActorKey, "debuff");
-                    setStatusIcon(traitActorKey, "maxhp_down", { source: `${traitActorKey}:${event.effect_type}` });
-                }
-                if (event.detail?.partner) {
-                    const partnerKey = findUnitKey(event.side, event.detail.partner);
-                    if (partnerKey) {
-                        flashEffectAura(partnerKey, "buff");
-                        setStatusIcon(partnerKey, "maxhp_up", { source: `${partnerKey}:${event.effect_type}` });
-                    }
-                }
             }
+            applyStatChangeIcons(event.detail?.changes, `${event.actor}:${event.effect_type}`);
             appendLog(traitLogText(event), "trait");
         } else if (eventType === "cast_start") {
             const actorKey = eventActorKey(event);

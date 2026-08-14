@@ -3,7 +3,7 @@
 시작 시 1회 호출한다(characters.json의 star_effects 문구를 실제 전투 수치로 반영).
 명명 규칙(star=passive)은 battle_core.py 상단 참고.
 """
-from battle_core import CRIT_CHANCE, _alive_units, _effective_gender, _teammate
+from battle_core import CRIT_CHANCE, _alive_units, _effective_gender, _teammate, build_stat_change_dicts
 
 # ───────────────────────── 성급별 효과(star_effects) - 전투 시작 시 1회만 판정 ─────────────────────────
 # characters.json의 star_effects는 원래 인벤토리 화면에 보여주기만 하던 문구였는데, 실제 전투에도
@@ -198,23 +198,9 @@ def _apply_battle_start_star_effects(attacker_team, defender_team, events=None):
                 continue
             # 튜플은 보통 (rel, target, atk_sign, hp_sign) 4개지만, 스탯이 아니라 다른 신호를 알려야 하는
             # 핸들러는 5번째(crit_sign)/6번째(crit_chance_sign)/7번째(rear_sign)를 더 얹어 돌려준다 -
-            # 나머지 핸들러는 그대로 4-튜플이라 이 신호들은 기본 0으로 취급된다.
-            change_dicts = []
-            for change in changes:
-                rel, target, atk_sign, hp_sign, *extra = change
-                extra = list(extra) + [0, 0, 0]
-                crit_sign, crit_chance_sign, rear_sign = extra[0], extra[1], extra[2]
-                if not (atk_sign or hp_sign or crit_sign or crit_chance_sign or rear_sign):
-                    continue
-                change_dicts.append({
-                    "target": target["name"],
-                    "target_side": side_name if rel == "own" else enemy_side,
-                    "atk": atk_sign,
-                    "hp": hp_sign,
-                    "crit": crit_sign,
-                    "crit_chance": crit_chance_sign,
-                    "rear_priority": rear_sign,
-                })
+            # 나머지 핸들러는 그대로 4-튜플이라 이 신호들은 기본 0으로 취급된다(build_stat_change_dicts 참고 -
+            # trait_handlers.py의 특성 효과와 형식을 공유한다).
+            change_dicts = build_stat_change_dicts(changes, side_name, enemy_side)
             if change_dicts:
                 events.append({
                     "time": 0, "event_type": "star_effect_resolve", "side": side_name,
