@@ -462,6 +462,34 @@ html,body{
   user-select:none;
 }
 
+/* 인물이 "혼자"만 등장하는 전용 슬롯 - 다른 4개(left/centerLeft/centerRight/right)는 세로로
+   내려갔다 올라오는(fade+rise) 연출인데, 여기는 오른쪽에서 가운데로 미끄러져 들어오는(slide) 연출을
+   쓴다. 숨은 상태(hidden)/보이는 상태(.show)가 각각 "살짝 오른쪽" <-> "정확히 가운데" 위치라서,
+   같은 트랜지션 규칙 하나로 등장(오른쪽->가운데)과 퇴장(가운데->오른쪽, 즉 자기 그룹 자리인
+   centerRight 방향으로 밀려나는 느낌) 둘 다 자동으로 좌우 슬라이드가 된다. */
+#char-center{
+  position:absolute;
+  bottom:0;
+  left:50%;
+  height:92%;
+  display:flex;
+  align-items:flex-end;
+  transition: opacity .5s ease, transform .5s ease, filter .35s ease;
+  opacity:0;
+  pointer-events:none;
+  transform: translate(calc(-50% + 60px), 0);
+}
+#char-center.show{ opacity:1; transform: translate(-50%, 0); }
+#char-center.dim{ filter:brightness(.5) saturate(.65); }
+#char-center.sprite-dip{ transition: opacity .24s ease, transform .24s ease; }
+#char-center.sprite-dip.sprite-dip-down{ opacity:.55; transform: translate(calc(-50% + 40px), 0); }
+#char-center img{
+  height:100%;
+  object-fit:contain;
+  -webkit-user-drag:none;
+  user-select:none;
+}
+
 /* 카페에서 세 명이 함께 보이는 배치 - 가운데 축 기준으로 균등 3등분(이 씬에서 centerRight는 항상
    비어있다 - left/centerLeft/right 세 슬롯만 쓴다). 전에는 right를 기본(2인용) 가장자리 위치에 가깝게만
    둬서 셋 중 하나(right)만 나머지 둘과 유독 멀리 떨어져 보였다. */

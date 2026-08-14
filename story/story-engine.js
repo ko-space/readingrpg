@@ -1276,11 +1276,28 @@ const SCENE_COLLECTOR_ENDING = [
     clearDim:true,
     bgm: 'Daily Routine'
   },
-  {type:'line', speaker:YEONGWOONG, text:'어이! 너네들 그동안 잘 지냈냐? 승유 이 녀석이 수능 끝난 기념으로 형 얼굴 좀 보러 오라고 난리를 치길래 바쁜 시간 쪼개서 달려왔더니…… 크, 이렇게 다 모여 있었구만!'},
-  {type:'line', speaker:SEUNGYU, text:'오~! 형 진짜 오셨네요! 안녕하세요~!'},
+  // 영웅의 대사 차례엔 혼자만 가운데로 미끄러져 등장하고(다른 셋은 퇴장), 다른 사람 차례가 오면
+  // 영웅은 다시 자기 자리(centerRight)로 미끄러져 물러나며 나머지가 등장하는 식으로 반복한다
+  // (playSlotsEnterBatched/두 종류의 연출은 #char-center 전용 CSS가 처리 - story-engine.js 상단 참고).
+  {
+    type:'line', speaker:YEONGWOONG,
+    text:'어이! 너네들 그동안 잘 지냈냐? 승유 이 녀석이 수능 끝난 기념으로 형 얼굴 좀 보러 오라고 난리를 치길래 바쁜 시간 쪼개서 달려왔더니…… 크, 이렇게 다 모여 있었구만!',
+    chars:{left:null, centerLeft:null, center:'yeongwoong', centerRight:null, right:null},
+  },
+  {
+    type:'line', speaker:SEUNGYU, text:'오~! 형 진짜 오셨네요! 안녕하세요~!',
+    chars:{left:'seungyu_true_stand', centerLeft:'juheon', center:null, centerRight:'yeongwoong', right:'ganghee_true_stand'},
+  },
   {type:'line', speaker:PLAYER, text:'영웅이 형! 진짜 오랜만이에요, 보고 싶었어요!'},
-  {type:'line', speaker:YEONGWOONG, text:'하하! 이 새끼, 형 보고 싶었단 말은 잘해요. 오늘 다들 고생 많았다! 가자, 형이 오늘 수능 끝난 기념으로 고기 원 없이 쏜다!'},
-  {type:'narration', text:'반가운 고함과 왁자지껄한 인사가 카페 안을 가득 채웠다.'},
+  {
+    type:'line', speaker:YEONGWOONG,
+    text:'하하! 이 새끼, 형 보고 싶었단 말은 잘해요. 오늘 다들 고생 많았다! 가자, 형이 오늘 수능 끝난 기념으로 고기 원 없이 쏜다!',
+    chars:{left:null, centerLeft:null, center:'yeongwoong', centerRight:null, right:null},
+  },
+  {
+    type:'narration', text:'반가운 고함과 왁자지껄한 인사가 카페 안을 가득 채웠다.',
+    chars:{left:'seungyu_true_stand', centerLeft:'juheon', center:null, centerRight:'yeongwoong', right:'ganghee_true_stand'},
+  },
   {type:'narration', text:'우리는 카페를 나와 가벼운 발걸음으로 근처 고깃집으로 자리를 옮겼다.'},
   {type:'narration', text:'지글지글 소리를 내며 불판 위에서 노릇하게 익어가는 고기 냄새, 모락모락 피어오르는 연기 사이로 끊임없이 오가는 술잔과 음료수 잔의 마찰음.'},
   {type:'thought', text:'생각해 보면, 영웅이 형까지 포함해 이렇게 우리 모두가 한자리에 다시 모인 게 대체 얼마 만인지 모른다.'},
@@ -1536,6 +1553,8 @@ const el = {
   charLeftImg: document.getElementById('char-left-img'),
   charCenterLeft: document.getElementById('char-center-left'),
   charCenterLeftImg: document.getElementById('char-center-left-img'),
+  charCenter: document.getElementById('char-center'),
+  charCenterImg: document.getElementById('char-center-img'),
   charCenterRight: document.getElementById('char-center-right'),
   charCenterRightImg: document.getElementById('char-center-right-img'),
   charRight: document.getElementById('char-right'),
@@ -1560,6 +1579,7 @@ const el = {
 
 let curLeftKey = null;
 let curCenterLeftKey = null;
+let curCenterKey = null; // 인물이 "혼자"만 등장할 때 전용(예: 컬렉터 엔딩에서 영웅이 말할 때만 혼자 등장) - 나머지 4개(left/centerLeft/centerRight/right)와 완전히 별개 슬롯
 let curCenterRightKey = null;
 let curRightKey = null;
 
@@ -1826,6 +1846,7 @@ function setCharacterSlot(container, image, key, instant, pendingEnters){
 const CHAR_SLOT_DEFS = [
   {name:'left', container:()=>el.charLeft, image:()=>el.charLeftImg, get:()=>curLeftKey, set:(k)=>{curLeftKey=k;}},
   {name:'centerLeft', container:()=>el.charCenterLeft, image:()=>el.charCenterLeftImg, get:()=>curCenterLeftKey, set:(k)=>{curCenterLeftKey=k;}},
+  {name:'center', container:()=>el.charCenter, image:()=>el.charCenterImg, get:()=>curCenterKey, set:(k)=>{curCenterKey=k;}},
   {name:'centerRight', container:()=>el.charCenterRight, image:()=>el.charCenterRightImg, get:()=>curCenterRightKey, set:(k)=>{curCenterRightKey=k;}},
   {name:'right', container:()=>el.charRight, image:()=>el.charRightImg, get:()=>curRightKey, set:(k)=>{curRightKey=k;}},
 ];
@@ -1894,6 +1915,10 @@ function setChars(chars, instant){
       pendingEnters
     );
   }
+  if('center' in chars){
+    curCenterKey = chars.center;
+    setCharacterSlot(el.charCenter, el.charCenterImg, chars.center, instant, pendingEnters);
+  }
   if('centerRight' in chars){
     curCenterRightKey = chars.centerRight;
     setCharacterSlot(
@@ -1918,6 +1943,7 @@ function clearAllCharacterDim(){
   [
     el.charLeft,
     el.charCenterLeft,
+    el.charCenter,
     el.charCenterRight,
     el.charRight,
   ].forEach(slot => slot.classList.remove('dim'));
@@ -1927,6 +1953,7 @@ function hideAllCharacters(){
   setChars({
     left:null,
     centerLeft:null,
+    center:null,
     centerRight:null,
     right:null,
   });
@@ -1995,6 +2022,7 @@ function applySpeakingDim(speakerKey){
   const slots = [
     {key:curLeftKey, element:el.charLeft},
     {key:curCenterLeftKey, element:el.charCenterLeft},
+    {key:curCenterKey, element:el.charCenter},
     {key:curCenterRightKey, element:el.charCenterRight},
     {key:curRightKey, element:el.charRight},
   ].filter(slot => slot.key);
@@ -2159,6 +2187,7 @@ function renderCurrent(){
       const dimTargets = {
         left:el.charLeft,
         centerLeft:el.charCenterLeft,
+        center:el.charCenter,
         centerRight:el.charCenterRight,
         right:el.charRight,
       };
@@ -2678,6 +2707,7 @@ function showScene6JuheonHighInput(){
         clearAllCharacterDim();
         el.charLeftImg.removeAttribute('src');
         el.charCenterLeftImg.removeAttribute('src');
+        el.charCenterImg.removeAttribute('src');
         el.charCenterRightImg.removeAttribute('src');
         el.charRightImg.removeAttribute('src');
 
@@ -2687,6 +2717,7 @@ function showScene6JuheonHighInput(){
           clearAllCharacterDim();
           el.charLeftImg.removeAttribute('src');
           el.charCenterLeftImg.removeAttribute('src');
+          el.charCenterImg.removeAttribute('src');
           el.charCenterRightImg.removeAttribute('src');
           el.charRightImg.removeAttribute('src');
 
