@@ -1261,13 +1261,18 @@ const SCENE_COLLECTOR_ENDING = [
   {
     type:'narration',
     text:'딸랑거리는 맑은 종소리와 함께, 바깥의 차가운 겨울 바람을 한껏 머금은 누군가가 문을 열고 안으로 걸어 들어왔다.',
-    chars:{left:'seungyu_true_stand', centerLeft:'juheon', centerRight:'ganghee_true_stand', right:'senior_sil'},
+    // 강 희는 계속 right 슬롯에 그대로 둔다 - 예전엔 이 자리에 영웅(senior_sil)을 넣고 강 희를
+    // centerRight로 옮겼는데, tryPlayCharacterHandoff 입장에선 "right의 강 희가 완전히 새 인물로
+    // 교체됨"으로 보여서 강 희가 통째로 퇴장했다가(500ms) 뒤늦게 centerRight에서 재등장하는 것처럼
+    // 보였다(그 사이 화면에서 강 희가 아예 사라짐). 새로 합류하는 영웅만 centerRight의 새 슬롯으로
+    // 들어오게 하면 강 희는 한 번도 안 건드려져서 계속 제자리에 남아있는다.
+    chars:{left:'seungyu_true_stand', centerLeft:'juheon', centerRight:'senior_sil', right:'ganghee_true_stand'},
     stopBgm:true
   },
   {
     type:'narration',
     text:'시원시원한 체구와 익숙하고 미더운 얼굴…… 바로 영웅이 형이었다.',
-    chars:{left:'seungyu_true_stand', centerLeft:'juheon', centerRight:'ganghee_true_stand', right:'yeongwoong'},
+    chars:{left:'seungyu_true_stand', centerLeft:'juheon', centerRight:'yeongwoong', right:'ganghee_true_stand'},
     clearDim:true,
     bgm: 'Daily Routine'
   },
@@ -1698,6 +1703,16 @@ function triggerImpactShake(){
   }, 760);
 }
 
+let castLayoutDowngradeTimer = null;
+let castLayoutAppliedCount = 0; // 마지막으로 실제 화면에 반영된(트랜지션 지연 없이 적용 완료된) 인원 수
+
+// curXKey들은 setChars가 exit를 시작하는 바로 그 순간 이미 null로 바뀌지만(퇴장 애니메이션은 아직
+// SPRITE_EXIT_MS 동안 진행 중), left/right/height는 트랜지션 대상이 아니라서(opacity/transform/filter만
+// 트랜지션됨) 인원수가 줄어드는 순간 stage 클래스(trio-cast/quad-cast)를 곧바로 떼면 아직 페이드아웃 중인
+// 캐릭터들이 다음 인원수의(더 좁은/기본) 위치·크기로 화면에서 순간이동해버린 뒤에야 흐려지는 것처럼
+// 보인다("사라질 때 부자연스럽다"의 원인). 인원이 줄 때만 실제 퇴장 트랜지션이 끝나는 시점까지 클래스
+// 전환을 미루고, 인원이 늘 때(새 캐릭터 등장)는 기존 인원도 곧바로 새 배치로 자연스럽게 모여들도록 즉시
+// 반영한다.
 function updateCastLayout(){
   const presentCount = [
     curLeftKey,
@@ -1706,8 +1721,26 @@ function updateCastLayout(){
     curRightKey,
   ].filter(Boolean).length;
 
-  el.stage.classList.toggle('trio-cast', presentCount === 3);
-  el.stage.classList.toggle('quad-cast', presentCount >= 4);
+  if(castLayoutDowngradeTimer){
+    clearTimeout(castLayoutDowngradeTimer);
+    castLayoutDowngradeTimer = null;
+  }
+
+  const apply = (count) => {
+    castLayoutAppliedCount = count;
+    el.stage.classList.toggle('trio-cast', count === 3);
+    el.stage.classList.toggle('quad-cast', count >= 4);
+  };
+
+  if(presentCount < castLayoutAppliedCount){
+    castLayoutDowngradeTimer = window.setTimeout(()=>{
+      castLayoutDowngradeTimer = null;
+      apply(presentCount);
+    }, SPRITE_EXIT_MS);
+    return;
+  }
+
+  apply(presentCount);
 }
 
 // 같은 인물의 스프라이트만 바뀌는 경우(예: 강 희 -> 강 희2, 표정/모습 교체)를 판별하기 위한 그룹핑.
@@ -1727,11 +1760,23 @@ const SPRITE_DIP_MS = 240;   // 같은 인물 표정 교체: 살짝 내려갔다
 const SPRITE_EXIT_MS = 500;  // 퇴장 트랜지션(opacity/transform .5s)과 맞춤 - 다 내려간 뒤에야 이미지를 지운다
 
 function playSlotEnter(container, image, key){
-  container.classList.remove('dim', 'mystery-silhouette', 'mystery-revealing');
-  image.src = CHAR_IMG[key];
-  container.classList.remove('show');
-  void container.offsetWidth; // 강제 리플로우 - show를 다시 붙였을 때 진입 트랜지션이 확실히 재생되게 함
-  container.classList.add('show');
+  playSlotsEnterBatched([{container, image, key}]);
+}
+
+// 등장 트랜지션을 재생하려면 "remove('show') 직후 상태가 브라우저에 실제로 반영된 뒤"에야 add('show')를
+// 해야 한다(안 그러면 트랜지션 없이 최종 상태로 바로 점프해버림) - 그래서 강제 리플로우(offsetWidth 읽기)가
+// 필요하다. 문제는 이 강제 리플로우 자체가 레이아웃을 동기적으로 다시 계산시키는 무거운 연산이라, 3~4명이
+// 동시에 등장/교체될 때(컬렉터 엔딩 카페/재회 씬 등) 슬롯마다 따로따로 호출하면 그만큼 반복돼서 눈에 띄는
+// 렉의 원인이 됐다. 여러 슬롯을 한 번에 준비해두고 강제 리플로우를 딱 1회만 실행한 뒤 한꺼번에 'show'를
+// 붙이면, 슬롯이 몇 개든 리플로우 비용은 항상 1번으로 끝난다.
+function playSlotsEnterBatched(entries){
+  entries.forEach(({container, image, key}) => {
+    container.classList.remove('dim', 'mystery-silhouette', 'mystery-revealing');
+    image.src = CHAR_IMG[key];
+    container.classList.remove('show');
+  });
+  if(entries.length > 0) void el.stage.offsetWidth; // 강제 리플로우(전체 슬롯 통틀어 딱 1회)
+  entries.forEach(({container}) => container.classList.add('show'));
 }
 
 function playSlotExit(container, image){
@@ -1742,7 +1787,7 @@ function playSlotExit(container, image){
   }, SPRITE_EXIT_MS);
 }
 
-function setCharacterSlot(container, image, key, instant){
+function setCharacterSlot(container, image, key, instant, pendingEnters){
   if(key){
     if(container.classList.contains('show') && image.getAttribute('src') === CHAR_IMG[key]){
       return; // 이미 같은 모습으로 나와 있음 - dip/교체 연출에서 방금 막 처리된 경우
@@ -1753,7 +1798,13 @@ function setCharacterSlot(container, image, key, instant){
       container.classList.add('show');
       return;
     }
-    playSlotEnter(container, image, key);
+    // 여기서 곧바로 재생하지 않고 pendingEnters에 모아둔다 - setChars가 같은 호출 안의 다른 슬롯들과
+    // 함께 강제 리플로우를 1번만 실행하도록(playSlotsEnterBatched 참고, 3~4명 동시 등장 렉 방지).
+    if(pendingEnters){
+      pendingEnters.push({container, image, key});
+    } else {
+      playSlotEnter(container, image, key);
+    }
   } else if(container.classList.contains('show')){
     if(instant){
       container.classList.remove('show', 'dim', 'mystery-silhouette', 'mystery-revealing');
@@ -1808,10 +1859,8 @@ function tryPlayCharacterHandoff(chars){
       s.container.classList.remove('sprite-dip-down'); // 같은 sprite-dip 트랜지션 속도를 유지한 채 다시 올라옴
       s.def.set(s.newKey);
     });
-    handoffSlots.forEach(s => {
-      playSlotEnter(s.container, s.image, s.newKey);
-      s.def.set(s.newKey);
-    });
+    playSlotsEnterBatched(handoffSlots.map(s => ({container:s.container, image:s.image, key:s.newKey})));
+    handoffSlots.forEach(s => s.def.set(s.newKey));
     if(dipSlots.length > 0){
       window.setTimeout(()=>{
         dipSlots.forEach(s => s.container.classList.remove('sprite-dip'));
@@ -1826,9 +1875,14 @@ function tryPlayCharacterHandoff(chars){
 function setChars(chars, instant){
   if(!chars) return;
 
+  // 새로 등장하는 슬롯들은 여기 모아뒀다가 마지막에 한꺼번에 처리한다(playSlotsEnterBatched) -
+  // 3~4명이 동시에 등장하는 씬(컬렉터 엔딩 카페/재회 등)에서 슬롯마다 강제 리플로우를 따로따로
+  // 하면 그게 그대로 렉으로 느껴졌다.
+  const pendingEnters = [];
+
   if('left' in chars){
     curLeftKey = chars.left;
-    setCharacterSlot(el.charLeft, el.charLeftImg, chars.left, instant);
+    setCharacterSlot(el.charLeft, el.charLeftImg, chars.left, instant, pendingEnters);
   }
   if('centerLeft' in chars){
     curCenterLeftKey = chars.centerLeft;
@@ -1836,7 +1890,8 @@ function setChars(chars, instant){
       el.charCenterLeft,
       el.charCenterLeftImg,
       chars.centerLeft,
-      instant
+      instant,
+      pendingEnters
     );
   }
   if('centerRight' in chars){
@@ -1845,13 +1900,16 @@ function setChars(chars, instant){
       el.charCenterRight,
       el.charCenterRightImg,
       chars.centerRight,
-      instant
+      instant,
+      pendingEnters
     );
   }
   if('right' in chars){
     curRightKey = chars.right;
-    setCharacterSlot(el.charRight, el.charRightImg, chars.right, instant);
+    setCharacterSlot(el.charRight, el.charRightImg, chars.right, instant, pendingEnters);
   }
+
+  if(pendingEnters.length > 0) playSlotsEnterBatched(pendingEnters);
 
   updateCastLayout();
 }
