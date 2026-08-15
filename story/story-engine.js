@@ -1847,6 +1847,112 @@ const CHAR_SLOT_DEFS = [
   {name:'center', container:()=>el.charCenter, image:()=>el.charCenterImg, get:()=>curCenterKey, set:(k)=>{curCenterKey=k;}},
   {name:'right', container:()=>el.charRight, image:()=>el.charRightImg, get:()=>curRightKey, set:(k)=>{curRightKey=k;}},
 ];
+function charSlotDef(name){ return CHAR_SLOT_DEFS.find(d => d.name === name); }
+
+// 같은 인물이 center<->left/right 사이를 실제로 "옮겨가는" 경우만 감지해서 옆으로 미끄러지는 연출을
+// 재생한다(그 외의 모든 등장/퇴장은 다른 캐릭터들과 통일된 세로 fade+rise를 쓴다 - #char-center 기본
+// CSS 참고). "이동"의 정의: 한쪽 자리(from)에 있던 인물이 사라지고(newKey=null), 동시에 다른 자리
+// (to)에 바로 그 인물이 새로 나타난다(같은 characterIdentity, 그 자리는 원래 비어있었음). center<->left,
+// center<->right 두 조합만 지원한다(left<->right 직행은 현재 어떤 씬에서도 쓰지 않는다).
+function tryPlaySlotShift(chars){
+  const pairs = [['center','left'], ['center','right']];
+  let shift = null;
+  for(const [a, b] of pairs){
+    const defA = charSlotDef(a), defB = charSlotDef(b);
+    const aOld = defA.get(), bOld = defB.get();
+    const aNew = a in chars ? chars[a] : aOld;
+    const bNew = b in chars ? chars[b] : bOld;
+    if(aOld && defA.container().classList.contains('show') && aNew === null &&
+       bNew && bNew !== bOld && characterIdentity(bNew) === characterIdentity(aOld)){
+      shift = {from:a, to:b, defFrom:defA, defTo:defB, key:bNew};
+      break;
+    }
+    if(bOld && defB.container().classList.contains('show') && bNew === null &&
+       aNew && aNew !== aOld && characterIdentity(aNew) === characterIdentity(bOld)){
+      shift = {from:b, to:a, defFrom:defB, defTo:defA, key:aNew};
+      break;
+    }
+  }
+  if(!shift) return false;
+
+  // 슬롯 순서(left < center < right)로 "to가 from보다 화면 오른쪽인지"를 판정해 이동 방향을 정한다.
+  const order = {left:0, center:1, right:2};
+  const dirOut = order[shift.to] > order[shift.from] ? 'right' : 'left'; // from이 사라지는 방향
+  const dirIn = dirOut === 'right' ? 'left' : 'right'; // to가 나타나는 시작 방향(from 쪽에서 이어받음)
+
+  el.dialogueWrap.classList.add('hidden');
+
+  // center가 이동의 도착지면 항상 솔로(그룹의 일원이 아니라 그 인물 혼자 옮겨온 것) - 반대로 center가
+  // 출발지면 그 자리는 어차피 비므로 모드는 다음 setChars 갱신 때 새로 정해진다.
+  if(shift.to === 'center'){
+    curCenterMode = 'solo';
+    el.charCenter.classList.remove('mode-group');
+  }
+
+  const fromContainer = shift.defFrom.container(), fromImage = shift.defFrom.image();
+  const toContainer = shift.defTo.container(), toImage = shift.defTo.image();
+
+  fromContainer.classList.remove('show');
+  fromContainer.classList.add(dirOut === 'right' ? 'shift-offset-right' : 'shift-offset-left');
+
+  toContainer.classList.remove('show', 'shift-offset-left', 'shift-offset-right');
+  toImage.src = CHAR_IMG[shift.key];
+  toContainer.classList.add(dirIn === 'right' ? 'shift-offset-right' : 'shift-offset-left');
+  void el.stage.offsetWidth; // 강제 리플로우 - to의 시작 오프셋을 실제로 커밋한 뒤에야 show로 넘어가야 함
+  toContainer.classList.remove(dirIn === 'right' ? 'shift-offset-right' : 'shift-offset-left');
+  toContainer.classList.add('show');
+
+  shift.defFrom.set(null);
+  shift.defTo.set(shift.key);
+  updateCastLayout();
+
+  window.setTimeout(()=>{
+    fromContainer.classList.remove('shift-offset-right', 'shift-offset-left');
+    fromImage.removeAttribute('src');
+    renderCurrent();
+  }, SPRITE_EXIT_MS);
+
+  return true;
+}
+
+// center에 있던 인물이 "다른" 인물로 바뀌면서 동시에 left/right 중 하나 이상이 새로 채워지는 경우
+// (=혼자 있던 스포트라이트가 그룹으로 전환되는 순간)만 특별 취급한다. center의 기존 인물이 완전히
+// 사라지는 연출을 먼저 보여준 뒤에야 그룹 셋이 함께 등장해야 한다는 요구사항 때문에, 이 경우엔
+// 좌/우와 center를 한 박자 어긋나게(center 퇴장 -> 대기 -> 셋 동시 등장) 처리한다. 반대 방향(그룹이
+// 흩어지고 center에 다른 인물이 혼자 들어오는 경우)은 이미 setChars 경로에서 셋이 동시에 사라지며
+// center가 즉시 교체되는 것으로 충분해서(사용자 요청: "다른 셋이 동시에 사라지고 center에 들어옴")
+// 여기서 다루지 않는다 - 아래 leftJoining/rightJoining 조건이 정확히 그 비대칭을 가른다.
+function tryPlaySoloToGroupTransition(chars){
+  const leftDef = charSlotDef('left'), centerDef = charSlotDef('center'), rightDef = charSlotDef('right');
+
+  if(!('center' in chars) || !chars.center) return false;
+  const centerOld = centerDef.get();
+  if(!centerOld || !centerDef.container().classList.contains('show')) return false;
+  if(characterIdentity(chars.center) === characterIdentity(centerOld)) return false;
+
+  const isJoining = (def, key) => key && !(def.get() && def.container().classList.contains('show'));
+  const leftJoining = 'left' in chars && isJoining(leftDef, chars.left);
+  const rightJoining = 'right' in chars && isJoining(rightDef, chars.right);
+  if(!leftJoining && !rightJoining) return false;
+
+  el.dialogueWrap.classList.add('hidden');
+  centerDef.container().classList.remove('show');
+
+  window.setTimeout(()=>{
+    const pendingEnters = [];
+    if('left' in chars){ leftDef.set(chars.left); setCharacterSlot(leftDef.container(), leftDef.image(), chars.left, false, pendingEnters); }
+    curCenterMode = (chars.left || chars.right) ? 'group' : 'solo';
+    el.charCenter.classList.toggle('mode-group', curCenterMode === 'group');
+    centerDef.set(chars.center);
+    setCharacterSlot(centerDef.container(), centerDef.image(), chars.center, false, pendingEnters);
+    if('right' in chars){ rightDef.set(chars.right); setCharacterSlot(rightDef.container(), rightDef.image(), chars.right, false, pendingEnters); }
+    if(pendingEnters.length > 0) playSlotsEnterBatched(pendingEnters);
+    updateCastLayout();
+    renderCurrent();
+  }, SPRITE_EXIT_MS);
+
+  return true;
+}
 
 // line.chars 안에 "이미 나와 있던 자리"의 값이 바뀌는 슬롯이 있으면(단순 신규 등장/완전 퇴장이 아니라),
 // 같은 인물의 표정 교체는 살짝 내려갔다 올라오는 연출로, 다른 인물로의 교체는 기존 인물이 완전히
@@ -2167,6 +2273,8 @@ function renderCurrent(){
     // noBgFade(화면이 즉시 암전/컷되는 지점)에서는 캐릭터도 슬라이드 없이 같이 즉시 사라져야
     // 화면과 안 어긋난다 - 이때는 등장/퇴장 연출과 dip/교체 연출을 전부 건너뛴다.
     const instant = Boolean(line.noBgFade);
+    if(!instant && tryPlaySoloToGroupTransition(line.chars)) return;
+    if(!instant && tryPlaySlotShift(line.chars)) return;
     if(!instant && tryPlayCharacterHandoff(line.chars)) return;
     setChars(line.chars, instant);
   }
@@ -3389,6 +3497,23 @@ document.getElementById('gallery-modal').addEventListener('click', (event)=>{
 document.addEventListener('keydown', (event)=>{
   if(event.key === 'Escape'){
     closeGalleryModal();
+    // 로비 화면(#lobby-wrap이 안 숨겨진 상태)에서는 확대 기능 자체가 없으니 여기서 끝낸다 -
+    // 위 closeGalleryModal()만으로 충분(도감 모달은 로비에서만 열린다).
+    if(!lobbyWrap.classList.contains('hidden')) return;
+    // ESC를 확대(zoom-btn) 버튼과 동일하게 - 이미 확대 중이면 해제, 아니면 확대.
+    el.stage.classList.toggle('ui-zoomed');
+    return;
+  }
+
+  if(event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar'){
+    // 로비 화면, 텍스트 입력 중(모모톡 작성창 등), 모달이 열려있을 때는 대사 진행과 무관하므로
+    // 스페이스바의 기본 스크롤 동작 등 평소 키 동작을 그대로 둔다.
+    if(!lobbyWrap.classList.contains('hidden')) return;
+    const active = document.activeElement;
+    if(active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
+    if(document.querySelector('.vn-ticket-modal.show, #vn-log-modal.show, #gallery-modal.show')) return;
+    event.preventDefault();
+    advance();
   }
 });
 
