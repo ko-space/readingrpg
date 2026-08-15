@@ -107,14 +107,14 @@ def _sync_pickup_banner(db: Session):
         db.commit()
 
         # 남은 모집 포인트를 골드로 즉시 지급하는 대신, 우편함으로 보낸다 - 신규 가입 축하금(auth.py)과
-        # 동일한 패턴. 포인트가 0인 유저는 빈 우편이 쌓이지 않도록 건너뛴다.
-        for u in db.query(User).all():
-            if u.gacha_points > 0:
-                db.add(Mail(
-                    user_id=u.id,
-                    title="모집 포인트가 골드로 전환되었습니다.",
-                    gold_amount=u.gacha_points,
-                ))
+        # 동일한 패턴. 포인트가 0인 유저는 빈 우편이 쌓이지 않도록 건너뛴다 - SQL 단에서부터 걸러서
+        # (0인 유저를 다시 0으로 덮어써봐야 no-op이므로) 전체 유저 테이블을 안 긁어온다(egress 절감).
+        for u in db.query(User).filter(User.gacha_points > 0).all():
+            db.add(Mail(
+                user_id=u.id,
+                title="모집 포인트가 골드로 전환되었습니다.",
+                gold_amount=u.gacha_points,
+            ))
             u.gacha_points = 0
         db.commit()
     else:

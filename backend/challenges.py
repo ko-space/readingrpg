@@ -14,7 +14,7 @@ from models import (
     Character, ReadingLog, PvpBattleLog, ActivityLog, UserCgUnlock, Challenge,
     MarketActivityLog, GachaPullLog, RankingTop1Log, RankingPeriodCursor, User, UserAchievement,
 )
-from achievements import get_character_catalog
+from achievements import get_all_character_catalogs
 from quests import MOCK_EXAM_MINUTES, _bounds_utc_naive
 
 KST = timezone(timedelta(hours=9))
@@ -29,11 +29,6 @@ def _job_class_matches(actual_job_class: str | None, target_job_class: str) -> b
     if target_job_class == "학생" and actual_job_class == "1반 학생":
         return True
     return False
-
-
-def _mock_exam_counted(row: ReadingLog) -> bool:
-    """모의고사는 그 난이도의 지정 시간 이상 기록됐어야 "봤다"로 인정한다 (quests.py/achievements.py와 동일 기준)."""
-    return row.reading_minutes >= MOCK_EXAM_MINUTES.get(row.difficulty, float("inf"))
 
 
 def compute_progress(db: Session, user, challenge: Challenge) -> dict:
@@ -107,56 +102,58 @@ def compute_progress(db: Session, user, challenge: Challenge) -> dict:
         ).count()
 
     elif ctype == "character_reading_exp":
-        rows = db.query(ReadingLog).filter(
+        current = db.query(func.sum(ReadingLog.earned_exp)).filter(
             ReadingLog.user_id == user.id,
             ReadingLog.session_type == "reading",
             ReadingLog.equipped_character_name == params.get("character_name"),
-        ).all()
-        current = sum(row.earned_exp or 0 for row in rows)
+        ).scalar() or 0
 
     elif ctype == "job_class_subject_exp":
+        # 어떤 캐릭터가 이 직업에 해당하는지는 DB가 아니라 정적 카탈로그(characters.json)만 보면
+        # 알 수 있으므로, 유저의 학습 로그를 통째로 가져와 한 줄씩 대조하는 대신 미리 이름 목록을
+        # 추려서 SQL IN 필터 + SUM으로 한 번에 집계한다.
         target_job_class = params.get("job_class")
-        rows = db.query(ReadingLog).filter(
+        matching_names = [
+            name for name, cat in get_all_character_catalogs().items()
+            if _job_class_matches(cat.get("job_class"), target_job_class)
+        ]
+        current = (db.query(func.sum(ReadingLog.earned_exp)).filter(
             ReadingLog.user_id == user.id,
             ReadingLog.session_type.in_(["subject", "mock_exam"]),
-            ReadingLog.equipped_character_name.isnot(None),
-        ).all()
-        current = 0
-        for row in rows:
-            catalog = get_character_catalog(row.equipped_character_name)
-            if catalog and _job_class_matches(catalog.get("job_class"), target_job_class):
-                current += row.earned_exp or 0
+            ReadingLog.equipped_character_name.in_(matching_names),
+        ).scalar() or 0) if matching_names else 0
 
     elif ctype == "gender_subject_exp":
         target_gender = params.get("gender")
-        rows = db.query(ReadingLog).filter(
+        matching_names = [
+            name for name, cat in get_all_character_catalogs().items()
+            if cat.get("gender") == target_gender
+        ]
+        current = (db.query(func.sum(ReadingLog.earned_exp)).filter(
             ReadingLog.user_id == user.id,
             ReadingLog.session_type.in_(["subject", "mock_exam"]),
-            ReadingLog.equipped_character_name.isnot(None),
-        ).all()
-        current = 0
-        for row in rows:
-            catalog = get_character_catalog(row.equipped_character_name)
-            if catalog and catalog.get("gender") == target_gender:
-                current += row.earned_exp or 0
+            ReadingLog.equipped_character_name.in_(matching_names),
+        ).scalar() or 0) if matching_names else 0
 
     elif ctype == "daily_full_mock_exam_set":
-        # 하루(KST)에 국어+영어+수학+탐구(2회)가 전부 "봤다"로 인정되는 날이 하나라도 있는지.
+        # 하루(KST)에 국어+영어+수학+탐구(2회)가 전부 "봤다"로 인정되는 날이 하나라도 있는지. 행 전체가
+        # 아니라 날짜별 그룹핑에 필요한 3개 컬럼만 가져온다(egress 절감 - 나머지 컬럼은 안 씀).
         target = 1
-        rows = db.query(ReadingLog).filter(
+        rows = db.query(
+            ReadingLog.created_at, ReadingLog.difficulty, ReadingLog.reading_minutes
+        ).filter(
             ReadingLog.user_id == user.id,
             ReadingLog.session_type == "mock_exam",
         ).all()
-        by_day: dict[str, list[ReadingLog]] = {}
-        for row in rows:
-            if not _mock_exam_counted(row):
+        by_day: dict[str, list[str]] = {}
+        for created_at, difficulty, reading_minutes in rows:
+            if (reading_minutes or 0) < MOCK_EXAM_MINUTES.get(difficulty, float("inf")):
                 continue
-            day_key = row.created_at.replace(tzinfo=timezone.utc).astimezone(KST).date().isoformat()
-            by_day.setdefault(day_key, []).append(row)
+            day_key = created_at.replace(tzinfo=timezone.utc).astimezone(KST).date().isoformat()
+            by_day.setdefault(day_key, []).append(difficulty)
 
         current = 0
-        for day_rows in by_day.values():
-            difficulties = [row.difficulty for row in day_rows]
+        for difficulties in by_day.values():
             has_korean = any(d.startswith("국어") for d in difficulties)
             has_english = any(d.startswith("영어") for d in difficulties)
             has_math = any(d.startswith("수학") for d in difficulties)
@@ -262,22 +259,25 @@ def compute_progress(db: Session, user, challenge: Challenge) -> dict:
         current = 1 if len(recent) == streak and all(r.rarity in qualifying for r in recent) else 0
 
     elif ctype == "daily_all_subjects_study_days":
-        # "하루에 국어·영어·수학·탐구를 각각 N분 이상 공부하기" - 그런 날이 며칠이나 있었는지.
+        # "하루에 국어·영어·수학·탐구를 각각 N분 이상 공부하기" - 그런 날이 며칠이나 있었는지. 날짜별
+        # 그룹핑에 필요한 3개 컬럼만 가져온다(egress 절감 - 나머지 컬럼은 안 씀).
         required_subjects = ["국어", "영어", "수학", "탐구"]
         min_minutes = params.get("min_minutes", 60)
-        rows = db.query(ReadingLog).filter(
+        rows = db.query(
+            ReadingLog.created_at, ReadingLog.difficulty, ReadingLog.reading_minutes
+        ).filter(
             ReadingLog.user_id == user.id,
             ReadingLog.session_type.in_(["subject", "mock_exam"]),
         ).all()
         by_day: dict[str, dict[str, int]] = {}
-        for row in rows:
-            if not row.difficulty:
+        for created_at, difficulty, reading_minutes in rows:
+            if not difficulty:
                 continue
-            day_key = row.created_at.replace(tzinfo=timezone.utc).astimezone(KST).date().isoformat()
+            day_key = created_at.replace(tzinfo=timezone.utc).astimezone(KST).date().isoformat()
             bucket = by_day.setdefault(day_key, {})
             for subject in required_subjects:
-                if row.difficulty.startswith(subject):
-                    bucket[subject] = bucket.get(subject, 0) + (row.reading_minutes or 0)
+                if difficulty.startswith(subject):
+                    bucket[subject] = bucket.get(subject, 0) + (reading_minutes or 0)
                     break
         current = sum(
             1 for bucket in by_day.values()
@@ -286,23 +286,19 @@ def compute_progress(db: Session, user, challenge: Challenge) -> dict:
 
     elif ctype == "character_filter_exp":
         # job_class_subject_exp/gender_subject_exp의 일반화판 - job_classes(목록, OR 조건) 또는
-        # rarity로 캐릭터를 거르고, session_type 제한 없이(독서 포함) earned_exp를 합산한다.
+        # rarity로 캐릭터를 거르고, session_type 제한 없이(독서 포함) earned_exp를 합산한다. 마찬가지로
+        # 정적 카탈로그에서 먼저 이름을 추려 SQL IN + SUM으로 집계한다.
         job_classes = params.get("job_classes")
         rarity = params.get("rarity")
-        rows = db.query(ReadingLog).filter(
+        matching_names = [
+            name for name, cat in get_all_character_catalogs().items()
+            if (not job_classes or any(_job_class_matches(cat.get("job_class"), jc) for jc in job_classes))
+            and (not rarity or cat.get("rarity") == rarity)
+        ]
+        current = (db.query(func.sum(ReadingLog.earned_exp)).filter(
             ReadingLog.user_id == user.id,
-            ReadingLog.equipped_character_name.isnot(None),
-        ).all()
-        current = 0
-        for row in rows:
-            catalog = get_character_catalog(row.equipped_character_name)
-            if not catalog:
-                continue
-            if job_classes and not any(_job_class_matches(catalog.get("job_class"), jc) for jc in job_classes):
-                continue
-            if rarity and catalog.get("rarity") != rarity:
-                continue
-            current += row.earned_exp or 0
+            ReadingLog.equipped_character_name.in_(matching_names),
+        ).scalar() or 0) if matching_names else 0
 
     return {"current": max(0, min(current, target)), "target": target}
 

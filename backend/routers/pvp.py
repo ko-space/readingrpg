@@ -2,7 +2,7 @@ import json
 import random
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 from database import get_db
 from models import User, Character, PvpBattleLog, Item, UserItem, Mail, ActivityLog
 from schemas import PvpDefenseRequest, PvpBattleRequest
@@ -496,6 +496,9 @@ def get_history(db: Session = Depends(get_db), user: User = Depends(get_current_
     """내가 공격했거나 방어했던 전투 기록(최근 50개) - 두 방향을 합쳐서 최신순으로 보여준다."""
     logs = (
         db.query(PvpBattleLog)
+        # battle_log는 전투 이벤트 전체가 담긴 무거운 JSON 컬럼인데 이 화면에선 안 쓰므로, defer로
+        # SELECT 대상에서 뺀다(egress 절감 - attacker/defender 관계 접근 등 나머지 동작은 그대로).
+        .options(defer(PvpBattleLog.battle_log))
         .filter(or_(PvpBattleLog.attacker_id == user.id, PvpBattleLog.defender_id == user.id))
         .order_by(PvpBattleLog.created_at.desc())
         .limit(50)
@@ -521,6 +524,7 @@ def get_rank_change_notice(db: Session = Depends(get_db), user: User = Depends(g
     """내가 모르는 새 순위가 바뀐(패배해서 순위를 뺏긴) 적이 있으면 알려준다."""
     logs = (
         db.query(PvpBattleLog)
+        .options(defer(PvpBattleLog.battle_log))
         .filter(
             PvpBattleLog.defender_id == user.id,
             PvpBattleLog.rank_changed == True,
