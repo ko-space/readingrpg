@@ -39,10 +39,19 @@
             <section class="defense-card">
                 <div class="panel-caption">
                     <span>방어 편성</span>
-                    <small>전방 · 후방</small>
+                    <small>조력자 · 후방 · 전방</small>
                 </div>
                 <div class="defense-standing-row">
-                    <div class="defense-standing-slot">
+                    <div class="defense-standing-slot defense-standing-slot-supporter">
+                        <div class="defense-standing-imgwrap">
+                            <img class="defense-standing-img" id="defense-supporter-img" src="" alt="">
+                        </div>
+                        <div class="defense-standing-info">
+                            <span class="defense-standing-name" id="defense-supporter-name">미설정</span>
+                            <span class="defense-standing-star" id="defense-supporter-star"></span>
+                        </div>
+                    </div>
+                    <div class="defense-standing-slot defense-standing-slot-back">
                         <div class="defense-standing-imgwrap">
                             <img class="defense-standing-img" id="defense-back-img" src="" alt="">
                         </div>
@@ -51,7 +60,7 @@
                             <span class="defense-standing-star" id="defense-back-star"></span>
                         </div>
                     </div>
-                    <div class="defense-standing-slot">
+                    <div class="defense-standing-slot defense-standing-slot-front">
                         <div class="defense-standing-imgwrap">
                             <img class="defense-standing-img" id="defense-front-img" src="" alt="">
                         </div>
@@ -93,7 +102,7 @@
 <div class="sub-view" id="pvp-defense-picker-view" hidden>
     <button class="pvp-back-btn" id="pvp-defense-back-btn" type="button">← 뒤로</button>
     <h3 class="pvp-section-title">방어 편성 변경</h3>
-    <p class="screen-placeholder">전방/후방에 서로 다른 인물을 선택하세요.</p>
+    <p class="screen-placeholder">전방/후방/조력자에 서로 다른 인물을 선택하세요. 최소 한 명(전방 또는 후방) 이상이면 출전할 수 있어요.</p>
     <div class="pvp-defense-slots">
         <div class="pvp-defense-slot">
             <div class="pvp-defense-slot-label">전방</div>
@@ -102,6 +111,10 @@
         <div class="pvp-defense-slot">
             <div class="pvp-defense-slot-label">후방</div>
             <select class="pvp-select" id="pvp-back-select"></select>
+        </div>
+        <div class="pvp-defense-slot">
+            <div class="pvp-defense-slot-label">조력자</div>
+            <select class="pvp-select" id="pvp-supporter-select"></select>
         </div>
     </div>
     <button class="dungeon-enter-btn" id="pvp-defense-save-btn" type="button">저장</button>

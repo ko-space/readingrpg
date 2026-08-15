@@ -369,25 +369,51 @@
         const side = key.startsWith("attacker") ? "attacker" : "defender";
         const enemySide = side === "attacker" ? "defender" : "attacker";
         const unit = units[key];
-        if (unit?.name === "최재혁" && (unit.star || 1) >= 3) {
+        // 스트라이커 1명만 등록된 편성이면 적의 전방/후방 중 한쪽이 비어있을 수 있으므로, 실제로
+        // 존재하는 슬롯을 우선한다(없는 자리를 향해 걷기 시작했다가 첫 공격 이벤트에서야 재조정되는
+        // 어색한 순간을 없앤다).
+        if (unit?.name === "최재혁" && (unit.star || 1) >= 3 && units[`${enemySide}-back`]) {
             return `${enemySide}-back`;
         }
-        return `${enemySide}-front`;
+        if (units[`${enemySide}-front`]) return `${enemySide}-front`;
+        if (units[`${enemySide}-back`]) return `${enemySide}-back`;
+        return `${enemySide}-front`; // 이론상 도달하지 않음(최소 한 명은 등록돼야 출전 가능)
     }
 
-    const units = {
-        "attacker-front": buildUnit(data.attacker_team.front),
-        "attacker-back": buildUnit(data.attacker_team.back),
-        "defender-front": buildUnit(data.defender_team.front),
-        "defender-back": buildUnit(data.defender_team.back),
-    };
+    // 스트라이커(전방/후방) 한 명만 등록한 편성이면 그 쪽 team.front/back이 null로 내려온다 - 그
+    // 슬롯은 애초에 units에 키 자체를 안 만든다(존재하지 않는 유닛). 코스트카드/로스터 정렬/
+    // Object.keys(units) 기반 순회 로직은 이미 복제 소환수처럼 "언제든 늘어날 수 있는 키 집합"을
+    // 전제로 짜여 있어서, 반대로 "처음부터 한 키가 아예 없는" 경우도 그대로 안전하게 건너뛴다.
+    const units = {};
+    if (data.attacker_team.front) units["attacker-front"] = buildUnit(data.attacker_team.front);
+    if (data.attacker_team.back) units["attacker-back"] = buildUnit(data.attacker_team.back);
+    if (data.defender_team.front) units["defender-front"] = buildUnit(data.defender_team.front);
+    if (data.defender_team.back) units["defender-back"] = buildUnit(data.defender_team.back);
+
+    // 빈 슬롯은 전장에서 보이지 않게(다른 3명의 위치엔 영향 없도록 display:none이 아니라
+    // visibility:hidden - .battle-row는 flex라 display:none이면 남은 유닛들이 재배치된다) 하고,
+    // 로스터 쪽엔 EMPTY로 표시한다(코스트카드의 기존 "EMPTY" 표기와 동일한 관례).
+    ["attacker-front", "attacker-back", "defender-front", "defender-back"].forEach((key) => {
+        if (units[key]) return;
+        const battleEl = document.querySelector(`[data-unit="${key}"]`);
+        if (battleEl) battleEl.style.visibility = "hidden";
+        const rosterEl = document.querySelector(`[data-roster="${key}"]`);
+        if (rosterEl) {
+            rosterEl.classList.add("roster-unit-empty-slot");
+            const nameEl = rosterEl.querySelector(".roster-unit-name");
+            if (nameEl) nameEl.textContent = "EMPTY";
+            const hpTrack = rosterEl.querySelector(".roster-hp-track");
+            if (hpTrack) hpTrack.style.visibility = "hidden";
+        }
+    });
 
     function findUnitKey(side, name) {
-        if (units[`${side}-front`].name === name) {
+        // 전방/후방 중 한쪽이 비어있는 편성(스트라이커 1명)이면 그 슬롯은 애초에 units에 없다.
+        if (units[`${side}-front`]?.name === name) {
             return `${side}-front`;
         }
 
-        if (units[`${side}-back`].name === name) {
+        if (units[`${side}-back`]?.name === name) {
             return `${side}-back`;
         }
 
@@ -864,9 +890,9 @@
     //   fy를 늘리면 아래쪽으로 발사 지점이 이동한다. type1은 attack_1.webp, type2는 attack_type2_1.webp
     //   기준으로 눈금을 맞췄다(공격 프레임 3번째 즈음에 발사되므로 attack_3 기준으로 다시 맞춰도 된다).
 
-    function playRangedAttack(actorKey, targetKey, onArrive) {
+    function playRangedAttack(actorKey, targetKey, onArrive, onLetterArrive) {
         const style = units[actorKey]?.style || "straight";
-        playRangedAttackByStyle(style, actorKey, targetKey, onArrive, { isType2: units[actorKey]?.isType2 });
+        playRangedAttackByStyle(style, actorKey, targetKey, onArrive, { isType2: units[actorKey]?.isType2, onLetterArrive });
     }
 
 
@@ -2376,7 +2402,11 @@
             function applyHitVisual() {
                 if (targetKey) {
                     renderUnit(targetKey);
-                    flashHit(targetKey, event.is_crit, event.type_multiplier);
+                    // 이종복 "F=ma": 로그의 event.is_crit은 4탄환 중 하나라도 크리면 켜지는 합산 값이라,
+                    // 마지막 탄환 자신의 착탄 이펙트는 그 탄환 고유의 크리 여부(bullet_hits 마지막 항목)를
+                    // 따로 써야 한다 - 안 그러면 정작 크리 안 난 마지막 탄환이 크리 색으로 반짝인다.
+                    const hitIsCrit = event.bullet_hits ? event.bullet_hits[event.bullet_hits.length - 1].is_crit : event.is_crit;
+                    flashHit(targetKey, hitIsCrit, event.type_multiplier);
                     // 이의진 type2 기본공격 부가효과(_apply_type2_stun_if_active) - 남성 대상이면 기절.
                     if (event.target_stunned) {
                         flashEffectAura(targetKey, "cc");
@@ -2437,6 +2467,22 @@
                 faceToward(actorKey, targetKey);
                 if (actorKey) playAttackFrames(actorKey);
                 rangedResolvePending[actorKey] = true;
+                // 이종복 "F=ma": 백엔드가 대미지를 4탄환으로 실제로 나눠 적용한 결과(bullet_hits)를
+                // 실어 보내면, 마지막 글자 전까지는 그 탄환만큼만 체력바/피격 이펙트를 미리 반영한다.
+                // 로그(피해 숫자)는 아래 applyHitVisual이 마지막 글자에서 총합(event.damage)으로 한 번만
+                // 띄운다 - onLetterArrive는 그 로그에는 관여하지 않는다.
+                const bulletHits = event.bullet_hits;
+                const onLetterArrive = (bulletHits && !targetWasAlreadyDead && targetKey)
+                    ? (i) => {
+                        if (i >= bulletHits.length - 1) return;
+                        // 다른 배우 이벤트가 그 사이 이 대상을 더 낮은 체력으로 이미 반영해뒀을 수
+                        // 있으므로(동시 진행 애니메이션), 절대 더 높은 값으로 역행시키지 않는다.
+                        units[targetKey].hp = Math.min(units[targetKey].hp, bulletHits[i].target_hp_after);
+                        renderUnit(targetKey);
+                        // 탄환마다 크리티컬을 독립적으로 굴리므로(백엔드), 그 탄환 고유의 is_crit로 반짝인다.
+                        flashHit(targetKey, bulletHits[i].is_crit, event.type_multiplier);
+                    }
+                    : null;
                 setTimeout(() => {
                     playRangedAttack(actorKey, targetKey, () => {
                         rangedResolvePending[actorKey] = false;
@@ -2445,7 +2491,7 @@
                         // 한 번 더 띄우지 않는다(HP는 이미 위에서 즉시 반영돼 있으므로 안전).
                         if (targetWasAlreadyDead) return;
                         applyHitVisual();
-                    });
+                    }, onLetterArrive);
                 }, EFFECT_LAUNCH_DELAY_MS);
             } else {
                 if (actorKey) playAttackFrames(actorKey);

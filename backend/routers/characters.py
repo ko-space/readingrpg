@@ -107,6 +107,9 @@ def _build_inventory_rows(user: User):
                 "exp_subjects": catalog.get("exp_subjects", []),
                 "skill_effects": catalog.get("skill_effects", {}),
                 "trait_effects": catalog.get("trait_effects", {}),
+                # 전술대회 편성 슬롯 구분("striker"/"supporter") - characters.json에 아직 값이 없는
+                # 캐릭터는 전부 "striker"로 취급한다(지금 도감 전원이 실제로 그렇다).
+                "unit_role": catalog.get("unit_role", "striker"),
                 "catalog_index": catalog["catalog_index"],
                 "start_star": catalog["start_star"],
             }
@@ -125,6 +128,7 @@ def _build_inventory_rows(user: User):
                 "exp_subjects": [],
                 "skill_effects": {},
                 "trait_effects": {},
+                "unit_role": "striker",
                 "catalog_index": fallback_index,
                 "start_star": 1,
             }
@@ -186,6 +190,7 @@ def get_character_inventory(
             "range": entry.get("range"),
             "attack_type": entry.get("attack_type"),
             "defense_type": entry.get("defense_type"),
+            "unit_role": entry.get("unit_role", "striker"),
             "outfit": (entry.get("outfits") or {}).get("기본"),
             "star_effects": entry.get("star_effects", {}),
             "skill_effects": entry.get("skill_effects", {}),
@@ -283,6 +288,7 @@ def _choose_enhancement_cards(user: User, copies: list[Character], material_coun
         for character_id in (
             user.pvp_defense_front_id,
             user.pvp_defense_back_id,
+            user.pvp_defense_supporter_id,
         )
         if character_id is not None
     }
@@ -552,6 +558,8 @@ def enhance_character(
                 locked_user.pvp_defense_front_id = None
             if locked_user.pvp_defense_back_id in selected_ids:
                 locked_user.pvp_defense_back_id = None
+            if locked_user.pvp_defense_supporter_id in selected_ids:
+                locked_user.pvp_defense_supporter_id = None
 
             for character in selected:
                 character.is_equipped = 0
@@ -681,6 +689,8 @@ def enhance_character(
                 locked_user.pvp_defense_front_id = None
             if locked_user.pvp_defense_back_id in selected_ids:
                 locked_user.pvp_defense_back_id = None
+            if locked_user.pvp_defense_supporter_id in selected_ids:
+                locked_user.pvp_defense_supporter_id = None
 
             for character in selected:
                 character.is_equipped = 0

@@ -25,6 +25,9 @@ class User(Base):
     pvp_rank = Column(Integer, nullable=True, unique=True)  # 낮을수록 높은 순위(1등이 최고). 신규 유저는 users.py에서 꼴찌로 배정
     pvp_defense_front_id = Column(Integer, ForeignKey("characters.id"), nullable=True)
     pvp_defense_back_id = Column(Integer, ForeignKey("characters.id"), nullable=True)
+    # 서포터(3번째) 슬롯 - 등록은 미리 받아두지만, 실제 전투는 battle_core.ENABLE_SUPPORTER_SLOT이
+    # True가 되기 전까진 전방/후방만으로 진행된다(routers/pvp.py의 run_battle 참고).
+    pvp_defense_supporter_id = Column(Integer, ForeignKey("characters.id"), nullable=True)
 
     lifetime_gold = Column(Integer, default=0)  # 소비와 무관하게 절대 감소하지 않는 누적 획득 골드. 업적("황금의 사냥꾼") 판정용
     equipped_achievement_id = Column(Integer, ForeignKey("achievements.id"), nullable=True)  # 지금 표시 중인 칭호.

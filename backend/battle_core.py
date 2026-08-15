@@ -106,6 +106,11 @@ TARGET_SWITCH_HESITATION_SECONDS = 0.51
 SKILL_TRIGGER_ATTACK_COUNT = 3   # 기본공격 몇 회마다 스킬을 시전하는지
 SKILL_CAST_INTERVAL_MULTIPLIER = 0.7  # 시전 시간 = 기본공격 주기 * 이 값
 
+# 서포터 슬롯을 실제 전투에 참여시킬지 여부. False인 동안은 routers/pvp.py의 run_battle이 서포터
+# 등록 여부와 무관하게 build_team에 항상 supporter=None만 넘겨서, 실배포 전투는 지금처럼 전방/후방
+# 2인 그대로 진행된다.
+ENABLE_SUPPORTER_SLOT = False
+
 # 전투 시간(게임 내 초) 상한 - 회복형 캐릭터가 양쪽/한쪽에 몰리면(예: 회복 스킬을 쓰는 유닛이 여럿) 입히는
 # 피해보다 회복량이 더 커져서 어느 쪽도 전멸하지 않는 채로 전투가 사실상 끝나지 않을 수 있다. 정상적인
 # 전투는 대부분 이 안에서 끝나므로(넉넉하게 여유를 둠), 이 시간을 넘기면 그 시점 HP 비율이 더 높은 쪽을
@@ -236,12 +241,14 @@ def compute_unit_stats(character_name, star, owner_level, slot="front", override
     }
 
 
-def build_team(front, back):
+def build_team(front, back, supporter=None):
     # "summon_front"/"summon_back"은 기존 전방/후방과 별개로 존재하는 전용 자리 - 윤영준의 복제체처럼
     # 인원을 대체하지 않고 "추가로" 소환되는 유닛 전용이다. 평소엔 비어있다(None). 시전자가 front면
     # summon_front, back이면 summon_back을 쓰므로, 같은 팀에 summon_clone을 쓰는 캐릭터가 둘(예:
     # 윤영준+강승유) 있어도 서로의 복제체를 밀어내지 않고 각자 자기 몫의 복제체를 유지할 수 있다.
-    return {"front": front, "back": back, "summon_front": None, "summon_back": None}
+    # "supporter"는 ENABLE_SUPPORTER_SLOT이 True인 동안만 호출부가 채워 넣는다 - _all_slots에는 아직
+    # 포함되지 않아 실제 공격/피격에는 참여하지 않는다.
+    return {"front": front, "back": back, "supporter": supporter, "summon_front": None, "summon_back": None}
 
 
 def _all_slots(team):

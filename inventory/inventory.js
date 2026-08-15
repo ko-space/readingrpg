@@ -323,7 +323,12 @@
         // 미보유 인물은 스프라이트를 검은색 실루엣으로(밝기 최저) 보여준다.
         standing.classList.toggle("is-unowned-silhouette", unowned);
 
-        document.getElementById("inventory-detail-rarity").textContent = `${g.rarity} · ${g.job_class || "?"}`;
+        const roleIcon = document.getElementById("inventory-detail-role-icon");
+        if (roleIcon) {
+            const role = g.unit_role === "supporter" ? "supporter" : "striker";
+            roleIcon.src = `assets/icons/${role}.webp`;
+            roleIcon.alt = role === "supporter" ? "서포터" : "스트라이커";
+        }
         document.getElementById("inventory-detail-name").textContent = unowned ? "???" : g.name;
         document.getElementById("inventory-detail-stars").textContent = stars(g.star);
         document.getElementById("inventory-detail-count").textContent = unowned ? "미보유" : `${g.count}명 보유`;

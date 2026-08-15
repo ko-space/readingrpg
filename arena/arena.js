@@ -13,7 +13,7 @@
     let loaded = false;
     let loading = false;
     let myInventory = []; // /characters/inventory 결과 (같은 이름+같은 성급은 하나로 묶여있음)
-    let myDefense = { front: null, back: null }; // /pvp/defense 결과 (지금 저장된 방어 편성)
+    let myDefense = { front: null, back: null, supporter: null }; // /pvp/defense 결과 (지금 저장된 방어 편성)
     let myArenaTicketCount = 0; // /users/me의 arena_ticket_count - 전투 버튼 활성화 여부를 결정
 
     function authHeaders() {
@@ -38,7 +38,8 @@
         await updatePvpChoiceAvailability();
     }
 
-    // 전술대회는 서로 다른 이름의 캐릭터를 2명 이상 보유해야 입장 가능 (방어 편성에 전방/후방이 필요하므로)
+    // 전술대회는 스트라이커(전방/후방) 한 명 이상만 보유하면 입장 가능(예전엔 전방/후방 둘 다 필요해서
+    // 2명 이상이었지만, 이제 한 명만 등록해도 EMPTY 자리인 채로 출전할 수 있다).
     async function updatePvpChoiceAvailability() {
         const pvpBtn = document.getElementById("arena-choice-pvp");
         if (!pvpBtn) return;
@@ -48,12 +49,12 @@
             const data = await res.json();
             const distinctNames = new Set((data.characters || []).map((c) => c.name));
 
-            if (distinctNames.size < 2) {
+            if (distinctNames.size < 1) {
                 pvpBtn.disabled = true;
                 pvpBtn.querySelector(".arena-choice-soon")?.remove();
                 const notice = document.createElement("span");
                 notice.className = "arena-choice-soon";
-                notice.textContent = "캐릭터 2명 이상 필요";
+                notice.textContent = "캐릭터 1명 이상 필요";
                 pvpBtn.appendChild(notice);
             } else {
                 pvpBtn.disabled = false;
@@ -197,7 +198,7 @@
     // 저장된 방어 편성을 좌측 스탠딩 일러스트로 표시.
     // 전신 그대로가 아니라 상점 의상 카드와 같은 스탠딩 크롭(명치 부근 확대)을 적용한다.
     function renderDefenseStanding() {
-        ["front", "back"].forEach((slot) => {
+        ["front", "back", "supporter"].forEach((slot) => {
             const unit = myDefense[slot];
             const imgEl = document.getElementById(`defense-${slot}-img`);
             const nameEl = document.getElementById(`defense-${slot}-name`);
@@ -222,12 +223,14 @@
     }
 
     // 방어 유닛 하나를 사진+우하단 노란 별 배지로 그린다. 이름은 표시하지 않는다.
-    function renderOpponentUnitThumb(unit) {
+    // extraClass: 서포터 칸을 전방/후방과 살짝 떨어뜨리는 등, 슬롯별 위치 보정용 수식 클래스(선택).
+    function renderOpponentUnitThumb(unit, extraClass = "") {
+        const cls = extraClass ? ` ${extraClass}` : "";
         if (!unit) {
-            return `<div class="opp-unit-thumb opp-unit-empty"></div>`;
+            return `<div class="opp-unit-thumb opp-unit-empty${cls}"></div>`;
         }
         return `
-            <div class="opp-unit-thumb">
+            <div class="opp-unit-thumb${cls}">
                 <img src="${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.webp" data-outfit="${unit.outfit}" alt="">
                 <span class="opp-unit-star">★${unit.star}</span>
             </div>
@@ -269,8 +272,9 @@
                         <div class="formation-preview">
                             <div class="formation-line"></div>
                             <div class="pvp-opponent-defense">
-                                ${renderOpponentUnitThumb(opp.defense?.back)}
                                 ${renderOpponentUnitThumb(opp.defense?.front)}
+                                ${renderOpponentUnitThumb(opp.defense?.back)}
+                                ${renderOpponentUnitThumb(opp.defense?.supporter, "opp-unit-thumb-supporter")}
                             </div>
                             <div class="formation-line"></div>
                         </div>
@@ -341,8 +345,10 @@
         showView("pvp-defense-picker-view");
         const frontSelect = document.getElementById("pvp-front-select");
         const backSelect = document.getElementById("pvp-back-select");
+        const supporterSelect = document.getElementById("pvp-supporter-select");
         frontSelect.innerHTML = `<option>불러오는 중...</option>`;
         backSelect.innerHTML = "";
+        supporterSelect.innerHTML = "";
 
         try {
             const res = await fetch(`${API_BASE_URL}/characters/inventory`, { headers: authHeaders() });
@@ -353,45 +359,65 @@
             return;
         }
 
+        const emptyOptionHtml = `<option value="">없음</option>`;
+
         if (myInventory.length === 0) {
             frontSelect.innerHTML = `<option>보유한 캐릭터가 없어요</option>`;
             backSelect.innerHTML = "";
+            supporterSelect.innerHTML = emptyOptionHtml;
             return;
         }
 
+        // 전방/후방은 최소 한 명만 있으면 되므로 "없음"을 선택할 수 있게 맨 앞에 넣어둔다.
         const optionsHtml = myInventory
             .map((c) => `<option value="${c.character_id}">${c.name} (${c.rarity} ★${c.star})</option>`)
             .join("");
-        frontSelect.innerHTML = optionsHtml;
-        backSelect.innerHTML = optionsHtml;
+        frontSelect.innerHTML = emptyOptionHtml + optionsHtml;
+        backSelect.innerHTML = emptyOptionHtml + optionsHtml;
+        // 조력자 칸에는 unit_role이 "supporter"인 캐릭터만 배치할 수 있다 - 지금 도감 전원이
+        // "striker"라 실제로는 항상 "없음"만 뜨지만, 서포터 캐릭터가 추가되면 자동으로 채워진다.
+        const supporterOptionsHtml = myInventory
+            .filter((c) => c.unit_role === "supporter")
+            .map((c) => `<option value="${c.character_id}">${c.name} (${c.rarity} ★${c.star})</option>`)
+            .join("");
+        supporterSelect.innerHTML = emptyOptionHtml + supporterOptionsHtml;
 
         preselectDefenseOption(frontSelect, myDefense.front);
         preselectDefenseOption(backSelect, myDefense.back);
+        preselectDefenseOption(supporterSelect, myDefense.supporter);
     }
 
     // 지금 저장된 캐릭터를 드롭다운에서 미리 선택해둔다. 그 정확한 카드가 목록에 없으면(강화 등으로
-    // 대표 카드가 바뀐 경우) 같은 이름의 아무 카드로라도 맞춰준다.
+    // 대표 카드가 바뀐 경우) 같은 이름의 아무 카드로라도 맞춰준다. 저장된 게 없으면(그 슬롯을 비워둔
+    // 상태) "없음"을 선택해둔다.
     function preselectDefenseOption(selectEl, savedUnit) {
         if (!savedUnit) {
-            if (selectEl.options.length > 1) selectEl.selectedIndex = 1; // 후방 기본값이 전방과 안 겹치게
+            selectEl.value = "";
             return;
         }
-        const exact = Array.from(selectEl.options).find((o) => Number(o.value) === savedUnit.id);
+        const options = Array.from(selectEl.options);
+        const exact = options.find((o) => Number(o.value) === savedUnit.id);
         if (exact) {
             selectEl.value = exact.value;
             return;
         }
-        const sameNameIndex = myInventory.findIndex((c) => c.name === savedUnit.name);
-        if (sameNameIndex >= 0) selectEl.selectedIndex = sameNameIndex;
+        // 이 select 자신의 옵션 목록(전체 myInventory가 아니라, 조력자처럼 역할로 걸러진 부분집합일
+        // 수도 있음) 안에서 같은 이름의 다른 사본을 찾는다.
+        const sameName = options.find((o) => {
+            const c = myInventory.find((item) => String(item.character_id) === o.value);
+            return c && c.name === savedUnit.name;
+        });
+        if (sameName) selectEl.value = sameName.value;
     }
 
     function setupDefenseSave() {
         document.getElementById("pvp-defense-save-btn")?.addEventListener("click", async () => {
-            const frontId = Number(document.getElementById("pvp-front-select").value);
-            const backId = Number(document.getElementById("pvp-back-select").value);
+            const frontId = Number(document.getElementById("pvp-front-select").value) || null;
+            const backId = Number(document.getElementById("pvp-back-select").value) || null;
+            const supporterId = Number(document.getElementById("pvp-supporter-select").value) || null;
 
-            if (!frontId || !backId) {
-                alert("전방/후방 캐릭터를 선택해주세요.");
+            if (!frontId && !backId) {
+                alert("전방 또는 후방 중 최소 한 명은 선택해주세요.");
                 return;
             }
 
@@ -399,7 +425,11 @@
                 const res = await fetch(`${API_BASE_URL}/pvp/defense`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json", ...authHeaders() },
-                    body: JSON.stringify({ front_character_id: frontId, back_character_id: backId })
+                    body: JSON.stringify({
+                        front_character_id: frontId,
+                        back_character_id: backId,
+                        supporter_character_id: supporterId,
+                    })
                 });
                 const data = await res.json();
                 if (!res.ok) {

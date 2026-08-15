@@ -294,7 +294,12 @@ function spawnGasBreathStream(actorKeyOrEl, onArrive) {
     const fieldRect = fieldEl.getBoundingClientRect();
     const start = fieldRelativeCenter(actorImg);
     start.y -= 60; // 얼굴 높이 정도로 살짝 위에서 시작
-    const end = { x: fieldRect.width, y: start.y };
+    // 적은 항상 시전자 반대편 진영에 있으므로, 시전자가 필드 중앙보다 왼쪽에 있으면 오른쪽 끝을,
+    // 오른쪽에 있으면 왼쪽 끝(0)을 향해 뿜는다. 예전엔 항상 오른쪽 끝(fieldRect.width)으로 고정돼
+    // 있어서, 상대편(오른쪽 진영)의 강 희가 시전하면 가스가 적 쪽(왼쪽)이 아니라 계속 화면 오른쪽
+    // 바깥으로 나가 거꾸로 나가는 것처럼 보였다.
+    const endX = start.x < fieldRect.width / 2 ? fieldRect.width : 0;
+    const end = { x: endX, y: start.y };
     const length = Math.hypot(end.x - start.x, end.y - start.y);
     const angle = angleDeg(start, end);
     const durationMs = 1150;
@@ -901,7 +906,7 @@ const RANGED_ATTACK_STYLE = {
 // 이의진 전용(염색체 변환 상태에 따라 eye_laser의 type1/type2가 갈림).
 function playRangedAttackByStyle(style, actorKeyOrEl, targetKeyOrEl, onArrive, opts = {}) {
     if (style === "instant_flash") playInstantFlash(actorKeyOrEl, targetKeyOrEl, onArrive);
-    else if (style === "text_particles") playTextParticles(actorKeyOrEl, targetKeyOrEl, onArrive);
+    else if (style === "text_particles") playTextParticles(actorKeyOrEl, targetKeyOrEl, onArrive, opts.onLetterArrive);
     else if (style === "crayon") {
         // 원래(arena-battle.js) 기준: 대상이 "-front" 슬롯이면 진분홍, 아니면(후방/복제체) 푸른색.
         // 문자열 키가 아닌 대상(예: raid-prototype처럼 보스를 DOM 엘리먼트로 직접 넘기는 화면)은
@@ -1018,7 +1023,11 @@ function playInstantFlash(actorKeyOrEl, targetKeyOrEl, onArrive) {
 }
 
 // 이종복 전용: "F", "=", "m", "a" 네 글자가 0.1초 간격으로 직선 발사된다.
-function playTextParticles(actorKeyOrEl, targetKeyOrEl, onArrive) {
+// onLetterArrive(i) - 선택. 글자 하나가 도착할 때마다(마지막 포함) 호출된다. 이종복 "F=ma" 기본공격이
+// 실제로 대미지를 4등분해서 각 글자 도착에 맞춰 체력바를 순서대로 반영하는 데 쓴다(호출부인
+// arena-battle.js/devtest.js 참고) - 이 함수 자체는 언제나처럼 순수 연출만 담당하고, "그 도착 시점에
+// 무엇을 반영할지"는 호출부가 결정한다.
+function playTextParticles(actorKeyOrEl, targetKeyOrEl, onArrive, onLetterArrive) {
     const letters = ["F", "=", "m", "a"];
     const actorImg = resolveEffectEl(actorKeyOrEl);
     const targetImg = resolveEffectEl(targetKeyOrEl);
@@ -1041,7 +1050,10 @@ function playTextParticles(actorKeyOrEl, targetKeyOrEl, onArrive) {
             el.style.left = `${end.x}px`;
             el.style.top = `${end.y}px`;
             setTimeout(() => el.remove(), PROJECTILE_TRAVEL_MS + 50);
-            if (i === letters.length - 1) setTimeout(onArrive, PROJECTILE_TRAVEL_MS);
+            setTimeout(() => {
+                if (onLetterArrive) onLetterArrive(i);
+                if (i === letters.length - 1) onArrive();
+            }, PROJECTILE_TRAVEL_MS);
         }, i * 100);
     });
 }

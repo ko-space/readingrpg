@@ -7,6 +7,7 @@ from database import get_db
 from models import User, Character, PvpBattleLog, Item, UserItem, Mail, ActivityLog
 from schemas import PvpDefenseRequest, PvpBattleRequest
 from security import get_current_user
+from battle_core import ENABLE_SUPPORTER_SLOT
 from battle_engine import compute_unit_stats, build_team, simulate_battle
 from achievements import check_and_grant_achievements, get_equipped_title_info
 
@@ -185,11 +186,13 @@ def _ensure_rank_assigned(user: User, db: Session):
 
 def _ensure_defense_assigned(user: User, db: Session):
     """
-    방어편성이 하나도 없는 유저가 서로 다른 이름의 캐릭터를 2명 이상 보유하게 되면,
-    자동으로 앞의 2명(이름이 겹치지 않는)을 전방/후방으로 채워준다.
-    이미 방어편성이 있으면 아무것도 안 하고, 캐릭터가 2명 미만이면 아직 배정하지 않는다(입장 자체가 막혀있음).
+    방어편성이 하나도 없는 유저가 서로 다른 이름의 캐릭터를 보유하게 되면, 자동으로 앞의 최대
+    2명(이름이 겹치지 않는)을 전방/후방으로 채워준다. 1명만 있으면 전방만 채운다 - 스트라이커
+    한 명 이상만 등록하면 출전할 수 있으므로, 더 이상 2명을 기다릴 필요가 없다.
+    전방/후방 중 하나라도 이미 값이 있으면(유저가 직접 편성을 건드린 적이 있다는 뜻이므로) 아무것도
+    안 한다 - 일부러 한쪽을 비워둔 편성을 자동배정이 되살리지 않게.
     """
-    if user.pvp_defense_front_id is not None and user.pvp_defense_back_id is not None:
+    if user.pvp_defense_front_id is not None or user.pvp_defense_back_id is not None:
         return
 
     seen_names = set()
@@ -202,11 +205,12 @@ def _ensure_defense_assigned(user: User, db: Session):
         if len(picked) == 2:
             break
 
-    if len(picked) < 2:
+    if not picked:
         return
 
     user.pvp_defense_front_id = picked[0].id
-    user.pvp_defense_back_id = picked[1].id
+    if len(picked) >= 2:
+        user.pvp_defense_back_id = picked[1].id
     db.commit()
     db.refresh(user)
 
@@ -239,16 +243,22 @@ def _get_candidate_pool(user: User, db: Session):
 
 
 def _has_defense_team(user: User) -> bool:
-    return user.pvp_defense_front_id is not None and user.pvp_defense_back_id is not None
+    # 스트라이커(전방/후방) 한 명 이상만 등록하면 출전할 수 있다 - 둘 다 필요했던 예전 규칙에서 완화됨.
+    return user.pvp_defense_front_id is not None or user.pvp_defense_back_id is not None
 
 
 def _defense_preview(db: Session, user: User):
     """카드에 보여줄 상대의 방어 편성 미리보기(사진+성급만, 이름은 안 보여줌)."""
     front = db.query(Character).filter(Character.id == user.pvp_defense_front_id).first()
     back = db.query(Character).filter(Character.id == user.pvp_defense_back_id).first()
+    supporter = (
+        db.query(Character).filter(Character.id == user.pvp_defense_supporter_id).first()
+        if user.pvp_defense_supporter_id else None
+    )
     return {
         "front": {"outfit": front.outfit, "star": front.star} if front else None,
         "back": {"outfit": back.outfit, "star": back.star} if back else None,
+        "supporter": {"outfit": supporter.outfit, "star": supporter.star} if supporter else None,
     }
 
 
@@ -284,23 +294,58 @@ def set_defense_team(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if req.front_character_id == req.back_character_id:
+    # 스트라이커(전방/후방)는 최소 한 명만 있으면 된다 - 완전히 빈 편성은 저장할 수 없다.
+    if req.front_character_id is None and req.back_character_id is None:
+        raise HTTPException(status_code=400, detail="전방 또는 후방 중 최소 한 명은 선택해야 합니다.")
+
+    if (
+        req.front_character_id is not None
+        and req.back_character_id is not None
+        and req.front_character_id == req.back_character_id
+    ):
         raise HTTPException(status_code=400, detail="전방과 후방에 같은 캐릭터를 넣을 수 없습니다.")
 
-    front = db.query(Character).filter(Character.id == req.front_character_id, Character.user_id == user.id).first()
-    back = db.query(Character).filter(Character.id == req.back_character_id, Character.user_id == user.id).first()
+    front = None
+    if req.front_character_id is not None:
+        front = db.query(Character).filter(Character.id == req.front_character_id, Character.user_id == user.id).first()
+        if not front:
+            raise HTTPException(status_code=404, detail="보유하지 않은 캐릭터입니다.")
 
-    if not front or not back:
-        raise HTTPException(status_code=404, detail="보유하지 않은 캐릭터입니다.")
+    back = None
+    if req.back_character_id is not None:
+        back = db.query(Character).filter(Character.id == req.back_character_id, Character.user_id == user.id).first()
+        if not back:
+            raise HTTPException(status_code=404, detail="보유하지 않은 캐릭터입니다.")
 
-    if front.name == back.name:
+    if front and back and front.name == back.name:
         raise HTTPException(status_code=400, detail="전방과 후방에 같은 이름의 캐릭터를 중복으로 넣을 수 없습니다.")
 
-    user.pvp_defense_front_id = front.id
-    user.pvp_defense_back_id = back.id
+    supporter = None
+    if req.supporter_character_id is not None:
+        if req.supporter_character_id in (req.front_character_id, req.back_character_id):
+            raise HTTPException(status_code=400, detail="서포터에 전방/후방과 같은 캐릭터를 넣을 수 없습니다.")
+        supporter = (
+            db.query(Character)
+            .filter(Character.id == req.supporter_character_id, Character.user_id == user.id)
+            .first()
+        )
+        if not supporter:
+            raise HTTPException(status_code=404, detail="보유하지 않은 캐릭터입니다.")
+        striker_names = {c.name for c in (front, back) if c}
+        if supporter.name in striker_names:
+            raise HTTPException(status_code=400, detail="서포터에 전방/후방과 같은 이름의 캐릭터를 중복으로 넣을 수 없습니다.")
+
+    user.pvp_defense_front_id = front.id if front else None
+    user.pvp_defense_back_id = back.id if back else None
+    user.pvp_defense_supporter_id = supporter.id if supporter else None
     db.commit()
 
-    return {"message": "방어 편성이 저장되었습니다.", "front": front.name, "back": back.name}
+    return {
+        "message": "방어 편성이 저장되었습니다.",
+        "front": front.name if front else None,
+        "back": back.name if back else None,
+        "supporter": supporter.name if supporter else None,
+    }
 
 
 def _character_brief(character: Character | None):
@@ -316,16 +361,40 @@ def _character_brief(character: Character | None):
 
 @router.get("/defense")
 def get_my_defense(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """지금 저장된 내 방어 편성(전방/후방)을 그대로 돌려준다. 화면을 껐다 켜도 항상 저장된 상태가 보이게 하기 위함."""
+    """지금 저장된 내 방어 편성(전방/후방/서포터)을 그대로 돌려준다. 화면을 껐다 켜도 항상 저장된 상태가 보이게 하기 위함."""
     _ensure_rank_assigned(user, db)
     _ensure_defense_assigned(user, db)
     front = db.query(Character).filter(Character.id == user.pvp_defense_front_id).first() if user.pvp_defense_front_id else None
     back = db.query(Character).filter(Character.id == user.pvp_defense_back_id).first() if user.pvp_defense_back_id else None
-    return {"front": _character_brief(front), "back": _character_brief(back)}
+    supporter = (
+        db.query(Character).filter(Character.id == user.pvp_defense_supporter_id).first()
+        if user.pvp_defense_supporter_id else None
+    )
+    return {"front": _character_brief(front), "back": _character_brief(back), "supporter": _character_brief(supporter)}
 
 
-def _character_to_unit(character: Character, owner_level: int, slot: str):
+def _character_to_unit(character: Character | None, owner_level: int, slot: str):
+    # 전방/후방 중 한쪽이 비어있는 편성(스트라이커 1명 등록)도 허용되므로 character가 None일 수 있다 -
+    # battle_core/battle_engine은 이미 team["front"]/team["back"]이 None인 경우를 정상적인
+    # "그 슬롯의 유닛이 죽어서 없음" 상태와 동일하게 다루도록 설계돼 있어(모든 순회가 None 슬롯을
+    # 건너뜀), 처음부터 None으로 시작해도 그대로 안전하다.
+    if character is None:
+        return None
     return compute_unit_stats(character.name, character.star, owner_level, slot)
+
+
+def _team_unit_view(unit: dict | None, character: Character | None):
+    """전투 결과 응답의 attacker_team/defender_team 한 슬롯 - 그 슬롯이 비어있으면(전방/후방 중
+    한쪽만 등록된 편성) None을 그대로 돌려주고, 프론트(arena-battle.js)가 그 슬롯을 빈 자리로 그린다."""
+    if unit is None or character is None:
+        return None
+    return {
+        "name": unit["name"],
+        "max_hp": unit["max_hp"],
+        "is_melee": unit["is_melee"],
+        "outfit": character.outfit,
+        "star": character.star,
+    }
 
 
 @router.post("/battle")
@@ -358,13 +427,28 @@ def run_battle(
     defender_front = db.query(Character).filter(Character.id == defender.pvp_defense_front_id).first()
     defender_back = db.query(Character).filter(Character.id == defender.pvp_defense_back_id).first()
 
+    # 서포터는 등록 여부와 무관하게 ENABLE_SUPPORTER_SLOT이 True일 때만 실제 전투에 반영한다 -
+    # 지금은 항상 False라, 유저가 서포터를 등록해뒀어도 전투는 전방/후방 2인으로만 진행된다.
+    attacker_supporter = defender_supporter = None
+    if ENABLE_SUPPORTER_SLOT:
+        attacker_supporter = (
+            db.query(Character).filter(Character.id == user.pvp_defense_supporter_id).first()
+            if user.pvp_defense_supporter_id else None
+        )
+        defender_supporter = (
+            db.query(Character).filter(Character.id == defender.pvp_defense_supporter_id).first()
+            if defender.pvp_defense_supporter_id else None
+        )
+
     attacker_team = build_team(
         _character_to_unit(attacker_front, user.level, "front"),
         _character_to_unit(attacker_back, user.level, "back"),
+        _character_to_unit(attacker_supporter, user.level, "supporter") if attacker_supporter else None,
     )
     defender_team = build_team(
         _character_to_unit(defender_front, defender.level, "front"),
         _character_to_unit(defender_back, defender.level, "back"),
+        _character_to_unit(defender_supporter, defender.level, "supporter") if defender_supporter else None,
     )
 
     result = simulate_battle(attacker_team, defender_team)
@@ -413,8 +497,8 @@ def run_battle(
         rank_changed=rank_did_change,
         attacker_rank_before=attacker_rank_before,
         defender_rank_before=defender_rank_before,
-        attacker_front_name=attacker_front.name,
-        attacker_back_name=attacker_back.name,
+        attacker_front_name=attacker_front.name if attacker_front else None,
+        attacker_back_name=attacker_back.name if attacker_back else None,
         battle_log=json.dumps(result["events"], ensure_ascii=False),
     )
     db.add(log)
@@ -457,36 +541,12 @@ def run_battle(
             "title_is_hidden": defender_title_hidden,
         },
         "attacker_team": {
-            "front": {
-                "name": attacker_team["front"]["name"],
-                "max_hp": attacker_team["front"]["max_hp"],
-                "is_melee": attacker_team["front"]["is_melee"],
-                "outfit": attacker_front.outfit,
-                "star": attacker_front.star,
-            },
-            "back": {
-                "name": attacker_team["back"]["name"],
-                "max_hp": attacker_team["back"]["max_hp"],
-                "is_melee": attacker_team["back"]["is_melee"],
-                "outfit": attacker_back.outfit,
-                "star": attacker_back.star,
-            },
+            "front": _team_unit_view(attacker_team["front"], attacker_front),
+            "back": _team_unit_view(attacker_team["back"], attacker_back),
         },
         "defender_team": {
-            "front": {
-                "name": defender_team["front"]["name"],
-                "max_hp": defender_team["front"]["max_hp"],
-                "is_melee": defender_team["front"]["is_melee"],
-                "outfit": defender_front.outfit,
-                "star": defender_front.star,
-            },
-            "back": {
-                "name": defender_team["back"]["name"],
-                "max_hp": defender_team["back"]["max_hp"],
-                "is_melee": defender_team["back"]["is_melee"],
-                "outfit": defender_back.outfit,
-                "star": defender_back.star,
-            },
+            "front": _team_unit_view(defender_team["front"], defender_front),
+            "back": _team_unit_view(defender_team["back"], defender_back),
         },
     }
 
