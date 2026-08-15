@@ -20,6 +20,8 @@ NEW_COLUMNS = [
     ("regions", "silver_rate", "FLOAT NOT NULL DEFAULT 0"),
     ("regions", "subject_bonus_rules", "JSON"),
     ("reading_logs", "earned_silver", "INTEGER NOT NULL DEFAULT 0"),
+    # 전술대회 서포터(3번째) 슬롯 - 등록만 미리 지원, 실제 전투 반영은 battle_core.ENABLE_SUPPORTER_SLOT 참고
+    ("users", "pvp_defense_supporter_id", "INTEGER"),
 ]
 
 

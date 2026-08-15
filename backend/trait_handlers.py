@@ -123,19 +123,22 @@ def _trait_team_teacher_hp_buff(caster, team, enemy_team, params):
 
 def _trait_teammate_hp_buff_self_cost(caster, team, enemy_team, params):
     # 송주헌(페이스 메이커): 파트너 최대 체력 X% 증가 + 자신의 최대 체력 50% 감소(대가).
+    # 팀에 파트너가 없으면(전방/후방 중 한 자리만 등록된 편성) 줄 상대가 없으니 자기 대가만 치르는
+    # 손해를 방지하기 위해 아예 발동하지 않는다.
     partner = _teammate(team, caster)
+    if not partner or partner["hp"] <= 0:
+        return None
     changes = []
-    if partner and partner["hp"] > 0:
-        gain = round(partner["max_hp"] * params["hp_percent"] / 100)
-        partner["max_hp"] += gain
-        partner["hp"] += gain
-        changes.append(("own", partner, 0, 1))
+    gain = round(partner["max_hp"] * params["hp_percent"] / 100)
+    partner["max_hp"] += gain
+    partner["hp"] += gain
+    changes.append(("own", partner, 0, 1))
     loss = round(caster["max_hp"] * params["self_hp_loss_percent"] / 100)
     caster["max_hp"] = max(1, caster["max_hp"] - loss)
     caster["hp"] = min(caster["hp"], caster["max_hp"])
     changes.append(("own", caster, 0, -1))
     detail = {
-        "partner": partner["name"] if partner else None,
+        "partner": partner["name"],
         "hp_percent": params["hp_percent"], "self_hp_loss_percent": params["self_hp_loss_percent"],
     }
     return detail, changes

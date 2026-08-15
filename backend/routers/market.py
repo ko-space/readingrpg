@@ -76,7 +76,7 @@ def _protected_character_ids(user: User) -> set:
     """장착 중이거나(캐릭터 자체 필드) 전술대회 방어 편성에 들어간(User의 FK 필드) 캐릭터 -
     characters.py의 _choose_enhancement_cards가 강화 재료 선택에서 이 카드들을 보호하는 것과
     동일한 이유로, 거래소 등록에서도 이 카드들은 자동 선택 대상에서 제외한다."""
-    ids = {user.pvp_defense_front_id, user.pvp_defense_back_id}
+    ids = {user.pvp_defense_front_id, user.pvp_defense_back_id, user.pvp_defense_supporter_id}
     ids.discard(None)
     return ids
 

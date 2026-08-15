@@ -63,7 +63,7 @@
 /* ── 메인 화면: 좌(배너/랭크/방어편성/액션) / 우(제목/후보목록) 2열 ── */
 .pvp-layout {
     display: grid;
-    grid-template-columns: 240px minmax(0, 1fr);
+    grid-template-columns: 300px minmax(0, 1fr);
     gap: 14px;
     align-items: start;
 }
@@ -228,7 +228,7 @@
 .defense-standing-row {
     display: grid;
     flex: 1;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
 }
 
@@ -261,11 +261,16 @@
     font-weight: 900;
 }
 
-.defense-standing-slot:first-child::before {
+.defense-standing-slot-supporter::before {
+    content: "조력자";
+    background: #6a6a8f;
+}
+
+.defense-standing-slot-back::before {
     content: "후방";
 }
 
-.defense-standing-slot:last-child::before {
+.defense-standing-slot-front::before {
     content: "전방";
     background: #b0523f;
 }
@@ -525,15 +530,22 @@
     background: rgba(0, 0, 0, 0.08);
 }
 
+/* 서포터는 전방/후방 조합과 살짝 떨어뜨려서 별도 자리라는 걸 시각적으로 구분한다. */
+.opp-unit-thumb-supporter {
+    margin-left: 8px;
+}
+
 .opp-unit-empty::before {
-    content: "-";
+    content: "EMPTY";
     position: absolute;
     left: 50%;
     top: 50%;
-    color: rgba(74, 60, 42, 0.35);
-    font-size: 18px;
+    color: rgba(74, 60, 42, 0.45);
+    font-size: 8px;
     font-weight: 900;
-    transform: translate(-50%, -55%);
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    transform: translate(-50%, -50%);
 }
 
 .opp-unit-star {

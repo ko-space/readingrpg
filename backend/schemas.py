@@ -61,8 +61,11 @@ class GachaSelectRequest(BaseModel):
 
 
 class PvpDefenseRequest(BaseModel):
-    front_character_id: int
-    back_character_id: int
+    # 스트라이커(전방/후방)는 최소 한 명만 있으면 출전할 수 있으므로 둘 다 선택이다 - 실제로 "최소
+    # 한 명" 검증은 routers/pvp.py의 set_defense_team이 담당한다.
+    front_character_id: int | None = None
+    back_character_id: int | None = None
+    supporter_character_id: int | None = None
 
 
 class PvpBattleRequest(BaseModel):
