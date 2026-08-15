@@ -50,42 +50,38 @@ def get_ranking(category: str, db: Session = Depends(get_db), limit: int = 50):
 
     if category == "reading_weekly":
         # 이번 주(KST, 월요일 0시 시작) 동안 쌓인 ReadingLog 합계로 매긴다 - quests.py의 주간 퀘스트와
-        # 같은 기준(월요일 시작)이라 "이번 주 읽은 시간" 감각이 서로 어긋나지 않는다.
+        # 같은 기준(월요일 시작)이라 "이번 주 읽은 시간" 감각이 서로 어긋나지 않는다. 예전엔 조건에
+        # 맞는 유저 전체를 가져온 뒤 파이썬에서 정렬·자르기를 했는데, gold/titles/pvp_* 카테고리처럼
+        # JOIN + ORDER BY + LIMIT을 SQL에서 전부 처리하도록 통일한다(egress 절감).
         today = _today_kst()
         monday = today - timedelta(days=today.weekday())
         start_utc = datetime(monday.year, monday.month, monday.day, tzinfo=KST).astimezone(timezone.utc).replace(tzinfo=None)
         end_utc = start_utc + timedelta(days=7)
+        total = func.sum(ReadingLog.reading_minutes)
         rows = (
-            db.query(ReadingLog.user_id, func.sum(ReadingLog.reading_minutes))
-            .filter(ReadingLog.created_at >= start_utc, ReadingLog.created_at < end_utc)
-            .group_by(ReadingLog.user_id)
+            db.query(User, total)
+            .join(ReadingLog, ReadingLog.user_id == User.id)
+            .filter(User.id != ADMIN_USER_ID, ReadingLog.created_at >= start_utc, ReadingLog.created_at < end_utc)
+            .group_by(User.id)
+            .order_by(total.desc())
+            .limit(limit)
             .all()
         )
-        minutes_by_user = {user_id: total or 0 for user_id, total in rows}
-        users = (
-            db.query(User)
-            .filter(User.id != ADMIN_USER_ID, User.id.in_(minutes_by_user.keys()))
-            .all()
-        )
-        ranked = sorted(users, key=lambda u: minutes_by_user[u.id], reverse=True)[:limit]
-        return [_row(i + 1, u, minutes_by_user[u.id]) for i, u in enumerate(ranked)]
+        return [_row(i + 1, u, minutes or 0) for i, (u, minutes) in enumerate(rows)]
 
     if category == "reading_daily":
         # daily_reading_minutes는 유저 본인이 요청을 보낼 때만 자정(KST) 리셋이 반영되는 지연 초기화 필드다.
         # 랭킹은 남의 값을 대신 고칠 수 없으니, 여기서는 읽기 시점에만 "오늘 값인지"를 판단해서 0으로 취급한다.
+        # ORDER BY/LIMIT을 SQL에서 처리(예전엔 조건에 맞는 유저 전체를 가져와 파이썬에서 정렬).
         today = _today_kst()
-        candidates = (
+        users = (
             db.query(User)
-            .filter(User.id != ADMIN_USER_ID, User.daily_reading_minutes > 0)
+            .filter(User.id != ADMIN_USER_ID, User.daily_reading_minutes > 0, User.daily_reading_date == today)
+            .order_by(User.daily_reading_minutes.desc())
+            .limit(limit)
             .all()
         )
-        rows = [
-            (u, u.daily_reading_minutes)
-            for u in candidates
-            if u.daily_reading_date == today
-        ]
-        rows.sort(key=lambda pair: pair[1], reverse=True)
-        return [_row(i + 1, u, v) for i, (u, v) in enumerate(rows[:limit])]
+        return [_row(i + 1, u, u.daily_reading_minutes) for i, u in enumerate(users)]
 
     if category == "gold":
         users = (

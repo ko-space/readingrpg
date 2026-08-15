@@ -16,6 +16,7 @@ check_and_grant_achievements(db, user)는 독서 기록 제출, 가챠, 강화, 
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from sqlalchemy import func, or_, and_
 from sqlalchemy.orm import Session
 
 from models import (
@@ -45,6 +46,14 @@ def get_character_catalog(name: str) -> dict | None:
     """characters.json에서 이 캐릭터의 원본 데이터(설명/스탯/exp_multiplier/exp_subjects 등)를 돌려준다.
     다른 라우터(logs.py 등)가 굳이 characters.json을 따로 또 읽지 않고 이 모듈의 캐시를 재사용하게 한다."""
     return _CHARACTER_BY_NAME.get(name)
+
+
+def get_all_character_catalogs() -> dict:
+    """{캐릭터명: characters.json 원본 데이터} 전체. challenges.py가 "직업/성별이 X인 캐릭터 목록"을
+    DB를 뒤지지 않고 이 정적 카탈로그에서 먼저 걸러서, ReadingLog 조회를 그 이름들로 좁힌 SQL IN
+    필터(+ SUM 집계)로 대체하는 데 쓴다(egress 절감 - 예전엔 유저의 전체 학습 로그를 통째로 가져와
+    파이썬에서 한 줄씩 캐릭터 카탈로그와 대조했다)."""
+    return _CHARACTER_BY_NAME
 
 
 MAX_PASSES = 20  # 메타 업적끼리 서로를 트리거하며 무한 루프에 빠지는 실수를 막는 안전장치
@@ -141,13 +150,12 @@ def compute_progress(db: Session, user, ach: Achievement) -> dict:
         today_kst = datetime.now(KST).date()
         start_utc = datetime(today_kst.year, today_kst.month, today_kst.day, tzinfo=KST).astimezone(timezone.utc).replace(tzinfo=None)
         end_utc = start_utc + timedelta(days=1)
-        rows = db.query(ReadingLog).filter(
+        current = db.query(func.sum(ReadingLog.reading_minutes)).filter(
             ReadingLog.user_id == user.id,
             ReadingLog.session_type == params.get("session_type"),
             ReadingLog.created_at >= start_utc,
             ReadingLog.created_at < end_utc,
-        ).all()
-        current = sum(row.reading_minutes or 0 for row in rows)
+        ).scalar() or 0
     elif ctype == "reading_session_count":
         current = db.query(ReadingLog).filter(ReadingLog.user_id == user.id).count()
     elif ctype == "own_characters":
@@ -173,15 +181,14 @@ def compute_progress(db: Session, user, ach: Achievement) -> dict:
             PvpBattleLog.winner_id == user.id,
         ).count()
     elif ctype == "combo_pvp_wins":
+        # 전투 전체 행(무거운 battle_log JSON 포함)을 가져올 필요 없이 편성 스냅샷 두 컬럼만 있으면
+        # 충분하다 - column projection으로 egress를 크게 줄인다.
         names = set(params.get("names", []))
-        wins = db.query(PvpBattleLog).filter(
+        wins = db.query(PvpBattleLog.attacker_front_name, PvpBattleLog.attacker_back_name).filter(
             PvpBattleLog.attacker_id == user.id,
             PvpBattleLog.winner_id == user.id,
         ).all()
-        current = sum(
-            1 for log in wins
-            if {log.attacker_front_name, log.attacker_back_name} == names
-        )
+        current = sum(1 for front, back in wins if {front, back} == names)
     elif ctype == "empty_inventory":
         target = 1
         # 인력 거래소에 등록 중인 캐릭터는 Character.user_id가 잠시 NULL이 되어 인벤토리 개수에
@@ -200,35 +207,41 @@ def compute_progress(db: Session, user, ach: Achievement) -> dict:
         )
     elif ctype == "session_type_count":
         # 특정 종류의 세션(예: 모의고사) 시행 횟수. reading_session_count는 전체 세션이라 별개로 둔다.
-        rows = db.query(ReadingLog).filter(
-            ReadingLog.user_id == user.id,
-            ReadingLog.session_type == params.get("session_type"),
-        ).all()
-        if params.get("session_type") == "mock_exam":
+        session_type = params.get("session_type")
+        if session_type == "mock_exam":
             # 모의고사는 quests.py의 session_count와 동일하게, 그 난이도의 지정 시간 이상 기록됐어야
             # "봤다"로 인정한다(is_auto_complete 플래그 대신) - 안 그러면 들어갔다가 바로 나가기만 해도
-            # 달성돼버리고, 반대로 자동종료 감지가 브라우저 쓰로틀링으로 늦어지면 놓칠 수 있다.
-            rows = [r for r in rows if r.reading_minutes >= MOCK_EXAM_MINUTES.get(r.difficulty, float("inf"))]
-        current = len(rows)
+            # 달성돼버리고, 반대로 자동종료 감지가 브라우저 쓰로틀링으로 늦어지면 놓칠 수 있다. 난이도별
+            # 기준 시간(MOCK_EXAM_MINUTES)을 SQL OR 조건으로 그대로 옮겨서, 로그를 통째로 안 가져오고
+            # COUNT만 받는다.
+            current = db.query(ReadingLog).filter(
+                ReadingLog.user_id == user.id,
+                ReadingLog.session_type == "mock_exam",
+                or_(*[
+                    and_(ReadingLog.difficulty == diff, ReadingLog.reading_minutes >= minutes)
+                    for diff, minutes in MOCK_EXAM_MINUTES.items()
+                ]),
+            ).count()
+        else:
+            current = db.query(ReadingLog).filter(
+                ReadingLog.user_id == user.id,
+                ReadingLog.session_type == session_type,
+            ).count()
     elif ctype == "subject_minutes":
         # 특정 과목의 누적 공부 시간(분). "과목"은 과목 공부와 모의고사를 모두 포함하고,
         # 모의고사 difficulty에는 "수학(하프)"처럼 변형 표기가 있어서 접두사 일치로 판정한다.
         subjects = tuple(params.get("subjects", []))
-        rows = db.query(ReadingLog).filter(
+        current = (db.query(func.sum(ReadingLog.reading_minutes)).filter(
             ReadingLog.user_id == user.id,
             ReadingLog.session_type.in_(["subject", "mock_exam"]),
-        ).all()
-        current = sum(
-            row.reading_minutes or 0 for row in rows
-            if row.difficulty and row.difficulty.startswith(subjects)
-        )
+            or_(*[ReadingLog.difficulty.like(f"{s}%") for s in subjects]),
+        ).scalar() or 0) if subjects else 0
     elif ctype == "study_minutes":
         # 전체 공부(과목+모의고사) 누적 시간(분). 독서(reading)는 "독서 시간"이라 별도 취급.
-        rows = db.query(ReadingLog).filter(
+        current = db.query(func.sum(ReadingLog.reading_minutes)).filter(
             ReadingLog.user_id == user.id,
             ReadingLog.session_type.in_(["subject", "mock_exam"]),
-        ).all()
-        current = sum(row.reading_minutes or 0 for row in rows)
+        ).scalar() or 0
     elif ctype == "cg_count":
         query = db.query(UserCgUnlock).filter(UserCgUnlock.user_id == user.id)
         if params.get("story_id"):
@@ -318,29 +331,26 @@ def compute_progress(db: Session, user, ach: Achievement) -> dict:
         # combo_pvp_wins와 동일한 스냅샷(attacker_front_name/back_name)을 쓰되, 정확한 조합이 아니라
         # "편성 전원이 지정 성별"인지를 characters.json 성별로 판정한다.
         gender = params.get("gender", "여")
-        wins = db.query(PvpBattleLog).filter(
+        wins = db.query(PvpBattleLog.attacker_front_name, PvpBattleLog.attacker_back_name).filter(
             PvpBattleLog.attacker_id == user.id,
             PvpBattleLog.winner_id == user.id,
         ).all()
         current = sum(
-            1 for log in wins
+            1 for front, back in wins
             if all(
                 _CHARACTER_BY_NAME.get(name, {}).get("gender") == gender
-                for name in (log.attacker_front_name, log.attacker_back_name)
+                for name in (front, back)
                 if name
             )
         )
     elif ctype == "subject_exp":
         # 특정 과목으로 누적 획득한 EXP(subject_minutes와 동일한 필터, earned_exp를 합산).
         subjects = tuple(params.get("subjects", []))
-        rows = db.query(ReadingLog).filter(
+        current = (db.query(func.sum(ReadingLog.earned_exp)).filter(
             ReadingLog.user_id == user.id,
             ReadingLog.session_type.in_(["subject", "mock_exam"]),
-        ).all()
-        current = sum(
-            row.earned_exp or 0 for row in rows
-            if row.difficulty and row.difficulty.startswith(subjects)
-        )
+            or_(*[ReadingLog.difficulty.like(f"{s}%") for s in subjects]),
+        ).scalar() or 0) if subjects else 0
     elif ctype == "item_types_and_gold":
         # "N종류 아이템 보유 AND M골드 이상 보유"를 진행도 바 하나로 합쳐서 표시한다.
         # 각 조건의 기여도를 그 조건의 목표치에서 상한(cap)을 둔 채로 더하므로,
