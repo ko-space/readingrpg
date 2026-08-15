@@ -1919,9 +1919,9 @@ function tryPlaySlotShift(chars){
 // (=혼자 있던 스포트라이트가 그룹으로 전환되는 순간)만 특별 취급한다. center의 기존 인물이 완전히
 // 사라지는 연출을 먼저 보여준 뒤에야 그룹 셋이 함께 등장해야 한다는 요구사항 때문에, 이 경우엔
 // 좌/우와 center를 한 박자 어긋나게(center 퇴장 -> 대기 -> 셋 동시 등장) 처리한다. 반대 방향(그룹이
-// 흩어지고 center에 다른 인물이 혼자 들어오는 경우)은 이미 setChars 경로에서 셋이 동시에 사라지며
-// center가 즉시 교체되는 것으로 충분해서(사용자 요청: "다른 셋이 동시에 사라지고 center에 들어옴")
-// 여기서 다루지 않는다 - 아래 leftJoining/rightJoining 조건이 정확히 그 비대칭을 가른다.
+// 흩어지고 center에 다른 인물이 혼자 들어오는 경우)은 대칭되는 tryPlayGroupToSoloTransition(바로
+// 아래)이 똑같은 방식(퇴장 먼저, 그 다음 등장)으로 처리한다 - 아래 leftJoining/rightJoining 조건이
+// "누군가 새로 합류하는" 이 함수만의 경우를 가른다.
 function tryPlaySoloToGroupTransition(chars){
   const leftDef = charSlotDef('left'), centerDef = charSlotDef('center'), rightDef = charSlotDef('right');
 
@@ -1947,6 +1947,48 @@ function tryPlaySoloToGroupTransition(chars){
     setCharacterSlot(centerDef.container(), centerDef.image(), chars.center, false, pendingEnters);
     if('right' in chars){ rightDef.set(chars.right); setCharacterSlot(rightDef.container(), rightDef.image(), chars.right, false, pendingEnters); }
     if(pendingEnters.length > 0) playSlotsEnterBatched(pendingEnters);
+    updateCastLayout();
+    renderCurrent();
+  }, SPRITE_EXIT_MS);
+
+  return true;
+}
+
+// tryPlaySoloToGroupTransition과 정확히 대칭되는 반대 방향 - 그룹(트리오)에서 누군가 완전히 떠나며
+// center에 다른 인물이 혼자 등장하는 경우(예: 컬렉터 엔딩에서 영웅의 대사가 시작되는 순간)다. 예전엔
+// 이 방향만 "셋이 동시에 사라지고 center가 즉시 교체"되도록 만들었는데, 그러면 center의 옛 인물이
+// 화면에 사라지는 모습 자체가 안 보이고(같은 리플로우 트릭 안에서 이미지가 바로 바뀜) 새 인물이
+// "뙇" 하고 나타나는 것처럼 보였다 - 다른 모든 캐릭터의 등장(완전한 퇴장 -> 대기 -> 등장)과 느낌이
+// 달라서, 이제는 반대 방향과 동일하게 그룹 전체가 먼저 완전히 퇴장한 뒤에야 center의 새 인물이
+// 등장하도록 통일한다(그만큼 시간은 더 걸리지만, 대사창은 그동안 계속 숨겨져 있다).
+function tryPlayGroupToSoloTransition(chars){
+  const leftDef = charSlotDef('left'), centerDef = charSlotDef('center'), rightDef = charSlotDef('right');
+
+  if(!('center' in chars) || !chars.center) return false;
+  const centerOld = centerDef.get();
+  if(centerOld && characterIdentity(chars.center) === characterIdentity(centerOld)) return false;
+
+  const isLeaving = (def, key) => key === null && def.get() && def.container().classList.contains('show');
+  const leftLeaving = 'left' in chars && isLeaving(leftDef, chars.left);
+  const rightLeaving = 'right' in chars && isLeaving(rightDef, chars.right);
+  if(!leftLeaving && !rightLeaving) return false;
+
+  el.dialogueWrap.classList.add('hidden');
+
+  // 왼쪽/오른쪽은 평소와 똑같은 퇴장 경로(setCharacterSlot의 populated->null, playSlotExit)를 그대로
+  // 쓰고, center에 이미 다른 인물이 있었다면 "교체"가 아니라 그것도 똑같이 완전히 퇴장시킨다.
+  if('left' in chars) { leftDef.set(null); setCharacterSlot(leftDef.container(), leftDef.image(), null, false); }
+  if('right' in chars) { rightDef.set(null); setCharacterSlot(rightDef.container(), rightDef.image(), null, false); }
+  if(centerOld && centerDef.container().classList.contains('show')){
+    centerDef.set(null);
+    setCharacterSlot(centerDef.container(), centerDef.image(), null, false);
+  }
+
+  window.setTimeout(()=>{
+    curCenterMode = 'solo';
+    el.charCenter.classList.remove('mode-group');
+    centerDef.set(chars.center);
+    setCharacterSlot(centerDef.container(), centerDef.image(), chars.center, false);
     updateCastLayout();
     renderCurrent();
   }, SPRITE_EXIT_MS);
@@ -2274,6 +2316,7 @@ function renderCurrent(){
     // 화면과 안 어긋난다 - 이때는 등장/퇴장 연출과 dip/교체 연출을 전부 건너뛴다.
     const instant = Boolean(line.noBgFade);
     if(!instant && tryPlaySoloToGroupTransition(line.chars)) return;
+    if(!instant && tryPlayGroupToSoloTransition(line.chars)) return;
     if(!instant && tryPlaySlotShift(line.chars)) return;
     if(!instant && tryPlayCharacterHandoff(line.chars)) return;
     setChars(line.chars, instant);
