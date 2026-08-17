@@ -16,16 +16,26 @@ DIFFICULTY_MULTIPLIER = {"문학": 1.0, "비문학": 1.5}
 SUBJECT_SET = {"국어", "수학", "영어", "탐구", "기타"}
 MOCK_EXAM_MINUTES = {
     "국어": 80, "수학": 100, "수학(하프)": 50, "영어": 70, "영어(하프)": 40,
-    "한국사": 30, "탐구": 30, "한문/제2외국어": 40,
+    "한국사": 30, "탐구": 30, "탐구(2회분)": 62, "한문/제2외국어": 40,
 }
 DAILY_READING_MINUTES_CAP = 18 * 60  # 하루 최대 인정 독서시간(1080분) - 기기 시스템 시간을 조작해서
 # 한 번에 비정상적으로 긴 시간을 보고하는 부정행위를 막기 위한 상한. session_type과 무관하게 그날(KST)
 # 누적된 daily_reading_minutes 전체에 적용된다.
 # 모의고사의 "하프" 변형은 배수 판정에서 원래 과목과 같은 것으로 취급한다(수학과 영어만 하프가 있음).
 # 한국사/한문·제2외국어는 독립 과목이 아니라 "기타" 공부시간으로 합산된다(탐구 앞뒤에 끼워 넣은
-# 모의고사 전용 과목 - 과목(subject) 탭에는 없음).
-MOCK_EXAM_BASE_SUBJECT = {"수학(하프)": "수학", "영어(하프)": "영어", "한국사": "기타", "한문/제2외국어": "기타"}
+# 모의고사 전용 과목 - 과목(subject) 탭에는 없음). 탐구(2회분)는 실제 탐구와 같은 과목이라 그대로 매핑.
+MOCK_EXAM_BASE_SUBJECT = {
+    "수학(하프)": "수학", "영어(하프)": "영어", "한국사": "기타", "한문/제2외국어": "기타",
+    "탐구(2회분)": "탐구",
+}
 KST = timezone(timedelta(hours=9))
+
+# 표시상으로는 응시 1건("탐구(2회분)", 62분)이지만, 실제 기록은 "탐구" 모의고사를 N회 본 것으로
+# 남겨야 한다(업적/도전과제/퀘스트가 전부 ReadingLog 행 개수 + 회차별 reading_minutes 임계치로 응시
+# 횟수를 세는 구조라 - quests.py의 session_count, achievements.py의 session_type_count,
+# challenges.py의 daily_full_mock_exam_set 참고). 그래서 저장 시점에만 "탐구" 행 N개로 쪼갠다 -
+# 그 뒤로는 어떤 카운팅 로직도 "탐구(2회분)"이라는 문자열을 몰라도 된다.
+MOCK_EXAM_SPLIT = {"탐구(2회분)": ("탐구", 2)}
 
 
 def _resolve_matched_subject(session_type: str, difficulty: str) -> str | None:
@@ -210,20 +220,39 @@ def add_reading_log(
     # 여기서 갱신하는 게 곧 "최근 입장 지역"과 같은 의미가 된다.
     user.current_region_id = region.id
 
-    new_log = ReadingLog(
-        user_id=user.id,
-        region_id=region.id,
-        dungeon_name=region.name,
-        difficulty=log_data.difficulty,
-        session_type=log_data.session_type,
-        reading_minutes=reading_minutes,
-        equipped_character_name=equipped.name if equipped else None,
-        earned_exp=gained_exp,
-        earned_gold=gained_gold,
-        earned_silver=gained_silver,
-        is_auto_complete=log_data.is_auto_complete and log_data.session_type == "mock_exam",
-    )
-    db.add(new_log)
+    split = MOCK_EXAM_SPLIT.get(log_data.difficulty) if log_data.session_type == "mock_exam" else None
+    if split:
+        split_difficulty, split_count = split
+        base_minutes, extra_minutes = divmod(reading_minutes, split_count)
+        base_exp, extra_exp = divmod(gained_exp, split_count)
+        base_gold, extra_gold = divmod(gained_gold, split_count)
+        base_silver, extra_silver = divmod(gained_silver, split_count)
+        for i in range(split_count):
+            is_last = i == split_count - 1  # 나눠떨어지지 않는 나머지는 마지막 회차에 몰아준다(합계는 항상 보존됨)
+            db.add(ReadingLog(
+                user_id=user.id, region_id=region.id, dungeon_name=region.name,
+                difficulty=split_difficulty, session_type=log_data.session_type,
+                reading_minutes=base_minutes + (extra_minutes if is_last else 0),
+                equipped_character_name=equipped.name if equipped else None,
+                earned_exp=base_exp + (extra_exp if is_last else 0),
+                earned_gold=base_gold + (extra_gold if is_last else 0),
+                earned_silver=base_silver + (extra_silver if is_last else 0),
+                is_auto_complete=log_data.is_auto_complete,
+            ))
+    else:
+        db.add(ReadingLog(
+            user_id=user.id,
+            region_id=region.id,
+            dungeon_name=region.name,
+            difficulty=log_data.difficulty,
+            session_type=log_data.session_type,
+            reading_minutes=reading_minutes,
+            equipped_character_name=equipped.name if equipped else None,
+            earned_exp=gained_exp,
+            earned_gold=gained_gold,
+            earned_silver=gained_silver,
+            is_auto_complete=log_data.is_auto_complete and log_data.session_type == "mock_exam",
+        ))
 
     start_level = user.level   # 이번 독서로 exp가 반영되기 '전' 상태 - 프론트 레벨업 바 애니메이션의 시작점
     start_exp = user.total_exp
