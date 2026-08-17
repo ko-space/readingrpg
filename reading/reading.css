@@ -188,13 +188,9 @@ html, body {
     gap: 20px;
 }
 
-.reading-stopwatch-wrap {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-/* 모의고사 전용 - 시험 시간을 5분 단위로 직접 조정(연장/단축)할 수 있는 버튼. 스톱워치 좌우에 붙는다. */
+/* 모의고사 전용 - 시작 전 10초 유예 카운트다운 동안만 시험 시간을 5분 단위로 조정(연장/단축)할 수
+   있는 버튼. 카운트다운 숫자 좌우에 붙는다(mock-countdown-adjust-row 참고) - 실제 시험이 시작된
+   뒤(reading-stopwatch)에는 뜨지 않는다. */
 .stopwatch-adjust-btn {
     background: rgba(255, 255, 255, 0.75);
     color: #4a3c2a;
@@ -214,10 +210,6 @@ html, body {
 .stopwatch-adjust-btn:disabled {
     opacity: 0.5;
     cursor: default;
-}
-
-.stopwatch-adjust-btn[hidden] {
-    display: none;
 }
 
 /* ── 독서 시계 옆 보조 스톱워치: 기록/보상과 전혀 무관한 순수 유틸리티. 숫자는 아무 의미 없음 ── */
@@ -334,6 +326,12 @@ html, body {
 
 .mock-countdown-overlay[hidden] {
     display: none;
+}
+
+.mock-countdown-adjust-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
 
 .mock-countdown-number {

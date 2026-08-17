@@ -208,29 +208,6 @@
         labelEl.hidden = false;
     }
 
-    // 모의고사 전용 - 스톱워치 좌우의 -5분/+5분 버튼으로 시험 시간을 직접 늘리거나 줄인다(실제
-    // 종이 시험보다 일찍/늦게 시작했을 때 맞추기 위함). 서버는 어차피 과목별 정해진 시간(MOCK_EXAM_MINUTES)
-    // 이상은 절대 인정하지 않으므로, 여기서 durationMs를 얼마든지 늘려도 보상이 그만큼 더 나가진 않는다 -
-    // 순수하게 화면에 보이는 카운트다운(및 자동 제출 시점)만 조정하는 것.
-    function setupMockExamAdjustButtons() {
-        const minusBtn = document.getElementById("mock-exam-minus-btn");
-        const plusBtn = document.getElementById("mock-exam-plus-btn");
-        if (!minusBtn || !plusBtn) return;
-        minusBtn.hidden = false;
-        plusBtn.hidden = false;
-
-        const ADJUST_MS = 5 * 60000;
-        function adjustDuration(deltaMs) {
-            if (handledEnd) return;
-            durationMs = Math.max(0, durationMs + deltaMs);
-            const stopwatchEl = document.getElementById("reading-stopwatch");
-            stopwatchEl.textContent = formatRemaining(durationMs - getElapsedMs());
-            persistActiveSession();
-        }
-        minusBtn.addEventListener("click", () => adjustDuration(-ADJUST_MS));
-        plusBtn.addEventListener("click", () => adjustDuration(ADJUST_MS));
-    }
-
     // ── 시간 누적: 일시정지 구간은 제외하고 누적하는 방식(스톱워치/타이머 공용) ──
     let accumulatedMs = 0;      // 일시정지 시점까지 확정된 누적 시간
     let segmentStartMs = null;  // 현재(재생 중인) 구간이 시작된 시각. 세션이 아직 시작 안 했으면 null
@@ -391,6 +368,11 @@
     }
 
     // ── 모의고사 전용: 어두운 화면 10초 카운트다운 후 자동으로 시험 타이머 시작 ──
+    // 이 10초 유예기간 동안에만 -5분/+5분 버튼으로 시험 시간(durationMs)을 직접 늘리거나 줄일 수
+    // 있다(실제 종이 시험보다 일찍/늦게 시작했을 때 맞추기 위함) - 카운트다운 자체의 길이(10초)는
+    // 버튼과 무관하게 항상 그대로다. 서버는 어차피 과목별 정해진 시간(MOCK_EXAM_MINUTES) 이상은
+    // 절대 인정하지 않으므로, durationMs를 얼마든지 늘려도 보상이 그만큼 더 나가진 않는다 - 순수하게
+    // 화면에 보이는 카운트다운(및 자동 제출 시점)만 조정하는 것.
     function runPreCountdown(onDone) {
         const overlay = document.getElementById("mock-countdown-overlay");
         const numberEl = document.getElementById("mock-countdown-number");
@@ -407,6 +389,13 @@
                 numberEl.textContent = String(n);
             }
         }, 1000);
+
+        const ADJUST_MS = 5 * 60000;
+        function adjustDuration(deltaMs) {
+            durationMs = Math.max(0, durationMs + deltaMs);
+        }
+        document.getElementById("mock-exam-minus-btn").addEventListener("click", () => adjustDuration(-ADJUST_MS));
+        document.getElementById("mock-exam-plus-btn").addEventListener("click", () => adjustDuration(ADJUST_MS));
     }
 
     function startSessionClock() {
@@ -545,10 +534,6 @@
         endBtn.disabled = true;
         const pauseBtn = document.getElementById("reading-pause-btn");
         if (pauseBtn) pauseBtn.disabled = true;
-        const minusBtn = document.getElementById("mock-exam-minus-btn");
-        if (minusBtn) minusBtn.disabled = true;
-        const plusBtn = document.getElementById("mock-exam-plus-btn");
-        if (plusBtn) plusBtn.disabled = true;
 
         // 모달은 서버 응답(EXP/골드 계산)을 기다리지 않고 즉시 뜨되, 아직 저장이 끝난 게 아니므로
         // "저장 중..."(입장 중... 오버레이와 동일한 점 애니메이션)으로 먼저 보여준다 - 응답이 도착해야
@@ -816,7 +801,6 @@
             stopwatchEl.textContent = formatRemaining(durationMs);
             document.getElementById("reading-pause-btn").hidden = true;
             document.getElementById("reading-end-btn").hidden = true;
-            setupMockExamAdjustButtons();
             // 이어서 하는 세션은 이미 한 번 카운트다운을 보고 시작한 것이므로 다시 보여주지 않는다.
             if (restoredSession) {
                 startSessionClock();
