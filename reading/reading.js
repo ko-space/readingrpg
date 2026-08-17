@@ -367,35 +367,34 @@
         }
     }
 
-    // ── 모의고사 전용: 어두운 화면 10초 카운트다운 후 자동으로 시험 타이머 시작 ──
-    // 이 10초 유예기간 동안에만 -5분/+5분 버튼으로 시험 시간(durationMs)을 직접 늘리거나 줄일 수
-    // 있다(실제 종이 시험보다 일찍/늦게 시작했을 때 맞추기 위함) - 카운트다운 자체의 길이(10초)는
-    // 버튼과 무관하게 항상 그대로다. 서버는 어차피 과목별 정해진 시간(MOCK_EXAM_MINUTES) 이상은
-    // 절대 인정하지 않으므로, durationMs를 얼마든지 늘려도 보상이 그만큼 더 나가진 않는다 - 순수하게
-    // 화면에 보이는 카운트다운(및 자동 제출 시점)만 조정하는 것.
+    // ── 모의고사 전용: 어두운 화면 유예 카운트다운(기본 10초) 후 자동으로 시험 타이머 시작 ──
+    // "잠시 후 모의고사가 시작됩니다" 문구 양옆의 -5분/+5분 버튼은 이 유예 카운트다운 자체의 남은
+    // 시간을 늘리거나 줄인다(실제 종이 시험 준비가 더 필요할 때를 위함) - 시험 시간(durationMs)은
+    // 이 화면에서 전혀 건드리지 않고, 카운트다운이 끝난 뒤 원래 정해진 시간 그대로 시작된다.
     function runPreCountdown(onDone) {
         const overlay = document.getElementById("mock-countdown-overlay");
         const numberEl = document.getElementById("mock-countdown-number");
         overlay.hidden = false;
-        let n = 10;
-        numberEl.textContent = String(n);
+        let remainingSec = 10;
+        numberEl.textContent = formatRemaining(remainingSec * 1000);
         const countdownTimer = setInterval(() => {
-            n -= 1;
-            if (n <= 0) {
+            remainingSec -= 1;
+            if (remainingSec <= 0) {
                 clearInterval(countdownTimer);
                 overlay.hidden = true;
                 onDone();
             } else {
-                numberEl.textContent = String(n);
+                numberEl.textContent = formatRemaining(remainingSec * 1000);
             }
         }, 1000);
 
-        const ADJUST_MS = 5 * 60000;
-        function adjustDuration(deltaMs) {
-            durationMs = Math.max(0, durationMs + deltaMs);
+        const ADJUST_SEC = 5 * 60;
+        function adjustCountdown(deltaSec) {
+            remainingSec = Math.max(1, remainingSec + deltaSec);
+            numberEl.textContent = formatRemaining(remainingSec * 1000);
         }
-        document.getElementById("mock-exam-minus-btn").addEventListener("click", () => adjustDuration(-ADJUST_MS));
-        document.getElementById("mock-exam-plus-btn").addEventListener("click", () => adjustDuration(ADJUST_MS));
+        document.getElementById("mock-exam-minus-btn").addEventListener("click", () => adjustCountdown(-ADJUST_SEC));
+        document.getElementById("mock-exam-plus-btn").addEventListener("click", () => adjustCountdown(ADJUST_SEC));
     }
 
     function startSessionClock() {
