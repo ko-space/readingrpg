@@ -3,6 +3,7 @@
 
 .dungeon-modal-box {
     min-width: 340px;
+    max-width: 560px;
 }
 
 /* ── 1단계: 독서/과목/모의고사 탭 ── */

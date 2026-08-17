@@ -379,8 +379,6 @@
         if (sessionType === "mock_exam") {
             const remainingMs = durationMs - getElapsedMs();
             stopwatchEl.textContent = formatRemaining(remainingMs);
-            // 10초 미만 남았을 때만 깜박이며 커졌다 작아지는 효과 - 그 전엔 절대 안 붙는다.
-            stopwatchEl.classList.toggle("stopwatch-urgent", remainingMs > 0 && remainingMs < 10000);
             if (remainingMs <= 0 && !handledEnd) {
                 handleEndReading(true);
             }
@@ -551,7 +549,6 @@
         if (minusBtn) minusBtn.disabled = true;
         const plusBtn = document.getElementById("mock-exam-plus-btn");
         if (plusBtn) plusBtn.disabled = true;
-        document.getElementById("reading-stopwatch")?.classList.remove("stopwatch-urgent");
 
         // 모달은 서버 응답(EXP/골드 계산)을 기다리지 않고 즉시 뜨되, 아직 저장이 끝난 게 아니므로
         // "저장 중..."(입장 중... 오버레이와 동일한 점 애니메이션)으로 먼저 보여준다 - 응답이 도착해야
