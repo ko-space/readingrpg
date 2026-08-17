@@ -182,18 +182,6 @@ html, body {
     border-color: #b8b8b8;
 }
 
-/* 모의고사 남은 시간이 10초 미만으로 떨어지면(stopwatch-urgent) 숫자가 깜박이며 커졌다 작아진다 -
-   그 전(10초 이상 남은 동안)에는 이 효과가 절대 붙지 않는다(reading.js의 tick 참고). */
-@keyframes stopwatch-urgent-pulse {
-    0%, 100% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.18); opacity: 0.55; }
-}
-.reading-stopwatch.stopwatch-urgent {
-    animation: stopwatch-urgent-pulse 0.5s ease-in-out infinite;
-    border-color: #ff6a5a;
-    box-shadow: 0 0 24px rgba(255, 106, 90, 0.65), inset 0 2px 6px rgba(0, 0, 0, 0.1);
-}
-
 .reading-stopwatch-row {
     display: flex;
     align-items: center;
