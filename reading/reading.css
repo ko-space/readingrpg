@@ -182,10 +182,54 @@ html, body {
     border-color: #b8b8b8;
 }
 
+/* 모의고사 남은 시간이 10초 미만으로 떨어지면(stopwatch-urgent) 숫자가 깜박이며 커졌다 작아진다 -
+   그 전(10초 이상 남은 동안)에는 이 효과가 절대 붙지 않는다(reading.js의 tick 참고). */
+@keyframes stopwatch-urgent-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.18); opacity: 0.55; }
+}
+.reading-stopwatch.stopwatch-urgent {
+    animation: stopwatch-urgent-pulse 0.5s ease-in-out infinite;
+    border-color: #ff6a5a;
+    box-shadow: 0 0 24px rgba(255, 106, 90, 0.65), inset 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
 .reading-stopwatch-row {
     display: flex;
     align-items: center;
     gap: 20px;
+}
+
+.reading-stopwatch-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 모의고사 전용 - 시험 시간을 5분 단위로 직접 조정(연장/단축)할 수 있는 버튼. 스톱워치 좌우에 붙는다. */
+.stopwatch-adjust-btn {
+    background: rgba(255, 255, 255, 0.75);
+    color: #4a3c2a;
+    border: 2px solid #ffd76a;
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-weight: 800;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.stopwatch-adjust-btn:hover {
+    background: #fff;
+}
+
+.stopwatch-adjust-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.stopwatch-adjust-btn[hidden] {
+    display: none;
 }
 
 /* ── 독서 시계 옆 보조 스톱워치: 기록/보상과 전혀 무관한 순수 유틸리티. 숫자는 아무 의미 없음 ── */
