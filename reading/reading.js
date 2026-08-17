@@ -376,7 +376,13 @@
         const numberEl = document.getElementById("mock-countdown-number");
         overlay.hidden = false;
         let remainingSec = 10;
-        numberEl.textContent = formatRemaining(remainingSec * 1000);
+        // 10초 미만 남았을 때만 깜박이며 커졌다 작아지는 효과 - 그 전엔 절대 안 붙는다(버튼으로 유예
+        // 시간을 늘려서 한동안 10초 이상 남아있는 동안에는 계속 꺼져있어야 함).
+        function render() {
+            numberEl.textContent = String(remainingSec);
+            numberEl.classList.toggle("countdown-urgent", remainingSec > 0 && remainingSec < 10);
+        }
+        render();
         const countdownTimer = setInterval(() => {
             remainingSec -= 1;
             if (remainingSec <= 0) {
@@ -384,14 +390,14 @@
                 overlay.hidden = true;
                 onDone();
             } else {
-                numberEl.textContent = formatRemaining(remainingSec * 1000);
+                render();
             }
         }, 1000);
 
         const ADJUST_SEC = 5 * 60;
         function adjustCountdown(deltaSec) {
             remainingSec = Math.max(1, remainingSec + deltaSec);
-            numberEl.textContent = formatRemaining(remainingSec * 1000);
+            render();
         }
         document.getElementById("mock-exam-minus-btn").addEventListener("click", () => adjustCountdown(-ADJUST_SEC));
         document.getElementById("mock-exam-plus-btn").addEventListener("click", () => adjustCountdown(ADJUST_SEC));
