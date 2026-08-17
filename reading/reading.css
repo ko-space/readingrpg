@@ -339,6 +339,11 @@ html, body {
     font-weight: 900;
     color: #ffe098;
     text-shadow: 0 0 30px rgba(255, 224, 152, 0.8);
+}
+
+/* 유예 카운트다운이 10초 미만 남았을 때만 깜박이며 커졌다 작아진다 - 그 전(10초 이상 남은 동안,
+   버튼으로 유예 시간을 늘린 경우 포함)에는 이 효과가 붙지 않는다(reading.js의 runPreCountdown 참고). */
+.mock-countdown-number.countdown-urgent {
     animation: mock-countdown-pulse 1s ease-in-out infinite;
 }
 
