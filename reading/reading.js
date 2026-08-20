@@ -33,6 +33,22 @@
         return token ? { "Authorization": `Bearer ${token}` } : {};
     }
 
+    // fetch()는 기본적으로 타임아웃이 없다 - 브라우저가 오래 유휴 상태였던(장시간 독서 세션 등) 커넥션
+    // 풀의 죽은 연결을 재사용하려다 응답을 영영 못 받으면, await가 성공도 실패도 안 한 채 그대로 멈춰서
+    // "저장 중..." 화면에서 영원히 멈춰있는 것처럼 보인다(에러도 안 남고 CPU도 안 씀 - 그냥 기다리기만
+    // 함). AbortController로 강제 타임아웃을 걸어 이 경우 확실히 실패로 처리되게 하고, 그러면 기존
+    // catch 블록의 복구 로직(모달 닫기+재시도 가능하게 버튼 재활성화)이 정상적으로 이어받는다.
+    const FETCH_TIMEOUT_MS = 15000;
+    async function fetchWithTimeout(url, options) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+        try {
+            return await fetch(url, { ...options, signal: controller.signal });
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+
     // ── 화면/절전 잠금 방지: 독서·모의고사 도중 컴퓨터가 잠들면 탭이 완전히 멈춰서(백그라운드 탭
     // 쓰로틀링보다 훨씬 심함) 타이머 확인 자체가 안 된다. Wake Lock API를 지원하는 브라우저에서만
     // 동작하고(구형 브라우저는 조용히 무시), 탭이 안 보이게 되면 브라우저가 잠금을 자동으로 풀기
@@ -464,7 +480,7 @@
             return;
         }
         try {
-            const res = await fetch(`${API_BASE_URL}/logs/`, {
+            const res = await fetchWithTimeout(`${API_BASE_URL}/logs/`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", ...authHeaders() },
                 body: JSON.stringify({
@@ -556,7 +572,7 @@
         }, 400);
 
         try {
-            const res = await fetch(`${API_BASE_URL}/logs/`, {
+            const res = await fetchWithTimeout(`${API_BASE_URL}/logs/`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", ...authHeaders() },
                 body: JSON.stringify({
@@ -601,7 +617,9 @@
         } catch (err) {
             clearInterval(savingDotTimer);
             document.getElementById("modal-complete").classList.remove("open");
-            alert("서버에 연결할 수 없습니다.");
+            alert(err.name === "AbortError"
+                ? "서버 응답이 너무 오래 걸려요. 다시 시도해주세요."
+                : "서버에 연결할 수 없습니다.");
             endBtn.disabled = false;
             if (pauseBtn) pauseBtn.disabled = false;
             handledEnd = false;
