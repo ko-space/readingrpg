@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>1:1 친선전 - 독서 RPG</title>
     <link rel="icon" href="logoicon.webp">
-    <link rel="stylesheet" href="shared/lobby.css?v=20260822l">
-    <link rel="stylesheet" href="arena/arena-battle.css?v=20260822l">
-    <link rel="stylesheet" href="shared/attack-effects.css?v=20260822l">
-    <link rel="stylesheet" href="shared/achievement-toast.css?v=20260822l">
-    <link rel="stylesheet" href="gacha/gacha-reveal.css?v=20260822l">
-    <link rel="stylesheet" href="arena/arena-live.css?v=20260822l">
+    <link rel="stylesheet" href="shared/lobby.css?v=20260822m">
+    <link rel="stylesheet" href="arena/arena-battle.css?v=20260822m">
+    <link rel="stylesheet" href="shared/attack-effects.css?v=20260822m">
+    <link rel="stylesheet" href="shared/achievement-toast.css?v=20260822m">
+    <link rel="stylesheet" href="gacha/gacha-reveal.css?v=20260822m">
+    <link rel="stylesheet" href="arena/arena-live.css?v=20260822m">
 </head>
 <body>
     <div class="battle-screen">
@@ -122,10 +122,6 @@
                 </div>
 
                 <div class="battle-field-line"></div>
-
-                <!-- 전술대회(arena-battle.js)와 동일하게 내 코스트덕만 둔다(확인된 요청) - 상대
-                     카드/게이지는 아예 그리지 않는다(costDockSides:["attacker"], arena-live.js). -->
-                <div class="cost-dock" id="cost-dock-attacker" data-cost-side="attacker" hidden></div>
             </div>
 
             <!-- 우측: 상대 -->
@@ -184,6 +180,12 @@
 
         </div>
 
+        <!-- 전술대회(arena-battle.js)와 동일하게 내 코스트덕만 둔다(확인된 요청) - 상대 카드/게이지는
+             아예 그리지 않는다(costDockSides:["attacker"], arena-live.js). .battle-field 밖에
+             둬야 하는 이유는 arena-battle.html의 같은 위치 주석 참고(화면 흔들림에 같이 흔들리는
+             버그 방지). -->
+        <div class="cost-dock" id="cost-dock-attacker" data-cost-side="attacker" hidden></div>
+
         <div class="battle-result" id="battle-result" hidden>
             <div class="battle-result-text" id="battle-result-text">-</div>
             <button class="dungeon-enter-btn" id="battle-close-btn">닫기</button>
@@ -207,15 +209,15 @@
         <div class="battle-loading-text">입장하는 중...</div>
     </div>
 
-    <script src="shared/api-config.js?v=20260822l"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js?v=20260822l"></script>
-    <script src="shared/session-guard.js?v=20260822l"></script>
-    <script src="shared/nav-lock.js?v=20260822l"></script>
-    <script src="shared/avatar-crop.js?v=20260822l"></script>
-    <script src="shared/achievement-toast.js?v=20260822l"></script>
-    <script src="shared/attack-effects.js?v=20260822l"></script>
-    <script src="shared/battle-renderer.js?v=20260822l"></script>
-    <script src="gacha/gacha-reveal.js?v=20260822l" defer></script>
-    <script src="arena/arena-live.js?v=20260822l" defer></script>
+    <script src="shared/api-config.js?v=20260822m"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js?v=20260822m"></script>
+    <script src="shared/session-guard.js?v=20260822m"></script>
+    <script src="shared/nav-lock.js?v=20260822m"></script>
+    <script src="shared/avatar-crop.js?v=20260822m"></script>
+    <script src="shared/achievement-toast.js?v=20260822m"></script>
+    <script src="shared/attack-effects.js?v=20260822m"></script>
+    <script src="shared/battle-renderer.js?v=20260822m"></script>
+    <script src="gacha/gacha-reveal.js?v=20260822m" defer></script>
+    <script src="arena/arena-live.js?v=20260822m" defer></script>
 </body>
 </html>

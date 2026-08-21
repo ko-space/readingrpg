@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>전술경연 대회 - 독서 RPG</title>
     <link rel="icon" href="logoicon.webp">
-    <link rel="stylesheet" href="shared/lobby.css?v=20260822l">
-    <link rel="stylesheet" href="arena/arena-battle.css?v=20260822l">
-    <link rel="stylesheet" href="shared/attack-effects.css?v=20260822l">
-    <link rel="stylesheet" href="shared/achievement-toast.css?v=20260822l">
-    <link rel="stylesheet" href="gacha/gacha-reveal.css?v=20260822l">
+    <link rel="stylesheet" href="shared/lobby.css?v=20260822m">
+    <link rel="stylesheet" href="arena/arena-battle.css?v=20260822m">
+    <link rel="stylesheet" href="shared/attack-effects.css?v=20260822m">
+    <link rel="stylesheet" href="shared/achievement-toast.css?v=20260822m">
+    <link rel="stylesheet" href="gacha/gacha-reveal.css?v=20260822m">
 </head>
 <body>
     <div class="battle-screen">
@@ -129,12 +129,6 @@
                 </div>
 
                 <div class="battle-field-line"></div>
-
-                <!-- 코스트 게이지 + 스킬카드(전방/후방/서포터) - 내용은 arena-battle.js가 cost_init
-                     이벤트를 받아서 만든다. .battle-field가 이미 position:relative이고 아래쪽에
-                     캐릭터 발밑 여백(padding-bottom)이 확보돼 있어, 여기에 절대 배치하면 기존
-                     3열 레이아웃을 전혀 밀지 않는다. -->
-                <div class="cost-dock" id="cost-dock-attacker" data-cost-side="attacker" hidden></div>
             </div>
 
             <!-- 우측: 상대 -->
@@ -193,6 +187,16 @@
 
         </div>
 
+        <!-- 코스트 게이지 + 스킬카드(전방/후방/서포터) - 내용은 arena-battle.js가 cost_init 이벤트를
+             받아서 만든다. .battle-field 밖(.battle-screen 바로 아래)에 둬야 한다 - .battle-field
+             안에 있으면, 김어진 "불빠따" 등이 화면을 흔들 때(.ground-fire-shake, transform 사용) 그
+             transform이 있는 조상 안의 position:fixed 자손은 뷰포트가 아니라 그 조상 기준으로
+             재배치되는 CSS 규칙 때문에 코스트덕까지 같이 흔들렸다(확인된 버그). 가로 위치는
+             shared/battle-renderer.js의 positionCostDock()이 .battle-field의 실제 위치를 측정해서
+             JS로 맞춘다(원래의 "필드 오른쪽 끝에서 6px" 정렬을 그대로 재현) - 세로는 CSS(bottom)로
+             항상 화면 맨 아래에 고정한다. -->
+        <div class="cost-dock" id="cost-dock-attacker" data-cost-side="attacker" hidden></div>
+
         <div class="battle-result" id="battle-result" hidden>
             <div class="battle-result-text" id="battle-result-text">-</div>
             <div class="battle-result-gold" id="battle-result-gold" hidden>+5G</div>
@@ -206,14 +210,14 @@
         <div class="battle-loading-text">입장하는 중...</div>
     </div>
 
-    <script src="shared/api-config.js?v=20260822l"></script>
-    <script src="shared/session-guard.js?v=20260822l"></script>
-    <script src="shared/nav-lock.js?v=20260822l"></script>
-    <script src="shared/avatar-crop.js?v=20260822l"></script>
-    <script src="shared/achievement-toast.js?v=20260822l"></script>
-    <script src="shared/attack-effects.js?v=20260822l"></script>
-    <script src="shared/battle-renderer.js?v=20260822l"></script>
-    <script src="gacha/gacha-reveal.js?v=20260822l" defer></script>
-    <script src="arena/arena-battle.js?v=20260822l" defer></script>
+    <script src="shared/api-config.js?v=20260822m"></script>
+    <script src="shared/session-guard.js?v=20260822m"></script>
+    <script src="shared/nav-lock.js?v=20260822m"></script>
+    <script src="shared/avatar-crop.js?v=20260822m"></script>
+    <script src="shared/achievement-toast.js?v=20260822m"></script>
+    <script src="shared/attack-effects.js?v=20260822m"></script>
+    <script src="shared/battle-renderer.js?v=20260822m"></script>
+    <script src="gacha/gacha-reveal.js?v=20260822m" defer></script>
+    <script src="arena/arena-battle.js?v=20260822m" defer></script>
 </body>
 </html>
