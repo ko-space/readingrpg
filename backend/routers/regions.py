@@ -20,7 +20,7 @@ REGION_IMAGES = {
 
 # 레벨만으로는 부족하고 실버로 한 번 구매해야만 입장할 수 있는 지역 - {지역명: 구매 가격(실버)}.
 # routers/logs.py의 GOLD_MINE_REGION_NAME과 같은 지역을 가리킨다(이 프로젝트 컨벤션상 파일마다 중복 선언).
-PURCHASABLE_REGIONS = {"종말의 금광": 5000}
+PURCHASABLE_REGIONS = {"종말의 금광": 50000}
 
 @router.get("/")
 def get_regions(db: Session = Depends(get_db)):
