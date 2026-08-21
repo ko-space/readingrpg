@@ -6,6 +6,7 @@ pydantic
 PyJWT
 google-auth
 requests
+supabase   # (1v1) 친선전 실시간 중계용 Realtime 클라이언트
 
 # DB 드라이버는 DATABASE_URL에 맞는 것만 골라서 주석 해제하세요.
 # SQLite는 별도 드라이버가 필요 없습니다 (파이썬 내장).

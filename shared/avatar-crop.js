@@ -7,6 +7,11 @@ const AVATAR_CROP_OVERRIDES = {
     "beginner/swimsuit": { xPercent: 50, yPercent: 0, scale: 1.5 },
     "international/basic": { xPercent: 50, yPercent: 0, scale: 3.0 },
     "mage_2/basic": { xPercent: 47, yPercent: 20, scale: 3.5 },
+    "chris/basic": { xPercent: 50, yPercent: 0, scale: 2.5 },
+    "back/basic": { xPercent: 50, yPercent: 1, scale: 2.5 },
+    "soldier/basic": { xPercent: 50, yPercent: 5, scale: 2.3 },
+    "parliament/basic": { xPercent: 50, yPercent: 0, scale: 1.5 },
+    "god/basic": { xPercent: 50, yPercent: 10, scale: 3.0 },
 };
 const DEFAULT_AVATAR_CROP = { xPercent: 50, yPercent: 0, scale: 4.0 };
 

@@ -115,6 +115,23 @@ html, body {
     z-index: 50;
 }
 
+/* 서포터(조력자) - .battle-row(전열/후열 대치 레이아웃) 밖에서 맵 맨 가장자리(공격은 왼쪽,
+   수비는 오른쪽)에 고정 배치한다. 전투 대상이 되지 않는 존재라 다른 유닛들과 같은 줄에 세워 혼동을
+   주지 않기 위함. .battle-field가 position:relative라 이 절대좌표는 그 기준으로 잡힌다. */
+.dt-supporter-slot {
+    position: absolute;
+    bottom: 104px;
+    opacity: 0.85;
+}
+
+.dt-supporter-slot-attacker {
+    left: 16px;
+}
+
+.dt-supporter-slot-defender {
+    right: 16px;
+}
+
 /* 히트박스(.battle-unit) 크기에 맞춘 점선 - .battle-unit-img는 이제 세로 기준으로 자유롭게
    커지는 순수 시각 요소라, 선택 표시는 실제 전투 로직이 쓰는 고정 크기 히트박스에 맞춰야 한다. */
 .battle-unit.dt-selected {
@@ -169,7 +186,7 @@ html, body {
     transition: width 0.2s ease;
 }
 
-/* ===== 캐스팅(시전) 연출 - 3회 공격 후 발동까지 ===== */
+/* ===== 캐스팅(시전) 연출 - 팀 공유 코스트 풀이 차서 스킬카드가 발동될 때부터 실제 효과 적용까지 ===== */
 @keyframes dt-casting-pulse {
     0%, 100% { filter: drop-shadow(0 0 6px #ffe066) drop-shadow(0 8px 8px rgba(0,0,0,.4)); }
     50% { filter: drop-shadow(0 0 18px #ffe066) drop-shadow(0 8px 8px rgba(0,0,0,.4)); }

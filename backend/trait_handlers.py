@@ -13,6 +13,8 @@
     이렇게 통일해두면 새 캐릭터가 추가돼도 changes만 제대로 채우면 프론트 아이콘 처리가 자동으로
     보장된다(예전엔 effect_type마다 프론트에 아이콘 분기를 손으로 추가해야 해서 빠뜨리기 쉬웠다).
 """
+import random
+
 from battle_core import _alive_units, _all_slots, _effective_gender, _teammate, build_stat_change_dicts
 
 # ───────────────────────── 특성(trait) - 전투 시작 시 1회만 판정 ─────────────────────────
@@ -102,14 +104,36 @@ def _trait_ally_type_conditional_team_buff(caster, team, enemy_team, params):
     return detail, changes
 
 
-def _trait_team_teacher_hp_buff(caster, team, enemy_team, params):
-    # 불빠따 김어진(교권 보호): 팀 내(자신 포함) 공격/방어 타입 중 하나라도 Teacher인 캐릭터 전원의
-    # 최대 체력 X% 증가.
+def _trait_gendered_ally_haste(caster, team, enemy_team, params):
+    # 배(유교적 윤리의식): 파트너나 캐스터 자신이 아니라 "받는 사람 자신의" 성별이 기준이라는 점이
+    # _trait_ally_type_conditional_team_buff류(파트너의 속성이 기준)와 다르다. 아군(자신 포함 여부는
+    # 무관 - 배 본인은 서포터라 _alive_units에 애초에 안 잡힘) 중 params["gender"]와 일치하는 캐릭터
+    # 각자에게 공격 속도 X% 증가.
+    gender = params["gender"]
+    haste_percent = params["haste_percent"]
+    targets = []
+    changes = []
+    for ally in _alive_units(team):
+        if _effective_gender(ally) != gender:
+            continue
+        ally["status"]["haste_percent"] += haste_percent
+        targets.append(ally["name"])
+        changes.append(("own", ally, 0, 0, 0, 0, 0, 1))
+    if not targets:
+        return None
+    detail = {"targets": targets, "gender": gender, "haste_percent": haste_percent}
+    return detail, changes
+
+
+def _trait_team_type_hp_buff(caster, team, enemy_team, params):
+    # 불빠따 김어진(교권 보호, type=Teacher)/김룡환(내리갈굼, type=Student): 팀 내(자신 포함) 공격/방어
+    # 타입 중 하나라도 params["type"]과 일치하는 캐릭터 전원의 최대 체력 X% 증가.
+    target_type = params["type"]
     percent = params["percent"]
     targets = []
     changes = []
     for u in _alive_units(team):
-        if u.get("attack_type") == "Teacher" or u.get("defense_type") == "Teacher":
+        if u.get("attack_type") == target_type or u.get("defense_type") == target_type:
             gain = round(u["max_hp"] * percent / 100)
             u["max_hp"] += gain
             u["hp"] += gain
@@ -117,7 +141,7 @@ def _trait_team_teacher_hp_buff(caster, team, enemy_team, params):
             changes.append(("own", u, 0, 1))
     if not targets:
         return None
-    detail = {"targets": targets, "hp_percent": percent}
+    detail = {"targets": targets, "hp_percent": percent, "type": target_type}
     return detail, changes
 
 
@@ -189,9 +213,9 @@ def _trait_dynamic_grant_rear_priority(caster, team, enemy_team, params):
 
 
 def _trait_death_heal_ally(caster, team, enemy_team, params):
-    # 이영웅(히포크라테스 선서): 지금은 그냥 "장전"만 해둔다 - 실제 발동(회복)은 자신이 죽는 순간
-    # _apply_death_triggers가 매 틱 감지해서 처리한다. 전투 시작 시점엔 아직 아무 일도 안 일어났으므로
-    # 여기선 이벤트를 남기지 않는다.
+    # 이영웅(히포크라테스 선서): 지금은 그냥 "장전"만 해둔다 - 실제 발동(보호막 부여, 확인된 요청 -
+    # 원래는 회복이었음)은 자신이 죽는 순간 _apply_death_triggers가 매 틱 감지해서 처리한다. 전투
+    # 시작 시점엔 아직 아무 일도 안 일어났으므로 여기선 이벤트를 남기지 않는다.
     caster["death_heal_percent"] = params["percent"]
     return None
 
@@ -208,15 +232,61 @@ def _trait_conditional_stun_dr_ally_type(caster, team, enemy_team, params):
     return None
 
 
+def _trait_teammate_haste_by_name(caster, team, enemy_team, params):
+    # 김크장(어울리기): 지정된 이름(partner_name)의 스트라이커가 함께 편성돼 있으면 그 파트너 본인의
+    # 공격 속도를 올려준다(캐스터 자신이 아니라 파트너에게 적용된다는 점이 ally_synergy_atk_buff류와
+    # 다르다). 캐스터(김크장)는 서포터라 전장에 없으므로(_teammate/_all_slots에도 없음) front/back을
+    # 직접 훑어서 이름이 일치하는 살아있는 스트라이커를 찾는다 - _teammate는 "그 외 첫 슬롯"을
+    # 반환하는 함수라 여기서는 안 맞는다(방임석이 back에 있으면 front를 잘못 짚어버릴 수 있음).
+    partner = next(
+        (u for u in (team.get("front"), team.get("back")) if u and u["name"] == caster["trait_partner_name"] and u["hp"] > 0),
+        None,
+    )
+    if not partner:
+        return None
+    haste_percent = params["haste_percent"]
+    partner["status"]["haste_percent"] += haste_percent
+    detail = {"partner": partner["name"], "haste_percent": haste_percent}
+    changes = [("own", partner, 0, 0, 0, 0, 0, 1)]
+    return detail, changes
+
+
 def _trait_type_attack_lifesteal(caster, team, enemy_team, params):
     # 윤(선생 고혈): 설정만 해둔다 - "지금 공격 대상이 이 타입인가"는 매 틱 갱신되는 상태(흡혈,
     # lifesteal_active)로 다뤄지고(battle_engine.py의 simulate_battle 메인 루프에서 resolved_target을
     # 구한 직후 판정 - neglect_active와 동일하게 상태가 바뀌는 순간만 이벤트를 남겨 프론트 아이콘을
     # 갱신한다), 실제 회복은 그 상태가 켜져 있는 동안 기본공격이 명중할 때마다 _do_basic_attack이
-    # 처리한다. 김어진(team_teacher_hp_buff)/방임석(neglect_config)과 동일하게 공격/방어 타입 둘 중
+    # 처리한다. 김어진/김룡환(team_type_hp_buff)/방임석(neglect_config)과 동일하게 공격/방어 타입 둘 중
     # 하나만 일치해도 "그 타입을 보유"한 것으로 취급한다.
     caster["lifesteal_config"] = {"type": params["type"], "heal_amount": params["amount"]}
     return None
+
+
+def _trait_periodic_shield_random_non_type_striker(caster, own_team, enemy_team, params, time_elapsed):
+    # 신(제 3 권한): star_handlers._star_periodic_heal_random_striker와 같은 이유로(전투 시작 1회가
+    # 아니라 "N초마다" 반복) TRAIT_EFFECT_HANDLERS가 아닌 PERIODIC_TRAIT_EFFECT_HANDLERS에 등록한다.
+    # "부모 속성을 보유하지 않은" = 공격/방어 타입 둘 다 exclude_type이 아닌 경우(_trait_team_type_hp_buff의
+    # "보유" 판정과 반대 방향).
+    exclude_type = params["exclude_type"]
+    candidates = [
+        u for u in (own_team.get("front"), own_team.get("back"))
+        if u and u["hp"] > 0 and u.get("attack_type") != exclude_type and u.get("defense_type") != exclude_type
+    ]
+    if not candidates:
+        return None
+    target = random.choice(candidates)
+    shield_percent = params["shield_percent"]
+    gain = round(target["max_hp"] * shield_percent / 100)
+    target["shield"] = target.get("shield", 0) + gain
+    return {
+        "target": target["name"], "_target_ref": target,
+        "shield_amount": gain, "shield_percent": shield_percent, "target_shield_after": target["shield"],
+    }
+
+
+PERIODIC_TRAIT_EFFECT_HANDLERS = {
+    "periodic_shield_random_non_type_striker": _trait_periodic_shield_random_non_type_striker,
+}
 
 
 TRAIT_EFFECT_HANDLERS = {
@@ -224,7 +294,7 @@ TRAIT_EFFECT_HANDLERS = {
     "ally_synergy_atk_buff": _trait_ally_synergy_atk_buff,
     "ally_job_conditional_team_buff": _trait_ally_job_conditional_team_buff,
     "ally_type_conditional_team_buff": _trait_ally_type_conditional_team_buff,
-    "team_teacher_hp_buff": _trait_team_teacher_hp_buff,
+    "team_type_hp_buff": _trait_team_type_hp_buff,
     "teammate_hp_buff_self_cost": _trait_teammate_hp_buff_self_cost,
     "battlefield_presence_haste": _trait_battlefield_presence_haste,
     "female_count_haste": _trait_female_count_haste,
@@ -232,12 +302,16 @@ TRAIT_EFFECT_HANDLERS = {
     "death_heal_ally": _trait_death_heal_ally,
     "conditional_stun_dr_ally_type": _trait_conditional_stun_dr_ally_type,
     "type_attack_lifesteal": _trait_type_attack_lifesteal,
+    "teammate_haste_by_name": _trait_teammate_haste_by_name,
+    "gendered_ally_haste": _trait_gendered_ally_haste,
 }
 
 
 def _apply_battle_start_traits(team, enemy_team, events, side):
     enemy_side = "defender" if side == "attacker" else "attacker"
-    for slot in ("front", "back"):
+    # "supporter"도 포함한다 - 김크장류 지원가의 [Special](어울리기 등)도 전투 시작 시 발동해야 한다.
+    # ENABLE_SUPPORTER_SLOT이 False인 동안은 team["supporter"]가 항상 None이라 자동으로 건너뛴다.
+    for slot in ("front", "back", "supporter"):
         unit = team[slot]
         if not unit or unit["hp"] <= 0 or not unit.get("trait_effect_type"):
             continue

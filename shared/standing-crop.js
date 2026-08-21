@@ -1,4 +1,5 @@
 const STANDING_CROP_OVERRIDES = {
+    "god/basic": {xPercent: 50, yPercent: 10, scale: 3.0}
     // "outfit_file": { xPercent: 50, yPercent: 18, scale: 2.0 },
 };
 const DEFAULT_STANDING_CROP = { xPercent: 50, yPercent: 5, scale: 2.0 };

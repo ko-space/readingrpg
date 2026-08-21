@@ -3,7 +3,9 @@
 시작 시 1회 호출한다(characters.json의 star_effects 문구를 실제 전투 수치로 반영).
 명명 규칙(star=passive)은 battle_core.py 상단 참고.
 """
-from battle_core import CRIT_CHANCE, _alive_units, _effective_gender, _teammate, build_stat_change_dicts
+import random
+
+from battle_core import CRIT_CHANCE, _alive_units, _effective_gender, _is_unit_moving, _teammate, build_stat_change_dicts
 
 # ───────────────────────── 성급별 효과(star_effects) - 전투 시작 시 1회만 판정 ─────────────────────────
 # characters.json의 star_effects는 원래 인벤토리 화면에 보여주기만 하던 문구였는데, 실제 전투에도
@@ -162,6 +164,96 @@ def _star_kill_heal_percent(unit, own_team, enemy_team, params):
     return []
 
 
+def _star_grant_shield_to_strikers_percent_max_hp(unit, own_team, enemy_team, params):
+    # 김크장(외국인 노동자): 서포터 본인은 전장에 없으므로 own_team의 "front"/"back"(스트라이커)에게만
+    # 각자 자기 최대 체력 기준 percent%의 보호막을 준다 - _alive_units(own_team)을 쓰면 supporter는
+    # 애초에 _all_slots에 없어 자동으로 빠지므로 따로 걸러낼 필요가 없다. 기존 self_shield_duration
+    # (일정 시간 무적)과 달리 이건 "수치가 있는" 보호막이라 unit["shield"]에 직접 더한다(_apply_damage
+    # 참고) - 매 성급마다 새로 전투가 시작될 때만 부여되므로 그냥 덮어쓰지 않고 더한다(다른 소스와
+    # 중첩 가능하게, 지금은 서포터가 1명뿐이라 실질적으로는 항상 0에서 시작).
+    percent = params["percent"]
+    changes = []
+    for striker in _alive_units(own_team):
+        gain = round(striker["max_hp"] * percent / 100)
+        striker["shield"] = striker.get("shield", 0) + gain
+        # shield_sign(9번째 자리)=1 - build_stat_change_dicts가 이 신호 하나만으로도 이벤트를 실제로
+        # 발생시키고, 그 시점의 striker["shield"](방금 갱신한 값)를 이벤트에 함께 실어보낸다. 그래야
+        # 프론트가 이 유닛이 처음 맞기 전부터(전투 시작 시점부터) 보호막 바를 바로 그릴 수 있다.
+        changes.append(("own", striker, 0, 0, 0, 0, 0, 0, 1))
+    return changes
+
+
+def _star_haste_boost_to_rear_striker(unit, own_team, enemy_team, params):
+    # 김룡환(입술의 말): 서포터 본인은 전장에 없으므로(own_team[slot] 순회에도 안 잡힘) own_team의
+    # "후방(back)" 슬롯에 실제로 배치된 스트라이커 본인에게(이름과 무관하게 누구든) 공격 속도를 준다.
+    # _teammate()는 "캐스터 기준 다른 슬롯"을 찾는 함수라 캐스터가 서포터(_all_slots에 없음)면 안
+    # 맞는다(_trait_teammate_haste_by_name과 동일한 이유) - back 슬롯을 이름과 무관하게 직접 조회한다.
+    rear = own_team.get("back")
+    if not rear or rear["hp"] <= 0:
+        return []
+    haste_percent = params["haste_percent"]
+    rear["status"]["haste_percent"] += haste_percent
+    return [("own", rear, 0, 0, 0, 0, 0, 1)]
+
+
+def _star_shield_low_hp_striker_once(unit, own_team, enemy_team, params):
+    # 배(개량한복): "장전"만 해둔다 - 실제 판정(아군 STRIKER 체력이 50% 미만으로 떨어지는 순간 무적 부여)은
+    # own_team["low_hp_shield_config"]를 보고 매 틱 _apply_low_hp_shield_grant(battle_engine.py)가
+    # 처리한다(_star_gain_paint_on_active_use와 같은 "장전 후 매 틱 감지" 패턴). 배 본인은 서포터라
+    # own_team["front"]/["back"]에 없어(대상이 될 수 없어) 유닛이 아니라 팀 단위로 저장해둔다.
+    own_team["low_hp_shield_config"] = {
+        "seconds": params["seconds"],
+        "once_per_striker": params.get("once_per_striker", False),
+    }
+    return []
+
+
+def _star_ally_attack_splash_damage(unit, own_team, enemy_team, params):
+    # 김국회(일당 독재): "장전"만 해둔다 - kill_heal_percent와 같은 패턴. 실제 판정(아군 STRIKER가
+    # 기본공격할 때마다 공격 대상이 아닌 다른 적 전원에게 스플래시)은 이 필드를 가진 서포터가 own_team에
+    # 있는지 _do_basic_attack이 매 기본공격마다 확인해서 처리한다. 수치 기준은 확인된 대로 "김국회
+    # 자신의" 공격력이라, 여기서는 %만 저장해두고 실제 공격력은 발동 시점에 supporter["atk"]에서 읽는다.
+    unit["ally_attack_splash_percent"] = params["percent"]
+    return []
+
+
+def _star_periodic_heal_random_striker(caster, own_team, enemy_team, params, time_elapsed):
+    # 신(제 1 권한): 전투 시작 1회가 아니라 "N초마다" 반복되는 완전히 다른 성격의 성급 효과라
+    # STAR_EFFECT_HANDLERS(battle_engine._apply_battle_start_star_effects가 t=0에 1회만 호출)가 아닌
+    # PERIODIC_STAR_EFFECT_HANDLERS에 등록한다(battle_engine._tick_periodic_effects가 매 틱 간격을
+    # 검사해서 호출) - 시그니처도 (caster, own_team, enemy_team, params, time_elapsed)로 skill 핸들러와
+    # 동일하고, 반환값도 change 튜플 목록이 아니라 skill_resolve와 같은 단일 detail dict다. 캐스터
+    # 자신(서포터)은 own_team["front"]/["back"]에 없으므로 대상 후보에서 저절로 제외된다.
+    candidates = [u for u in (own_team.get("front"), own_team.get("back")) if u and u["hp"] > 0]
+    if not candidates:
+        return None
+    target = random.choice(candidates)
+    heal_percent = params["heal_percent"]
+    # 뽑힌 대상이 아직 자기 기본공격 목표를 향해 이동 중이면(_is_unit_moving) 하트가 실제로 안 맞은
+    # 것으로 치고 회복을 실패시킨다 - 이미 풀피라 healed=0인 경우(이벤트 자체를 안 남김)와 달리, 이건
+    # "맞았으면 회복했을 텐데 이동 중이라 놓쳤다"는 걸 보여줘야 하므로 missed=True로 이벤트는 남긴다.
+    if _is_unit_moving(target):
+        return {
+            "target": target["name"], "_target_ref": target,
+            "healed": 0, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"],
+            "heal_percent": heal_percent, "missed": True,
+        }
+    healed = min(target["max_hp"] - target["hp"], round(target["max_hp"] * heal_percent / 100))
+    if healed <= 0:
+        return None  # 마침 뽑힌 대상이 이미 풀피면 회복량이 0 - 허공에 이펙트만 뜨는 걸 막기 위해 이벤트 자체를 안 남긴다
+    target["hp"] += healed
+    return {
+        "target": target["name"], "_target_ref": target,
+        "healed": healed, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"],
+        "heal_percent": heal_percent,
+    }
+
+
+PERIODIC_STAR_EFFECT_HANDLERS = {
+    "periodic_heal_random_striker": _star_periodic_heal_random_striker,
+}
+
+
 STAR_EFFECT_HANDLERS = {
     "gain_paint_on_active_use": _star_gain_paint_on_active_use,
     "kill_heal_percent": _star_kill_heal_percent,
@@ -174,6 +266,10 @@ STAR_EFFECT_HANDLERS = {
     "damage_to_gender_bonus": _star_damage_to_gender_bonus,
     "self_crit_multiplier": _star_self_crit_multiplier,
     "self_rear_priority": _star_self_rear_priority,
+    "grant_shield_to_strikers_percent_max_hp": _star_grant_shield_to_strikers_percent_max_hp,
+    "haste_boost_to_rear_striker": _star_haste_boost_to_rear_striker,
+    "ally_attack_splash_damage": _star_ally_attack_splash_damage,
+    "shield_low_hp_striker_once": _star_shield_low_hp_striker_once,
 }
 
 
@@ -186,7 +282,10 @@ def _apply_battle_start_star_effects(attacker_team, defender_team, events=None):
         ("defender", defender_team, attacker_team),
     ):
         enemy_side = "defender" if side_name == "attacker" else "attacker"
-        for slot in ("front", "back"):
+        # "supporter"도 포함한다 - 김크장류 지원가는 전장엔 없지만(_all_slots에 없음) [Passive]는
+        # 정상적으로 발동해야 한다(예: 외국인 노동자가 스트라이커에게 보호막을 부여). ENABLE_SUPPORTER_SLOT이
+        # False인 동안은 own_team["supporter"]가 항상 None이라 이 슬롯은 자동으로 그냥 건너뛴다.
+        for slot in ("front", "back", "supporter"):
             unit = own_team[slot]
             if not unit or unit["hp"] <= 0 or not unit.get("star_effect_type"):
                 continue

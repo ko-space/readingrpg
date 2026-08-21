@@ -5,17 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>전술경연 대회 - 독서 RPG</title>
     <link rel="icon" href="logoicon.webp">
-    <link rel="stylesheet" href="shared/lobby.css">
-    <link rel="stylesheet" href="arena/arena-battle.css">
-    <link rel="stylesheet" href="shared/attack-effects.css">
-    <link rel="stylesheet" href="shared/achievement-toast.css">
-    <link rel="stylesheet" href="gacha/gacha-reveal.css">
+    <link rel="stylesheet" href="shared/lobby.css?v=20260822j">
+    <link rel="stylesheet" href="arena/arena-battle.css?v=20260822j">
+    <link rel="stylesheet" href="shared/attack-effects.css?v=20260822j">
+    <link rel="stylesheet" href="shared/achievement-toast.css?v=20260822j">
+    <link rel="stylesheet" href="gacha/gacha-reveal.css?v=20260822j">
 </head>
 <body>
     <div class="battle-screen">
         <div class="battle-timer-row">
             <div class="battle-timer" id="battle-timer">03:00</div>
-            <button type="button" class="battle-speed-toggle" id="battle-speed-toggle" aria-label="재생 속도 전환" title="재생 속도 전환"></button>
+            <!-- 코스트 덱(cost_init 처리 시 arena-battle.js가 여기서 이 버튼을 옮겨간다)이 뜨기 전까지는
+                 숨겨둔다 - 안 그러면 전투 시작 직후 잠깐 이 원래 자리(타이머 옆)에서 보였다가 코스트
+                 덱으로 "점프"하는 게 눈에 띈다. -->
+            <button type="button" class="battle-speed-toggle" id="battle-speed-toggle" aria-label="재생 속도 전환" title="재생 속도 전환" hidden></button>
         </div>
 
         <div class="battle-layout">
@@ -46,6 +49,9 @@
                             <div class="roster-unit-name">-</div>
                             <div class="roster-status-icons"></div>
                         </div>
+                        <div class="roster-shield-track" hidden>
+                            <div class="roster-shield-fill"></div>
+                        </div>
                         <div class="roster-hp-track">
                             <div class="roster-hp-fill"></div>
                         </div>
@@ -60,6 +66,9 @@
                         <div class="roster-name-row">
                             <div class="roster-unit-name">-</div>
                             <div class="roster-status-icons"></div>
+                        </div>
+                        <div class="roster-shield-track" hidden>
+                            <div class="roster-shield-fill"></div>
                         </div>
                         <div class="roster-hp-track">
                             <div class="roster-hp-fill"></div>
@@ -120,6 +129,12 @@
                 </div>
 
                 <div class="battle-field-line"></div>
+
+                <!-- 코스트 게이지 + 스킬카드(전방/후방/서포터) - 내용은 arena-battle.js가 cost_init
+                     이벤트를 받아서 만든다. .battle-field가 이미 position:relative이고 아래쪽에
+                     캐릭터 발밑 여백(padding-bottom)이 확보돼 있어, 여기에 절대 배치하면 기존
+                     3열 레이아웃을 전혀 밀지 않는다. -->
+                <div class="cost-dock" id="cost-dock-attacker" data-cost-side="attacker" hidden></div>
             </div>
 
             <!-- 우측: 상대 -->
@@ -148,6 +163,9 @@
                             <div class="roster-unit-name">-</div>
                             <div class="roster-status-icons"></div>
                         </div>
+                        <div class="roster-shield-track" hidden>
+                            <div class="roster-shield-fill"></div>
+                        </div>
                         <div class="roster-hp-track">
                             <div class="roster-hp-fill"></div>
                         </div>
@@ -162,6 +180,9 @@
                         <div class="roster-name-row">
                             <div class="roster-unit-name">-</div>
                             <div class="roster-status-icons"></div>
+                        </div>
+                        <div class="roster-shield-track" hidden>
+                            <div class="roster-shield-fill"></div>
                         </div>
                         <div class="roster-hp-track">
                             <div class="roster-hp-fill"></div>
@@ -185,13 +206,14 @@
         <div class="battle-loading-text">입장하는 중...</div>
     </div>
 
-    <script src="shared/api-config.js"></script>
-    <script src="shared/session-guard.js"></script>
-    <script src="shared/nav-lock.js"></script>
-    <script src="shared/avatar-crop.js"></script>
-    <script src="shared/achievement-toast.js"></script>
-    <script src="shared/attack-effects.js"></script>
-    <script src="gacha/gacha-reveal.js" defer></script>
-    <script src="arena/arena-battle.js" defer></script>
+    <script src="shared/api-config.js?v=20260822j"></script>
+    <script src="shared/session-guard.js?v=20260822j"></script>
+    <script src="shared/nav-lock.js?v=20260822j"></script>
+    <script src="shared/avatar-crop.js?v=20260822j"></script>
+    <script src="shared/achievement-toast.js?v=20260822j"></script>
+    <script src="shared/attack-effects.js?v=20260822j"></script>
+    <script src="shared/battle-renderer.js?v=20260822j"></script>
+    <script src="gacha/gacha-reveal.js?v=20260822j" defer></script>
+    <script src="arena/arena-battle.js?v=20260822j" defer></script>
 </body>
 </html>

@@ -1,0 +1,521 @@
+/* 가챠 시네마틱 연출(인트로 간판인물 -> 10연차 보석 미리보기 -> 신규 캐릭터 몸통 티저).
+   gacha_reveal.html 프로토타입의 연출/타이밍을 그대로 이식하되, 작은 고정 스테이지가 아니라
+   gacha-reveal.css(.gacha-reveal-overlay)와 동일하게 화면 전체를 덮는 오버레이로 만든다 - 이 연출이
+   끝나면 그대로 사라지고 기존 showCharacterReveal 오버레이가 이어받아 뜨므로 z-index도 그보다
+   약간 낮게 잡는다(둘이 동시에 보일 일은 없지만, 전환 프레임에서 어긋나지 않도록). */
+
+.gc-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 495;
+    overflow: hidden;
+    background: transparent; /* 처음엔 투명해야 함 - 배경이 이미 검정이면 문이 닫히는 게 안 보임
+        (gacha-reveal.css의 .gacha-reveal-overlay와 동일한 이유) */
+    font-family: 'Malgun Gothic', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.gc-overlay.open {
+    display: block;
+}
+
+.gc-overlay.no-transition * {
+    transition: none !important;
+}
+
+/* ===== 전반부(인트로: 간판인물 2인) ===== */
+.gc-intro-layer {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+.gc-intro-layer.show { opacity: 1; }
+
+.gc-intro-bg {
+    position: absolute;
+    inset: 0;
+    background: url('../assets/gacha/bg-begin.webp') center / cover no-repeat;
+    opacity: 0; /* 문이 열리기 전까지는 숨김(gc-doors-open이 붙어야 드러남) - .show만으로는 안 됨,
+        .gc-intro-layer.show는 트랜지션 없이 즉시 켜져서(문이 닫히기도 전에 배경이 먼저 보이면 안 됨) */
+}
+.gc-intro-layer.gc-doors-open .gc-intro-bg { opacity: 1; }
+
+.gc-char-slot {
+    position: absolute;
+    bottom: 0;
+    width: 42%;
+    height: 92%;
+    opacity: 0;
+    transition: left 1.3s cubic-bezier(.3,.7,.3,1), right 1.3s cubic-bezier(.3,.7,.3,1), opacity 1.4s ease;
+}
+.gc-char-slot.show { opacity: 1; }
+.gc-char-slot.gc-left { left: 4%; }
+.gc-char-slot.gc-right { right: 4%; }
+/* ===== 간판인물이 서로를 향해 다가서는 거리 - 여기 두 값(left/right)을 조정하세요 =====
+   숫자가 클수록 더 많이 움직입니다(기본 위치 4%에서 이 값까지 다가섬). 지금은 살짝만 움직이도록
+   작게 잡아뒀습니다 - 더 가까이 붙길 원하면 숫자를 키우고, 덜 움직이길 원하면 줄이세요. */
+.gc-char-slot.gc-left.gc-move-in { left: 15%; }
+.gc-char-slot.gc-right.gc-move-in { right: 10%; }
+
+.gc-char-slot .gc-char-art {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    height: 100%;
+    width: auto;
+    max-width: none;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+.gc-char-slot .gc-char-art.gc-on { opacity: 1; }
+
+/* 가챠 시작 즉시 문이 닫혔다 열리며 이미 자리잡은 간판인물을 드러낸다(확인된 요청 - 배경/인물이
+   서서히 페이드인하는 대신, 문 연출로 바로 시작). gacha-reveal.css의 door 연출과 같은 발상. */
+.gc-intro-door {
+    position: absolute; top: 0; bottom: 0; width: 50%;
+    background: #000; z-index: 15;
+    transition: transform 0.5s ease-in-out;
+}
+.gc-intro-door-left { left: 0; transform: translateX(-100%); }
+.gc-intro-door-right { right: 0; transform: translateX(100%); }
+.gc-intro-layer.gc-doors-closed .gc-intro-door-left,
+.gc-intro-layer.gc-doors-closed .gc-intro-door-right {
+    transform: translateX(0);
+}
+.gc-intro-layer.gc-doors-open .gc-intro-door {
+    transition: transform 0.7s ease-in-out;
+}
+.gc-intro-layer.gc-doors-open .gc-intro-door-left { transform: translateX(-100%); }
+.gc-intro-layer.gc-doors-open .gc-intro-door-right { transform: translateX(100%); }
+
+.gc-light-burst {
+    position: absolute;
+    left: 50%; top: 46%;
+    width: 60px; height: 60px;
+    margin: -30px 0 0 -30px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fff 0%, #ffe9b0 25%, rgba(255,220,150,0.6) 50%, rgba(255,220,150,0) 75%);
+    opacity: 0; transform: scale(0);
+    z-index: 5;
+}
+.gc-light-burst.gc-burst { animation: gc-burst 1.3s ease-out forwards; }
+/* 두 간판인물이 다가선 뒤 실제 폭발(등급을 알아야 트리거되므로 서버 응답을 기다려야 함, 10연차는
+   특히 느릴 수 있음)까지 남는 시간 동안, 화면이 멈춘 것처럼 안 보이게 은은하게 계속 두근거리는
+   예열(charging) 상태 - 확인된 요청. playIntroBurst가 실제 폭발(gc-burst)로 바꿔치기하면서 이
+   클래스를 뗀다. */
+.gc-light-burst.gc-charging {
+    animation: gc-charge-pulse 1.1s ease-in-out infinite;
+}
+@keyframes gc-charge-pulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.55); }
+    50% { opacity: 0.65; transform: scale(0.8); }
+}
+@keyframes gc-burst {
+    0%   { opacity: 0; transform: scale(0); }
+    12%  { opacity: 1; transform: scale(2.2); }
+    100% { opacity: 0; transform: scale(16); }
+}
+
+.gc-light-rays {
+    position: absolute;
+    left: 50%; top: 46%;
+    width: 900px; height: 900px;
+    margin: -450px 0 0 -450px;
+    border-radius: 50%;
+    background: repeating-conic-gradient(from 0deg, rgba(255,255,255,0.85) 0deg 4deg, rgba(255,255,255,0) 4deg 16deg);
+    opacity: 0; transform: scale(0) rotate(0deg);
+    z-index: 4;
+    mix-blend-mode: screen;
+}
+.gc-light-rays.gc-burst { animation: gc-raysburst 1.3s ease-out forwards; }
+@keyframes gc-raysburst {
+    0%   { opacity: 0; transform: scale(0) rotate(0deg); }
+    18%  { opacity: 0.95; transform: scale(0.6) rotate(25deg); }
+    100% { opacity: 0; transform: scale(1.6) rotate(70deg); }
+}
+
+.gc-white-flash {
+    position: absolute; inset: 0;
+    background: #fff;
+    opacity: 0;
+    z-index: 6;
+    pointer-events: none;
+}
+.gc-white-flash.gc-flash { animation: gc-whiteflash 0.7s ease-out forwards; }
+@keyframes gc-whiteflash {
+    0%   { opacity: 0; }
+    35%  { opacity: 0.95; }
+    100% { opacity: 0; }
+}
+
+/* ===== 중반부(10연차 전용: 보석 10개 미리보기) ===== */
+.gc-mid-layer {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 26px;
+    cursor: pointer;
+    opacity: 0;
+}
+.gc-mid-layer.show { display: flex; opacity: 1; }
+
+.gc-mid-bg {
+    position: absolute; inset: 0;
+    background: url('../assets/gacha/bg-result.webp') center / cover no-repeat;
+}
+
+.gc-mid-jewels {
+    position: relative;
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 18px; max-width: 82%;
+}
+.gc-mid-jewel {
+    width: 64px; height: 64px;
+    opacity: 0; transform: scale(0.4);
+    filter: drop-shadow(0 0 0 rgba(255,255,255,0));
+    transition: opacity 0.35s ease, transform 0.35s ease, filter 0.35s ease;
+}
+.gc-mid-jewel.pop {
+    opacity: 1; transform: scale(1);
+    filter: drop-shadow(0 0 14px rgba(255,255,255,0.6));
+}
+
+/* 캐릭터별 등급 보석 도입부(playRarityGemReveal) 전용 - 10개 미리보기의 작은 보석과 같은 이미지를
+   재사용하되 혼자 가운데 크게 뜬다. 가운데서 그냥 확대되는 10개 미리보기용 기본 팝(.gc-mid-jewel의
+   scale(0.4)->scale(1))과 달리, 확대된 채로 왼쪽에 있다가 가운데로 날아오면서 원래 크기로 줄어드는
+   느낌을 준다(확인된 요청) - translateX+scale을 함께 트랜지션해서 "날아온다"는 인상을 준다. */
+.gc-mid-jewel-solo {
+    width: 190px; height: 190px;
+    transform: translateX(-260px) scale(1.6);
+    transition: opacity 0.5s ease-out, transform 0.5s ease-out, filter 0.5s ease-out;
+}
+.gc-mid-jewel-solo.pop {
+    transform: translateX(0) scale(1);
+    filter: drop-shadow(0 0 28px rgba(255,255,255,0.75));
+}
+
+/* 보석이 가운데 "부착"되는 순간 사방으로 퍼지는 충격파(확인된 요청 - 원래 좌우로만 퍼지는 가로
+   띠였다가 모든 방향으로 고르게 퍼지는 원형 링으로 변경) - 절대 위치라 gc-mid-jewels의 flex 정렬과
+   무관하게 항상 보석 중심에 겹친다. 가운데서 번쩍이는 원형 플래시(::after) + 사방으로 넓어지며
+   옅어지는 링(::before) 두 겹으로 구성. */
+.gc-gem-shockwave {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 1px; height: 1px;
+    pointer-events: none;
+}
+.gc-gem-shockwave::before,
+.gc-gem-shockwave::after {
+    content: "";
+    position: absolute;
+    left: 50%; top: 50%;
+    opacity: 0;
+}
+.gc-gem-shockwave::before {
+    width: 60px; height: 60px;
+    margin: -30px 0 0 -30px;
+    border-radius: 50%;
+    border: 5px solid rgba(255,255,255,0.95);
+    box-shadow: 0 0 12px 2px rgba(255,255,255,0.6);
+    transform: scale(0.15);
+}
+.gc-gem-shockwave::after {
+    width: 90px; height: 90px;
+    margin: -45px 0 0 -45px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.35) 45%, rgba(255,255,255,0) 72%);
+    transform: scale(0.2);
+}
+.gc-gem-shockwave.play::before { animation: gc-shockwave-ring 0.55s ease-out forwards; }
+.gc-gem-shockwave.play::after { animation: gc-shockwave-flash 0.4s ease-out forwards; }
+@keyframes gc-shockwave-ring {
+    0%   { opacity: 0.9; transform: scale(0.15); border-width: 6px; }
+    100% { opacity: 0; transform: scale(6.5); border-width: 0.5px; }
+}
+@keyframes gc-shockwave-flash {
+    0%   { opacity: 0.85; transform: scale(0.2); }
+    100% { opacity: 0; transform: scale(1.3); }
+}
+
+.gc-mid-prompt {
+    position: relative;
+    font-size: 13px; letter-spacing: 2px; color: rgba(255,255,255,0.85);
+    text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+    opacity: 0; transition: opacity 0.4s ease;
+}
+/* gc-hint-pulse는 .show일 때만 재생한다(확인된 버그 수정) - 예전엔 이 애니메이션이 .show 여부와
+   무관하게 항상 걸려있어서, 이 요소는 opacity:0을 keyframe의 opacity(0.55~1)가 매 프레임 덮어써
+   버렸다. 그래서 캐릭터별 등급 보석 도입부(playRarityGemReveal, gc-mid-prompt.show를 켜지 않음)에서도
+   "화면을 클릭하면 계속됩니다" 문구가 계속 은은하게 깜박이며 보이는 문제가 있었다(10개 미리보기에서는
+   어차피 항상 이 문구를 보여줄 차례였어서 여태 안 드러났었음). */
+.gc-mid-prompt.show { opacity: 1; animation: gc-hint-pulse 1.4s ease-in-out infinite; }
+
+/* ===== 후반부(신규 캐릭터 티저: 공방타입+대사+카메라워크) ===== */
+.gc-teaser-layer {
+    position: absolute; inset: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+.gc-teaser-layer.show { opacity: 1; }
+
+.gc-camera {
+    position: absolute; inset: 0;
+    transform-origin: center center;
+}
+
+/* 상체까지 비춘 뒤 배경이 서서히 살짝 하얘지는 연출(확인된 요청) - 스윕/최종 화면으로 넘어가면서
+   gc-teaser-layer 자체가 숨겨지므로(playOnePullReveal), 최종 화면에는 이 하얘짐이 남지 않고
+   "원래대로" 보인다 - 별도로 되돌리는 로직이 필요 없다. */
+.gc-teaser-whiten {
+    position: absolute; inset: 0;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.9s ease;
+    z-index: 3;
+}
+.gc-teaser-whiten.show { opacity: 0.4; }
+
+.gc-teaser-bg {
+    position: absolute; inset: 0;
+    background-size: cover; background-position: center;
+    opacity: 0;
+    transition: opacity 0.5s ease, background-image 0.1s linear;
+}
+.gc-teaser-bg.show { opacity: 1; }
+.gc-teaser-bg.dim::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: #000; opacity: 0.7;
+}
+
+.gc-char-zone {
+    position: absolute;
+    left: 50%; bottom: 6%;
+    height: 88%;
+    transform: translateX(-50%);
+    display: flex; align-items: flex-end; justify-content: center;
+    opacity: 0;
+}
+/* 하체/상체를 비추는 동안 캐릭터가 아주 조금씩 계속 위로 떠오르는 느낌(확인된 요청) - 카메라
+   확대/이동(snapCamera)과는 별개로 캐릭터 자신의 위치만 서서히 올라간다. 재생 시간(gc-rise 지속시간)은
+   두 확대 단계를 합친 시간과 맞춰뒀다(playNewCharacterTeaser 참고 - 하체->상체 화이트 플래시가
+   느려지면서 900+450+900=2250ms로 늘어남에 맞춰 2.1s -> 2.25s). */
+.gc-char-zone.gc-rising {
+    animation: gc-char-rise 2.25s linear forwards;
+}
+@keyframes gc-char-rise {
+    from { transform: translateX(-50%) translateY(0); }
+    to   { transform: translateX(-50%) translateY(-26px); }
+}
+/* 상체까지 다 비춘 뒤(화이트닝 시작 시점) 캐릭터가 멈추지 않고 계속 떠오르면서 그대로 서서히
+   사라진다(확인된 요청) - gc-rising이 멈춘 지점(translateY(-26px))에서 이어받아 계속 위로 떠오르며
+   opacity를 0까지 낮춘다. 지속시간은 화이트닝 대기(playNewCharacterTeaser의 wait(500))와 맞춘다. */
+.gc-char-zone.gc-rising-out {
+    animation: gc-char-rise-out 0.5s ease-out forwards;
+}
+@keyframes gc-char-rise-out {
+    from { transform: translateX(-50%) translateY(-26px); opacity: 1; }
+    to   { transform: translateX(-50%) translateY(-46px); opacity: 0; }
+}
+.gc-char-full {
+    height: 100%;
+    width: auto;
+    display: block;
+}
+
+.gc-icon-row {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center; gap: 40px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+}
+.gc-icon-row.show { opacity: 1; }
+.gc-icon-chip-wrap { position: relative; }
+.gc-icon-chip {
+    width: 96px; height: 96px;
+    border-radius: 50%;
+    background: rgba(10,14,23,0.55);
+    border: 1px solid rgba(255,255,255,0.35);
+    box-shadow: 0 0 24px rgba(0,0,0,0.5);
+    object-fit: contain;
+    padding: 16px;
+    opacity: 0; transform: scale(0.7);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.gc-icon-chip.pop { opacity: 1; transform: scale(1); }
+.gc-icon-label {
+    position: absolute; bottom: -26px; left: 0; right: 0;
+    text-align: center; font-size: 12px; letter-spacing: 2px;
+    color: rgba(255,255,255,0.8);
+    text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+}
+
+.gc-desc-layer {
+    position: absolute; inset: 0;
+    display: none; align-items: center; justify-content: center; padding: 40px;
+}
+.gc-desc-layer.show { display: flex; }
+.gc-desc-box {
+    max-width: 78%; text-align: center; color: #fff;
+    font-size: 30px; line-height: 1.75; letter-spacing: 0.5px;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.7);
+    opacity: 0; transform: translateY(8px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.gc-desc-box.pop { opacity: 1; transform: translateY(0); }
+.gc-quote-mark { color: rgba(255,255,255,0.5); font-size: 38px; }
+
+/* 타입 아이콘이 사라지며 대사가 나타나는 순간 함께 반짝이는 스파클(gacha-reveal.css의
+   sparkle-twinkle과 같은 발상 - 별빛 점들이 깜빡임) - 재생할 때마다 클래스를 껐다 켜서 재시작한다. */
+.gc-desc-sparkle {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    background-repeat: no-repeat;
+    background-image:
+        radial-gradient(circle, #fff 2px, transparent 3px),
+        radial-gradient(circle, #fff 1.5px, transparent 2.5px),
+        radial-gradient(circle, #fff 1.8px, transparent 3px),
+        radial-gradient(circle, #fff 1.5px, transparent 2.5px),
+        radial-gradient(circle, #fff 1.2px, transparent 2.2px),
+        radial-gradient(circle, #fff 1.6px, transparent 2.8px);
+    background-size: 70px 70px, 50px 50px, 80px 80px, 55px 55px, 45px 45px, 65px 65px;
+    background-position: 22% 30%, 78% 22%, 30% 74%, 72% 70%, 50% 18%, 50% 82%;
+}
+.gc-desc-sparkle.sparkle-play {
+    animation: gc-sparkle-burst 1.4s ease-out;
+}
+@keyframes gc-sparkle-burst {
+    0%   { opacity: 0; }
+    20%  { opacity: 1; }
+    60%  { opacity: 0.7; }
+    100% { opacity: 0; }
+}
+
+/* ===== 신규 티저 종료 -> 최종 화면: 문 연출 대신 대각선(우측 아래 -> 좌측 위) 빛 스윕 =====
+   .gc-overlay(495)와 gacha-reveal-overlay(500) 둘 다보다 위(600)에 있어야 최종 화면이 이미
+   열린 뒤에도 스윕이 그 위를 계속 쓸고 지나갈 수 있다 - body 직속 요소라 이 z-index가 그대로 적용된다.
+   바깥(.gc-sweep)은 화면 좌표로 순수하게 "이동"만 담당하고, 안쪽(.gc-sweep-band)은 각도만 고정으로
+   담당한다 - 하나의 transform에 회전+이동을 같이 넣으면 이동이 "회전된 축 기준"으로 벌어져서 실제
+   화면상 이동 방향이 의도와 어긋나는 문제가 있었다(이동 축과 띠의 각도가 서로 수직이 아니면, 이동
+   방향이 띠의 무늬에 거의 영향을 못 줘서 잘못된 방향으로 쓸려가는 것처럼 보임) - 둘을 분리하면 이런
+   혼동 없이 정확히 "우측 아래 -> 좌측 위"로 이동한다. */
+.gc-sweep {
+    position: fixed;
+    inset: 0;
+    opacity: 0;
+    z-index: 600;
+    pointer-events: none;
+    transform: translate(55%, 55%); /* 시작 위치: 우측 아래 */
+}
+.gc-sweep-band {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 60vmax;
+    height: 260vmax;
+    margin-left: -30vmax;
+    margin-top: -130vmax;
+    background: linear-gradient(90deg,
+        transparent 40%,
+        rgba(255,255,255,0.55) 47%,
+        rgba(255,255,255,0.98) 50%,
+        rgba(255,255,255,0.55) 53%,
+        transparent 60%);
+    transform: rotate(45deg); /* 이동 방향(우측 아래<->좌측 위)과 수직인 띠 각도로 고정 */
+}
+.gc-sweep.sweeping {
+    animation: gc-sweep-move 0.9s cubic-bezier(.45, 0, .3, 1) forwards;
+}
+@keyframes gc-sweep-move {
+    0%   { transform: translate(55%, 55%); opacity: 0; }
+    12%  { opacity: 1; }
+    50%  { transform: translate(0%, 0%); opacity: 1; }
+    88%  { opacity: 1; }
+    100% { transform: translate(-55%, -55%); opacity: 0; } /* 도착 위치: 좌측 위 */
+}
+
+/* ===== 10연차 결과 모아보기: 원형 -> 정사각형, 실제 캐릭터 이미지 ===== */
+.gc-summary-layer {
+    position: absolute; inset: 0; z-index: 30;
+    display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 22px; padding: 24px;
+    background: url('../assets/gacha/bg-result.webp') center / cover no-repeat;
+}
+.gc-summary-layer.show { display: flex; }
+.gc-summary-title {
+    font-size: 20px; font-weight: 800; color: #fff; letter-spacing: 3px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+}
+.gc-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 20px 14px;
+}
+.gc-summary-item {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    width: 84px;
+}
+.gc-summary-face {
+    width: 76px; height: 76px;
+    border-radius: 12px;
+    padding: 3px;
+    background: rgba(0,0,0,0.3);
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.25);
+}
+.gc-summary-face-inner {
+    width: 100%; height: 100%;
+    border-radius: 9px;
+    background: #12182a;
+    overflow: hidden;
+    position: relative;
+}
+.gc-summary-face-inner img {
+    position: absolute;
+    /* avatar-crop.js(applyAvatarCrop)이 object-fit/object-position/transform을 직접 설정한다. */
+    width: 100%; height: 100%;
+}
+.gc-summary-name {
+    font-size: 12px; color: #eef2fb; text-align: center; line-height: 1.3;
+    letter-spacing: 0.3px; word-break: keep-all;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+}
+
+/* ===== 공통 ===== */
+.gc-blackout {
+    position: absolute; inset: 0; background: #e6e6e6; z-index: 50;
+    opacity: 1; transition: opacity 0.45s ease; pointer-events: none;
+}
+.gc-blackout.clear { opacity: 0; }
+
+.gc-next-hint {
+    position: absolute; left: 0; right: 0; bottom: 6%; z-index: 55;
+    text-align: center; font-size: 14px; letter-spacing: 2px; color: #fff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+    opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+    animation: gc-hint-pulse 1.4s ease-in-out infinite;
+}
+.gc-next-hint.show { opacity: 1; pointer-events: auto; cursor: pointer; }
+@keyframes gc-hint-pulse {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+}
+
+/* .gc-sweep과 동일한 이유로 body 직속 고정 위치 요소다(gacha-cinematic.js의 getSkipBtnEl 주석 참고) -
+   .gc-overlay(495) 안에 있으면 캐릭터별 최종 화면(gacha-reveal-overlay, z-index:500)이 뜨는 동안
+   그 아래 깔려 안 보이고 클릭도 안 됐던 버그가 있었다(확인됨) - 두 오버레이보다 위(600)에 둬서
+   최종 화면 위에서도 항상 보이고 눌리게 한다. */
+.gc-skip-btn {
+    position: fixed; top: 18px; right: 18px; z-index: 600;
+    font-family: inherit; font-size: 13px; padding: 8px 16px;
+    border-radius: 20px; border: 1px solid rgba(255,255,255,0.35);
+    background: rgba(10,14,23,0.55); color: #fff; cursor: pointer;
+    letter-spacing: 1px; backdrop-filter: blur(2px);
+    opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+}
+.gc-skip-btn.active { opacity: 1; pointer-events: auto; }
+.gc-skip-btn:hover { background: rgba(10,14,23,0.8); }

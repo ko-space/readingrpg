@@ -65,6 +65,33 @@ def _equipped_character_exp_multiplier(equipped, matched_subject: str | None) ->
     multiplier = (catalog.get("exp_multiplier") or {}).get(str(equipped.star))
     return multiplier if multiplier is not None else 1.0
 
+
+def _equipped_character_silver_multiplier(equipped, matched_subject: str | None) -> float:
+    """_equipped_character_exp_multiplier와 완전히 같은 판정이지만 exp_multiplier/exp_subjects 대신
+    silver_multiplier/silver_subjects를 본다(김크장처럼 EXP가 아니라 실버에 배수가 붙는 캐릭터용).
+    한 캐릭터가 exp/실버 배수를 둘 다 갖는 경우는 아직 없어서 완전히 독립적으로 계산한다."""
+    if not matched_subject or not equipped:
+        return 1.0
+    catalog = get_character_catalog(equipped.name)
+    if not catalog or matched_subject not in (catalog.get("silver_subjects") or []):
+        return 1.0
+    multiplier = (catalog.get("silver_multiplier") or {}).get(str(equipped.star))
+    return multiplier if multiplier is not None else 1.0
+
+
+def _equipped_character_gold_multiplier(equipped) -> float:
+    """exp/실버 배수(_equipped_character_exp_multiplier/_equipped_character_silver_multiplier)와 달리
+    신(gold_multiplier)은 과목 일치 여부와 무관하게 항상 적용된다 - 어떤 세션이든(과목이 뭐든) 그
+    성급의 배수가 그대로 곱해진다. gold_rate가 0이 아닌 지역(종말의 금광/투기장)에서만 실질적인
+    체감이 있다."""
+    if not equipped:
+        return 1.0
+    catalog = get_character_catalog(equipped.name)
+    if not catalog:
+        return 1.0
+    multiplier = (catalog.get("gold_multiplier") or {}).get(str(equipped.star))
+    return multiplier if multiplier is not None else 1.0
+
 def _today_kst():
     # 서버가 어느 시간대에서 돌든(Render는 보통 UTC) 상관없이, 한국 기준 자정에 맞춰 초기화되도록
     # 항상 KST로 변환한 날짜를 씀.
@@ -190,6 +217,8 @@ def add_reading_log(
     equipped = _get_equipped_character(user)
     matched_subject = _resolve_matched_subject(log_data.session_type, log_data.difficulty)
     character_exp_multiplier = _equipped_character_exp_multiplier(equipped, matched_subject)
+    character_silver_multiplier = _equipped_character_silver_multiplier(equipped, matched_subject)
+    character_gold_multiplier = _equipped_character_gold_multiplier(equipped)
 
     # 지역별 과목 보너스(예: 지혜의 신전의 국어/영어) - exp에만 적용되고 실버에는 적용되지 않는다.
     # 캐릭터별 과목 보너스(character_exp_multiplier)와는 별개로 곱연산으로 함께 적용된다.
@@ -203,8 +232,8 @@ def add_reading_log(
         reading_minutes * region.exp_rate * difficulty_multiplier
         * character_exp_multiplier * region_subject_multiplier
     )
-    gained_gold = int(reading_minutes * region.gold_rate)
-    gained_silver = int(reading_minutes * region.silver_rate)
+    gained_gold = int(reading_minutes * region.gold_rate * character_gold_multiplier)
+    gained_silver = int(reading_minutes * region.silver_rate * character_silver_multiplier)
 
     user.gold += gained_gold
     user.lifetime_gold += gained_gold

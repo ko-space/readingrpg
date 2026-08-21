@@ -1,0 +1,89 @@
+/* 1:1 실시간 친선전(arena-live.html) 전용 스타일. 전투 스테이지 자체(유닛/로스터/코스트덕 기본
+   모양)는 arena/arena-battle.css를 그대로 재사용하고, 여기서는 이 페이지에만 있는 요소(상단 vs
+   라벨, 대기/연결끊김 오버레이, 양쪽 코스트덕 배치, 수동발동 어포던스)만 추가한다. */
+
+.live-vs-label {
+    font-size: 16px;
+    font-weight: 900;
+    color: var(--text-dark, #4a3c2a);
+    text-align: center;
+    flex: 1;
+}
+
+/* 친선전도 전술대회(arena-battle.js)와 똑같이 내 코스트덕만 보여준다(확인된 요청) - 상대 카드/게이지는
+   아예 안 그려진다(costDockSides:["attacker"], arena-live.js). 그래서 attacker 쪽 배치도 기존
+   arena-battle.css 그대로 두고, defender 전용 위치/뒤집기 규칙은 필요 없다.
+
+   ── 수동 발동(Phase 5): is-ready 카드는 클릭 가능 ── */
+.cost-dock[data-cost-side="attacker"] .cost-card.is-ready {
+    pointer-events: auto;
+    cursor: pointer;
+}
+.cost-dock[data-cost-side="attacker"] .cost-card.is-ready:hover {
+    box-shadow: 0 0 10px rgba(232, 184, 75, 0.9);
+}
+.cost-dock[data-cost-side="attacker"] .cost-auto-badge {
+    pointer-events: auto;
+    cursor: pointer;
+}
+.cost-auto-badge.is-on {
+    background: var(--panel-border, #c9a86a);
+    color: #fff;
+}
+
+/* ── 매치 시작 전(방 코드 공유+대기) / 연결 끊김 오버레이 ── */
+.live-status-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(20, 14, 8, 0.72);
+}
+.live-status-overlay[hidden] { display: none; }
+
+.live-status-box {
+    background: var(--panel-bg, #f6ecd9);
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 16px;
+    padding: 32px 36px;
+    text-align: center;
+    max-width: 360px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.live-status-title {
+    font-size: 18px;
+    font-weight: 900;
+    color: var(--text-dark, #4a3c2a);
+    margin-bottom: 14px;
+}
+
+.live-room-code-box {
+    margin-bottom: 14px;
+}
+
+.live-room-code-caption {
+    font-size: 12px;
+    color: var(--text-dark, #4a3c2a);
+    opacity: 0.7;
+    margin-bottom: 4px;
+}
+
+.live-room-code-value {
+    font-size: 36px;
+    font-weight: 900;
+    letter-spacing: 8px;
+    color: var(--text-dark, #4a3c2a);
+    font-variant-numeric: tabular-nums;
+}
+
+.live-status-desc {
+    font-size: 13px;
+    color: var(--text-dark, #4a3c2a);
+    opacity: 0.85;
+    line-height: 1.5;
+    margin-bottom: 4px;
+}
+.live-status-desc:empty { display: none; }

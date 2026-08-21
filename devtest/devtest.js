@@ -8,9 +8,6 @@
     const OUTFIT_IMAGE_BASE = `${API_BASE_URL}/static/outfits/`;
 
     const PLAYBACK_SPEED = 0.8;
-    // 방임 해제 즉시 발동(cast_start 없는 skill_resolve)에 순수 연출용으로 붙이는 시전 자세 재생
-    // 시간(arena-battle.js와 동일한 이유 - 백엔드가 시간을 안 주므로 프론트가 임의로 정한 고정값).
-    const NEGLECT_RELEASE_POSE_SECONDS = 0.6;
     const PROJECTILE_TRAVEL_MS = 220;
     const MAX_ATTACK_FRAMES = 6;
     const MAX_SKILL_FRAMES = 9; // 스킬 시전 전용 사진은 캐릭터당 총 9장까지 넣기로 확정됨(arena-battle.js와 동일)
@@ -18,7 +15,9 @@
     const ATTACK_FRAME_DURATION_MS = 60;
     const WALK_FRAME_DURATION_MS = 220;
     const EFFECT_LAUNCH_DELAY_MS = ATTACK_FRAME_DURATION_MS * 3; // 원거리 공격: 애니메이션 3프레임쯤 재생된 뒤 이펙트 발사
-    const MOVE_STEP_PX = 4;
+    // 이동 속도 = 초당 "뷰포트 가로폭의 10%"(arena-battle.js와 동일한 기준 - 화면 크기가 달라져도
+    // 도착 시간이 거의 그대로 유지되도록 고정 픽셀 대신 화면 가로 비례값을 쓴다).
+    const MOVE_SPEED_VW_PERCENT_PER_SEC = 10;
     const ARRIVE_THRESHOLD_PX = 2;
     // 이미 도착한 상태에서 상대가 계속 걷느라 화면 위치가 살짝씩 흔들리면 매 프레임 도착/미도착이
     // 갈려서 공격 연출이 밀리는 문제가 있었다(arena-battle.js와 동일) - 확실히 멀어지기 전까지는
@@ -44,16 +43,21 @@
     }
 
     const SLOTS = ["attacker-front", "attacker-back", "defender-front", "defender-back"];
+    // 서포터(조력자)는 SLOTS(전투 대상이 되는 슬롯)와 분리해서 관리한다 - enemySlots/findSlotByName의
+    // 타겟팅 목록엔 일부러 안 넣어서(아래 각각 별도 수정) 기본공격/스킬의 대상이 되지 않는다. 양 팀 모두
+    // 지원한다(방어 조력자 특성 테스트도 필요할 수 있음).
+    const SUPPORTER_SLOTS = ["attacker-supporter", "defender-supporter"];
 
     // 수동 "스킬 사용" 버튼용 - battle_engine.py의 계산식을 그대로 흉내낸다(서버 왕복 없이 로컬에서 즉시 적용).
     const STAR_BASE_STATS = { 1: { hp: 100, atk: 10 }, 2: { hp: 200, atk: 20 }, 3: { hp: 300, atk: 30 }, 4: { hp: 400, atk: 40 }, 5: { hp: 500, atk: 50 }, 6: { hp: 600, atk: 60 } };
     const TYPE_ADVANTAGE = { Parent: "Teacher", Student: "Parent", Teacher: "Student" };
 
     // hp는 원거리 기준값, atk는 근거리 기준값 - 반대쪽 사거리는 1.5배(battle_engine.py의 RANGE_STAT_MULTIPLIER와 동일).
+    // 내구도 패치: 체력 125%/공격력 75%(레벨 보정분 포함) - battle_core.py의 compute_unit_stats와 동일.
     function computeBaseStats(star, level, isMelee) {
         const base = STAR_BASE_STATS[star] || STAR_BASE_STATS[1];
-        const rangedHp = base.hp + level * 20;
-        const meleeAtk = base.atk + level * 2;
+        const rangedHp = Math.round((base.hp + level * 20) * 1.25);
+        const meleeAtk = Math.round((base.atk + level * 2) * 0.75);
         if (isMelee) return { hp: Math.round(rangedHp * 1.5), atk: meleeAtk };
         return { hp: rangedHp, atk: Math.round(meleeAtk * 1.5) };
     }
@@ -146,8 +150,9 @@
             if (d.hp_percent) parts.push(`최대 체력 ${d.hp_percent}%`);
             return `${event.actor}의 [Special] 발동! 아군 전체 ${parts.join("·")} 증가`;
         }
-        if (event.effect_type === "team_teacher_hp_buff") {
-            return `${event.actor}의 [Special] 발동! 팀 내 선생 타입 캐릭터 최대 체력 ${d.hp_percent}% 증가`;
+        if (event.effect_type === "team_type_hp_buff") {
+            const typeLabel = { Teacher: "선생", Student: "학생", Parent: "부모" }[d.type] || d.type;
+            return `${event.actor}의 [Special] 발동! 팀 내 ${typeLabel} 타입 캐릭터 최대 체력 ${d.hp_percent}% 증가`;
         }
         if (event.effect_type === "teammate_hp_buff_self_cost") {
             return `${event.actor}의 [Special] 발동! ${d.partner ? `${d.partner} 최대 체력 ${d.hp_percent}% 증가, ` : ""}자신의 최대 체력 ${d.self_hp_loss_percent}% 감소`;
@@ -160,6 +165,9 @@
         }
         if (event.effect_type === "dynamic_grant_rear_priority") {
             return `${event.actor}의 [Special] 발동! ${d.partner}도 후방 적 우선 공격`;
+        }
+        if (event.effect_type === "gendered_ally_haste") {
+            return `${event.actor}의 [Special] 발동! ${d.gender === "남" ? "남성" : "여성"} 아군 공격 속도 ${d.haste_percent}% 증가`;
         }
         return `${event.actor}의 [Special] 발동! (${event.effect_type}) ${JSON.stringify(d)}`;
     }
@@ -225,10 +233,43 @@
 
             onUnitConfigChange(slot);
         });
+
+        // 서포터(조력자) 선택란 - unit_role이 supporter인 캐릭터만 후보로 보여준다(front/back에 다른
+        // 역할 캐릭터를 넣는 실수를 방지). "없음"을 기본값으로 둬서 서포터 없이도 그대로 테스트할 수 있다.
+        const supporterCatalog = characterCatalog.filter((c) => c.unit_role === "supporter");
+        SUPPORTER_SLOTS.forEach((slot) => {
+            const cfg = configEl(slot);
+            if (!cfg) return;
+            const charSelect = cfg.querySelector(".dt-char-select");
+            const starSelect = cfg.querySelector(".dt-star-select");
+
+            charSelect.innerHTML = `<option value="">없음</option>` + supporterCatalog
+                .map((c) => `<option value="${c.name}">${c.name} (${c.rarity})</option>`)
+                .join("");
+            starSelect.innerHTML = [1, 2, 3, 4, 5, 6].map((s) => `<option value="${s}">${s}성</option>`).join("");
+            charSelect.value = "";
+
+            charSelect.addEventListener("change", () => {
+                // <select>는 항상 첫 옵션(1성)이 기본으로 선택된 상태라 "비어있을 때만" 조건으로는
+                // 절대 발동하지 않는다 - 서포터는 대부분 1성에 스킬이 없어(희귀 등급은 2성부터 시작)
+                // 캐릭터를 고를 때마다 매번 그 캐릭터의 실제 시작 성급으로 맞춰준다.
+                if (charSelect.value) {
+                    const defaultChar = supporterCatalog.find((c) => c.name === charSelect.value);
+                    if (defaultChar) starSelect.value = String(defaultChar.start_star);
+                }
+                onUnitConfigChange(slot);
+            });
+            starSelect.addEventListener("change", () => onUnitConfigChange(slot));
+
+            onUnitConfigChange(slot);
+        });
     }
 
     function newStatus() {
-        return { atkPercentBonus: 0, atkPercentDebuff: 0, debuffUntil: 0, stunUntil: 0, shieldUntil: 0, stackCount: 0 };
+        return {
+            atkPercentBonus: 0, atkPercentDebuff: 0, debuffUntil: 0, stunUntil: 0, shieldUntil: 0, stackCount: 0,
+            hastePercent: 0, stackAtkBonus: 0, stackHasteBonus: 0,
+        };
     }
 
     function onUnitConfigChange(slot) {
@@ -236,7 +277,14 @@
         const name = cfg.querySelector(".dt-char-select").value;
         const star = Number(cfg.querySelector(".dt-star-select").value);
         const catalog = catalogOf(name);
-        if (!catalog) return;
+        if (!catalog) {
+            // 서포터 선택란의 "없음"(value="") 전용 경로 - 서포터 없이 테스트할 수도 있어야 하므로,
+            // 유닛 데이터를 지우고 전장 스프라이트도 숨긴다(front/back은 "없음"이 없어 사실상 무해).
+            delete units[slot];
+            const emptyEl = document.querySelector(`[data-unit="${slot}"]`);
+            if (emptyEl) emptyEl.hidden = true;
+            return;
+        }
 
         const skillParamsEl = cfg.querySelector(".dt-skill-params");
         const skillMech = catalog.skill_mechanics;
@@ -269,11 +317,14 @@
         // 공격/스킬 프레임 개수를 미리 확인해둔다(arena-battle.js와 동일한 이유) - 안 해두면 이 캐릭터가
         // "처음" 스킬을 쓸 때 그제서야 프레임 탐색(최대 9장 순차 404 확인)을 하느라 실제 시간이 걸리고,
         // 그동안 캐스팅 타이머는 그대로 흘러서 애니메이션이 끝까지 재생되지 못하고 잘리는 버그가 있었다.
-        getAttackFrameCount(outfit);
-        getSkillFrameCount(outfit);
-        if (isMelee) {
-            getWalkFrameCount(outfit);
+        // 서포터는 기본공격/이동이 아예 없으므로(스킬만 씀) attack/walk 프레임은 애초에 찾을 필요가 없다.
+        if (!SUPPORTER_SLOTS.includes(slot)) {
+            getAttackFrameCount(outfit);
+            if (isMelee) {
+                getWalkFrameCount(outfit);
+            }
         }
+        getSkillFrameCount(outfit);
         // _type2 변형은 이의진(염색체 변환) 본인만 실제로 쓴다(arena-battle.js와 동일) - 다른
         // 캐릭터에게까지 존재하지도 않는 type2 프레임을 미리 찾아보게 하면 콘솔에 불필요한 404만 남는다.
         if (name === "이의진") {
@@ -284,6 +335,8 @@
             }
         }
 
+        const el = document.querySelector(`[data-unit="${slot}"]`);
+        if (el) el.hidden = false;
         renderUnit(slot);
     }
 
@@ -302,6 +355,11 @@
         const unit = units[slot];
         const imgEl = document.querySelector(`[data-unit="${slot}"] .battle-unit-img`);
         if (!unit || !imgEl) return;
+
+        // arena-battle.js의 playDeathSequence와 동일한 이유로 걷기 프레임 루프를 확실히 멈추고
+        // walkAnimActive를 리셋한다 - 안 그러면 아직 도착 전(walk_N.webp 순환 중)에 원거리 공격으로
+        // 죽었을 때 그 루프가 안 멈춘 채로 남아, 슬롯이 나중에 재사용될 때 다시 시작되지 않는다.
+        stopWalkFrames(slot);
 
         // arena-battle.js의 playDeathSequence와 동일한 이유로 한 틱 미룬다 - 같은 콜백 안에서 이어지는
         // 피해 로그가 먼저 찍히고 그 다음에 사망 로그가 오게 하기 위함.
@@ -350,12 +408,19 @@
                 imgEl.classList.remove("dying", "death-fallback-filter", "golden-self-destruct");
 
                 if (!attackAnimActive[slot]) {
-                    const variant = spriteVariantSuffix(slot);
-                    imgEl.onerror = () => {
+                    if (SUPPORTER_SLOTS.includes(slot)) {
+                        // 서포터는 전장에 나서지 않는 존재라 battle_idle(전투 대기 자세) 자체가 없다 -
+                        // 404 후 onerror로 되돌아가는 우회 없이 처음부터 idle(인벤토리/로스터용 원본)만 쓴다.
                         imgEl.onerror = null;
                         imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.webp`;
-                    };
-                    imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.webp`;
+                    } else {
+                        const variant = spriteVariantSuffix(slot);
+                        imgEl.onerror = () => {
+                            imgEl.onerror = null;
+                            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.webp`;
+                        };
+                        imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.webp`;
+                    }
                     imgEl.classList.toggle("flipped", isFacingFlipped(slot)); // 방향은 전투 중 동적으로 바뀔 수 있음
                 }
             }
@@ -372,6 +437,7 @@
 
     function renderAll() {
         SLOTS.forEach(renderUnit);
+        SUPPORTER_SLOTS.forEach(renderUnit);
     }
 
     // 이의진처럼 상태(type1/type2)에 따라 다른 스프라이트 파일을 쓰는 캐릭터용(arena-battle.js와 동일).
@@ -384,8 +450,11 @@
     // ───────────────────────── 유닛 선택(클릭) -> 활성 유닛 ─────────────────────────
 
     function setupUnitSelection() {
-        // summon(복제체) 슬롯도 소환된 뒤에는 클릭으로 활성 유닛 선택이 가능해야 한다.
-        [...SLOTS, "attacker-summon-front", "attacker-summon-back", "defender-summon-front", "defender-summon-back"].forEach((slot) => {
+        // summon(복제체) 슬롯도 소환된 뒤에는 클릭으로 활성 유닛 선택이 가능해야 한다. 서포터도 "활성
+        // 유닛"으로는 선택 가능해야 [스킬 사용] 버튼으로 테스트할 수 있다 - 여기서 막는 건 "전투 대상"
+        // 선택이 아니라 "누구를 조작할지"라 서포터를 넣어도 "타깃이 된다"는 뜻이 아니다(enemySlots/
+        // findSlotByName은 별도로 그대로 두어 실제 공격/스킬 대상에서는 여전히 제외된다).
+        [...SLOTS, ...SUPPORTER_SLOTS, "attacker-summon-front", "attacker-summon-back", "defender-summon-front", "defender-summon-back"].forEach((slot) => {
             const el = document.querySelector(`[data-unit="${slot}"]`);
             if (!el) return;
             el.addEventListener("click", () => {
@@ -466,9 +535,9 @@
         return [isCrit ? Math.round(atk * CRIT_MULTIPLIER) : atk, isCrit];
     }
 
-    function hitVisual(slot, isCrit, typeMultiplier) {
+    function hitVisual(slot, isCrit, typeMultiplier, damage) {
         renderUnit(slot);
-        flashHit(slot, isCrit, typeMultiplier);
+        flashHit(slot, isCrit, typeMultiplier, damage);
     }
 
     // 캐릭터 하나가 이번 성급에 실제 스킬을 갖고 있는지(있으면 {effect_type, params}) 조회 - copy_target_skill(강승유)에서 씀.
@@ -481,10 +550,24 @@
 
     const MANUAL_SKILL_HANDLERS = {
         self_stack_buff(casterSlot, params) {
+            // 윤대웅 "카메라 업그레이드"(확인된 요청으로 공격력->공격 속도, backend/skill_handlers.py와
+            // 동일한 델타 패턴) - 통째로 대입하면 다른 영구 소스의 기여분을 지워버리는 버그가 있어서
+            // (확인된 요청으로 함께 수정), 이 스킬이 지금까지 쌓아둔 자기 몫만 델타로 빼고 새 몫을 더한다.
             const u = units[casterSlot];
             if (u.status.stackCount < params.max_stacks) u.status.stackCount += 1;
-            u.status.atkPercentBonus = u.status.stackCount * params.percent_per_stack;
-            return { text: `공격력 +${u.status.atkPercentBonus}% (스택 ${u.status.stackCount})` };
+            const newBonus = u.status.stackCount * params.percent_per_stack;
+            const stat = params.stat || "atk";
+            let label;
+            if (stat === "haste") {
+                u.status.hastePercent += newBonus - u.status.stackHasteBonus;
+                u.status.stackHasteBonus = newBonus;
+                label = `공격 속도 +${newBonus}%`;
+            } else {
+                u.status.atkPercentBonus += newBonus - u.status.stackAtkBonus;
+                u.status.stackAtkBonus = newBonus;
+                label = `공격력 +${newBonus}%`;
+            }
+            return { text: `${label} (스택 ${u.status.stackCount})` };
         },
 
         summon_clone(casterSlot, params) {
@@ -656,7 +739,7 @@
             const [atk, isCrit] = rollDamageAtk(casterSlot);
             const damage = atk * params.multiplier / 100 * typeMult;
             const dealt = applyDamage(targetSlot, damage);
-            hitVisual(targetSlot, isCrit, typeMult);
+            hitVisual(targetSlot, isCrit, typeMult, dealt);
             return { text: `${units[targetSlot].name}에게 ${dealt} 피해(밀쳐내기)${isCrit ? " 치명타!" : ""}`, targetSlot };
         },
 
@@ -671,7 +754,7 @@
                 const typeMult = getTypeMultiplier(caster.attackType, t.defenseType);
                 const [atk, isCrit] = rollDamageAtk(casterSlot);
                 const dealt = applyDamage(slot, atk * mult / 100 * typeMult);
-                hitVisual(slot, isCrit, typeMult);
+                hitVisual(slot, isCrit, typeMult, dealt);
                 parts.push(`${t.name} ${dealt}${isCrit ? "(치명타!)" : ""}`);
                 hits.push({ targetSlot: slot, gender });
             });
@@ -711,7 +794,7 @@
             const typeMult = getTypeMultiplier(units[casterSlot].attackType, units[targetSlot].defenseType);
             const [atk, isCrit] = rollDamageAtk(casterSlot);
             const dealt = applyDamage(targetSlot, atk * params.fallback_multiplier / 100 * typeMult);
-            hitVisual(targetSlot, isCrit, typeMult);
+            hitVisual(targetSlot, isCrit, typeMult, dealt);
             return { text: `복제할 스킬 없음 - ${units[targetSlot].name}에게 ${dealt} 피해${isCrit ? " 치명타!" : ""}` };
         },
 
@@ -720,15 +803,24 @@
             if (!targetSlot) return { text: "대상 없음" };
             units[targetSlot].status.stunUntil = performance.now() + params.seconds * 1000;
             renderUnit(targetSlot);
-            // 송주헌 "격차 벌리기": multiplier가 있으면 기절과 함께 피해도 준다.
+            // 송주헌 "격차 벌리기"/김크장 "GPT 킬러": multiplier가 있으면 기절과 함께 피해도 준다.
+            // bullet_count가 있으면(김크장만) 서버(_skill_stun_target)와 동일하게 탄환마다 전체
+            // 공격력의 1/bullet_count씩 독립적으로 크리를 굴려서 여러 번 나눠 맞힌다.
             if (params.multiplier) {
                 const caster = units[casterSlot];
                 const target = units[targetSlot];
                 const typeMult = getTypeMultiplier(caster.attackType, target.defenseType);
-                const [atk, isCrit] = rollDamageAtk(casterSlot);
-                const dealt = applyDamage(targetSlot, atk * params.multiplier / 100 * typeMult);
-                hitVisual(targetSlot, isCrit, typeMult);
-                return { text: `${target.name} ${params.seconds}초 기절, 피해 ${dealt}${isCrit ? "(치명타!)" : ""}`, targetSlot };
+                const bulletCount = params.bullet_count || 1;
+                let totalDealt = 0;
+                let anyCrit = false;
+                for (let i = 0; i < bulletCount; i++) {
+                    const [atk, isCrit] = rollDamageAtk(casterSlot);
+                    const dealt = applyDamage(targetSlot, (atk / bulletCount) * params.multiplier / 100 * typeMult);
+                    hitVisual(targetSlot, isCrit, typeMult, dealt);
+                    totalDealt += dealt;
+                    anyCrit = anyCrit || isCrit;
+                }
+                return { text: `${target.name} ${params.seconds}초 기절, 피해 ${totalDealt}${anyCrit ? "(치명타!)" : ""}`, targetSlot };
             }
             return { text: `${units[targetSlot].name} ${params.seconds}초 기절`, targetSlot };
         },
@@ -741,7 +833,7 @@
                 const typeMult = getTypeMultiplier(caster.attackType, t.defenseType);
                 const [atk, isCrit] = rollDamageAtk(casterSlot);
                 const dealt = applyDamage(slot, atk * params.multiplier / 100 * typeMult);
-                hitVisual(slot, isCrit, typeMult);
+                hitVisual(slot, isCrit, typeMult, dealt);
                 parts.push(`${t.name} ${dealt}${isCrit ? "(치명타!)" : ""}`);
             });
             return { text: `적 전체 피해: ${parts.join(", ") || "대상 없음"}` };
@@ -754,7 +846,7 @@
             const [atk, isCrit] = rollDamageAtk(casterSlot);
             const damage = target.hp * params.hp_percent / 100 + atk * params.atk_percent / 100;
             const dealt = applyDamage(targetSlot, damage);
-            hitVisual(targetSlot, isCrit);
+            hitVisual(targetSlot, isCrit, undefined, dealt);
             return { text: `${target.name}에게 ${dealt} 피해${isCrit ? " 치명타!" : ""}`, targetSlot };
         },
 
@@ -767,7 +859,7 @@
             const typeMult = getTypeMultiplier(units[casterSlot].attackType, target.defenseType);
             const [atk, isCrit] = rollDamageAtk(casterSlot);
             const dealt = applyDamage(targetSlot, atk * params.multiplier / 100 * typeMult);
-            hitVisual(targetSlot, isCrit, typeMult);
+            hitVisual(targetSlot, isCrit, typeMult, dealt);
             return { text: `${target.name} 공격력 -${params.atk_debuff_percent}% + ${dealt} 피해${isCrit ? " 치명타!" : ""}`, targetSlot };
         },
 
@@ -778,7 +870,7 @@
             if (units[allySlot] && units[allySlot].hp > 0) {
                 const [atk, isCrit] = rollDamageAtk(casterSlot);
                 const dealt = applyDamage(allySlot, atk * params.multiplier / 100);
-                hitVisual(allySlot, isCrit);
+                hitVisual(allySlot, isCrit, undefined, dealt);
                 parts.push(`${units[allySlot].name} ${dealt}${isCrit ? "(치명타!)" : ""}`);
             }
             aliveEnemyUnits(casterSlot).forEach((slot) => {
@@ -786,10 +878,42 @@
                 const typeMult = getTypeMultiplier(caster.attackType, t.defenseType);
                 const [atk, isCrit] = rollDamageAtk(casterSlot);
                 const dealt = applyDamage(slot, atk * params.multiplier / 100 * typeMult);
-                hitVisual(slot, isCrit, typeMult);
+                hitVisual(slot, isCrit, typeMult, dealt);
                 parts.push(`${t.name} ${dealt}${isCrit ? "(치명타!)" : ""}`);
             });
             return { text: `자신 제외 전원 피해: ${parts.join(", ") || "대상 없음"}` };
+        },
+
+        positional_bomb_line(casterSlot, params) {
+            // 김룡환 "Perfect" - 실제로는 전장 좌표(0~3축) 기준 5발 독립 판정이지만, 수동 모드는
+            // 정밀한 위치를 추적하지 않는다("정밀 계산 없이 눈으로 느낌만 확인하는 용도"라는 이 모드의
+            // 기존 방침 그대로) - 그래서 적 전열/후열은 항상 맞는 것으로(실전에서 가장 자주 걸리는
+            // 구간과 일치) 단순화하고, 내 편은 [이동] 버튼으로 전진(advancedSlot)해 있을 때만 사거리에
+            // 든 것으로 취급해 같이 맞는다(친화력 미스도 재현 가능하게).
+            const caster = units[casterSlot];
+            const ownSide = sideOf(casterSlot);
+            const ownFrontSlot = `${ownSide}-front`;
+            const ownBackSlot = `${ownSide}-back`;
+
+            const targets = [];
+            aliveEnemyUnits(casterSlot)
+                .filter((s) => s.endsWith("front") || s.endsWith("back"))
+                .forEach((slot) => targets.push({ slot, isOwn: false }));
+            [ownFrontSlot, ownBackSlot].forEach((slot) => {
+                if (units[slot] && units[slot].hp > 0 && advancedSlot[slot]) targets.push({ slot, isOwn: true });
+            });
+
+            const parts = [];
+            targets.forEach(({ slot, isOwn }) => {
+                const t = units[slot];
+                const typeMult = isOwn ? 1.0 : getTypeMultiplier(caster.attackType, t.defenseType);
+                const [atk, isCrit] = rollDamageAtk(casterSlot);
+                const dealt = applyDamage(slot, atk * params.multiplier / 100 * typeMult);
+                hitVisual(slot, isCrit, typeMult, dealt);
+                parts.push(`${t.name} ${dealt}${isCrit ? "(치명타!)" : ""}`);
+            });
+
+            return { text: `폭탄 5발: ${parts.join(", ") || "대상 없음"}` };
         },
     };
 
@@ -1008,43 +1132,62 @@
     function captureAndApplyHp(slot, newHp) {
         if (!slot || !units[slot]) return true;
         const wasAlreadyDead = units[slot].hp <= 0;
-        units[slot].hp = newHp;
+        // 이미 죽어있었다면 적용하지 않는다(arena-battle.js와 동일한 이유) - 이 갱신은 시간상 이
+        // 이벤트보다 나중인(하지만 연출 지연 때문에 화면엔 더 먼저 도착한) 다른 이벤트가 이미 이
+        // 유닛을 죽였다는 뜻이라, 덮어쓰면 죽은 유닛이 이 낡은 hp로 "부활"해서 정작 진짜로 죽인
+        // 이벤트의 renderUnit이 나중에 실행될 때 hp가 0이 아니게 되어 사망 연출이 영영 안 뜨는
+        // 버그로 이어진다(실제 배틀로그 재현으로 확인됨).
+        if (!wasAlreadyDead) {
+            units[slot].hp = newHp;
+        }
         return wasAlreadyDead;
     }
 
-    // 치명타 시 대상 머리 위에 "치명타!" 글자가 튀어오르듯 잠깐 떴다 사라진다.
-    function showCritLabel(slot) {
+    // 상성(유형 상성) 적중 시 대상 머리 위에 "Weak"(유리, 주황 글씨·진한 빨강 테두리)/"Resist"(불리,
+    // 하늘색 글씨·진한 파랑 테두리) 글자를 띄운다(arena-battle.js와 동일). damage(선택)가 있으면 그
+    // 글자 바로 밑에 <br>로 피해 숫자를 이어붙인다(별도 엘리먼트로 독립 배치하지 않음 - 같은 팝업 안의
+    // 두 번째 줄이라 위치 계산이 필요 없다). isCrit이면 그 숫자 뒤에 가시 돋친 붉은 타원을 추가로
+    // 얹는다(더 이상 "치명타!" 글자 자체는 안 뜬다 - CSS .label-damage-crit-burst 참고).
+    // 같은 대상이 짧은 시간에 여러 번 맞으면 팝업들이 전부 같은 자리에서 시작해 겹쳐 안 읽히므로,
+    // jitterPoint(shared/attack-effects.js)로 작은 원 안에서 무작위로 살짝 흩어지게 한다.
+    function showTypeLabel(slot, kind, damage, isCrit) {
         const layer = document.getElementById("projectile-layer");
         const imgEl = document.querySelector(`[data-unit="${slot}"] .battle-unit-img`);
         if (!layer || !imgEl) return;
         const pos = fieldRelativeCenter(imgEl);
-        const label = document.createElement("div");
-        label.className = "crit-label";
-        label.textContent = "치명타!";
-        label.style.left = `${pos.x}px`;
-        label.style.top = `${pos.y - 46}px`;
-        layer.appendChild(label);
-        setTimeout(() => label.remove(), 700);
-    }
-
-    // 상성(유형 상성) 적중 시 대상 머리 위에 "Weak"(유리, 빨강)/"Resist"(불리, 파랑) 글자를 띄운다(arena-battle.js와 동일).
-    function showTypeLabel(slot, kind) {
-        const layer = document.getElementById("projectile-layer");
-        const imgEl = document.querySelector(`[data-unit="${slot}"] .battle-unit-img`);
-        if (!layer || !imgEl) return;
-        const pos = fieldRelativeCenter(imgEl);
+        const jittered = jitterPoint({ x: pos.x, y: pos.y - 62 }, 16);
         const label = document.createElement("div");
         label.className = `type-label type-${kind}`;
-        label.textContent = kind === "weak" ? "Weak" : "Resist";
-        label.style.left = `${pos.x}px`;
-        label.style.top = `${pos.y - 62}px`;
+        const text = kind === "weak" ? "Weak" : "Resist";
+        label.innerHTML = damage != null
+            ? `<span class="label-text">${text}</span><br><span class="label-damage label-damage-${kind}${isCrit ? " label-damage-crit-burst" : ""}">${Math.round(damage).toLocaleString()}</span>`
+            : text;
+        label.style.left = `${jittered.x}px`;
+        label.style.top = `${jittered.y}px`;
         layer.appendChild(label);
-        setTimeout(() => label.remove(), 700);
+        setTimeout(() => label.remove(), 520);
+    }
+
+    // 피해 숫자(weak/resist 글자가 전혀 없는 평범한 타격 전용) - 흰 글씨로 대상 머리 위 기본 위치에
+    // 홀로 떴다 사라진다(arena-battle.js와 동일). isCrit이면 뒤에 가시 돋친 붉은 타원을 얹는다.
+    function showDamageLabel(slot, damage, isCrit) {
+        const layer = document.getElementById("projectile-layer");
+        const imgEl = document.querySelector(`[data-unit="${slot}"] .battle-unit-img`);
+        if (!layer || !imgEl) return;
+        const pos = fieldRelativeCenter(imgEl);
+        const jittered = jitterPoint({ x: pos.x, y: pos.y - 30 }, 16);
+        const label = document.createElement("div");
+        label.className = `damage-label${isCrit ? " label-damage-crit-burst" : ""}`;
+        label.textContent = Math.round(damage).toLocaleString();
+        label.style.left = `${jittered.x}px`;
+        label.style.top = `${jittered.y}px`;
+        layer.appendChild(label);
+        setTimeout(() => label.remove(), 520);
     }
 
     // flashHit/flashEffectAura(+EFFECT_AURA_COLORS)는 이제 shared/attack-effects.js가 arena-battle.js와
     // 공유로 제공한다(중복 방지) - 이 파일 시작부의 initAttackEffects(...) 호출로 showTypeLabel/
-    // showCritLabel(이 화면 전용 라벨 연출)만 넘겨준다.
+    // showDamageLabel(이 화면 전용 라벨 연출)만 넘겨준다.
 
     // ===== 상태 아이콘(체력바 위, 왼쪽부터 채워짐) - arena-battle.js와 동일한 source-map 방식 =====
     // xN 배지는 서로 다른 원인이 동시에 겹칠 때만 오르고, 같은 원인의 반복(갱신)은 카운트를 늘리지 않는다.
@@ -1156,6 +1299,17 @@
         return Number(match[1].split(",")[4]) || 0;
     }
 
+    // el의 "인라인 transform이 전혀 없다고 가정했을 때"의 위치를 잰다(arena-battle.js와 동일) - 넉백이
+    // 남긴 translateX가 쌓여있어도 순수 홈(전투 시작) 위치를 구할 수 있다. 동기적으로 지웠다 즉시
+    // 복원하므로 진행 중인 트랜지션에도 영향을 주지 않는다.
+    function measureHomeRect(el) {
+        const saved = el.style.transform;
+        el.style.transform = "none";
+        const rect = el.getBoundingClientRect();
+        el.style.transform = saved;
+        return rect;
+    }
+
     // 청년 전용(bonus_damage_knockback): 대상을 "후방으로 이동"한 것으로 취급한다 - 밀려난 뒤 원래
     // 자리로 되돌아오지 않고 그대로 남는다(arena-battle.js와 동일). CSS 트랜지션으로 한 번만 밀어내고
     // 손을 떼는 이유: walker의 tick()도 같은 요소의 인라인 transform을 매 프레임 덮어쓰는데, rAF
@@ -1239,11 +1393,16 @@
         });
         walkerRunning = true;
         const myEpoch = ++walkerEpoch;
+        let lastTickMs = null; // 실제 경과 시간(dt)을 재서 곱한다 - 안 그러면 고주사율 모니터에서 더 빨리 걷는다.
 
         // summon(복제체) 슬롯은 전투 도중에 units에 새로 추가될 수 있으므로, 고정된 SLOTS 대신
         // 매 프레임 Object.keys(units)를 다시 읽어야 새로 생긴 유닛도 즉시 이동을 시작한다.
-        function tick() {
+        function tick(now) {
             if (!walkerRunning || walkerEpoch !== myEpoch) return;
+            const dt = lastTickMs === null ? 1 / 60 : Math.min(0.1, (now - lastTickMs) / 1000);
+            lastTickMs = now;
+            const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+            const moveSpeedPxPerSec = viewportWidth * MOVE_SPEED_VW_PERCENT_PER_SEC / 100;
             Object.keys(units).forEach((slot) => {
                 if (!units[slot] || !units[slot].isMelee || units[slot].hp <= 0) return;
                 if (walkerSuspended[slot]) return; // 넉백 트랜지션이 끝날 때까지 이 유닛은 건드리지 않는다
@@ -1268,7 +1427,8 @@
                     walkAnimActive[slot] = true;
                     playWalkFrames(slot);
                 }
-                const step = Math.sign(gap) * Math.min(MOVE_STEP_PX, Math.abs(gap));
+                const stepPx = moveSpeedPxPerSec * dt;
+                const step = Math.sign(gap) * Math.min(stepPx, Math.abs(gap));
                 setFacing(slot, step < 0);
                 const currentX = getCurrentTranslateX(el);
                 el.style.transform = `translateX(${currentX + step}px)`;
@@ -1322,7 +1482,7 @@
                 const dummyDamage = Math.round((isCrit ? 10 * CRIT_MULTIPLIER : 10) * typeMult); // 수동 테스트는 눈으로 느낌만 확인하는 용도라 정밀 계산 없이 고정값 기준 + 상성만 반영
                 units[targetSlot].hp = Math.max(0, units[targetSlot].hp - dummyDamage);
                 renderUnit(targetSlot);
-                flashHit(targetSlot, isCrit, typeMult);
+                flashHit(targetSlot, isCrit, typeMult, dummyDamage);
                 let stunText = "";
                 // 이의진 type2(Parent) 상태 기본공격 부가효과 - battle_engine.py의 _apply_type2_stun_if_active와 동일.
                 const stunSeconds = actor.status?.type2StunSeconds;
@@ -1429,7 +1589,8 @@
                 // 시전자가 곧 수신자이므로 시전자에게 뜬다.
                 if (dispatchEffectType === "self_stack_buff") {
                     flashEffectAura(actorSlot, "buff");
-                    setStatusIcon(actorSlot, "atk_up", { source: `${actorSlot}:self_stack_buff`, weight: units[actorSlot].status.stackCount });
+                    const stackIcon = params.stat === "haste" ? "atk_speed_up" : "atk_up";
+                    setStatusIcon(actorSlot, stackIcon, { source: `${actorSlot}:self_stack_buff`, weight: units[actorSlot].status.stackCount });
                 } else if (dispatchEffectType === "self_shield_duration") {
                     flashEffectAura(actorSlot, "special");
                     setStatusIcon(actorSlot, "immune", { source: `${actorSlot}:self_shield_duration`, durationMs: params.seconds * 1000 });
@@ -1443,6 +1604,14 @@
                             setStatusIcon(result.targetSlot, "stun", { source: `${actorSlot}:stun`, durationMs: params.stun_seconds * 1000 });
                         });
                     }
+                } else if (dispatchEffectType === "stun_target" && units[actorSlot]?.name === "김크장" && result.targetSlot) {
+                    // 김크장 "GPT 킬러" - 피해/기절 데이터는 핸들러가 이미 즉시 반영했으므로(다른 수동
+                    // 핸들러들과 동일한 관례), 여기선 N-O-G-P-T 5탄환 연출만 곁들이고 CC 오라/아이콘은
+                    // 탄환이 실제로 도착하는 시점에 맞춰 띄운다.
+                    playGptKillerVolley(actorSlot, result.targetSlot, () => {
+                        flashEffectAura(result.targetSlot, "cc");
+                        setStatusIcon(result.targetSlot, "stun", { source: `${actorSlot}:stun`, durationMs: params.seconds * 1000 });
+                    }, null, sideOf(actorSlot));
                 } else if (dispatchEffectType === "stun_target" && result.targetSlot) {
                     flashEffectAura(result.targetSlot, "cc");
                     setStatusIcon(result.targetSlot, "stun", { source: `${actorSlot}:stun`, durationMs: params.seconds * 1000 });
@@ -1462,6 +1631,17 @@
                     setStatusIcon(result.targetSlot, "knockback", { source: `${actorSlot}:knockback`, durationMs: MOMENT_ICON_MS });
                 } else if (dispatchEffectType === "aoe_enemy_damage") {
                     spawnGasBreathStream(actorSlot, () => {});
+                } else if (dispatchEffectType === "positional_bomb_line") {
+                    // 김룡환 "Perfect" - 피해는 핸들러가 이미 즉시 반영했으므로, 여기선 폭탄 낙하
+                    // 연출만 순수하게 곁들인다(실제 착탄 지점은 항상 고정된 5개 지점). 착탄 지점은
+                    // 항상 화면 오른쪽(수비 후방 방향)으로 고정돼 있었는데, 서버 로직(battle_engine.py의
+                    // is_attacker_team 분기)과 다르게 시전자 진영을 반영하지 못해 수비 조력자로 놓아도
+                    // 계속 오른쪽으로 나가는 버그가 있었다 - sideOf로 갈라서 공격 진영이면 오른쪽
+                    // (적진=수비 방향), 수비 진영이면 왼쪽(적진=공격 방향)으로 나가게 한다.
+                    const bombFractions = sideOf(actorSlot) === "attacker"
+                        ? [0.6, 0.7, 0.8, 0.9, 1.0]
+                        : [0.4, 0.3, 0.2, 0.1, 0.0];
+                    playPositionalBombLine(bombFractions, () => {});
                 } else if (dispatchEffectType === "heal_ally_percent_max_hp") {
                     // 아군 전체가 한 번에 회복되므로(death_heal_ally와 동일한 이유) 투사체 없이 곧바로 반영.
                     (result.healedSlots || []).forEach((slot) => {
@@ -1508,7 +1688,7 @@
 
     async function startBattle() {
         walkerRunning = false;
-        SLOTS.forEach((slot) => clearAllStatusIcons(slot)); // 서버가 새로 보내는 이벤트로만 상태가 갱신되게, 수동으로 쌓아둔 건 초기화
+        [...SLOTS, ...SUPPORTER_SLOTS].forEach((slot) => clearAllStatusIcons(slot)); // 서버가 새로 보내는 이벤트로만 상태가 갱신되게, 수동으로 쌓아둔 건 초기화
         Object.keys(walkerSuspended).forEach((slot) => delete walkerSuspended[slot]);
         // 이전 전투에서 남은 배우별 애니메이션 체인도 정리한다 - 이미 완료된(resolved) 체인이라 새
         // 체인이 이어붙어도 기능상 무해하지만, 세션 내 재실행이 잦은 devtest 특성상 위생적으로 비워둔다.
@@ -1516,7 +1696,7 @@
         // resetAll과 동일한 이유로 진행 중이던 시전/공격/이동 루프의 토큰도 무효화한다 - 이전 전투가
         // 애니메이션 도중(시전/공격/걷기 중)에 끝나고 곧바로 재시작하면, 그 루프가 여전히 유효하다고
         // 판단해서 새 전투의 화면 위에 이전 전투 캐릭터의 프레임을 계속 덮어쓸 수 있다.
-        SLOTS.forEach((slot) => {
+        [...SLOTS, ...SUPPORTER_SLOTS].forEach((slot) => {
             attackAnimTokens[slot] = (attackAnimTokens[slot] || 0) + 1;
             walkAnimTokens[slot] = (walkAnimTokens[slot] || 0) + 1;
             attackAnimActive[slot] = false;
@@ -1541,6 +1721,12 @@
             defender_front: collectUnitConfig("defender-front"),
             defender_back: collectUnitConfig("defender-back"),
         };
+        // 서포터는 선택("없음"이 아님) 상태일 때만 요청에 싣는다 - 서버 스키마도 옵션 필드라 그냥
+        // 안 보내면 서포터 없는 기존 방식 그대로 동작한다.
+        SUPPORTER_SLOTS.forEach((slot) => {
+            const supporterName = configEl(slot)?.querySelector(".dt-char-select").value;
+            if (supporterName) body[slot.replace("-", "_")] = collectUnitConfig(slot);
+        });
 
         log("전투 게시 요청 중...");
         let res;
@@ -1596,6 +1782,29 @@
                 }
             }
         });
+
+        // 서포터는 응답에 있을 때만 채운다("없음"으로 보낸 요청이면 해당 팀 supporter가 null) -
+        // 지난 전투에서 서포터가 있었다가 이번엔 없는 경우를 대비해 없으면 확실히 지우고 숨긴다.
+        SUPPORTER_SLOTS.forEach((supporterSlot) => {
+            const side = sideOf(supporterSlot);
+            const supporterRaw = data[`${side}_team`].supporter;
+            const supporterEl = document.querySelector(`[data-unit="${supporterSlot}"]`);
+            if (supporterRaw) {
+                units[supporterSlot] = {
+                    name: supporterRaw.name, maxHp: supporterRaw.max_hp, hp: supporterRaw.max_hp,
+                    isMelee: supporterRaw.is_melee, outfit: supporterRaw.outfit, star: supporterRaw.star,
+                    style: RANGED_ATTACK_STYLE[supporterRaw.name] || (supporterRaw.is_melee ? "melee" : "straight"),
+                    isType2: false,
+                };
+                if (supporterEl) supporterEl.hidden = false;
+                // 서포터는 기본공격이 없으므로(스킬만 씀) attack 프레임 캐시는 불필요 - getSkillFrameCount만.
+                framePrecachePromises.push(getSkillFrameCount(units[supporterSlot].outfit));
+            } else {
+                delete units[supporterSlot];
+                if (supporterEl) supporterEl.hidden = true;
+            }
+        });
+
         renderAll();
         await Promise.all(framePrecachePromises);
         startMeleeWalker();
@@ -1609,10 +1818,12 @@
         const backSlot = `${side}-back`;
         const summonFrontSlot = `${side}-summon-front`;
         const summonBackSlot = `${side}-summon-back`;
+        const supporterSlot = `${side}-supporter`;
         if (units[frontSlot]?.name === name) return frontSlot;
         if (units[backSlot]?.name === name) return backSlot;
         if (units[summonFrontSlot]?.name === name) return summonFrontSlot;
         if (units[summonBackSlot]?.name === name) return summonBackSlot;
+        if (units[supporterSlot]?.name === name) return supporterSlot;
         return null;
     }
 
@@ -1784,16 +1995,18 @@
                 }
             }
         } else if (event.event_type === "death_trigger_resolve") {
-            // 이영웅 "히포크라테스 선서": 자신이 죽는 순간 아군을 회복.
-            (event.detail?.heals || []).forEach((heal) => {
-                const healSlot = findSlotByName(actorSide, heal.target);
+            // 이영웅 "히포크라테스 선서": 자신이 죽는 순간 아군에게 보호막 부여(확인된 요청 - 원래는
+            // 회복이었음). devtest.js는 shared/battle-renderer.js를 안 써서 보호막 바 표시는 없지만
+            // (확인됨), units[slot].shield 값 자체는 최신으로 맞춰둔다.
+            (event.detail?.shields || []).forEach((shield) => {
+                const healSlot = findSlotByName(actorSide, shield.target);
                 if (!healSlot) return;
-                units[healSlot].hp = heal.target_hp_after;
+                units[healSlot].hp = shield.target_hp_after;
+                units[healSlot].shield = shield.target_shield_after;
                 renderUnit(healSlot);
-                flashEffectAura(healSlot, "heal");
-                setStatusIcon(healSlot, "heal", { source: `${event.actor}:death_heal`, durationMs: 1200 });
+                flashEffectAura(healSlot, "buff");
             });
-            log(`[특성] ${event.actor}의 [Special] 발동! 사망과 함께 아군 회복`);
+            log(`[특성] ${event.actor}의 [Special] 발동! 사망과 함께 아군 보호막 부여`);
         } else if (event.event_type === "paint_gain_resolve") {
             // 방임석 "예술가의 혼"(arena-battle.js와 동일) - weight를 "현재 총 보유량"으로 덮어쓰고, 0이면 지운다.
             const paintSlot = findSlotByName(actorSide, event.actor);
@@ -1831,6 +2044,41 @@
                 }
             }
             log(`[특성] ${event.actor}의 흡혈 상태 ${event.detail?.active ? "활성화" : "해제"}`);
+        } else if (event.event_type === "low_hp_shield_resolve") {
+            // 배 "개량한복"(arena-battle.js와 동일) - self_shield_duration(자기 자신에게 거는 무적)과
+            // 같은 연출을 재사용하되, 수신자가 시전자(서포터라 전장에 없음)가 아니라 그 순간 체력이
+            // 50% 미만으로 떨어진 STRIKER라는 점만 다르다.
+            const shieldSlot = findSlotByName(actorSide, event.actor);
+            if (shieldSlot) {
+                const shieldMs = (event.detail?.seconds || 0) * 1000 * PLAYBACK_SPEED;
+                flashEffectAura(shieldSlot, "special");
+                setStatusIcon(shieldSlot, "immune", { source: `${shieldSlot}:low_hp_shield`, durationMs: shieldMs });
+            }
+            log(`[패시브] ${event.actor} ${event.detail?.seconds}초간 무적`);
+        } else if (event.event_type === "ally_attack_splash_resolve") {
+            // 김국회 "일당 독재"(arena-battle.js와 동일) - 아군 STRIKER 기본공격마다 그 대상이 아닌
+            // 다른 적 전원에게 대포알 스플래시가 들어간다. actorSlot은 위에서 findSlotByName으로 이미
+            // 구해뒀다(서포터도 대상이라 찾을 수 있음).
+            const splashHits = event.detail?.hits || [];
+            splashHits.forEach((hit) => {
+                const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
+                if (!hitSlot) return;
+                const wasAlreadyDead = captureAndApplyHp(hitSlot, hit.target_hp_after);
+                spawnCannonShellProjectile(actorSlot, hitSlot, () => {
+                    if (wasAlreadyDead) return;
+                    renderUnit(hitSlot);
+                    flashHit(hitSlot, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
+                }, actorSide);
+            });
+            log(`[패시브] ${event.actor} 스플래시: ${splashHits.map((h) => `${h.target} ${h.shown_damage ?? h.damage}${h.is_crit ? "(치명타!)" : ""}`).join(", ") || "대상 없음"}`);
+        } else if (event.event_type === "summon_expire_resolve") {
+            // 김국회 "국회의사당": 20초 지속시간이 다 되면 자동으로 사라진다(arena-battle.js와 동일) -
+            // 죽었을 때와 동일하게 hp를 0으로 반영해서 기존 사망 렌더링을 그대로 태운다.
+            if (actorSlot && units[actorSlot]) {
+                units[actorSlot].hp = 0;
+                renderUnit(actorSlot);
+            }
+            log(`[소환] ${event.actor} 지속시간 종료로 퇴장`);
         } else if (event.event_type === "target_lock_resolve") {
             // 백엔드가 새 기본공격 대상을 "확정"한 시점(실제 명중보다 먼저 온다, arena-battle.js와 동일) -
             // 근접 유닛은 이 신호를 받는 즉시 새 목표를 향해 걷기 시작한다.
@@ -1884,23 +2132,6 @@
                 units[actorSlot].isType2 = !!event.detail?.type2_active;
             }
 
-            // 방임 해제 즉시 발동은 cast_start 없이 skill_resolve만 온다(arena-battle.js와 동일한 이유 -
-            // 무방비 노출을 막으려고 정상 시전 절차를 건너뛰기 때문). 그대로 두면 시전 자세 없이 곧바로
-            // idle로 스냅해버려서 발동감이 없으므로, 순수 연출로만 짧은 시전 자세를 끼워넣는다(백엔드
-            // 판정은 이미 끝난 그대로, 재현/딜레이 없음). onNeglectReleasePoseDone은 아래 dispatchEffectType별
-            // 분기(이번 이벤트 처리의 나머지, 지금 동기 실행 흐름 안에서 곧 채워짐)가 채워준다 - 이
-            // 클로저는 항상 그보다 나중(비동기, playCastFrames가 끝난 뒤)에야 실행되므로 항상 채워진 뒤에 호출된다.
-            const isNeglectReleaseTrigger = Boolean(event.detail?.neglect_release_trigger);
-            let onNeglectReleasePoseDone = null;
-            if (isNeglectReleaseTrigger && actorSlot && units[actorSlot]) {
-                chainActorAnim(actorSlot, async () => {
-                    await waitForAnimIdle(actorSlot);
-                    const poseImgEl = document.querySelector(`[data-unit="${actorSlot}"] .battle-unit-img`);
-                    poseImgEl?.classList.add("casting");
-                    await playCastFrames(actorSlot, NEGLECT_RELEASE_POSE_SECONDS * 1000 * PLAYBACK_SPEED);
-                    onNeglectReleasePoseDone?.();
-                });
-            }
 
             if (actorSlot) {
                 // "시전 자세 풀기 + idle 스냅"만 이 배우 전용 체인에 매달아둔다(arena-battle.js와 동일한
@@ -1936,7 +2167,8 @@
 
                 if (dispatchEffectType === "self_stack_buff" && event.detail?.stack_count) {
                     flashEffectAura(actorSlot, "buff");
-                    setStatusIcon(actorSlot, "atk_up", { source: `${actorSlot}:self_stack_buff`, weight: event.detail.stack_count });
+                    const stackIcon = event.detail.stat === "haste" ? "atk_speed_up" : "atk_up";
+                    setStatusIcon(actorSlot, stackIcon, { source: `${actorSlot}:self_stack_buff`, weight: event.detail.stack_count });
                 }
 
                 if (dispatchEffectType === "self_shield_duration" && event.detail?.shield_seconds) {
@@ -2039,6 +2271,97 @@
                     meleeArrived[cloneSlot] = false;
                 }
             }
+
+            // 김국회 "국회의사당"(arena-battle.js와 동일) - summon_clone과 같은 전용 summon_front/
+            // summon_back 슬롯을 쓰지만, 캐스터(서포터라 전장에 스프라이트가 없음) 자신은 밀려나지
+            // 않는다 - 대신 그 자리를 원래 차지하고 있던(히트박스가 겹치는) 유닛이 밀려난다.
+            if (dispatchEffectType === "summon_into_ranged_slot" && event.detail?.summoned) {
+                const buildingSlot = `${actorSide}-${event.detail.building_slot}`;
+                units[buildingSlot] = {
+                    name: event.detail.building_name,
+                    maxHp: event.detail.building_hp,
+                    hp: event.detail.building_hp,
+                    isMelee: false,
+                    outfit: "parliament/basic",
+                    // RANGED_ATTACK_STYLE["국회의사당"]="cannon"과 동일한 값을 직접 지정(arena-battle.js와
+                    // 동일한 이유 - 이 유닛은 rawUnit->style 변환을 거치지 않고 여기서 직접 생성됨).
+                    style: "cannon",
+                    spriteVariant: "",
+                    meleeOverlapPercent: null,
+                    isCopy: false,
+                };
+
+                // displaced_ally는 캐스터 자기 팀일 수도, 전투 중 이동/넉백으로 그 자리까지 들어온
+                // 적군일 수도 있다(확인된 설계) - 그래서 actorSide가 아니라 백엔드가 알려주는
+                // displaced_side로 찾는다. 아무도 그 자리에 없으면 displaced_ally 자체가 없다.
+                const displacedSlot = event.detail.displaced_ally
+                    ? findSlotByName(event.detail.displaced_side, event.detail.displaced_ally)
+                    : null;
+                // 착지 지점은 항상 캐스터 소속 팀의 "후방(back)" 홈 좌표 - 그 슬롯 엘리먼트의 화면
+                // 위치를 기준으로 삼는다(거기 지금 실제로 누가 서 있는지와 무관하게 항상 같은 자리).
+                const rangedSlotEl = document.querySelector(`[data-unit="${actorSide}-back"]`);
+                const buildingEl = document.querySelector(`[data-unit="${buildingSlot}"]`);
+
+                if (buildingEl) {
+                    buildingEl.hidden = false;
+                    buildingEl.style.transform = "";
+                    // 착지 지점은 전용 summon 슬롯의 기본 CSS 위치가 아니라 후방 홈 좌표(히트박스가
+                    // 겹치도록) - measureHomeRect로 재는 이유: 이전 소환에서 넉백당한 아군이 그 슬롯
+                    // 엘리먼트에 남긴 인라인 transform이 있으면 착지 지점이 두 번째 소환부터 엉뚱한
+                    // 자리로 밀리기 때문(arena-battle.js와 동일한 버그 수정).
+                    let baseX = getCurrentTranslateX(buildingEl);
+                    if (rangedSlotEl) {
+                        const buildingRect = buildingEl.getBoundingClientRect();
+                        const slotRect = measureHomeRect(rangedSlotEl);
+                        baseX += slotRect.left - buildingRect.left;
+                    }
+
+                    // 하늘에서 떨어지는 착지 연출 - 착지하는 순간(화면 흔들림과 정확히 같은 타이밍에)
+                    // 밀려나는 아군의 넉백 상태/효과도 함께 발동한다(확인된 설계).
+                    buildingEl.style.transition = "none";
+                    buildingEl.style.transform = `translate(${baseX}px, -520px)`;
+                    void buildingEl.offsetWidth;
+                    const FALL_MS = 420;
+                    buildingEl.style.transition = `transform ${FALL_MS}ms cubic-bezier(.55,0,1,1)`;
+                    requestAnimationFrame(() => {
+                        buildingEl.style.transform = `translate(${baseX}px, 0px)`;
+                    });
+                    setTimeout(() => {
+                        buildingEl.style.transition = "";
+                        if (attackEffectsConfig.fieldEl) {
+                            attackEffectsConfig.fieldEl.classList.remove("ground-fire-shake");
+                            void attackEffectsConfig.fieldEl.offsetWidth;
+                            attackEffectsConfig.fieldEl.classList.add("ground-fire-shake");
+                        }
+                        if (displacedSlot) {
+                            const displacedEl = document.querySelector(`[data-unit="${displacedSlot}"]`);
+                            if (displacedEl) {
+                                flashEffectAura(displacedSlot, "cc");
+                                setStatusIcon(displacedSlot, "knockback", { source: `${displacedSlot}:knockback`, durationMs: MOMENT_ICON_MS });
+                                // 확인된 설계: 방향은 밀려나는 유닛이 아니라 항상 캐스터(actorSide)의
+                                // 소속으로 정해진다 - 공격자면 오른쪽(+1), 수비자면 왼쪽(-1)이 적진 방향.
+                                const forwardDir = actorSide === "attacker" ? 1 : -1;
+                                applyKnockback(displacedSlot, {
+                                    distance: displacedEl.getBoundingClientRect().width * 2,
+                                    durationMs: 320,
+                                    knockDir: forwardDir,
+                                });
+                            }
+                        }
+                    }, FALL_MS + 20);
+                }
+
+                attackAnimTokens[buildingSlot] = (attackAnimTokens[buildingSlot] || 0) + 1;
+                attackAnimActive[buildingSlot] = false;
+                rangedResolvePending[buildingSlot] = false;
+                meleeHitPending[buildingSlot] = false;
+                delete actorAnimChain[buildingSlot];
+                delete walkerSuspended[buildingSlot];
+                getAttackFrameCount(units[buildingSlot].outfit);
+                renderUnit(buildingSlot);
+                log(`[액티브] ${event.actor} -> 국회의사당이 ${event.detail.displaced_ally || "빈 자리"}${event.detail.displaced_ally ? "의 자리" : ""}에 소환됨 (${event.detail.duration_seconds}초)`);
+            }
+
             // 캐릭터 전용 스킬 발사체 연출. 김남옥(여성 대상 기절 성공)·이종복은 투사체가 대상에
             // 닿는 순간에 맞춰 피해/상태 표시를 늦추고, 서민석·임소정은 즉시 반영하면서 투사체만 얹는다.
             if (dispatchEffectType === "conditional_target_debuff" && event.detail?.stunned && actorSlot) {
@@ -2052,6 +2375,38 @@
                         });
                         if (event.detail?.interrupted_cast) interruptCasting(hitSlot);
                     });
+                }
+            } else if (dispatchEffectType === "stun_target" && event.actor === "김크장" && actorSlot && event.detail?.hit) {
+                // 김크장 "GPT 킬러": arena-battle.js와 동일 - 백엔드가 탄환마다(bullet_count=5) 전체
+                // 공격력의 1/5씩 독립적으로 크리를 굴려 hits를 5개 만들어주므로, 이종복 "F=ma"의
+                // bullet_hits와 동일한 방식으로 각 글자가 도착할 때마다 그 탄환 몫만 반영한다 - 마지막
+                // (T) 탄환의 몫과 기절만 onArrive에서 함께 처리한다.
+                const hitSlot = event.detail.target ? findHitSlot(actorSide, event.detail.target, event.detail.target_side) : null;
+                const gptHits = event.detail?.hits || [];
+                if (hitSlot) {
+                    const lastHit = gptHits[gptHits.length - 1];
+                    const wasAlreadyDead = lastHit ? captureAndApplyHp(hitSlot, lastHit.target_hp_after) : false;
+                    playGptKillerVolley(actorSlot, hitSlot, () => {
+                        if (!wasAlreadyDead) {
+                            if (lastHit) {
+                                renderUnit(hitSlot);
+                                flashHit(hitSlot, lastHit.is_crit, lastHit.type_multiplier, lastHit.shown_damage ?? lastHit.damage);
+                            }
+                            flashEffectAura(hitSlot, "cc");
+                            setStatusIcon(hitSlot, "stun", {
+                                source: `${event.actor}:stun`,
+                                durationMs: (event.detail.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
+                            });
+                            if (event.detail?.interrupted_cast) interruptCasting(hitSlot);
+                        }
+                    }, (letterIndex) => {
+                        if (wasAlreadyDead || letterIndex >= gptHits.length - 1) return;
+                        const hit = gptHits[letterIndex];
+                        if (!hit) return;
+                        units[hitSlot].hp = Math.min(units[hitSlot].hp, hit.target_hp_after);
+                        renderUnit(hitSlot);
+                        flashHit(hitSlot, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
+                    }, actorSide);
                 }
             } else if (dispatchEffectType === "stun_target" && event.detail?.hit) {
                 const hitSlot = event.detail.target ? findHitSlot(actorSide, event.detail.target, event.detail.target_side) : null;
@@ -2070,8 +2425,32 @@
                     if (dmgSlot) {
                         units[dmgSlot].hp = hit.target_hp_after;
                         renderUnit(dmgSlot);
-                        flashHit(dmgSlot, hit.is_crit, hit.type_multiplier);
+                        flashHit(dmgSlot, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
                     }
+                }
+            } else if (dispatchEffectType === "stun_rear_target" && event.detail?.hit) {
+                // 배 "유배 보내기": arena-battle.js와 동일 - 항상 적의 "후방"을 노리고, 캐스터가 아니라
+                // 대상 머리 위에서 감옥이 떨어지는 전용 연출(dropPrisonOnTarget). 피격판정은 감옥이 실제로
+                // 대상에게 닿는 순간(onLand)에 나고, 감옥은 기절 지속시간 동안 대상 위에 얹혀있다가 사라진다.
+                const hitSlot = event.detail.target ? findHitSlot(actorSide, event.detail.target, event.detail.target_side) : null;
+                if (hitSlot) {
+                    const hit = event.detail?.hits?.[0];
+                    const wasAlreadyDead = hit ? captureAndApplyHp(hitSlot, hit.target_hp_after) : false;
+                    dropPrisonOnTarget(hitSlot, (removePrison) => {
+                        if (!wasAlreadyDead) {
+                            if (hit) {
+                                renderUnit(hitSlot);
+                                flashHit(hitSlot, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
+                            }
+                            flashEffectAura(hitSlot, "cc");
+                            setStatusIcon(hitSlot, "stun", {
+                                source: `${event.actor}:stun`,
+                                durationMs: (event.detail.stun_seconds || 0) * 1000 * PLAYBACK_SPEED,
+                            });
+                            if (event.detail?.interrupted_cast) interruptCasting(hitSlot);
+                        }
+                        setTimeout(removePrison, (event.detail.stun_seconds || 0) * 1000 * PLAYBACK_SPEED);
+                    });
                 }
             } else if (dispatchEffectType === "damage_hp_percent_plus_atk" && actorSlot && event.detail?.hits?.length) {
                 const hit = event.detail.hits[0];
@@ -2081,7 +2460,7 @@
                     spawnMeteorProjectile(actorSlot, hitSlot, () => {
                         if (wasAlreadyDead) return;
                         renderUnit(hitSlot);
-                        flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
+                        flashHit(hitSlot, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
                     });
                 }
             } else if (dispatchEffectType === "aoe_gendered_damage" && actorSlot) {
@@ -2090,7 +2469,7 @@
                     if (!hitSlot) return;
                     units[hitSlot].hp = hit.target_hp_after;
                     renderUnit(hitSlot);
-                    flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
+                    flashHit(hitSlot, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
                     const gender = effectiveGender(hit.target, hitSlot);
                     spawnHeartProjectile(actorSlot, hitSlot, gender === "여" ? "heart-red" : "heart-pink", () => {});
                 });
@@ -2100,7 +2479,7 @@
                 if (hitSlot) {
                     units[hitSlot].hp = hit.target_hp_after;
                     renderUnit(hitSlot);
-                    flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
+                    flashHit(hitSlot, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
                     playElectricBolt(actorSlot, hitSlot, true, null, ELECTRIC_ORIGIN_SKILL);
                     flashEffectAura(hitSlot, "debuff");
                     setStatusIcon(hitSlot, "atk_down", {
@@ -2117,7 +2496,7 @@
                 if (hitSlot) {
                     units[hitSlot].hp = hit.target_hp_after;
                     renderUnit(hitSlot);
-                    flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
+                    flashHit(hitSlot, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
                 }
             } else if (dispatchEffectType === "aoe_enemy_damage" && actorSlot) {
                 // 가스 숨결이 실제로 닿는 순간에 맞춰 피해/HP/피격 이펙트를 반영한다(arena-battle.js와
@@ -2131,12 +2510,14 @@
                         const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                         if (!hitSlot) return;
                         renderUnit(hitSlot);
-                        flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
+                        flashHit(hitSlot, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
                     });
                 });
             } else if (dispatchEffectType === "heal_ally_percent_max_hp" && event.detail?.healed) {
                 // 이제 아군 전체가 동시에 회복된다(death_heal_ally와 동일한 이유로 투사체 없이 곧바로 반영).
+                // missed(아직 이동 중이라 하트가 안 맞음)면 체력 갱신도 오라/아이콘도 없다(arena-battle.js와 동일).
                 (event.detail.heals || []).forEach((heal) => {
+                    if (heal.missed) return;
                     const healSlot = findSlotByName(actorSide, heal.target);
                     if (!healSlot) return;
                     units[healSlot].hp = heal.target_hp_after;
@@ -2168,14 +2549,37 @@
                         const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                         if (!hitSlot) return;
                         renderUnit(hitSlot);
-                        flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
+                        flashHit(hitSlot, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
+                    }
+                );
+            } else if (dispatchEffectType === "positional_bomb_line" && actorSlot && event.detail?.impact_fractions) {
+                // 김룡환 "Perfect" (arena-battle.js와 동일한 로직) - 폭탄 5발이 착탄점마다 독립적으로
+                // 판정되므로, 각 히트가 자기 bomb_index에 해당하는 폭탄이 실제로 착탄하는 순간에 맞춰
+                // 화면에 반영되도록 미룬다. HP는 지금 즉시 반영, 아무도 안 맞아도 폭탄 5발은 그대로
+                // 떨어져야 하므로 hits 유무가 아니라 impact_fractions 존재로만 분기한다.
+                const bombHits = event.detail.hits || [];
+                bombHits.forEach((hit) => {
+                    hit.__wasAlreadyDead = captureAndApplyHp(findHitSlot(actorSide, hit.target, hit.target_side), hit.target_hp_after);
+                });
+                playPositionalBombLine(
+                    event.detail.impact_fractions,
+                    () => {},
+                    (bombIndex) => {
+                        bombHits.filter((h) => h.bomb_index === bombIndex).forEach((hit) => {
+                            if (hit.__wasAlreadyDead) return;
+                            const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
+                            if (!hitSlot) return;
+                            renderUnit(hitSlot);
+                            flashHit(hitSlot, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
+                        });
                     }
                 );
             } else if (dispatchEffectType === "consume_paint_multi_effect" && actorSlot) {
                 // 방임석 "제목은 관객이 정하세요" - 물감 색깔별로 각각 독립된 투사체를 병렬로 날린다
-                // (arena-battle.js와 동일). 물감이 하나도 없으면 흰색 단일 투사체로 강한 피해만.
+                // (arena-battle.js와 동일). 물감이 하나도 없으면 SKILL_TARGET_AVAILABILITY_CHECKS
+                // (_has_any_paint)가 애초에 카드 발동 자체를 막으므로, 이 이벤트는 항상 최소 한 색은
+                // 보유한 채로 도착한다.
                 const d = event.detail || {};
-                const hasAnyPaint = d.red || d.blue || d.yellow;
 
                 // 백엔드가 이 스킬 발동 시 보유 물감을 전부 0으로 리셋하는데(arena-battle.js와 동일한
                 // 이유), 소모 이벤트 자체엔 그걸 알리는 별도 신호가 없어서 여기서 세 색 아이콘을 직접
@@ -2189,68 +2593,52 @@
                 // 하므로 더 늦게 뜬다)보다 먼저 처리돼도 체력이 과거 값으로 되돌아가지 않게 한다. 실제
                 // 투사체 발사(순수 연출)는 fireConsumePaintVisuals로 묶어서, 평소엔 즉시 실행하고 방임
                 // 해제 즉시 발동일 땐 시전 자세가 다 재생된 뒤로 미룬다(arena-battle.js와 동일한 패턴).
-                let whiteHit = null;
                 let redHit = null;
                 let blueHeal = null;
                 let stunTargets = null;
-                if (!hasAnyPaint && d.hits?.length) {
+                if (d.red && d.hits?.length) {
                     const hit = d.hits[0];
                     const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                     if (hitSlot) {
                         const wasAlreadyDead = captureAndApplyHp(hitSlot, hit.target_hp_after);
-                        whiteHit = { hit, hitSlot, wasAlreadyDead };
-                    }
-                } else {
-                    if (d.red && d.hits?.length) {
-                        const hit = d.hits[0];
-                        const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
-                        if (hitSlot) {
-                            const wasAlreadyDead = captureAndApplyHp(hitSlot, hit.target_hp_after);
-                            redHit = { hit, hitSlot, wasAlreadyDead };
-                        }
-                    }
-
-                    if (d.blue && d.heals?.length) {
-                        const heal = d.heals[0];
-                        // 회복은 항상 시전자와 같은 편이라 actorSide로 바로 찾는다.
-                        const healSlot = findSlotByName(actorSide, heal.target);
-                        if (healSlot) {
-                            const wasAlreadyDead = captureAndApplyHp(healSlot, heal.target_hp_after);
-                            blueHeal = { heal, healSlot, wasAlreadyDead };
-                        }
-                    }
-
-                    if (d.yellow && d.stunned?.length) {
-                        stunTargets = d.stunned;
+                        redHit = { hit, hitSlot, wasAlreadyDead };
                     }
                 }
 
-                const fireConsumePaintVisuals = () => {
-                    if (whiteHit) {
-                        const { hit, hitSlot, wasAlreadyDead } = whiteHit;
-                        spawnPaintSkillProjectile(actorSlot, hitSlot, "paint-white", () => {
-                            if (wasAlreadyDead) return;
-                            renderUnit(hitSlot);
-                            flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
-                        });
+                if (d.blue && d.shields?.length) {
+                    const shield = d.shields[0];
+                    // 보호막도 항상 시전자와 같은 편이라 actorSide로 바로 찾는다. HP는 안 바뀌므로
+                    // target_hp_after를 그대로 넘긴다 - devtest.js는 shared/battle-renderer.js를 안 쓰는
+                    // 별도 구현이라 보호막 바 표시는 없지만(확인됨), units[slot].shield 값 자체는
+                    // 최신으로 맞춰둔다.
+                    const healSlot = findSlotByName(actorSide, shield.target);
+                    if (healSlot) {
+                        const wasAlreadyDead = captureAndApplyHp(healSlot, shield.target_hp_after);
+                        if (units[healSlot]) units[healSlot].shield = shield.target_shield_after;
+                        blueHeal = { heal: shield, healSlot, wasAlreadyDead };
                     }
+                }
 
+                if (d.yellow && d.stunned?.length) {
+                    stunTargets = d.stunned;
+                }
+
+                const fireConsumePaintVisuals = () => {
                     if (redHit) {
                         const { hit, hitSlot, wasAlreadyDead } = redHit;
                         spawnPaintSkillProjectile(actorSlot, hitSlot, "paint-red", () => {
                             if (wasAlreadyDead) return;
                             renderUnit(hitSlot);
-                            flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
+                            flashHit(hitSlot, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
                         });
                     }
 
                     if (blueHeal) {
-                        const { heal, healSlot, wasAlreadyDead } = blueHeal;
+                        const { healSlot, wasAlreadyDead } = blueHeal;
                         spawnPaintSkillProjectile(actorSlot, healSlot, "paint-blue", () => {
                             if (wasAlreadyDead) return;
                             renderUnit(healSlot);
-                            flashEffectAura(healSlot, "heal");
-                            setStatusIcon(healSlot, "heal", { source: `${event.actor}:paint_heal`, durationMs: MOMENT_ICON_MS });
+                            flashEffectAura(healSlot, "buff");
                         });
                     }
 
@@ -2270,18 +2658,14 @@
                     }
                 };
 
-                if (isNeglectReleaseTrigger) {
-                    onNeglectReleasePoseDone = fireConsumePaintVisuals;
-                } else {
-                    fireConsumePaintVisuals();
-                }
+                fireConsumePaintVisuals();
             } else {
                 (event.detail?.hits || []).forEach((hit) => {
                     const hitSlot = findHitSlot(actorSide, hit.target, hit.target_side);
                     if (hitSlot) {
                         units[hitSlot].hp = hit.target_hp_after;
                         renderUnit(hitSlot);
-                        flashHit(hitSlot, hit.is_crit, hit.type_multiplier);
+                        flashHit(hitSlot, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
                     }
                 });
             }
@@ -2307,7 +2691,7 @@
             function applyHitVisual() {
                 if (targetSlot) {
                     renderUnit(targetSlot);
-                    flashHit(targetSlot, event.is_crit, event.type_multiplier);
+                    flashHit(targetSlot, event.is_crit, event.type_multiplier, event.shown_damage ?? event.damage);
                     // 이의진 type2 기본공격 부가효과(_apply_type2_stun_if_active) - 남성 대상이면 기절.
                     if (event.target_stunned) {
                         flashEffectAura(targetSlot, "cc");
@@ -2326,7 +2710,7 @@
                 if (actorSlot && event.actor_self_destruct) {
                     renderUnit(actorSlot);
                 }
-                log(`${event.actor} -> ${event.target} 피해 ${event.damage}${event.is_crit ? " 치명타!" : ""}${event.actor_self_heal ? ` (자가 회복 ${event.actor_self_heal})` : ""}${event.actor_self_destruct ? " (자폭)" : ""}`);
+                log(`${event.actor} -> ${event.target} 피해 ${event.shown_damage ?? event.damage}${event.is_crit ? " 치명타!" : ""}${event.actor_self_heal ? ` (자가 회복 ${event.actor_self_heal})` : ""}${event.actor_self_destruct ? " (자폭)" : ""}`);
             }
 
             if (actorSlot && units[actorSlot]?.isMelee) {
@@ -2406,7 +2790,7 @@
             imgEl?.classList.remove("casting", "casting-rainbow", "walking", "attacking", "hit-flash", "crit-flash", "is-clone", "flipped", "effect-aura-flash", "dying", "death-fallback-filter");
             imgEl?.style.removeProperty("--effect-aura-color");
         });
-        [...SLOTS, "attacker-summon-front", "attacker-summon-back", "defender-summon-front", "defender-summon-back"].forEach((slot) => {
+        [...SLOTS, ...SUPPORTER_SLOTS, "attacker-summon-front", "attacker-summon-back", "defender-summon-front", "defender-summon-back"].forEach((slot) => {
             clearAllStatusIcons(slot);
             delete facingFlipped[slot];
             delete walkerSuspended[slot];
@@ -2430,7 +2814,7 @@
         advancedSlot = {};
         document.getElementById("dt-active-unit-name").textContent = "(전장에서 캐릭터 클릭)";
         document.getElementById("dt-log").innerHTML = "";
-        SLOTS.forEach((slot) => onUnitConfigChange(slot));
+        [...SLOTS, ...SUPPORTER_SLOTS].forEach((slot) => onUnitConfigChange(slot));
         log("초기화 완료");
     }
 
@@ -2443,7 +2827,7 @@
             fieldEl: document.querySelector(".battle-field"),
             layerEl: document.getElementById("projectile-layer"),
             showTypeLabel,
-            showCritLabel,
+            showDamageLabel,
             effectLaunchDelayMs: EFFECT_LAUNCH_DELAY_MS,
         });
         setupUnitSelection();

@@ -46,6 +46,7 @@
                     <div class="reveal-character-glow" id="reveal-character-glow"></div>
                     <img class="reveal-character-img" id="reveal-character-img" src="" alt="">
                 </div>
+                <div class="reveal-instant-whiten"></div>
             </div>
             <div class="reveal-side-panel">
                 <div class="reveal-info-row">
@@ -201,6 +202,10 @@
 
         // 상태를 "문 닫히기 전" 초기 모습으로 순간 리셋 (트랜지션 없이)
         overlay.className = "gacha-reveal-overlay open no-transition";
+        // className 리셋은 클래스만 지우므로, 중복 전용 dup-slide가 지난 번에 남겨둔 인라인
+        // transitionDuration(아래 _dupSlideSync 분기 참고)이 이번(특히 신규) 재생에 새지 않도록
+        // 따로 지운다.
+        overlay.querySelector(".reveal-character-wrap").style.transitionDuration = "";
 
         overlay.querySelector("#reveal-bg").className = `reveal-bg rarity-${character.rarity}`;
         overlay.querySelector("#reveal-character-glow").className = `reveal-character-glow rarity-${character.rarity}`;
@@ -239,6 +244,44 @@
         };
 
         // ── 실제 연출 시퀀스 시작 ──
+        if (character._instantEntry) {
+            // 가챠 시네마틱 티저(몸통 확대 + 대각선 스윕) 바로 뒤에 이어지는 경우 - 문 닫힘/열림
+            // 애니메이션도, 캐릭터 확대(0.3배->1배)도 없이(둘 다 확인된 요청으로 제거) 배경/캐릭터
+            // 투명도 페이드인 + reveal-instant-whiten(티저의 화이트닝과 이어지는 흰 막, 서서히 원래
+            // 색으로)만 재생한다. instant-entry 클래스가 이 두 CSS 효과를 켠다.
+            // 옆으로 슬라이드는 표준보다 훨씬 짧은 대기(INSTANT_WAIT_AFTER_OPEN_MS) 뒤에 바로 시작해서,
+            // 대각선 스윕이 아직 화면을 가로지르는 동안 슬라이드가 함께 보이게 한다(확인된 요청).
+            overlay.classList.add("instant-entry");
+            // 신규 전용(확인된 요청): 티저에서 이미 "상체"까지 확대해서 보여줬으므로, 최종 화면에서
+            // 다시 확대되는 연출 없이 처음부터 확대된 상태로 등장한다 - pre-enlarged가 instant-entry의
+            // 기본 scale(1)을 scale(1.35)로 덮어쓰고(gacha-reveal.css), slide-left는 그 확대된 크기를
+            // 유지한 채 이동만 재생한다.
+            if (character._preEnlarged) overlay.classList.add("pre-enlarged");
+            nextPaint(() => {
+                overlay.classList.remove("no-transition");
+                nextPaint(() => {
+                    overlay.classList.add("doors-open");
+                    if (character._dupSlideSync) {
+                        // 중복 전용(확인된 요청): gacha-cinematic.js가 이 화면을 열 때 이미 화면을
+                        // 지나가고 있는 빛줄기(gc-sweep, body 직속)와 보조를 맞춰야 하므로, 신규처럼
+                        // INSTANT_WAIT_AFTER_OPEN_MS(120ms)를 기다리지 않고 doors-open과 동시에 곧바로
+                        // 확대+이동(dup-slide)을 시작한다. 지속시간은 호출부가 넘겨준 _dupSlideMs로
+                        // 맞춰서, 빛줄기가 화면을 완전히 벗어나는 순간 정확히 이동이 멈춘 것처럼 보이게
+                        // 한다(CSS 쪽 고정값 대신 인라인으로 지정 - gacha-cinematic.js의 DUP_SLIDE_MS와
+                        // 항상 정확히 일치시키기 위함).
+                        overlay.querySelector(".reveal-character-wrap").style.transitionDuration = `${character._dupSlideMs}ms`;
+                        overlay.classList.add("dup-slide", "panels-shown");
+                    } else {
+                        const INSTANT_WAIT_AFTER_OPEN_MS = 120;
+                        timers.push(setTimeout(() => {
+                            overlay.classList.add("slide-left", "panels-shown");
+                        }, INSTANT_WAIT_AFTER_OPEN_MS));
+                    }
+                });
+            });
+            return;
+        }
+
         // no-transition을 확실히 "한 프레임 그려진 뒤"에 떼어내고, 그 다음 프레임에 doors-closed를 붙여야
         // 브라우저가 "off-screen(트랜지션 꺼짐) -> off-screen(트랜지션 켜짐) -> center(트랜지션 켜짐)" 순서를
         // 각각 별도 프레임으로 인식해서 애니메이션이 확실히 재생된다.

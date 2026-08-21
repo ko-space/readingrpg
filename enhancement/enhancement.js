@@ -151,8 +151,14 @@
     }
 
     // 지금 선택된 아이템 정의 목록. 확률 미리보기와 "카드 몇 장 필요한지" 계산이 둘 다 이걸 쓴다.
+    // shift/redistribute류 아이템은 적용 순서에 따라 결과가 달라지므로(예: 오페라 하우스 -> 크레파스와
+    // 크레파스 -> 오페라 하우스는 다른 확률표가 나옴), 반드시 selectedItemIds(클릭한 순서)를 기준으로
+    // 순서를 맞춰야 한다 - myEnhancementItems.filter(...)를 쓰면 카탈로그 순서로 나와서, 실제로 제출될
+    // item_ids(selectedItemIds 그대로) 순서와 어긋나 미리보기가 실제 결과와 다르게 보이는 버그가 있었다.
     function getSelectedItemDefs() {
-        return myEnhancementItems.filter((item) => selectedItemIds.includes(item.item_id));
+        return selectedItemIds
+            .map((id) => myEnhancementItems.find((item) => item.item_id === id))
+            .filter(Boolean);
     }
 
     // "강 희의 파쇄기"(파괴 확정)를 지금 선택했는지 - 선택했으면 재료 없이 카드 1장만으로 강화를 시도할 수 있다.

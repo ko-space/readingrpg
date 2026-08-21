@@ -201,12 +201,18 @@
     color: var(--text-dark, #4a3c2a);
 }
 
-/* ── 모집 버튼: 다른 상자들과 너비를 맞춤 ── */
-#gacha-pull-btn {
+/* ── 모집 버튼: 1회(초록)/10회(빨강) 나란히, 다른 상자들과 전체 너비를 맞춤 ── */
+.gacha-pull-btn-row {
     display: flex;
+    gap: 10px;
     width: 100%;
     box-sizing: border-box;
     margin-top: 12px;
+}
+
+.gacha-pull-btn-row .dungeon-enter-btn {
+    flex: 1;
+    width: auto;
 }
 
 /* ── 모집 버튼 아래 포인트 + 인물 선택 ── */

@@ -48,6 +48,7 @@ def _unit_view(unit):
         "name": unit["name"],
         "max_hp": unit["max_hp"],
         "is_melee": unit["is_melee"],
+        "melee_speed_ratio": unit.get("melee_speed_ratio"),
         "outfit": catalog.get("outfits", {}).get("기본"),
         "star": unit["star"],
     }
@@ -62,10 +63,12 @@ def devtest_battle(
     attacker_team = build_team(
         _config_to_unit(req.attacker_front, "front", is_admin),
         _config_to_unit(req.attacker_back, "back", is_admin),
+        supporter=_config_to_unit(req.attacker_supporter, "supporter", is_admin) if req.attacker_supporter else None,
     )
     defender_team = build_team(
         _config_to_unit(req.defender_front, "front", is_admin),
         _config_to_unit(req.defender_back, "back", is_admin),
+        supporter=_config_to_unit(req.defender_supporter, "supporter", is_admin) if req.defender_supporter else None,
     )
 
     result = simulate_battle(attacker_team, defender_team)
@@ -74,8 +77,14 @@ def devtest_battle(
         "attacker_won": result["attacker_won"],
         "duration": result["duration"],
         "events": result["events"],
-        "attacker_team": {"front": _unit_view(attacker_team["front"]), "back": _unit_view(attacker_team["back"])},
-        "defender_team": {"front": _unit_view(defender_team["front"]), "back": _unit_view(defender_team["back"])},
+        "attacker_team": {
+            "front": _unit_view(attacker_team["front"]), "back": _unit_view(attacker_team["back"]),
+            "supporter": _unit_view(attacker_team["supporter"]) if attacker_team.get("supporter") else None,
+        },
+        "defender_team": {
+            "front": _unit_view(defender_team["front"]), "back": _unit_view(defender_team["back"]),
+            "supporter": _unit_view(defender_team["supporter"]) if defender_team.get("supporter") else None,
+        },
     }
 
 
@@ -90,6 +99,7 @@ def devtest_characters(user: User = Depends(get_current_user)):
             "name": c["name"],
             "rarity": c["rarity"],
             "start_star": c["start_star"],
+            "unit_role": c.get("unit_role", "striker"),
             "range": c.get("range"),
             "gender": c.get("gender"),
             "attack_type": c.get("attack_type", "Student"),

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1:1 친선전 - 독서 RPG</title>
+    <link rel="icon" href="logoicon.webp">
+    <link rel="stylesheet" href="shared/lobby.css?v=20260822j">
+    <link rel="stylesheet" href="arena/arena-battle.css?v=20260822j">
+    <link rel="stylesheet" href="shared/attack-effects.css?v=20260822j">
+    <link rel="stylesheet" href="shared/achievement-toast.css?v=20260822j">
+    <link rel="stylesheet" href="gacha/gacha-reveal.css?v=20260822j">
+    <link rel="stylesheet" href="arena/arena-live.css?v=20260822j">
+</head>
+<body>
+    <div class="battle-screen">
+        <div class="battle-timer-row">
+            <div class="live-vs-label" id="live-vs-label">상대를 찾는 중...</div>
+        </div>
+
+        <div class="battle-layout">
+
+            <!-- 좌측: 나 (호스트/게스트 여부와 무관하게 항상 내 팀 - arena-live.js가 이벤트를
+                 도착시점에 attacker<->defender로 리매핑해서 항상 이 자리에 내 팀이 오게 한다) -->
+            <div class="player-panel" data-side="attacker">
+                <div class="player-identity">
+                    <div class="player-avatar-frame">
+                        <img class="player-avatar" id="attacker-avatar" src="" alt="내 대표 캐릭터" onerror="this.style.visibility='hidden'" onload="this.style.visibility=''">
+                    </div>
+
+                    <div class="player-summary">
+                        <div class="player-name" id="attacker-name">나</div>
+                        <div class="card-divider"></div>
+                        <div class="player-meta">
+                            Lv.<span id="attacker-level">-</span>
+                        </div>
+                        <div class="player-title-line" id="attacker-title"></div>
+                    </div>
+                </div>
+
+                <div class="roster-unit" data-roster="attacker-front">
+                    <div class="roster-unit-thumb">
+                        <img class="roster-unit-img" src="" alt="">
+                    </div>
+                    <div class="roster-unit-body">
+                        <div class="roster-name-row">
+                            <div class="roster-unit-name">-</div>
+                            <div class="roster-status-icons"></div>
+                        </div>
+                        <div class="roster-shield-track" hidden>
+                            <div class="roster-shield-fill"></div>
+                        </div>
+                        <div class="roster-hp-track">
+                            <div class="roster-hp-fill"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="roster-unit" data-roster="attacker-back">
+                    <div class="roster-unit-thumb">
+                        <img class="roster-unit-img" src="" alt="">
+                    </div>
+                    <div class="roster-unit-body">
+                        <div class="roster-name-row">
+                            <div class="roster-unit-name">-</div>
+                            <div class="roster-status-icons"></div>
+                        </div>
+                        <div class="roster-shield-track" hidden>
+                            <div class="roster-shield-fill"></div>
+                        </div>
+                        <div class="roster-hp-track">
+                            <div class="roster-hp-fill"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="battle-log-panel" id="battle-log-panel"></div>
+            </div>
+
+            <!-- 중앙: 실제 전투 캐릭터 -->
+            <div class="battle-field">
+                <div class="projectile-layer" id="projectile-layer"></div>
+
+                <div class="battle-row">
+                    <div class="battle-unit" data-unit="attacker-summon-front" hidden>
+                        <img class="battle-unit-img" src="" alt="">
+                        <div class="battle-unit-shadow"></div>
+                    </div>
+                    <div class="battle-unit" data-unit="attacker-summon-back" hidden>
+                        <img class="battle-unit-img" src="" alt="">
+                        <div class="battle-unit-shadow"></div>
+                    </div>
+
+                    <div class="battle-unit" data-unit="attacker-back">
+                        <img class="battle-unit-img" src="" alt="">
+                        <div class="battle-unit-shadow"></div>
+                    </div>
+
+                    <div class="battle-unit" data-unit="attacker-front">
+                        <img class="battle-unit-img" src="" alt="">
+                        <div class="battle-unit-shadow"></div>
+                    </div>
+
+                    <div class="battle-unit" data-unit="defender-front">
+                        <img class="battle-unit-img" src="" alt="">
+                        <div class="battle-unit-shadow"></div>
+                    </div>
+
+                    <div class="battle-unit" data-unit="defender-back">
+                        <img class="battle-unit-img" src="" alt="">
+                        <div class="battle-unit-shadow"></div>
+                    </div>
+
+                    <div class="battle-unit" data-unit="defender-summon-front" hidden>
+                        <img class="battle-unit-img" src="" alt="">
+                        <div class="battle-unit-shadow"></div>
+                    </div>
+                    <div class="battle-unit" data-unit="defender-summon-back" hidden>
+                        <img class="battle-unit-img" src="" alt="">
+                        <div class="battle-unit-shadow"></div>
+                    </div>
+                </div>
+
+                <div class="battle-field-line"></div>
+
+                <!-- 전술대회(arena-battle.js)와 동일하게 내 코스트덕만 둔다(확인된 요청) - 상대
+                     카드/게이지는 아예 그리지 않는다(costDockSides:["attacker"], arena-live.js). -->
+                <div class="cost-dock" id="cost-dock-attacker" data-cost-side="attacker" hidden></div>
+            </div>
+
+            <!-- 우측: 상대 -->
+            <div class="player-panel" data-side="defender">
+                <div class="player-identity">
+                    <div class="player-avatar-frame">
+                        <img class="player-avatar" id="defender-avatar" src="" alt="상대 대표 캐릭터" onerror="this.style.visibility='hidden'" onload="this.style.visibility=''">
+                    </div>
+
+                    <div class="player-summary">
+                        <div class="player-name" id="defender-name">상대</div>
+                        <div class="card-divider"></div>
+                        <div class="player-meta">
+                            Lv.<span id="defender-level">-</span>
+                        </div>
+                        <div class="player-title-line" id="defender-title"></div>
+                    </div>
+                </div>
+
+                <div class="roster-unit" data-roster="defender-front">
+                    <div class="roster-unit-thumb">
+                        <img class="roster-unit-img" src="" alt="">
+                    </div>
+                    <div class="roster-unit-body">
+                        <div class="roster-name-row">
+                            <div class="roster-unit-name">-</div>
+                            <div class="roster-status-icons"></div>
+                        </div>
+                        <div class="roster-shield-track" hidden>
+                            <div class="roster-shield-fill"></div>
+                        </div>
+                        <div class="roster-hp-track">
+                            <div class="roster-hp-fill"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="roster-unit" data-roster="defender-back">
+                    <div class="roster-unit-thumb">
+                        <img class="roster-unit-img" src="" alt="">
+                    </div>
+                    <div class="roster-unit-body">
+                        <div class="roster-name-row">
+                            <div class="roster-unit-name">-</div>
+                            <div class="roster-status-icons"></div>
+                        </div>
+                        <div class="roster-shield-track" hidden>
+                            <div class="roster-shield-fill"></div>
+                        </div>
+                        <div class="roster-hp-track">
+                            <div class="roster-hp-fill"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="battle-result" id="battle-result" hidden>
+            <div class="battle-result-text" id="battle-result-text">-</div>
+            <button class="dungeon-enter-btn" id="battle-close-btn">닫기</button>
+        </div>
+    </div>
+
+    <!-- 매치 시작 전(방 코드 공유 + 상대 대기) / 연결 끊김 시 화면을 덮는 오버레이 -->
+    <div class="live-status-overlay" id="live-waiting-overlay">
+        <div class="live-status-box">
+            <div class="live-status-title" id="live-status-title">상대를 기다리는 중입니다...</div>
+            <div class="live-room-code-box" id="live-room-code-box" hidden>
+                <div class="live-room-code-caption">방 코드</div>
+                <div class="live-room-code-value" id="live-room-code-value">------</div>
+            </div>
+            <div class="live-status-desc" id="live-status-desc"></div>
+            <button class="dungeon-enter-btn" id="live-status-close-btn" hidden>닫기</button>
+        </div>
+    </div>
+
+    <div class="battle-loading-overlay" id="battle-loading-overlay">
+        <div class="battle-loading-text">입장하는 중...</div>
+    </div>
+
+    <script src="shared/api-config.js?v=20260822j"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js?v=20260822j"></script>
+    <script src="shared/session-guard.js?v=20260822j"></script>
+    <script src="shared/nav-lock.js?v=20260822j"></script>
+    <script src="shared/avatar-crop.js?v=20260822j"></script>
+    <script src="shared/achievement-toast.js?v=20260822j"></script>
+    <script src="shared/attack-effects.js?v=20260822j"></script>
+    <script src="shared/battle-renderer.js?v=20260822j"></script>
+    <script src="gacha/gacha-reveal.js?v=20260822j" defer></script>
+    <script src="arena/arena-live.js?v=20260822j" defer></script>
+</body>
+</html>

@@ -82,3 +82,24 @@ def get_current_user(
             detail="다른 기기에서 로그인되어 세션이 종료되었습니다.",
         )
     return user
+
+
+def get_current_user_ws(token: str, db: Session) -> User | None:
+    """(1v1) 친선전 앵커 웹소켓 전용 - 브라우저 WebSocket API는 Authorization 헤더를 못 보내므로
+    ?token= 쿼리스트링으로 받은 access_token을 get_current_user와 동일한 규칙(서명/만료/세션 일치)으로
+    검증한다. HTTPException 대신 None을 돌려준다 - WS 핸드셰이크 단계에서 예외를 던지면 클라이언트에
+    이유가 전달되지 않고 그냥 연결이 끊기므로, 호출부(pvp_live.py)가 accept 후 직접 code/reason을 실어
+    close()하도록 판단만 여기서 내려준다."""
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        user_id = int(payload.get("sub"))
+        session_id = payload.get("sid")
+    except (jwt.PyJWTError, TypeError, ValueError):
+        return None
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return None
+    if user.active_session_id and session_id != user.active_session_id:
+        return None
+    return user

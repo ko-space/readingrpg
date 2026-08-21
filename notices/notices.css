@@ -87,7 +87,11 @@
 }
 
 .notice-detail-overlay {
-    position: absolute;
+    /* 부모(.notices-modal-box)가 480px로 좁게 제한돼 있어서, 상세 모달만 그 폭에 갇히지 않고 화면
+       기준으로 훨씬 넓게 뜨도록 absolute 대신 fixed로 뷰포트에 직접 위치시킨다(확인된 요청 - "매우
+       넓게"). .modal-overlay(z-index:100)의 스태킹 컨텍스트 안에서 그려지므로 다른 모달과 순서가
+       꼬이지 않는다. */
+    position: fixed;
     inset: 0;
     z-index: 40;
     display: flex;
@@ -104,8 +108,8 @@
 
 .notice-detail-box {
     position: relative;
-    width: min(100%, 420px);
-    max-height: 100%;
+    width: min(94vw, 1040px);
+    max-height: min(90vh, 880px);
     display: flex;
     flex-direction: column;
     border: 3px solid #e8c04b;
@@ -170,9 +174,86 @@
     white-space: pre-wrap;
 }
 
+.notice-detail-image {
+    max-height: 320px;
+}
+
 .notice-detail-body .notice-red {
     color: #ff5c5c;
     font-weight: 700;
+}
+
+/* 상향/버프 강조 */
+.notice-detail-body .notice-green {
+    color: #6ee7a0;
+    font-weight: 700;
+}
+
+/* 조정/안내 강조 */
+.notice-detail-body .notice-blue {
+    color: #7ec8ff;
+    font-weight: 700;
+}
+
+/* 신규/하이라이트 강조 - 모달 테마의 금색과 동일 계열 */
+.notice-detail-body .notice-gold {
+    color: #ffd766;
+    font-weight: 700;
+}
+
+/* 섹션 제목 - 왼쪽 금색 바 + 본문보다 큰 글자로 "패치노트" 항목 구분을 준다 */
+.notice-detail-body .notice-h {
+    margin: 20px 0 10px;
+    padding: 4px 0 4px 12px;
+    border-left: 4px solid #e8c04b;
+    font-size: 15.5px;
+    font-weight: 900;
+    color: #f5e6b8;
+    letter-spacing: .2px;
+}
+
+.notice-detail-body .notice-h:first-child {
+    margin-top: 2px;
+}
+
+/* 구분선 - 브라우저 기본 hr 대신 은은한 금색 그라데이션 띠 */
+.notice-detail-body .notice-hr {
+    margin: 16px 0;
+    border: none;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(232, 192, 75, .7) 50%, transparent);
+}
+
+/* 표(예: 인물/방향성 밸런스 목록) - 진짜 게임 패치노트 느낌의 다크+골드 테마 */
+.notice-detail-body .notice-table {
+    width: 100%;
+    margin: 6px 0 18px;
+    border-collapse: collapse;
+    white-space: normal;
+    font-size: 13px;
+}
+
+.notice-detail-body .notice-table th,
+.notice-detail-body .notice-table td {
+    padding: 8px 12px;
+    border: 1px solid rgba(232, 192, 75, .25);
+    text-align: center;
+}
+
+.notice-detail-body .notice-table thead th {
+    background: linear-gradient(160deg, #3a2f12 0%, #2a2410 100%);
+    color: #f5e6b8;
+    font-weight: 900;
+    letter-spacing: .3px;
+}
+
+.notice-detail-body .notice-table tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, .03);
+}
+
+.notice-detail-body .notice-table tbody td:first-child {
+    font-weight: 700;
+    color: #f0ecd8;
 }
 
 @media (max-width: 650px) {

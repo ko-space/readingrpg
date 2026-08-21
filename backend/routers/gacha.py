@@ -32,24 +32,37 @@ PICKUP_SCHEDULE = [
         "characters": [{"character_name": "송주헌", "point_cost": 20, "rate_up": 0.99}],
     },
     {
-        "start_at": datetime(2026, 8, 4, 21, 20, tzinfo=KST),
-        "banner_name": "픽업모집",
-        "image_file": "pickup-banner-new2.webp",
-        "characters": [{"character_name": "방임석", "point_cost": 50, "rate_up": 0.99}], 
-    },
-    {
-        "start_at": datetime(2026, 8, 11, 21, 20, tzinfo=KST),  
-        "banner_name": "픽업모집",
-        "image_file": "pickup-banner-new3.webp",
-        "characters": [{"character_name": "윤 & 호", "point_cost": 40, "rate_up": 0.6666}],
-    },
-    {
-        "start_at": datetime(2026, 8, 18, 21, 20, tzinfo=KST),  
+        "start_at": datetime(2026, 8, 18, 21, 20, tzinfo=KST),
         "banner_name": "픽업모집",
         "image_file": "pickup-banner.webp",
         "characters": [{"character_name": "송주헌", "point_cost": 20, "rate_up": 0.99}],
-    },    
-  
+    },
+    {
+        "start_at": datetime(2026, 8, 21, 21, 20, tzinfo=KST),
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner-new4.webp",
+        "characters": [
+            {"character_name": "김크장", "point_cost": 10, "rate_up": 0.3333},
+            {"character_name": "김룡환", "point_cost": 20, "rate_up": 0.3333},
+        ],
+    },
+    {
+        "start_at": datetime(2026, 8, 24, 21, 20, tzinfo=KST),
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner-new5.webp",
+        "characters": [
+            {"character_name": "배", "point_cost": 30, "rate_up": 0.3333},
+            {"character_name": "김국회", "point_cost": 100, "rate_up": 0.2857},
+        ],
+    },
+    {
+        "start_at": datetime(2026, 8, 27, 21, 20, tzinfo=KST),
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner-new6.webp",
+        "characters": [
+            {"character_name": "신", "point_cost": 200, "rate_up": 0.3333},
+        ],
+    },
 ]
 
 
@@ -175,6 +188,77 @@ def _pick_character_with_pickup(rarity: str, active_pickup_rates: dict, include_
             return pickup_char
     return random.choice(tier)
 
+
+def _pick_rarity() -> str:
+    rand_val = random.random()
+    cumulative = 0.0
+    for tier_name, tier_prob in RARITY_TIER_PROBABILITY.items():
+        cumulative += tier_prob
+        if rand_val < cumulative:
+            return tier_name
+    return "일반"  # 부동소수점 오차 대비 fallback
+
+
+def _perform_one_pull(db: Session, user: User, active_pickup_rates: dict, include_hidden: bool) -> dict:
+    """등급/캐릭터 추첨부터 DB 반영(Character/ActivityLog/GachaPullLog)까지 한 번의 뽑기 전체를 수행하고,
+    그 결과를 프론트 획득 연출이 바로 쓸 수 있는 dict로 돌려준다. 골드 차감/포인트 적립은 호출부 책임.
+
+    실제 커밋(디스크 fsync 포함이라 원격 DB 왕복마다 눈에 띄게 느림)은 하지 않고 flush만 한다 - 10연차가
+    이 함수를 10번 부르는 동안 매번 커밋하면 그 지연이 그대로 쌓여서(사용자 보고: "10연차 인물 접근 후
+    터지는 이펙트가 너무 늦게 나옴") 인트로 연출이 다 끝나고도 한참 더 기다려야 했다. flush는 트랜잭션
+    안에서 방금 추가한 행을 그 자리에서 곧바로 조회 가능하게만 만들고(아래 owned_names 쿼리가 이걸
+    전제로 함) 실제 커밋은 호출부(pull_character/pull_character_ten)가 전부 끝난 뒤 한 번만 한다.
+
+    owned_names는 매 호출마다 새로 조회해야 한다(10연차 도중 앞선 뽑기가 이미 같은 이름을 지급했을 수
+    있어, 뒤의 뽑기가 그걸 "중복"으로 올바르게 인식해야 하기 때문) - 이때 user.characters(관계 캐시)
+    대신 Character 테이블을 직접 새로 쿼리한다. user.characters는 커밋 시점에만 자동으로 새로고침되는데
+    (SQLAlchemy expire_on_commit 기본값), 이제 커밋을 매번 안 하므로 그 캐시가 낡은 채로 남아있을 수
+    있다 - 직접 쿼리는 이 캐시를 아예 안 거치므로(session.autoflush=False라도 이 함수 자신이 이미
+    flush해뒀으므로) 항상 최신 상태를 본다."""
+    rarity = _pick_rarity()
+    picked_character = _pick_character_with_pickup(rarity, active_pickup_rates, include_hidden=include_hidden)
+
+    owned_names = {row[0] for row in db.query(Character.name).filter(Character.user_id == user.id).all()}
+    is_duplicate = picked_character["name"] in owned_names
+    is_pickup = picked_character["name"] in active_pickup_rates
+
+    new_row = Character(
+        user_id=user.id,
+        name=picked_character["name"],
+        job_class=picked_character["job_class"],
+        rarity=rarity,
+        star=RARITY_START_STAR.get(rarity, 1),
+        outfit=picked_character["outfits"]["기본"],
+        is_equipped=0,
+    )
+    db.add(new_row)
+    db.add(ActivityLog(user_id=user.id, activity_type="gacha_pull"))  # 퀘스트("모집 N회") 판정용
+    db.add(GachaPullLog(  # 도전과제("N성 인물 모집", "픽업 인물 모집" 등) 판정용
+        user_id=user.id, character_name=picked_character["name"], rarity=rarity, was_pickup=is_pickup,
+    ))
+    db.flush()
+    db.refresh(new_row)
+
+    return {
+        "message": (
+            f"'{picked_character['name']}' 카드 1장을 추가로 획득했습니다."
+            if is_duplicate else picked_character["description"]
+        ),
+        "character": {
+            "id": new_row.id,
+            "name": new_row.name,
+            "rarity": rarity,
+            "job_class": new_row.job_class,
+            "description": picked_character["description"],
+            "gacha_quote": picked_character.get("gacha_quote"),
+            "outfit": new_row.outfit,
+            **resolve_character_reveal_info(new_row.name, new_row.star),
+        },
+        "is_duplicate": is_duplicate,
+        "is_pickup": is_pickup,
+    }
+
+
 @router.post("/")
 def pull_character(
     banner_id: int | None = None,  # 지금 화면에서 선택 중인 배너. 이게 픽업 배너일 때만 픽업 판정이 적용됨
@@ -190,96 +274,62 @@ def pull_character(
     if user.gold < GACHA_COST:
         raise HTTPException(status_code=400, detail="골드가 부족합니다.")
 
+    # 아직 커밋하지 않는다 - 여기서 커밋하면 with_for_update 락이 곧바로 풀려버려서, 골드를 빼놓고
+    # 아직 뽑기 결과를 반영하기 전인 짧은 틈에 다른 요청이 끼어들 수 있다(_perform_one_pull은 flush만
+    # 하므로, 아래 db.commit()이 이 변경사항까지 한 트랜잭션으로 함께 반영하고 나서야 락이 풀린다).
     user.gold -= GACHA_COST
-
-    rand_val = random.random()
-    cumulative = 0.0
-    rarity = "일반"
-    for tier_name, tier_prob in RARITY_TIER_PROBABILITY.items():
-        cumulative += tier_prob
-        if rand_val < cumulative:
-            rarity = tier_name
-            break
-
-    active_pickup_rates = _get_active_pickup_rates(db, banner_id)
-    picked_character = _pick_character_with_pickup(rarity, active_pickup_rates, include_hidden=(user.id == ADMIN_USER_ID))
-
     user.gacha_points += GACHA_POINTS_PER_PULL
 
-    owned_names = {c.name for c in user.characters}
-    is_duplicate = picked_character["name"] in owned_names
-    is_pickup = picked_character["name"] in active_pickup_rates
-
-    if is_duplicate:
-        # 중복은 버리지 않고 같은 캐릭터 카드 1장으로 저장한다.
-        # 인벤토리 API가 같은 이름+같은 성의 행들을 한 카드로 묶어 count로 보여준다.
-        duplicate_copy = Character(
-            user_id=user.id,
-            name=picked_character["name"],
-            job_class=picked_character["job_class"],
-            rarity=rarity,
-            star=RARITY_START_STAR.get(rarity, 1),
-            outfit=picked_character["outfits"]["기본"],
-            is_equipped=0,
-        )
-        db.add(duplicate_copy)
-        db.add(ActivityLog(user_id=user.id, activity_type="gacha_pull"))  # 퀘스트("모집 N회") 판정용
-        db.add(GachaPullLog(  # 도전과제("N성 인물 모집", "픽업 인물 모집" 등) 판정용
-            user_id=user.id, character_name=picked_character["name"], rarity=rarity, was_pickup=is_pickup,
-        ))
-        db.commit()
-        db.refresh(duplicate_copy)
-        new_achievements, new_characters = check_and_grant_achievements(db, user)
-        return {
-            "message": f"'{picked_character['name']}' 카드 1장을 추가로 획득했습니다.",
-            "character": {
-                "id": duplicate_copy.id,
-                "name": duplicate_copy.name,
-                "rarity": rarity,
-                "job_class": duplicate_copy.job_class,
-                "description": picked_character["description"],
-                "outfit": duplicate_copy.outfit,
-                **resolve_character_reveal_info(duplicate_copy.name, duplicate_copy.star),
-            },
-            "is_duplicate": True,
-            "is_pickup": is_pickup,
-            "left_gold": user.gold,
-            "gacha_points": user.gacha_points,
-            "new_achievements": new_achievements,
-            "new_characters": new_characters,
-        }
-
-    new_character = Character(
-        user_id=user.id,
-        name=picked_character["name"],
-        job_class=picked_character["job_class"],
-        rarity=rarity,
-        star=RARITY_START_STAR.get(rarity, 1),
-        outfit=picked_character["outfits"]["기본"],
-        is_equipped=0
-    )
-    db.add(new_character)
-    db.add(ActivityLog(user_id=user.id, activity_type="gacha_pull"))  # 퀘스트("모집 N회") 판정용
-    db.add(GachaPullLog(  # 도전과제("N성 인물 모집", "픽업 인물 모집" 등) 판정용
-        user_id=user.id, character_name=picked_character["name"], rarity=rarity, was_pickup=is_pickup,
-    ))
+    active_pickup_rates = _get_active_pickup_rates(db, banner_id)
+    result = _perform_one_pull(db, user, active_pickup_rates, include_hidden=(user.id == ADMIN_USER_ID))
     db.commit()
-    db.refresh(new_character)
     new_achievements, new_characters = check_and_grant_achievements(db, user)
 
     return {
-        "message": picked_character["description"],
-        "character": {
-            "id": new_character.id,
-            "name": new_character.name,
-            "rarity": new_character.rarity,
-            "job_class": new_character.job_class,
-            "description": picked_character["description"],
-            "outfit": new_character.outfit,
-            **resolve_character_reveal_info(new_character.name, new_character.star),
-        },
-        "is_duplicate": False,
-        "is_pickup": is_pickup,
+        **result,
+        "left_gold": user.gold,
+        "gacha_points": user.gacha_points,
+        "new_achievements": new_achievements,
+        "new_characters": new_characters,
+    }
+
+
+@router.post("/pull10")
+def pull_character_ten(
+    banner_id: int | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """10연차 - 단발(pull_character)과 동일한 확률/픽업 규칙으로 독립된 뽑기 10번을 한 요청에서 처리한다.
+    할인 없이 정가(GACHA_COST * 10) 그대로 - 사용자 확정. 도전과제 알림은 10번 전부 끝난 뒤 한 번만
+    확인해서(단발과 동일하게 "요청당 1번" 유지) 토스트가 10개씩 뜨지 않게 한다.
+
+    _perform_one_pull이 매번 flush만 하고 실제 커밋은 이 함수 끝에서 딱 한 번만 한다 - 예전엔 10번 다
+    각자 커밋해서(원격 DB 왕복마다 실제 디스크 fsync가 걸림) 그 지연이 그대로 쌓였고, 프론트 인트로
+    연출이 다 끝난 뒤에도 응답을 한참 더 기다려야 해서 "간판인물이 다가간 뒤 빛 이펙트가 너무 늦게
+    나온다"는 문제로 이어졌다(사용자 보고, 2026-08-20). 커밋을 1번으로 줄이면 이 대기가 대부분 사라진다."""
+    _sync_pickup_banner(db)
+
+    user = db.query(User).filter(User.id == user.id).with_for_update().first()
+
+    total_cost = GACHA_COST * 10
+    if user.gold < total_cost:
+        raise HTTPException(status_code=400, detail="골드가 부족합니다.")
+
+    # 단발과 동일한 이유로 여기서 커밋하지 않는다 - 루프가 끝난 뒤의 db.commit() 한 번이 이 골드
+    # 차감까지 함께 반영하고 나서야 with_for_update 락이 풀린다.
+    user.gold -= total_cost
+    user.gacha_points += GACHA_POINTS_PER_PULL * 10
+
+    active_pickup_rates = _get_active_pickup_rates(db, banner_id)
+    include_hidden = user.id == ADMIN_USER_ID
+    results = [_perform_one_pull(db, user, active_pickup_rates, include_hidden) for _ in range(10)]
+    db.commit()
+
+    new_achievements, new_characters = check_and_grant_achievements(db, user)
+
+    return {
+        "results": results,
         "left_gold": user.gold,
         "gacha_points": user.gacha_points,
         "new_achievements": new_achievements,

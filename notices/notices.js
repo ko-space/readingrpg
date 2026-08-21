@@ -22,16 +22,72 @@
             .replaceAll("'", "&#039;");
     }
 
-    // 공지 본문 안에 [[red]]...[[/red]]로 감싼 구간만 빨간 글씨로 강조한다(seed.py의 NOTICES가 쓰는
-    // 아주 단순한 마커 - 그 외 마크업은 없음). 마커가 아닌 부분은 전부 escapeHtml을 거치므로 안전하다.
+    // 인라인 색 강조만 처리한다(표 칸 텍스트에도 재사용) - [[red]]/[[green]]/[[blue]]/[[gold]]...[[/태그]].
+    // 마커가 아닌 부분은 전부 escapeHtml을 거치므로 안전하다(임의 HTML 삽입 불가).
+    function renderInline(text) {
+        const src = String(text ?? "");
+        const re = /\[\[(red|green|blue|gold)\]\]([\s\S]*?)\[\[\/\1\]\]/g;
+        let out = "";
+        let lastIndex = 0;
+        let m;
+        while ((m = re.exec(src))) {
+            out += escapeHtml(src.slice(lastIndex, m.index));
+            out += `<span class="notice-${m[1]}">${escapeHtml(m[2])}</span>`;
+            lastIndex = re.lastIndex;
+        }
+        out += escapeHtml(src.slice(lastIndex));
+        return out;
+    }
+
+    // 헤더1|헤더2\n값1|값2\n... 형태(|로 칸, 줄바꿈으로 행 구분, 첫 줄=헤더)를 실제 <table>로 바꾼다.
+    // 칸 텍스트에도 renderInline을 적용해서 표 안에서도 색 강조를 쓸 수 있다(예: 방향성 칸).
+    function renderTable(inner) {
+        const rows = inner.trim().split("\n").filter((row) => row.trim()).map((row) => row.split("|").map((cell) => cell.trim()));
+        if (!rows.length) return "";
+        const [headerRow, ...bodyRows] = rows;
+        const theadHtml = `<tr>${headerRow.map((cell) => `<th>${renderInline(cell)}</th>`).join("")}</tr>`;
+        const tbodyHtml = bodyRows.map((row) => `<tr>${row.map((cell) => `<td>${renderInline(cell)}</td>`).join("")}</tr>`).join("");
+        return `<table class="notice-table"><thead>${theadHtml}</thead><tbody>${tbodyHtml}</tbody></table>`;
+    }
+
+    // 공지 본문의 아주 단순한 마커 언어(마크다운이 아니라 seed.py 전용 최소 문법 - 그 외 마크업은 없음).
+    // 지원 마커:
+    //   [[red]] [[green]] [[blue]] [[gold]] ...[[/태그]] : 색 강조(renderInline, 표 칸 안에서도 동작)
+    //   [[h]]...[[/h]] : 섹션 제목
+    //   [[hr]] : 구분선
+    //   [[table]]헤더1|헤더2\n값1|값2\n...[[/table]] : 표(renderTable 참고)
+    // 닫는 태그가 없는 등 마크업이 깨지면 해당 여는 마커를 그냥 리터럴 텍스트로 표시한다(방어적 처리).
     function renderNoticeBody(text) {
-        const segments = String(text ?? "").split(/(\[\[red\]\][\s\S]*?\[\[\/red\]\])/g);
-        return segments.map((segment) => {
-            const match = segment.match(/^\[\[red\]\]([\s\S]*)\[\[\/red\]\]$/);
-            return match
-                ? `<span class="notice-red">${escapeHtml(match[1])}</span>`
-                : escapeHtml(segment);
-        }).join("");
+        const src = String(text ?? "");
+        const markerRe = /\[\[(h|hr|table)\]\]/g;
+        let out = "";
+        let i = 0;
+        while (i < src.length) {
+            markerRe.lastIndex = i;
+            const m = markerRe.exec(src);
+            if (!m) {
+                out += renderInline(src.slice(i));
+                break;
+            }
+            out += renderInline(src.slice(i, m.index));
+            const tag = m[1];
+            if (tag === "hr") {
+                out += `<hr class="notice-hr">`;
+                i = m.index + m[0].length;
+                continue;
+            }
+            const closeTag = `[[/${tag}]]`;
+            const closeIdx = src.indexOf(closeTag, m.index + m[0].length);
+            if (closeIdx === -1) {
+                out += escapeHtml(m[0]);
+                i = m.index + m[0].length;
+                continue;
+            }
+            const inner = src.slice(m.index + m[0].length, closeIdx);
+            out += tag === "table" ? renderTable(inner) : `<div class="notice-h">${renderInline(inner)}</div>`;
+            i = closeIdx + closeTag.length;
+        }
+        return out;
     }
 
     async function ensureLoaded() {

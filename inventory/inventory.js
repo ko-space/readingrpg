@@ -23,6 +23,7 @@
     let itemData = [];
     let selectedGroup = null;
     let activeListTab = "characters";
+    let activeRoleFilter = "all"; // "all" | "striker" | "supporter" - 인물 탭 안에서 unit_role로 거름
 
     function authHeaders(json = false) {
         const token = localStorage.getItem("access_token");
@@ -33,6 +34,15 @@
 
     function stars(n) {
         return "★".repeat(Math.max(0, Math.min(6, Number(n) || 0)));
+    }
+
+    // 성급 1~5(5는 5성 이상 전부) 순서로 보유 수를 "N명 · N명 · N명 · N명 · N명" 형태로 나열한다
+    // (확인된 요청 - 예전엔 "★N · N명"으로 그 줄(성급)의 개수만 보여줬는데, 이제 캐릭터당 가장 높은
+    // 성급 한 줄만 대표로 보여주면서(백엔드 _collapse_to_highest_star) 그 자리에 전체 성급 분포를
+    // 대신 보여준다). star_counts가 없는(옛 캐시 등) 경우를 대비해 0으로 채운 배열을 기본값으로 둔다.
+    function starCountsText(group) {
+        const counts = group.star_counts || [0, 0, 0, 0, 0];
+        return counts.map((n) => `${n}명`).join(" · ");
     }
 
     function setMode(mode) {
@@ -84,8 +94,9 @@
         document.getElementById("inventory-open-characters")?.addEventListener("click", () => openList("characters"));
         document.getElementById("inventory-open-items")?.addEventListener("click", () => openList("items"));
         document.getElementById("inventory-list-back")?.addEventListener("click", () => setMode("menu"));
-        document.getElementById("inventory-character-tab")?.addEventListener("click", () => switchListTab("characters"));
-        document.getElementById("inventory-item-tab")?.addEventListener("click", () => switchListTab("items"));
+        document.getElementById("inventory-role-tab-all")?.addEventListener("click", () => switchRoleFilter("all"));
+        document.getElementById("inventory-role-tab-striker")?.addEventListener("click", () => switchRoleFilter("striker"));
+        document.getElementById("inventory-role-tab-supporter")?.addEventListener("click", () => switchRoleFilter("supporter"));
         document.getElementById("inventory-detail-back")?.addEventListener("click", () => {
             setMode("list");
             switchListTab("characters");
@@ -129,14 +140,29 @@
     // 보이지 않도록, 에러를 잡아서 화면에 표시하고 콘솔에도 남긴다.
     function switchListTab(tab) {
         activeListTab = tab;
-        document.getElementById("inventory-character-tab")?.classList.toggle("active", tab === "characters");
-        document.getElementById("inventory-item-tab")?.classList.toggle("active", tab === "items");
+        // 전체/striker/supporter 탭은 인물 목록을 걸러보는 용도라 아이템 화면에선 의미가 없다 -
+        // 아이템에는 따로 탭을 만들지 않고, 인물 화면일 때만 이 탭 바를 보여준다.
+        const roleTabs = document.getElementById("inventory-role-tabs");
+        if (roleTabs) roleTabs.hidden = tab !== "characters";
         document.getElementById("inventory-character-grid").hidden = tab !== "characters";
         document.getElementById("inventory-item-grid").hidden = tab !== "items";
 
         try {
             if (tab === "characters") renderCharacterGrid();
             else renderItemGrid();
+        } catch (error) {
+            console.error("인벤토리 탭 렌더링 오류:", error);
+            showEmpty(`화면을 그리지 못했습니다. (${error.message})`, true);
+        }
+    }
+
+    function switchRoleFilter(role) {
+        activeRoleFilter = role;
+        document.getElementById("inventory-role-tab-all")?.classList.toggle("active", role === "all");
+        document.getElementById("inventory-role-tab-striker")?.classList.toggle("active", role === "striker");
+        document.getElementById("inventory-role-tab-supporter")?.classList.toggle("active", role === "supporter");
+        try {
+            renderCharacterGrid();
         } catch (error) {
             console.error("인벤토리 탭 렌더링 오류:", error);
             showEmpty(`화면을 그리지 못했습니다. (${error.message})`, true);
@@ -159,7 +185,6 @@
         // 미보유 카드는 이름 대신 "???"를, 인물 수 대신 "미보유"를 보여준다 - 성급(★N)은 실제 성급이
         // 아니라 모집 시 받는 기본 성급(rarity 기준, 백엔드가 unowned_characters에 미리 계산해서 줌)이다.
         const displayName = isUnowned ? "???" : group.name;
-        const metaText = isUnowned ? `★${group.star} · 미보유` : `★${group.star} · ${group.count}명`;
         card.innerHTML = `
             <div class="inventory-card-portrait rarity-${group.rarity}">
                 <img alt="${escapeHtml(displayName)}" loading="lazy" decoding="async">
@@ -167,7 +192,7 @@
                 <div class="inventory-card-star-overlay">${stars(group.star)}</div>
             </div>
             <div class="inventory-card-name">${escapeHtml(displayName)}</div>
-            <div class="inventory-card-meta">${escapeHtml(metaText)}</div>
+            ${isUnowned ? `<div class="inventory-card-meta">${escapeHtml(`★${group.star} · 미보유`)}</div>` : ""}
         `;
         const img = card.querySelector("img");
         img.src = `${OUTFIT_IMAGE_BASE}${group.outfit}/idle.webp`;
@@ -177,11 +202,17 @@
         return card;
     }
 
+    // unit_role이 없는 캐릭터는 전부 "striker"로 취급한다(routers/characters.py의 기본값과 동일).
+    function matchesRoleFilter(group) {
+        if (activeRoleFilter === "all") return true;
+        return (group.unit_role || "striker") === activeRoleFilter;
+    }
+
     function renderCharacterGrid() {
         const grid = document.getElementById("inventory-character-grid");
         grid.innerHTML = "";
-        const groups = inventoryData.characters || [];
-        const unowned = inventoryData.unowned_characters || [];
+        const groups = (inventoryData.characters || []).filter(matchesRoleFilter);
+        const unowned = (inventoryData.unowned_characters || []).filter(matchesRoleFilter);
         showEmpty(
             groups.length || unowned.length ? "" : "보유한 인물이 없습니다.",
             groups.length === 0 && unowned.length === 0
@@ -331,7 +362,7 @@
         }
         document.getElementById("inventory-detail-name").textContent = unowned ? "???" : g.name;
         document.getElementById("inventory-detail-stars").textContent = stars(g.star);
-        document.getElementById("inventory-detail-count").textContent = unowned ? "미보유" : `${g.count}명 보유`;
+        document.getElementById("inventory-detail-count").textContent = unowned ? "미보유" : starCountsText(g);
         document.getElementById("inventory-info-rarity").textContent = g.rarity;
         document.getElementById("inventory-info-job").textContent = g.job_class || "-";
         // 성별/사거리/공수 타입은 미보유여도 그대로 보여준다(이름/스킬 설명만 가림).
@@ -445,24 +476,43 @@
         const key = String(g.star);
         const unowned = Boolean(g._unowned);
 
-        // "EXP 과목"과 "EXP 배수"는 항상 같이 봐야 의미가 있는 정보라(어느 과목에 몇 배가 붙는지)
-        // 한 줄로 합친다 - 과목이 없으면 애초에 이 성급에서 배수가 붙을 일이 없으므로 "-".
-        const expMultiplier = g.exp_multiplier?.[key];
-        const expSubjects = g.exp_subjects || [];
-        const expRateText = expSubjects.length
-            ? `${expSubjects.join(", ")}에서 ${expMultiplier == null ? "-" : `${expMultiplier}배`}`
-            : "-";
+        // "과목"과 "배수"는 항상 같이 봐야 의미가 있는 정보라(어느 과목에 몇 배가 붙는지) 한 줄로
+        // 합친다 - 과목이 없으면 애초에 이 성급에서 배수가 붙을 일이 없으므로 "-". 라벨을 "EXP 배수"가
+        // 아니라 그냥 "배수"로 둔 이유: 캐릭터마다 배수가 붙는 대상이 EXP뿐 아니라 실버/골드가 될 수도
+        // 있어서, 대상 이름(EXP/실버)은 라벨이 아니라 이 값 텍스트 안에("~에서 EXP n배"처럼) 직접
+        // 밝혀준다. 한 캐릭터는 이 중 하나만 갖는다(김크장처럼 exp_multiplier가 전부 null이면 대신
+        // silver_multiplier를 본다).
+        const MULTIPLIER_SOURCES = [
+            { measure: "EXP", multipliers: g.exp_multiplier, subjects: g.exp_subjects },
+            { measure: "실버", multipliers: g.silver_multiplier, subjects: g.silver_subjects },
+        ];
+        const activeSource = MULTIPLIER_SOURCES.find((s) => (s.subjects || []).length && s.multipliers?.[key] != null)
+            || MULTIPLIER_SOURCES.find((s) => (s.subjects || []).length);
+        // 골드 배수(신)는 exp/실버와 달리 특정 과목에 붙는 게 아니라 어떤 세션이든 항상 적용되므로
+        // subjects 자체가 없다 - 위 목록과 같은 방식으로 다룰 수 없어서 별도로 확인한다.
+        const goldMultiplier = g.gold_multiplier;
+        const hasGoldSource = goldMultiplier && Object.values(goldMultiplier).some((v) => v != null);
+        let expRateText;
+        if (activeSource) {
+            expRateText = `${activeSource.subjects.join(", ")}에서 ${activeSource.measure} ${activeSource.multipliers?.[key] == null ? "-" : `${activeSource.multipliers[key]}배`}`;
+        } else if (hasGoldSource) {
+            expRateText = goldMultiplier[key] == null ? "-" : `전체 골드 ${goldMultiplier[key]}배`;
+        } else {
+            expRateText = "-";
+        }
         document.getElementById("inventory-info-exp-rate").textContent = expRateText;
 
         Object.entries(ABILITY_META).forEach(([kind, meta]) => {
             const effectsByStar = g[meta.field] || {};
             // 미보유 인물은 스킬 "이름"은 보여주되(findCanonicalAbilityName), 실제로 해금됐는지와
             // 무관하게 항상 잠금 상태로 그린다(forceLocked) - 설명은 절대 클릭해서 못 보게 한다.
-            renderAbilityGroup(kind, meta, effectsByStar[key], findCanonicalAbilityName(effectsByStar), unowned, findUnlockStar(effectsByStar));
+            // 코스트는 Active(전술대회 코스트제)에만 있는 개념이라 그 kind일 때만 넘긴다.
+            const cost = kind === "active" ? g.active_skill_cost : null;
+            renderAbilityGroup(kind, meta, effectsByStar[key], findCanonicalAbilityName(effectsByStar), unowned, findUnlockStar(effectsByStar), cost);
         });
     }
 
-    function renderAbilityGroup(kind, meta, text, canonicalName, forceLocked = false, unlockStar = null) {
+    function renderAbilityGroup(kind, meta, text, canonicalName, forceLocked = false, unlockStar = null, cost = null) {
         const holder = document.getElementById(`inventory-ability-${kind}`);
         if (!holder) return;
         holder.innerHTML = "";
@@ -485,14 +535,22 @@
             ` : ""}
         `;
         if (available) {
-            button.addEventListener("click", () => openAbilityModal(meta.bracket, desc));
+            button.addEventListener("click", () => openAbilityModal(meta.bracket, desc, cost));
         }
         holder.appendChild(button);
     }
 
-    function openAbilityModal(bracket, desc) {
+    function openAbilityModal(bracket, desc, cost = null) {
         document.getElementById("inventory-subinfo-title").textContent = `[${bracket}]`;
-        document.getElementById("inventory-subinfo-body").innerHTML = highlightNumbers(desc);
+        // Active 스킬은 설명 위에 "COST : N"을 이탤릭체로 한 줄 먼저 보여주고, 줄바꿈 뒤에 기존 설명이
+        // 이어진다(전술대회 코스트제, backend/battle_core.py 참고). 숫자는 아래 설명 본문의 숫자
+        // 강조와 같은 클래스(subinfo-number)를 그대로 써서 색을 통일하고, "COST :" 글자 자체는 본문과
+        // 같은 일반 텍스트 색을 쓴다. cost가 없으면(Passive/Special, 또는 아직 characters.json에 값이
+        // 없는 경우) 평소처럼 설명만 보여준다.
+        const costLine = cost != null
+            ? `<div class="inventory-ability-cost-line">COST : <strong class="subinfo-number">${escapeHtml(String(cost))}</strong></div>`
+            : "";
+        document.getElementById("inventory-subinfo-body").innerHTML = costLine + highlightNumbers(desc);
         document.getElementById("inventory-subinfo-overlay").hidden = false;
     }
 

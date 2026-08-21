@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>개발자화면</title>
     <link rel="icon" href="logoicon.webp">
-    <link rel="stylesheet" href="arena/arena-battle.css">
-    <link rel="stylesheet" href="shared/attack-effects.css">
-    <link rel="stylesheet" href="devtest/devtest.css">
+    <link rel="stylesheet" href="arena/arena-battle.css?v=20260822j">
+    <link rel="stylesheet" href="shared/attack-effects.css?v=20260822j">
+    <link rel="stylesheet" href="devtest/devtest.css?v=20260822j">
 </head>
 <body>
     <div class="dt-root">
@@ -50,6 +50,28 @@
 
             <div class="dt-unit-config" data-slot="defender-back">
                 <div class="dt-unit-config-title">수비후방</div>
+                <select class="dt-char-select"></select>
+                <select class="dt-star-select"></select>
+                <input type="number" class="dt-hp-input" placeholder="HP override">
+                <input type="number" class="dt-atk-input" placeholder="ATK override">
+                <input type="number" step="0.1" class="dt-interval-input" placeholder="공격주기(초) override">
+                <input type="number" class="dt-level-input" placeholder="레벨" value="1">
+                <textarea class="dt-skill-params" placeholder="스킬 파라미터"></textarea>
+            </div>
+
+            <div class="dt-unit-config" data-slot="attacker-supporter">
+                <div class="dt-unit-config-title">공격조력자</div>
+                <select class="dt-char-select"></select>
+                <select class="dt-star-select"></select>
+                <input type="number" class="dt-hp-input" placeholder="HP override">
+                <input type="number" class="dt-atk-input" placeholder="ATK override">
+                <input type="number" step="0.1" class="dt-interval-input" placeholder="공격주기(초) override">
+                <input type="number" class="dt-level-input" placeholder="레벨" value="1">
+                <textarea class="dt-skill-params" placeholder="스킬 파라미터"></textarea>
+            </div>
+
+            <div class="dt-unit-config" data-slot="defender-supporter">
+                <div class="dt-unit-config-title">수비조력자</div>
                 <select class="dt-char-select"></select>
                 <select class="dt-star-select"></select>
                 <input type="number" class="dt-hp-input" placeholder="HP override">
@@ -134,14 +156,28 @@
                 </div>
             </div>
 
+            <!-- 서포터(조력자) - front/back과 달리 전투 대상이 되지 않는 존재라 .battle-row(전열/후열
+                 대치 레이아웃) 밖에 두고, 맵 맨 끝(공격은 왼쪽/수비는 오른쪽 가장자리)에 고정 배치한다
+                 (devtest.css 참고). -->
+            <div class="battle-unit dt-supporter-slot dt-supporter-slot-attacker" data-unit="attacker-supporter" hidden>
+                <img class="battle-unit-img" src="" alt="">
+                <div class="battle-unit-shadow"></div>
+                <div class="dt-status-icons"></div>
+            </div>
+            <div class="battle-unit dt-supporter-slot dt-supporter-slot-defender" data-unit="defender-supporter" hidden>
+                <img class="battle-unit-img" src="" alt="">
+                <div class="battle-unit-shadow"></div>
+                <div class="dt-status-icons"></div>
+            </div>
+
             <div class="battle-field-line"></div>
         </div>
     </div>
 
-    <script src="shared/api-config.js"></script>
-    <script src="shared/session-guard.js"></script>
-    <script src="shared/nav-lock.js"></script>
-    <script src="shared/attack-effects.js"></script>
-    <script src="devtest/devtest.js" defer></script>
+    <script src="shared/api-config.js?v=20260822j"></script>
+    <script src="shared/session-guard.js?v=20260822j"></script>
+    <script src="shared/nav-lock.js?v=20260822j"></script>
+    <script src="shared/attack-effects.js?v=20260822j"></script>
+    <script src="devtest/devtest.js?v=20260822j" defer></script>
 </body>
 </html>

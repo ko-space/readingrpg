@@ -5,23 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>독서 RPG</title>
     <link rel="icon" href="logoicon.webp">
-    <link rel="stylesheet" href="shared/lobby.css?v=20260820">
-    <link rel="stylesheet" href="gacha/gacha.css?v=20260820">
-    <link rel="stylesheet" href="gacha/gacha-reveal.css?v=20260820">
-    <link rel="stylesheet" href="dungeon/dungeon.css?v=20260820">
-    <link rel="stylesheet" href="arena/arena.css?v=20260820">
-    <link rel="stylesheet" href="inventory/inventory.css?v=20260820">
-    <link rel="stylesheet" href="enhancement/enhancement.css?v=20260820">
-    <link rel="stylesheet" href="shop/shop.css?v=20260820">
-    <link rel="stylesheet" href="trade/trade.css?v=20260820">
-    <link rel="stylesheet" href="achievements/achievements.css?v=20260820">
-    <link rel="stylesheet" href="shared/achievement-toast.css?v=20260820">
-    <link rel="stylesheet" href="ranking/ranking.css?v=20260820">
-    <link rel="stylesheet" href="quests/quests.css?v=20260820">
-    <link rel="stylesheet" href="mail/mail.css?v=20260820">
-    <link rel="stylesheet" href="notices/notices.css?v=20260820">
-    <link rel="stylesheet" href="help/help.css?v=20260820">
-    <link rel="stylesheet" href="settings/settings.css?v=20260820">
+    <link rel="stylesheet" href="shared/lobby.css?v=20260822j">
+    <link rel="stylesheet" href="gacha/gacha.css?v=20260822j">
+    <link rel="stylesheet" href="gacha/gacha-reveal.css?v=20260822j">
+    <link rel="stylesheet" href="gacha/gacha-cinematic.css?v=20260822j">
+    <link rel="stylesheet" href="dungeon/dungeon.css?v=20260822j">
+    <link rel="stylesheet" href="arena/arena.css?v=20260822j">
+    <link rel="stylesheet" href="inventory/inventory.css?v=20260822j">
+    <link rel="stylesheet" href="enhancement/enhancement.css?v=20260822j">
+    <link rel="stylesheet" href="shop/shop.css?v=20260822j">
+    <link rel="stylesheet" href="trade/trade.css?v=20260822j">
+    <link rel="stylesheet" href="achievements/achievements.css?v=20260822j">
+    <link rel="stylesheet" href="shared/achievement-toast.css?v=20260822j">
+    <link rel="stylesheet" href="ranking/ranking.css?v=20260822j">
+    <link rel="stylesheet" href="quests/quests.css?v=20260822j">
+    <link rel="stylesheet" href="mail/mail.css?v=20260822j">
+    <link rel="stylesheet" href="notices/notices.css?v=20260822j">
+    <link rel="stylesheet" href="help/help.css?v=20260822j">
+    <link rel="stylesheet" href="settings/settings.css?v=20260822j">
 </head>
 <body>
     <div class="game-home">
@@ -185,7 +186,7 @@
 
         </div>
 
-        <div class="version-tag">ver. 0.5.0</div>
+        <div class="version-tag">ver. 0.5.1</div>
 
     </div>
 
@@ -373,11 +374,45 @@
                         <span class="arena-choice-type">PVP</span>
                         <span class="arena-choice-label">전술대회</span>
                     </button>
+                    <button class="arena-choice-btn" id="arena-choice-live">
+                        <span class="arena-choice-type">PVP</span>
+                        <span class="arena-choice-label">친선전(BETA)</span>
+                    </button>
                 </div>
             </div>
 
             <div id="pvp-content" hidden>
                 <p class="screen-placeholder">불러오는 중...</p>
+            </div>
+
+            <div id="live-content" hidden>
+                <div id="live-choice-view">
+                    <h2 class="screen-title">1:1 친선전</h2>
+                    <p class="live-choice-desc">친구와 방 코드로 실시간 대전을 합니다. 결과는 전적/랭킹에 반영되지 않습니다.</p>
+                    <div class="live-choice-row">
+                        <button class="live-choice-btn" id="live-choice-host">방 만들기</button>
+                        <button class="live-choice-btn" id="live-choice-join">방 입장하기</button>
+                    </div>
+                    <button class="live-back-btn" id="live-choice-back-btn">← 뒤로</button>
+                </div>
+
+                <div id="live-host-view" hidden>
+                    <h2 class="screen-title">방 만들기</h2>
+                    <p class="live-host-desc">이 코드를 친구에게 알려주세요.</p>
+                    <div class="live-room-code" id="live-room-code-display">------</div>
+                    <p class="live-waiting-text" id="live-host-status">상대를 기다리는 중입니다...</p>
+                    <p class="live-error-text" id="live-host-error" hidden></p>
+                    <button class="live-back-btn" id="live-host-cancel-btn">취소</button>
+                </div>
+
+                <div id="live-join-view" hidden>
+                    <h2 class="screen-title">방 입장하기</h2>
+                    <p class="live-host-desc">친구에게 받은 6자리 코드를 입력하세요.</p>
+                    <input class="live-code-input" id="live-code-input" type="text" inputmode="numeric" maxlength="6" placeholder="000000">
+                    <button class="live-choice-btn" id="live-join-submit-btn">입장하기</button>
+                    <p class="live-error-text" id="live-join-error" hidden></p>
+                    <button class="live-back-btn" id="live-join-back-btn">← 뒤로</button>
+                </div>
             </div>
         </div>
     </div>
@@ -408,29 +443,30 @@
         <div class="lobby-entering-tip" id="lobby-entering-tip"></div>
     </div>
 
-    <script src="shared/api-config.js?v=20260820"></script>
-    <script src="shared/session-guard.js?v=20260820"></script>
-    <script src="shared/nav-lock.js?v=20260820"></script>
-    <script src="shared/avatar-crop.js?v=20260820"></script>
-    <script src="shared/standing-crop.js?v=20260820"></script>
-    <script src="shared/achievement-toast.js?v=20260820"></script>
-    <script src="shared/reading-session.js?v=20260820"></script>
-    <script src="shared/home.js?v=20260820"></script>
-    <script src="gacha/gacha.js?v=20260820" defer></script>
-    <script src="gacha/gacha-reveal.js?v=20260820" defer></script>
-    <script src="dungeon/dungeon.js?v=20260820" defer></script>
-    <script src="arena/arena.js?v=20260820" defer></script>
-    <script src="story/story.js?v=20260820" defer></script>
-    <script src="inventory/inventory.js?v=20260820" defer></script>
-    <script src="enhancement/enhancement.js?v=20260820" defer></script>
-    <script src="shop/shop.js?v=20260820" defer></script>
-    <script src="trade/trade.js?v=20260820" defer></script>
-    <script src="achievements/achievements.js?v=20260820" defer></script>
-    <script src="ranking/ranking.js?v=20260820" defer></script>
-    <script src="quests/quests.js?v=20260820" defer></script>
-    <script src="mail/mail.js?v=20260820" defer></script>
-    <script src="notices/notices.js?v=20260820" defer></script>
-    <script src="help/help.js?v=20260820" defer></script>
-    <script src="settings/settings.js?v=20260820" defer></script>
+    <script src="shared/api-config.js?v=20260822j"></script>
+    <script src="shared/session-guard.js?v=20260822j"></script>
+    <script src="shared/nav-lock.js?v=20260822j"></script>
+    <script src="shared/avatar-crop.js?v=20260822j"></script>
+    <script src="shared/standing-crop.js?v=20260822j"></script>
+    <script src="shared/achievement-toast.js?v=20260822j"></script>
+    <script src="shared/reading-session.js?v=20260822j"></script>
+    <script src="shared/home.js?v=20260822j"></script>
+    <script src="gacha/gacha.js?v=20260822j" defer></script>
+    <script src="gacha/gacha-reveal.js?v=20260822j" defer></script>
+    <script src="gacha/gacha-cinematic.js?v=20260822j" defer></script>
+    <script src="dungeon/dungeon.js?v=20260822j" defer></script>
+    <script src="arena/arena.js?v=20260822j" defer></script>
+    <script src="story/story.js?v=20260822j" defer></script>
+    <script src="inventory/inventory.js?v=20260822j" defer></script>
+    <script src="enhancement/enhancement.js?v=20260822j" defer></script>
+    <script src="shop/shop.js?v=20260822j" defer></script>
+    <script src="trade/trade.js?v=20260822j" defer></script>
+    <script src="achievements/achievements.js?v=20260822j" defer></script>
+    <script src="ranking/ranking.js?v=20260822j" defer></script>
+    <script src="quests/quests.js?v=20260822j" defer></script>
+    <script src="mail/mail.js?v=20260822j" defer></script>
+    <script src="notices/notices.js?v=20260822j" defer></script>
+    <script src="help/help.js?v=20260822j" defer></script>
+    <script src="settings/settings.js?v=20260822j" defer></script>
 </body>
 </html>

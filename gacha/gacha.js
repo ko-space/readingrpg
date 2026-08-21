@@ -44,7 +44,7 @@
     }
 
     async function initGachaInteractions() {
-        setupPullButton();
+        setupPullButtons();
         setupCharacterSelectNav();
         setupRateInfoModal();
     }
@@ -150,56 +150,73 @@
         refreshPickupButtons(value);
     }
 
-    // ── 모집 버튼: 실제 /gacha/ 뽑기 API 호출 ──────────────────────
-    function setupPullButton() {
-        const pullBtn = contentEl.querySelector("#gacha-pull-btn");
+    // ── 모집 버튼(1회/10회): 실제 /gacha/ 뽑기 API 호출 ──────────────
+    // 응답을 기다리지 않고 fetch를 던지자마자 시네마틱 연출(gacha-cinematic.js)부터 시작한다 - 인트로
+    // 전반부는 뽑기 결과가 없어도 재생 가능하므로, 응답이 늦어도 로딩 대기가 체감되지 않는다.
+    // resultPromise는 { ok, data } 형태로 감싸서 넘긴다(fetch 자체의 reject/실패 응답 둘 다 그 안에서
+    // 처리되도록, gacha-cinematic.js가 res.ok 여부까지 함께 판단할 수 있게).
+    function fetchAsResult(url) {
+        return fetch(url, { method: "POST", headers: authHeaders() })
+            .then(async (res) => ({ ok: res.ok, data: await res.json() }));
+    }
 
-        pullBtn?.addEventListener("click", async () => {
-            pullBtn.disabled = true;
-            try {
-                const url = currentBannerId
-                    ? `${API_BASE_URL}/gacha/?banner_id=${currentBannerId}`
-                    : `${API_BASE_URL}/gacha/`;
-                const res = await fetch(url, {
-                    method: "POST",
-                    headers: authHeaders()
-                });
-                const data = await res.json();
-
-                if (!res.ok) {
-                    alert(data.detail || "모집에 실패했어요.");
-                    return;
-                }
-
-                setPoints(data.gacha_points);
-
-                // 골드가 서버에서 이미 차감됐으니, 연출을 어떻게 닫든(빈 공간 클릭/장착하기) 상관없이
-                // 홈 화면 골드 표시가 항상 즉시 최신 상태가 되도록 여기서 바로 갱신해준다.
-                if (typeof loadProfile === "function") loadProfile();
-
-                // gacha-reveal.js가 전역에 노출해둔 함수. 문 열림/캐릭터 등장 연출을 담당.
-                // 업적 알림은 그 연출을 다 보고 닫은 뒤에 뜨도록 onClose로 넘긴다.
-                const notifyAchievements = () => {
-                    if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
-                        showAchievementToast(data.new_achievements);
-                    }
-                };
-                // 이번에 뽑은 캐릭터 + 이 뽑기로 새로 달성한 업적이 캐릭터를 보상으로 줬다면 그것도 이어서 순차 재생.
-                const revealCharacters = [
-                    { ...data.character, is_pickup: data.is_pickup, is_duplicate: data.is_duplicate },
-                    ...(data.new_characters || []),
-                ];
-                if (typeof showCharacterReveal === "function") {
-                    showCharacterReveal(revealCharacters, notifyAchievements);
-                } else {
-                    alert(`모집 완료! ${data.character.name} [${data.character.rarity}] 획득!`);
-                    notifyAchievements();
-                }
-            } catch (err) {
-                alert("서버에 연결할 수 없어요. 서버가 켜져 있는지 확인하세요.");
-            } finally {
-                pullBtn.disabled = false;
+    async function runPullFlow(playFn, resultPromise) {
+        const notifyAchievementsFor = (data) => {
+            if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
+                showAchievementToast(data.new_achievements);
             }
+        };
+        const onResult = (data) => {
+            // 골드/포인트는 서버에서 이미 차감/적립됐으니, 연출이 끝나길 기다리지 않고 결과를 아는
+            // 즉시(빛 폭발 직전) 홈 화면 표시를 갱신한다.
+            setPoints(data.gacha_points);
+            if (typeof loadProfile === "function") loadProfile();
+        };
+
+        const outcome = await playFn(resultPromise, onResult);
+        if (outcome.aborted) return; // 로비로 돌아가기 등으로 도중에 취소됨
+        if (outcome.error) {
+            alert(outcome.error);
+            return;
+        }
+
+        const data = outcome.data;
+        // 이 뽑기로 새로 달성한 업적이 캐릭터를 보상으로 줬다면(가챠 자체와 별개로) 기존 방식 그대로
+        // 이어서 보여준다 - 시네마틱 티저 없이, gacha-reveal.js의 평범한 문 열림 연출만.
+        if ((data.new_characters || []).length && typeof showCharacterReveal === "function") {
+            await new Promise((resolve) => showCharacterReveal(data.new_characters, resolve));
+        }
+        notifyAchievementsFor(data);
+    }
+
+    function setupPullButtons() {
+        const pull1Btn = contentEl.querySelector("#gacha-pull1-btn");
+        const pull10Btn = contentEl.querySelector("#gacha-pull10-btn");
+
+        function bannerQuery() {
+            return currentBannerId ? `?banner_id=${currentBannerId}` : "";
+        }
+
+        async function handlePull(url, playFn) {
+            if (typeof playFn !== "function") {
+                alert("연출 스크립트를 불러오지 못했어요. 새로고침 후 다시 시도해주세요.");
+                return;
+            }
+            pull1Btn.disabled = true;
+            pull10Btn.disabled = true;
+            try {
+                await runPullFlow(playFn, fetchAsResult(url));
+            } finally {
+                pull1Btn.disabled = false;
+                pull10Btn.disabled = false;
+            }
+        }
+
+        pull1Btn?.addEventListener("click", () => {
+            handlePull(`${API_BASE_URL}/gacha/${bannerQuery()}`, window.playSinglePullCinematic);
+        });
+        pull10Btn?.addEventListener("click", () => {
+            handlePull(`${API_BASE_URL}/gacha/pull10${bannerQuery()}`, window.playTenPullCinematic);
         });
     }
 

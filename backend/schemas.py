@@ -156,3 +156,7 @@ class DevTestBattleRequest(BaseModel):
     attacker_back: DevTestUnitConfig
     defender_front: DevTestUnitConfig
     defender_back: DevTestUnitConfig
+    # 서포터(조력자, 김크장/김룡환류)는 선택 사항 - front/back과 달리 전장에 나서지 않고 코스트
+    # 로테이션과 전투 시작 시 1회 효과([Passive]/[Special])에만 참여한다(battle_core.py 참고).
+    attacker_supporter: DevTestUnitConfig | None = None
+    defender_supporter: DevTestUnitConfig | None = None
