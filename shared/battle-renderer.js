@@ -200,6 +200,28 @@ let costDockRunning = false;
 // 써야 하므로 그대로 노출한다.
 const cardCooldownUntil = {};
 
+// .cost-dock은 화면이 흔들려도 같이 흔들리지 않도록 뷰포트 기준 position:fixed다(HTML상으로도
+// .battle-field 밖에 둠 - transform이 걸리는 조상 안에 있으면 fixed 자손이 그 조상 기준으로
+// 재배치되는 CSS 규칙 때문에 흔들림을 따라간다, 확인된 버그). 세로(bottom)는 CSS 고정값으로
+// 충분하지만, 가로는 .battle-field의 실제 위치를 몰라서는 맞출 수 없다 - .battle-layout이 화면
+// 폭에 따라 그리드 컬럼 너비를 바꾸는 반응형 레이아웃이라, 뷰포트 기준 고정 px로는 스킬카드/
+// 코스트바가 원래 있던 "필드 오른쪽 끝에서 6px" 자리에 못 맞는다(확인된 버그) - 매번 실측해서
+// 인라인 스타일로 맞춘다.
+function positionCostDock(dock) {
+    const fieldEl = attackEffectsConfig.fieldEl || document.querySelector(".battle-field");
+    if (!fieldEl) return;
+    const fieldRect = fieldEl.getBoundingClientRect();
+    dock.style.left = `${fieldRect.right - 6 - dock.offsetWidth}px`;
+}
+
+// 창 크기가 바뀌면(반응형 브레이크포인트 전환 포함) 이미 떠 있는 코스트덕도 다시 맞춰야 한다.
+window.addEventListener("resize", () => {
+    battleRendererConfig.costDockSides.forEach((side) => {
+        const dock = document.getElementById(`cost-dock-${side}`);
+        if (dock && !dock.hidden) positionCostDock(dock);
+    });
+});
+
 function buildCostDockHtml(cards) {
     const cardsHtml = cards.map((card) => `
         <div class="cost-card" data-cost-slot="${card.slot}">
@@ -246,6 +268,7 @@ function initCostSide(event) {
     if (!dock) return;
     dock.innerHTML = buildCostDockHtml(event.cards);
     dock.hidden = false;
+    positionCostDock(dock);
 
     event.cards.forEach((card) => {
         const el = dock.querySelector(`[data-cost-slot="${card.slot}"]`);

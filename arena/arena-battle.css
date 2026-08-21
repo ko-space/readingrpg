@@ -1173,10 +1173,14 @@ body {
 /* position:fixed(뷰포트 기준)로 화면 맨 아래에 고정한다(확인된 버그 수정) - 예전엔 .battle-field
    (position:relative, min-height:430px) 기준 absolute였는데, 좁고 짧은 화면에서는 .battle-field
    자체가 실제 뷰포트(100vh)보다 커져서 그 "바닥"이 화면 밖으로 밀려나 코스트바가 안 보였다.
-   .battle-screen이 정확히 100vw/100vh라 fixed로 바꿔도 시각적 위치는 그대로 유지된다. */
+   가로 위치(left)는 CSS 고정값이 아니라 shared/battle-renderer.js의 positionCostDock()이 매번
+   .battle-field의 실제 위치를 측정해서 인라인 스타일로 맞춘다 - .battle-layout이 화면 폭에 따라
+   그리드 컬럼 너비를 바꾸는 반응형 레이아웃이라, 뷰포트 기준 고정 px로는 절대 같은 자리를 못
+   맞춘다(확인된 버그 - 화면을 흔드는 스킬을 쓰면 코스트덕까지 같이 흔들리는 문제와 스킬카드/코스트바
+   가로 위치가 어긋나는 문제를 같이 해결하며 HTML도 .battle-field 밖으로 옮겼다, 관련 주석은
+   arena-battle.html 참고). */
 .cost-dock {
     position: fixed;
-    right: 6px;
     bottom: 4px;
     z-index: 4;
     pointer-events: none;
