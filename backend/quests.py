@@ -164,13 +164,18 @@ PATCH_0727_DATE = "2026-07-27"
 def _grant_patch_0727_mail_if_eligible(db: Session, user_id: int) -> None:
     if _daily_period_key() != PATCH_0727_DATE:
         return
-    exists = db.query(Mail).filter(
-        Mail.user_id == user_id,
-        Mail.title == PATCH_0727_MAIL_TITLE,
+    # "받았는지"를 우편(Mail) 존재 여부로 판정하면, 유저가 우편함 일괄삭제로 그 우편을 지운 뒤 다음
+    # 접속(log_login_activity는 /users/me 등에서 매번 호출됨) 때 다시 지급되는 악용이 가능했다(확인된
+    # 버그) - 우편함 삭제가 절대 건드리지 않는 ActivityLog를 "이미 지급했는지"의 영구 기록으로 쓴다.
+    already_granted = db.query(ActivityLog).filter(
+        ActivityLog.user_id == user_id,
+        ActivityLog.activity_type == "mail_grant_patch_0727",
     ).first()
-    if not exists:
-        db.add(Mail(user_id=user_id, title=PATCH_0727_MAIL_TITLE, gold_amount=PATCH_0727_MAIL_GOLD))
-        db.commit()
+    if already_granted:
+        return
+    db.add(Mail(user_id=user_id, title=PATCH_0727_MAIL_TITLE, gold_amount=PATCH_0727_MAIL_GOLD))
+    db.add(ActivityLog(user_id=user_id, activity_type="mail_grant_patch_0727"))
+    db.commit()
 
 
 # 일회성 이벤트: 8/21(KST) 하루만 받을 수 있는 점검 보상
@@ -183,15 +188,19 @@ MAINTENANCE_0821_DATE = "2026-08-21"
 def _grant_maintenance_0821_mail_if_eligible(db: Session, user_id: int) -> None:
     if _daily_period_key() != MAINTENANCE_0821_DATE:
         return
-    exists = db.query(Mail).filter(
-        Mail.user_id == user_id,
-        Mail.title == MAINTENANCE_0821_MAIL_TITLE,
+    # 위 7/27 보상과 동일한 이유로 Mail 존재 여부가 아니라 ActivityLog로 지급 여부를 영구히 기록한다
+    # (확인된 버그 - 우편함 일괄삭제 후 재접속하면 보상이 무한정 재지급되던 문제).
+    already_granted = db.query(ActivityLog).filter(
+        ActivityLog.user_id == user_id,
+        ActivityLog.activity_type == "mail_grant_maintenance_0821",
     ).first()
-    if not exists:
-        db.add(Mail(
-            user_id=user_id,
-            title=MAINTENANCE_0821_MAIL_TITLE,
-            gold_amount=MAINTENANCE_0821_MAIL_GOLD,
-            silver_amount=MAINTENANCE_0821_MAIL_SILVER,
-        ))
-        db.commit()
+    if already_granted:
+        return
+    db.add(Mail(
+        user_id=user_id,
+        title=MAINTENANCE_0821_MAIL_TITLE,
+        gold_amount=MAINTENANCE_0821_MAIL_GOLD,
+        silver_amount=MAINTENANCE_0821_MAIL_SILVER,
+    ))
+    db.add(ActivityLog(user_id=user_id, activity_type="mail_grant_maintenance_0821"))
+    db.commit()
