@@ -105,8 +105,19 @@ def _build_inventory_rows(user: User):
                 "star_effects": catalog.get("star_effects", {}),
                 "exp_multiplier": catalog.get("exp_multiplier", {}),
                 "exp_subjects": catalog.get("exp_subjects", []),
+                # 실버 배수(김크장 등) - exp_multiplier와 같은 형태(성급별 배수 dict)지만 EXP가 아니라
+                # 실버에 적용된다. 캐릭터마다 exp/실버/골드 중 하나만 배수가 붙으므로 둘 다 있는
+                # 캐릭터는 아직 없다 - routers/logs.py의 보상 계산과 inventory.js의 표시 로직이 이
+                # 필드 유무로 어느 재화의 배수인지 판단한다.
+                "silver_multiplier": catalog.get("silver_multiplier", {}),
+                "silver_subjects": catalog.get("silver_subjects", []),
+                # 골드 배수(신) - exp/실버와 달리 과목(subjects) 개념이 없다(어떤 세션이든 항상 적용).
+                "gold_multiplier": catalog.get("gold_multiplier", {}),
                 "skill_effects": catalog.get("skill_effects", {}),
                 "trait_effects": catalog.get("trait_effects", {}),
+                # [Active] 발동에 드는 코스트(전술대회 코스트제, backend/battle_core.py 참고) - 인벤토리
+                # 상세 화면이 Active 설명 위에 "COST: N"으로 보여준다. 스킬이 없는 캐릭터는 None.
+                "active_skill_cost": catalog.get("skill_mechanics", {}).get("cost"),
                 # 전술대회 편성 슬롯 구분("striker"/"supporter") - characters.json에 아직 값이 없는
                 # 캐릭터는 전부 "striker"로 취급한다(지금 도감 전원이 실제로 그렇다).
                 "unit_role": catalog.get("unit_role", "striker"),
@@ -126,8 +137,12 @@ def _build_inventory_rows(user: User):
                 "star_effects": {},
                 "exp_multiplier": {},
                 "exp_subjects": [],
+                "silver_multiplier": {},
+                "silver_subjects": [],
+                "gold_multiplier": {},
                 "skill_effects": {},
                 "trait_effects": {},
+                "active_skill_cost": None,
                 "unit_role": "striker",
                 "catalog_index": fallback_index,
                 "start_star": 1,
@@ -158,6 +173,50 @@ def _build_inventory_rows(user: User):
     return result
 
 
+def _collapse_to_highest_star(rows: list[dict]) -> list[dict]:
+    """인벤토리 "목록" 화면 전용 - 같은 이름의 캐릭터가 성급별로 여러 줄(row)에 나뉘어 있는
+    _build_inventory_rows의 결과를, 캐릭터당 "가장 높은 성급" 한 줄만 대표로 남기고 나머지는 접어서
+    보여준다(확인된 요청). 강화 화면(get_enhancement_inventory)은 성급별로 따로 골라 강화해야 하므로
+    _build_inventory_rows의 원본(성급별 분리) 결과를 그대로 쓰고, 이 함수는 절대 거치지 않는다.
+
+    대표 줄의 표시용 메타데이터(외형/스킬 설명 등)는 "가장 높은 성급" 기준이지만, 실제로 장착된 카드가
+    더 낮은 성급 쪽에 있을 수도 있으므로(예: ★1을 장착해둔 채 ★3을 새로 얻음) is_equipped/character_id는
+    "장착된 성급이 있으면 그쪽"을 우선한다 - 안 그러면 실제로 장착 중인데도 인벤토리에 표시가 안 되거나,
+    "장착하기"를 다시 눌러도 이미 장착된 낮은 성급이 아니라 엉뚱한 높은 성급 카드를 장착해버리는
+    문제가 생긴다.
+
+    star_counts는 성급 1~5(5는 5성 이상 전부 합산 - 현재 강화 최고 성급은 6까지 가능하지만 표시는
+    5개 구간으로 고정, 확인된 요청) 순서로 보유 수를 담은 길이 5 배열이다."""
+    by_name: dict[str, list[dict]] = defaultdict(list)
+    for row in rows:
+        by_name[row["name"]].append(row)
+
+    collapsed = []
+    for name, group_rows in by_name.items():
+        highest = max(group_rows, key=lambda r: r["star"])
+        equipped_row = next((r for r in group_rows if r["is_equipped"]), None)
+        representative = equipped_row or highest
+
+        star_counts = [0, 0, 0, 0, 0]
+        for r in group_rows:
+            star_counts[min(r["star"], 5) - 1] += r["count"]
+
+        entry = dict(highest)
+        entry["star_counts"] = star_counts
+        entry["count"] = sum(star_counts)
+        entry["is_equipped"] = equipped_row is not None
+        entry["character_id"] = representative["character_id"]
+        entry["copy_ids"] = [cid for r in group_rows for cid in r["copy_ids"]]
+        collapsed.append(entry)
+
+    collapsed.sort(key=lambda row: (
+        -row["star"],
+        -RARITY_RANK.get(row["rarity"], 0),
+        row["catalog_index"],
+    ))
+    return collapsed
+
+
 @router.get("/")
 def get_my_characters(
     db: Session = Depends(get_db),
@@ -180,6 +239,9 @@ def get_character_inventory(
     설명 본문은 화면이 항상 잠금 처리해서 노출하지 않는다)."""
     rows = _build_inventory_rows(user)
     owned_names = {row["name"] for row in rows}
+    # 목록 화면은 캐릭터당 가장 높은 성급 한 줄만 보여준다(확인된 요청) - owned_names/unowned 판정은
+    # 접기 전 원본 rows 기준으로 충분하므로 순서를 바꿀 필요는 없다.
+    collapsed_rows = _collapse_to_highest_star(rows)
     unowned = [
         {
             "name": entry["name"],
@@ -200,9 +262,9 @@ def get_character_inventory(
         if entry["name"] not in owned_names and not is_hidden_override(entry["name"], entry.get("is_hidden", False))
     ]
     unowned.sort(key=lambda row: (-RARITY_RANK.get(row["rarity"], 0), row["name"]))
-    _attach_designer_nicknames(db, rows + unowned)
+    _attach_designer_nicknames(db, collapsed_rows + unowned)
     return {
-        "characters": rows,
+        "characters": collapsed_rows,
         "unowned_characters": unowned,
     }
 

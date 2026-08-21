@@ -138,23 +138,39 @@
 
 .inventory-list-back { position: absolute; left: 16px; top: 14px; }
 
+/* display:flex가 hidden 속성의 기본 숨김 동작을 덮어쓰는 걸 막음(arena-battle.css의
+   .battle-speed-toggle[hidden]과 동일한 패턴) - 아이템 화면에선 이 탭 바 자체를 숨겨야 하는데,
+   안 그러면 hidden이 켜져도 flex 때문에 계속 보인다. */
+.inventory-tabs[hidden] {
+    display: none;
+}
+
 .inventory-tabs {
     /* 모달 닫기 버튼(우측 상단, width:28px+right:10px)과 절대 안 겹치도록 넉넉히 여백을 둔다.
        예전엔 여기 여백이 부족해서 "아이템" 탭이 닫기 버튼 클릭 영역에 가려질 수 있었다. */
     margin-left: auto;
     margin-right: 6px;
-    display: flex;
+    /* flex(flex:1 1 0%)로는 로고 이미지가 든 탭이 자기 콘텐츠 최소 크기 때문에 다른 탭보다 넓게
+       밀려나는 문제가 있었다(min-width:0을 줘도, 아이콘이 안 찌그러지게 flex-shrink:0을 걸어두면
+       그 콘텐츠가 결국 형제 탭들의 몫까지 침범함) - grid의 minmax(0,1fr)는 콘텐츠 크기와 무관하게
+       세 칸을 항상 정확히 동일 폭으로 강제한다(arena.css의 .defense-standing-row와 같은 관례). */
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     min-width: 300px;
     max-width: calc(100% - 20px);
     border: 2px solid #79a9c2;
     border-radius: 6px;
     overflow: hidden;
+    /* STRIKER/SUPPORTER 로고가 이탤릭체라, 옆에 나란히 붙는 ALL/탭 바 전체도 같은 각도로 기울여
+       톤을 통일한다 - 컨테이너 하나에만 걸어두면 안의 버튼들도 같이 기울어 보이므로 각 버튼마다
+       따로 줄 필요가 없다. 대신 로고 자체(.inventory-tab-icon-mask)는 반대로 되돌려서 안 기울게
+       한다(아래 참고). */
+    transform: skewX(-8deg);
 }
 
 .inventory-tab {
     position: relative;
     z-index: 1;
-    flex: 1;
     border: 0;
     padding: 11px 18px;
     background: rgba(255,255,255,.78);
@@ -166,6 +182,82 @@
 .inventory-tab.active {
     background: #275777;
     color: #fff;
+}
+
+#inventory-role-tab-all {
+    /* 옆 탭의 로고 이미지 세로폭(16px)과 눈으로 봤을 때 비슷한 크기로 보이도록 - 글자는 실제
+       글자 높이(cap-height)가 font-size보다 작으므로 font-size를 그보다 크게 잡는다. */
+    font-size: 20px;
+    /* 기울기 자체는 .inventory-tabs(컨테이너)에 걸어서 탭 바 전체가 통일된 각도로 기울어지게
+       하므로, 여기서 따로 줄 필요는 없다. */
+}
+
+.inventory-tab-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* 아이콘 탭은 로고 이미지 자체가 이미 여백 없이 글자로 꽉 차 있어서, 다른 탭과 같은 좌우
+       패딩(18px)을 쓰면 SUPPORTER 로고(세로 16px 기준 실제 가로 폭 ≈78.5px)가 버튼 안에 다 못 들어가
+       flex-shrink로 찌그러져 STRIKER보다 낮아 보였다 - 좌우 패딩을 줄여 로고가 안 찌그러지고
+       16px 높이 그대로 들어갈 공간을 확보한다. */
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+/* striker/supporter 로고는 색이 고정된 이미지가 아니라 CSS mask로 그린다 - mask-image는 이미지의
+   알파 채널(글자 모양)만 가져오고 실제 채우는 색은 background-color로 정하므로, 같은 이미지 파일
+   하나로 "원래 브랜드 색" 상태와 "탭이 active일 때 흰색으로 반전" 상태를 둘 다 표현할 수 있다
+   (흰 배경 칩 없이). */
+.inventory-tab-icon-mask {
+    display: block;
+    height: 16px;
+    /* flex 자식 기본값(flex-shrink:1)이면 버튼 폭이 부족할 때 이 마스크가 찌그러져 실제 세로가
+       16px보다 낮게 나온다 - 항상 지정한 세로 그대로 나오도록 찌그러짐을 막는다. */
+    flex-shrink: 0;
+    /* 탭 바 컨테이너 전체가 skewX(-8deg)로 기울어 있어서 그대로 두면 로고까지 같이 기울어 보인다 -
+       로고 이미지 자체는 이미 디자인된 형태(기울어진 서체 느낌)를 그대로 유지해야 하므로, 부모의
+       기울기만큼 반대 방향(+8deg)으로 되돌려서 시각적으로 다시 똑바로 서게 한다. */
+    transform: skewX(8deg);
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+}
+
+.inventory-tab-striker .inventory-tab-icon-mask {
+    /* striker.webp의 실제 가로:세로(800:200) 그대로 - 세로를 16px로 고정해두면 가로는 이 비율로
+       자동 계산되므로 폭을 직접 계산해 넣을 필요가 없다(SUPPORTER 쪽에서 폭을 손으로 어림잡다
+       생긴 오차 문제를 원천적으로 없앤다). */
+    aspect-ratio: 800 / 200;
+    -webkit-mask-image: url('../assets/icons/striker.webp');
+    mask-image: url('../assets/icons/striker.webp');
+    background-color: #f74a20;
+}
+
+.inventory-tab-supporter .inventory-tab-icon-mask {
+    /* supporter.webp의 실제 가로:세로(800:163) 그대로. */
+    aspect-ratio: 800 / 163;
+    -webkit-mask-image: url('../assets/icons/supporter.webp');
+    mask-image: url('../assets/icons/supporter.webp');
+    background-color: #017eff;
+}
+
+/* active 상태에선 탭 배경 자체가 그 아이콘의 브랜드색이 되고(일반 탭의 짙은 파랑 대신), 로고는
+   흰색으로 반전돼 그 배경 위에서 또렷이 보인다. */
+.inventory-tab-striker.active {
+    background: #f74a20;
+}
+.inventory-tab-striker.active .inventory-tab-icon-mask {
+    background-color: #fff;
+}
+
+.inventory-tab-supporter.active {
+    background: #017eff;
+}
+.inventory-tab-supporter.active .inventory-tab-icon-mask {
+    background-color: #fff;
 }
 
 .inventory-grid-scroll {
@@ -832,6 +924,17 @@
     line-height: 1.6;
     font-weight: 700;
     white-space: pre-line; /* characters.json 설명 텍스트에 든 \n을 실제 줄바꿈으로 표시 */
+}
+
+/* Active 스킬 설명 위에 이탤릭체로 먼저 뜨는 코스트 표기(전술대회 코스트제) - div라 자연히 한 줄을
+   차지해서, 바로 아래 이어지는 설명 본문과 저절로 줄바꿈된다. "COST :" 글자 자체는 색을 따로
+   지정하지 않고 .inventory-subinfo-body의 일반 텍스트 색(#314f60)을 그대로 물려받고, 숫자만
+   .subinfo-number(주황, 아래 설명 본문의 숫자 강조와 동일)로 색이 갈린다 - 굵기는 900으로 올려서
+   숫자 강조와 같은 두께로 맞췄다. */
+.inventory-ability-cost-line {
+    font-style: italic;
+    font-weight: 900;
+    margin-bottom: 6px;
 }
 
 .subinfo-number {

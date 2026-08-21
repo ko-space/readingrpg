@@ -10,6 +10,7 @@
         "기본": "artist/basic"
       },
       "description": "그는 학생의 자율성을 존중했을 뿐. 방치한 것이 아닙니다.",
+      "gacha_quote": "지도는 하지 않습니다. 재능은 간섭받지 않을 때 가장 아름답게 피어나거든요.",
       "range": "원거리",
       "attack_type": "Parent",
       "defense_type": "Teacher",
@@ -21,7 +22,10 @@
         "5": 2.8,
         "6": 15
       },
-      "exp_subjects": ["탐구", "기타"],
+      "exp_subjects": [
+        "탐구",
+        "기타"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -34,17 +38,17 @@
         "1": null,
         "2": null,
         "3": null,
-        "4": "제목은 관객이 정하세요: 보유한 물감을 전부 소모하여 작품을 완성하고, 물감의 종류에 따라 다음 효과 발동.\n- 빨간 물감 1개당: 공격 대상에게 공격력의 80% 피해\n- 파란 물감 1개당: 체력이 가장 낮은 아군의 최대 체력 5% 회복\n- 노란 물감 1개당: 적 전체를 0.5초 기절\n보유한 물감이 없는 경우 공격 대상에게 공격력의 150%만큼 피해",
-        "5": "제목은 관객이 정하세요: 보유한 물감을 전부 소모하여 작품을 완성하고, 물감의 종류에 따라 다음 효과 발동.\n- 빨간 물감 1개당: 공격 대상에게 공격력의 150% 피해\n- 파란 물감 1개당: 체력이 가장 낮은 아군의 최대 체력 5% 회복\n- 노란 물감 1개당: 적 전체를 0.5초 기절\n보유한 물감이 없는 경우 공격 대상에게 공격력의 150%만큼 피해",
-        "6": "제목은 관객이 정하세요: 보유한 물감을 전부 소모하여 작품을 완성하고, 물감의 종류에 따라 다음 효과 발동.\n- 빨간 물감 1개당: 공격 대상에게 공격력의 300% 피해\n- 파란 물감 1개당: 체력이 가장 낮은 아군의 최대 체력 15% 회복\n- 노란 물감 1개당: 적 전체를 1초 기절\n보유한 물감이 없는 경우 공격 대상에게 공격력의 300%만큼 피해"
+        "4": "제목은 관객이 정하세요: 보유한 물감을 전부 소모하여 작품을 완성하고, 물감의 종류에 따라 다음 효과 발동.\n- 빨간 물감 1개당: 공격 대상에게 공격력의 80% 피해\n- 파란 물감 1개당: 체력이 가장 낮은 아군에게 최대 체력의 5% 보호막 부여\n- 노란 물감 1개당: 적 전체를 0.5초 기절",
+        "5": "제목은 관객이 정하세요: 보유한 물감을 전부 소모하여 작품을 완성하고, 물감의 종류에 따라 다음 효과 발동.\n- 빨간 물감 1개당: 공격 대상에게 공격력의 200% 피해\n- 파란 물감 1개당: 체력이 가장 낮은 아군에게 최대 체력의 5% 보호막 부여\n- 노란 물감 1개당: 적 전체를 0.75초 기절",
+        "6": "제목은 관객이 정하세요: 보유한 물감을 전부 소모하여 작품을 완성하고, 물감의 종류에 따라 다음 효과 발동.\n- 빨간 물감 1개당: 공격 대상에게 공격력의 300% 피해\n- 파란 물감 1개당: 체력이 가장 낮은 아군에게 최대 체력의 15% 보호막 부여\n- 노란 물감 1개당: 적 전체를 1초 기절"
       },
       "trait_effects": {
         "1": null,
         "2": null,
         "3": null,
         "4": null,
-        "5": "방임: 아군 학생 타입 보유 인물이 존재하는 동안(공격/방어 상관없이) 자신 기절, 받는 피해량 50% 감소",
-        "6": "방임: 아군 학생 타입 보유 인물이 존재하는 동안(공격/방어 상관없이) 자신 기절, 받는 피해량 75% 감소, 2초마다 무작위 물감 1개 획득"
+        "5": "방임: 아군 학생 타입 보유 STRIKER가 존재하는 동안(공격/방어 상관없이) 자신 기절, 받는 피해량 60% 감소",
+        "6": "방임: 아군 학생 타입 보유 STRIKER가 존재하는 동안(공격/방어 상관없이) 자신 기절, 받는 피해량 75% 감소, 2초마다 무작위 물감 1개 획득"
       },
       "star_mechanics": {
         "effect_type": "gain_paint_on_active_use",
@@ -65,28 +69,28 @@
       },
       "skill_mechanics": {
         "effect_type": "consume_paint_multi_effect",
+        "cost": 3,
         "params": {
           "4": {
-            "red_percent_per_paint": 80,
-            "blue_percent_per_paint": 5,
-            "yellow_seconds_per_paint": 0.5,
-            "no_paint_multiplier": 150
-          },
-          "5": {
             "red_percent_per_paint": 150,
             "blue_percent_per_paint": 5,
-            "yellow_seconds_per_paint": 0.5,
-            "no_paint_multiplier": 150
+            "yellow_seconds_per_paint": 0.5
+          },
+          "5": {
+            "red_percent_per_paint": 200,
+            "blue_percent_per_paint": 5,
+            "yellow_seconds_per_paint": 0.75
           },
           "6": {
             "red_percent_per_paint": 300,
             "blue_percent_per_paint": 15,
-            "yellow_seconds_per_paint": 1,
-            "no_paint_multiplier": 300
+            "yellow_seconds_per_paint": 1
           }
         }
       },
-      "skill_categories": ["yellow"],
+      "skill_categories": [
+        "yellow"
+      ],
       "trait_mechanics": {
         "effect_type": "conditional_stun_dr_ally_type",
         "params": {
@@ -103,6 +107,125 @@
       }
     },
     {
+      "name": "신",
+      "designer_user_id": 4,
+      "job_class": "신",
+      "gender": "남",
+      "unit_role": "supporter",
+      "outfits": {
+        "기본": "god/basic"
+      },
+      "description": "신... 그자체입니다.",
+      "gacha_quote": "3학년들은 내 말이 귀에 안들어올 것 같으니까 먼저 가세요.",
+      "range": "근거리",
+      "attack_type": "Teacher",
+      "defense_type": "Teacher",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "exp_subjects": [],
+      "silver_multiplier": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "silver_subjects": [],
+      "gold_multiplier": {
+        "1": null,
+        "2": null,
+        "3": 0,
+        "4": 0,
+        "5": 5,
+        "6": 25
+      },
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "제 1 권한: 10초마다 아군 STRIKER 중 랜덤으로 대상의 최대 체력의 20% 회복",
+        "4": "제 1 권한: 10초마다 아군 STRIKER 중 랜덤으로 대상의 최대 체력의 20% 회복",
+        "5": "제 1 권한: 10초마다 아군 STRIKER 중 랜덤으로 대상의 최대 체력의 20% 회복",
+        "6": "제 1 권한: 10초마다 아군 STRIKER 중 랜덤으로 대상의 최대 체력의 60% 회복"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": "제 2 권한: 최대 체력의 30%로 죽은 아군 STRIKER 부활",
+        "5": "제 2 권한: 최대 체력의 30%로 죽은 아군 STRIKER 부활",
+        "6": "제 2 권한: 최대 체력의 100%로 죽은 아군 STRIKER 부활"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "제 3 권한: 10초마다 부모 속성을 보유하지 않은 아군 STRIKER 중 랜덤으로 대상의 최대 체력의 20% 보호막 부여",
+        "6": "제 3 권한: 10초마다 부모 속성을 보유하지 않은 아군 STRIKER 중 랜덤으로 대상의 최대 체력의 60% 보호막 부여"
+      },
+      "skill_mechanics": {
+        "effect_type": "revive_dead_striker",
+        "cost": 3,
+        "params": {
+          "4": {
+            "hp_percent": 30
+          },
+          "5": {
+            "hp_percent": 30
+          },
+          "6": {
+            "hp_percent": 100
+          }
+        }
+      },
+      "skill_categories": [
+        "blue"
+      ],
+      "star_mechanics": {
+        "effect_type": "periodic_heal_random_striker",
+        "params": {
+          "3": {
+            "interval_seconds": 10,
+            "heal_percent": 20
+          },
+          "4": {
+            "interval_seconds": 10,
+            "heal_percent": 20
+          },
+          "5": {
+            "interval_seconds": 10,
+            "heal_percent": 20
+          },
+          "6": {
+            "interval_seconds": 10,
+            "heal_percent": 60
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "periodic_shield_random_non_type_striker",
+        "params": {
+          "5": {
+            "interval_seconds": 10,
+            "shield_percent": 20,
+            "exclude_type": "Parent"
+          },
+          "6": {
+            "interval_seconds": 10,
+            "shield_percent": 60,
+            "exclude_type": "Parent"
+          }
+        }
+      }
+    },
+    {
       "name": "윤대웅",
       "designer_user_id": 4,
       "job_class": "사진 작가",
@@ -112,6 +235,7 @@
         "기본": "photographer/basic"
       },
       "description": "카메라를 수집하고 다닙니다. [nex5r + 삼양 85.4]를 특히 애용합니다.",
+      "gacha_quote": "찰칵! 찰칵찰칵! 어이 거기 너네! 가만히 멈춰있어봐 freez! 시적인 사진 찍어줄게!",
       "range": "원거리",
       "attack_type": "Teacher",
       "defense_type": "Teacher",
@@ -123,7 +247,10 @@
         "5": 2.8,
         "6": 15
       },
-      "exp_subjects": ["수학", "기타"],
+      "exp_subjects": [
+        "수학",
+        "기타"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -136,9 +263,9 @@
         "1": null,
         "2": null,
         "3": null,
-        "4": "카메라 업그레이드: 전투 종료 시까지 자신의 공격력 15% 증가, 최대 6회 중첩",
-        "5": "카메라 업그레이드: 전투 종료 시까지 자신의 공격력 15% 증가, 최대 6회 중첩",
-        "6": "카메라 업그레이드: 전투 종료 시까지 자신의 공격력 30% 증가, 최대 6회 중첩"
+        "4": "카메라 업그레이드: 전투 종료 시까지 자신의 공격 속도 15% 증가, 최대 6회 중첩",
+        "5": "카메라 업그레이드: 전투 종료 시까지 자신의 공격 속도 15% 증가, 최대 6회 중첩",
+        "6": "카메라 업그레이드: 전투 종료 시까지 자신의 공격 속도 30% 증가, 최대 6회 중첩"
       },
       "trait_effects": {
         "1": null,
@@ -150,25 +277,28 @@
       },
       "skill_mechanics": {
         "effect_type": "self_stack_buff",
+        "cost": 2,
         "params": {
           "5": {
-            "stat": "atk",
+            "stat": "haste",
             "percent_per_stack": 15,
             "max_stacks": 6
           },
           "6": {
-            "stat": "atk",
+            "stat": "haste",
             "percent_per_stack": 30,
             "max_stacks": 6
           },
           "4": {
-            "stat": "atk",
+            "stat": "haste",
             "percent_per_stack": 15,
             "max_stacks": 6
           }
         }
       },
-      "skill_categories": ["yellow"],
+      "skill_categories": [
+        "yellow"
+      ],
       "trait_mechanics": {
         "effect_type": "ally_synergy_remove_absorb",
         "partner_name": "윤영준",
@@ -209,6 +339,7 @@
         "기본": "tutor/basic"
       },
       "description": "TinkerCAD로 자동차도 만들고 아기도 씻깁니다.",
+      "gacha_quote": "3D 프린터로 만들수 없는 것은 없습니다. 오페라하우스조차 만들 수 있죠!",
       "range": "근거리",
       "attack_type": "Parent",
       "defense_type": "Parent",
@@ -220,7 +351,10 @@
         "5": 2.8,
         "6": 15
       },
-      "exp_subjects": ["국어", "영어"],
+      "exp_subjects": [
+        "국어",
+        "영어"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -247,6 +381,7 @@
       },
       "skill_mechanics": {
         "effect_type": "summon_clone",
+        "cost": 6,
         "params": {
           "5": {
             "hp_percent": 15,
@@ -262,7 +397,9 @@
           }
         }
       },
-      "skill_categories": ["blue"],
+      "skill_categories": [
+        "blue"
+      ],
       "trait_mechanics": {
         "effect_type": "ally_synergy_atk_buff",
         "partner_name": "강 희",
@@ -296,6 +433,119 @@
   ],
   "전설": [
     {
+      "name": "김국회",
+      "designer_user_id": 4,
+      "job_class": "국회의원",
+      "gender": "남",
+      "unit_role": "supporter",
+      "outfits": {
+        "기본": "parliament/basic"
+      },
+      "description": "그는 대단한 자본가입니다",
+      "gacha_quote": "한시는 마음의 평화를 불러 일으킵니다. 저도 \"하루\"라고 호를 지었죠.",
+      "range": "원거리",
+      "attack_type": "Parent",
+      "defense_type": "Parent",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "exp_subjects": [],
+      "silver_multiplier": {
+        "1": null,
+        "2": null,
+        "3": 0,
+        "4": 1.8,
+        "5": 2.4,
+        "6": 12
+      },
+      "silver_subjects": [
+        "수학"
+      ],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "일당 독재: 아군 STRIKER가 공격할 때마다 공격 대상이 아닌 다른 적에게 각각 공격력의 20%만큼 피해",
+        "4": "일당 독재: 아군 STRIKER가 공격할 때마다 공격 대상이 아닌 다른 적에게 각각 공격력의 20%만큼 피해",
+        "5": "일당 독재: 아군 STRIKER가 공격할 때마다 공격 대상이 아닌 다른 적에게 각각 공격력의 20%만큼 피해",
+        "6": "일당 독재: 아군 STRIKER가 공격할 때마다 공격 대상이 아닌 다른 적에게 각각 공격력의 60%만큼 피해"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": "국회의사당: 김국회가 공격력의 50%와 최대 체력의 100%를 가진 국회의사당에 탑승하여 20초간 전투에 등장.",
+        "5": "국회의사당: 김국회가 공격력의 50%와 최대 체력의 100%를 가진 국회의사당에 탑승하여 20초간 전투에 등장.",
+        "6": "국회의사당: 김국회가 공격력의 100%와 최대 체력의 100%를 가진 국회의사당에 탑승하여 20초간 전투에 등장."
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "편나누기: 선생 타입 보유 인물(공격/방어 상관없이)의 최대 체력 20% 증가",
+        "6": "편나누기: 선생 타입 보유 인물(공격/방어 상관없이)의 최대 체력 60% 증가"
+      },
+      "skill_mechanics": {
+        "effect_type": "summon_into_ranged_slot",
+        "cost": 4,
+        "params": {
+          "4": {
+            "atk_percent": 50,
+            "hp_percent": 100,
+            "duration_seconds": 20
+          },
+          "5": {
+            "atk_percent": 50,
+            "hp_percent": 100,
+            "duration_seconds": 20
+          },
+          "6": {
+            "atk_percent": 100,
+            "hp_percent": 100,
+            "duration_seconds": 20
+          }
+        }
+      },
+      "skill_categories": [
+        "blue"
+      ],
+      "star_mechanics": {
+        "effect_type": "ally_attack_splash_damage",
+        "params": {
+          "3": {
+            "percent": 20
+          },
+          "4": {
+            "percent": 20
+          },
+          "5": {
+            "percent": 20
+          },
+          "6": {
+            "percent": 60
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "team_type_hp_buff",
+        "params": {
+          "5": {
+            "percent": 20,
+            "type": "Teacher"
+          },
+          "6": {
+            "percent": 60,
+            "type": "Teacher"
+          }
+        }
+      }
+    },
+    {
       "name": "김남옥",
       "designer_user_id": 4,
       "job_class": "크레파스 회사 사장",
@@ -305,6 +555,7 @@
         "기본": "ceo/basic"
       },
       "description": "크레파스를 좋아합니다. 박보검 팬클럽 회장입니다.",
+      "gacha_quote": "가끔은 이  크레파스로 마음 가는 대로 막 칠해봐. 기분이 훨씬 나아질 거야.",
       "range": "원거리",
       "attack_type": "Teacher",
       "defense_type": "Parent",
@@ -316,7 +567,11 @@
         "5": 2.7,
         "6": 14.5
       },
-      "exp_subjects": ["수학", "탐구", "기타"],
+      "exp_subjects": [
+        "수학",
+        "탐구",
+        "기타"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -343,6 +598,7 @@
       },
       "skill_mechanics": {
         "effect_type": "conditional_target_debuff",
+        "cost": 2,
         "params": {
           "5": {
             "condition": "target_gender_female",
@@ -364,7 +620,9 @@
           }
         }
       },
-      "skill_categories": ["yellow"],
+      "skill_categories": [
+        "yellow"
+      ],
       "star_mechanics": {
         "effect_type": "self_stat_percent",
         "params": {
@@ -406,6 +664,7 @@
         "기본": "mage_2/basic"
       },
       "description": "둘은 절대 떨어지지 않습니다.",
+      "gacha_quote": "사람들은 의견을 모을 때 머리를 맞댄다던데, 우리는 배를 맞대는 쪽이 더 잘 맞는 것 같아.",
       "range": "근거리",
       "attack_type": "Student",
       "defense_type": "Parent",
@@ -417,7 +676,10 @@
         "5": 2.7,
         "6": 14.5
       },
-      "exp_subjects": ["국어", "탐구"],
+      "exp_subjects": [
+        "국어",
+        "탐구"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -444,6 +706,7 @@
       },
       "skill_mechanics": {
         "effect_type": "summon_clone",
+        "cost": 5,
         "params": {
           "4": {
             "hp_percent": 15,
@@ -483,7 +746,9 @@
           }
         }
       },
-      "skill_categories": ["blue"],
+      "skill_categories": [
+        "blue"
+      ],
       "star_mechanics": {
         "effect_type": "kill_heal_percent",
         "params": {
@@ -525,6 +790,7 @@
         "기본": "mage/basic"
       },
       "description": "수백 년간 교무실에서 상주해 온 대마법사입니다.",
+      "gacha_quote": "내 목소리에 방음 마법을 걸어두라고? 미안하지만 내 성량은 이미 자연 법칙을 초월했어!",
       "range": "원거리",
       "attack_type": "Teacher",
       "defense_type": "Parent",
@@ -536,7 +802,9 @@
         "5": 2.6,
         "6": 14
       },
-      "exp_subjects": ["국어"],
+      "exp_subjects": [
+        "국어"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -558,11 +826,12 @@
         "2": null,
         "3": null,
         "4": null,
-        "5": "유이한 대마법사: 임소정, 이종복 대상으로 공격력 40% 증가",
-        "6": "유이한 대마법사: 임소정, 이종복 대상으로 공격력 100% 증가"
+        "5": "유일한 대마법사: 임소정, 이종복 대상으로 공격력 40% 증가",
+        "6": "유일한 대마법사: 임소정, 이종복 대상으로 공격력 100% 증가"
       },
       "skill_mechanics": {
         "effect_type": "damage_hp_percent_plus_atk",
+        "cost": 6,
         "params": {
           "5": {
             "hp_percent": 20,
@@ -578,7 +847,9 @@
           }
         }
       },
-      "skill_categories": ["red"],
+      "skill_categories": [
+        "red"
+      ],
       "star_mechanics": {
         "effect_type": "ally_team_stat_percent",
         "params": {
@@ -623,6 +894,7 @@
         "기본": "sj/basic"
       },
       "description": "수백 년간 교무실을 지켜온 대마법사입니다.",
+      "gacha_quote": "얘들아 이번 물리 시험 솔직히 14분이면 4페이지 들어갔어야 해.",
       "range": "원거리",
       "attack_type": "Teacher",
       "defense_type": "Student",
@@ -634,7 +906,9 @@
         "5": 2.8,
         "6": 15
       },
-      "exp_subjects": ["수학"],
+      "exp_subjects": [
+        "수학"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -656,11 +930,12 @@
         "2": null,
         "3": null,
         "4": null,
-        "5": "유이한 대마법사: 임소정, 이종복 대상으로 공격력 40% 증가",
-        "6": "유이한 대마법사: \"임소정\",\"이종복\" 인물 대상으로 공격력 100% 증가"
+        "5": "유일한 대마법사: 임소정, 이종복 대상으로 공격력 40% 증가",
+        "6": "유일한 대마법사: \"임소정\",\"이종복\" 인물 대상으로 공격력 100% 증가"
       },
       "skill_mechanics": {
         "effect_type": "debuff_atk_and_damage",
+        "cost": 5,
         "params": {
           "5": {
             "atk_debuff_percent": 10,
@@ -679,7 +954,10 @@
           }
         }
       },
-      "skill_categories": ["yellow", "red"],
+      "skill_categories": [
+        "yellow",
+        "red"
+      ],
       "star_mechanics": {
         "effect_type": "ally_team_stat_percent",
         "params": {
@@ -717,6 +995,118 @@
   ],
   "영웅": [
     {
+      "name": "배",
+      "designer_user_id": 4,
+      "job_class": "영의정",
+      "gender": "여",
+      "unit_role": "supporter",
+      "outfits": {
+        "기본": "back/basic"
+      },
+      "description": "함경도 유배지에서 해배를 기다리고 있습니다",
+      "gacha_quote": "어이 학생들? 급식실 1등은 내꺼야! 내 식판에 소시지 한 개라도 더 채울 테다!",
+      "range": "근거리",
+      "attack_type": "Parent",
+      "defense_type": "Student",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "exp_subjects": [],
+      "silver_multiplier": {
+        "1": null,
+        "2": null,
+        "3": 0,
+        "4": 2.0,
+        "5": 3.0,
+        "6": 15
+      },
+      "silver_subjects": [
+        "탐구"
+      ],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "개량한복: 체력 50% 미만 STRIKER 대상 2초 무적 (전투 내 1회 한정)",
+        "4": "개량한복: 체력 50% 미만 STRIKER 대상 2초 무적 (전투 내 1회 한정)",
+        "5": "개량한복: 체력 50% 미만 STRIKER 대상 2초 무적 (전투 내 1회 한정)",
+        "6": "개량한복: 체력 50% 미만 STRIKER 대상 5초 무적 (STRIKER별 1회 한정)"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": "유배 보내기: 후방 적 3초 기절, 공격력의 100% 피해",
+        "5": "유배 보내기: 후방 적 3초 기절, 공격력의 100% 피해",
+        "6": "유배 보내기: 후방 적 6초 기절, 공격력의 300% 피해"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "유교적 윤리의식: 남성인 아군의 공격 속도 20% 증가",
+        "6": "유교적 윤리의식: 남성인 아군의 공격 속도 60% 증가"
+      },
+      "skill_mechanics": {
+        "effect_type": "stun_rear_target",
+        "cost": 3,
+        "params": {
+          "4": {
+            "multiplier": 100,
+            "seconds": 3.0
+          },
+          "5": {
+            "multiplier": 100,
+            "seconds": 3.0
+          },
+          "6": {
+            "multiplier": 300,
+            "seconds": 6.0
+          }
+        }
+      },
+      "skill_categories": [
+        "red",
+        "yellow"
+      ],
+      "star_mechanics": {
+        "effect_type": "shield_low_hp_striker_once",
+        "params": {
+          "3": {
+            "seconds": 2.0
+          },
+          "4": {
+            "seconds": 2.0
+          },
+          "5": {
+            "seconds": 2.0
+          },
+          "6": {
+            "seconds": 5.0,
+            "once_per_striker": true
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "gendered_ally_haste",
+        "params": {
+          "5": {
+            "gender": "남",
+            "haste_percent": 20
+          },
+          "6": {
+            "gender": "남",
+            "haste_percent": 60
+          }
+        }
+      }
+    },
+    {
       "name": "불빠따 김어진",
       "designer_user_id": 2,
       "job_class": "타자",
@@ -726,6 +1116,7 @@
         "기본": "batter/basic"
       },
       "description": "쉬는 시간에 클래식 듣기를 거부하는 학생들에게 홈런을 몸소 보여줍니다.",
+      "gacha_quote": "공부할 때, 하체가 따뜻해야 혈액순환이 잘돼 얘들아.",
       "range": "근거리",
       "attack_type": "Teacher",
       "defense_type": "Teacher",
@@ -737,7 +1128,9 @@
         "5": 2.5,
         "6": 13
       },
-      "exp_subjects": ["탐구"],
+      "exp_subjects": [
+        "탐구"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -750,9 +1143,9 @@
         "1": null,
         "2": null,
         "3": null,
-        "4": "불빠따: 자신을 제외한 모든 인물에게 공격력의 150%만큼 피해",
-        "5": "불빠따: 자신을 제외한 모든 인물에게 공격력의 150%만큼 피해",
-        "6": "불빠따: 자신을 제외한 모든 인물에게 공격력의 300%만큼 피해"
+        "4": "불빠따: 자신을 제외한 모든 인물에게 공격력의 250%만큼 피해",
+        "5": "불빠따: 자신을 제외한 모든 인물에게 공격력의 250%만큼 피해",
+        "6": "불빠따: 자신을 제외한 모든 인물에게 공격력의 450%만큼 피해"
       },
       "trait_effects": {
         "1": null,
@@ -764,19 +1157,22 @@
       },
       "skill_mechanics": {
         "effect_type": "aoe_all_others_damage",
+        "cost": 3,
         "params": {
           "5": {
-            "multiplier": 150
+            "multiplier": 250
           },
           "6": {
-            "multiplier": 300
+            "multiplier": 450
           },
           "4": {
-            "multiplier": 150
+            "multiplier": 250
           }
         }
       },
-      "skill_categories": ["red"],
+      "skill_categories": [
+        "red"
+      ],
       "star_mechanics": {
         "effect_type": "damage_to_gender_bonus",
         "params": {
@@ -799,13 +1195,15 @@
         }
       },
       "trait_mechanics": {
-        "effect_type": "team_teacher_hp_buff",
+        "effect_type": "team_type_hp_buff",
         "params": {
           "5": {
-            "percent": 40
+            "percent": 40,
+            "type": "Teacher"
           },
           "6": {
-            "percent": 100
+            "percent": 100,
+            "type": "Teacher"
           }
         }
       }
@@ -820,6 +1218,7 @@
         "기본": "hero/basic"
       },
       "description": "건국대 의대에 영웅이 등장합니다. 말 그대로 영웅이었습니다.",
+      "gacha_quote": "이건 의학으로 카피할 수 있는 영역이 아니야. 타고난 우월한 유전자의 힘이다!",
       "range": "근거리",
       "attack_type": "Parent",
       "defense_type": "Student",
@@ -831,7 +1230,9 @@
         "5": 2.5,
         "6": 13
       },
-      "exp_subjects": ["수학"],
+      "exp_subjects": [
+        "수학"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -853,11 +1254,12 @@
         "2": null,
         "3": null,
         "4": null,
-        "5": "히포크라테스 선서: 자신이 죽을 때, 자신을 제외한 모든 아군에게 \"이영웅\"의 최대 체력의 10%만큼 회복",
-        "6": "히포크라테스 선서: 자신이 죽을 때, 자신을 제외한 모든 아군에게 \"이영웅\"의 최대 체력의 20%만큼 회복"
+        "5": "히포크라테스 선서: 자신이 죽을 때, 자신을 제외한 모든 아군에게 \"이영웅\"의 최대 체력의 10%만큼 보호막 부여",
+        "6": "히포크라테스 선서: 자신이 죽을 때, 자신을 제외한 모든 아군에게 \"이영웅\"의 최대 체력의 20%만큼 보호막 부여"
       },
       "skill_mechanics": {
         "effect_type": "heal_ally_percent_max_hp",
+        "cost": 2,
         "params": {
           "5": {
             "percent": 10
@@ -870,7 +1272,9 @@
           }
         }
       },
-      "skill_categories": ["blue"],
+      "skill_categories": [
+        "blue"
+      ],
       "star_mechanics": {
         "effect_type": "debuff_all_others_atk",
         "params": {
@@ -910,6 +1314,7 @@
         "기본": "international/basic"
       },
       "description": "연분홍색 크록스가 매력 포인트입니다. 그는 왜 눈을 뜨지 않는 걸까요?",
+      "gacha_quote": "인간은 참 미련하지. 보지 않아도 될 절망을 굳이 들추려 하니까. 왜 눈을 뜨지 않냐고? 묻지마. 다쳐",
       "range": "원거리",
       "attack_type": "Student",
       "defense_type": "Student",
@@ -921,7 +1326,9 @@
         "5": 2.5,
         "6": 13
       },
-      "exp_subjects": ["탐구"],
+      "exp_subjects": [
+        "탐구"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -948,6 +1355,7 @@
       },
       "skill_mechanics": {
         "effect_type": "self_type_swap_heal",
+        "cost": 3,
         "params": {
           "5": {
             "heal_percent": 5,
@@ -963,7 +1371,9 @@
           }
         }
       },
-      "skill_categories": ["blue"],
+      "skill_categories": [
+        "blue"
+      ],
       "star_mechanics": {
         "effect_type": "self_crit_multiplier",
         "params": {
@@ -1008,6 +1418,7 @@
         "기본": "ksy/basic"
       },
       "description": "성대모사 장인입니다. 그 누구도 될 수 있습니다.",
+      "gacha_quote": "어이 너! 너말야! 나랑 싸지 박을래?",
       "range": "근거리",
       "attack_type": "Student",
       "defense_type": "Student",
@@ -1019,7 +1430,9 @@
         "5": 2.4,
         "6": 12
       },
-      "exp_subjects": ["수학"],
+      "exp_subjects": [
+        "수학"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -1046,6 +1459,7 @@
       },
       "skill_mechanics": {
         "effect_type": "copy_target_skill",
+        "cost": 5,
         "params": {
           "5": {
             "potency_percent": 50,
@@ -1061,7 +1475,9 @@
           }
         }
       },
-      "skill_categories": ["red"],
+      "skill_categories": [
+        "red"
+      ],
       "star_mechanics": {
         "effect_type": "self_stat_percent",
         "params": {
@@ -1100,6 +1516,113 @@
       }
     },
     {
+      "name": "김룡환",
+      "designer_user_id": 4,
+      "job_class": "신병",
+      "gender": "여",
+      "unit_role": "supporter",
+      "outfits": {
+        "기본": "soldier/basic"
+      },
+      "description": "이병 김 룡 환! 잘못들었습니다?",
+      "gacha_quote": "장기자랑 말입니까? 노래 잘부릅니다! 네 입술의 못된 말이~",
+      "range": "원거리",
+      "attack_type": "Teacher",
+      "defense_type": "Teacher",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "exp_subjects": [],
+      "silver_multiplier": {
+        "1": null,
+        "2": 1.8,
+        "3": 1.8,
+        "4": 1.8,
+        "5": 2.4,
+        "6": 12
+      },
+      "silver_subjects": [
+        "국어"
+      ],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "입술의 말: 아군 후방 STRIKER의 공격속도 15% 증가",
+        "4": "입술의 말: 아군 후방 STRIKER의 공격속도 15% 증가",
+        "5": "입술의 말: 아군 후방 STRIKER의 공격속도 15% 증가",
+        "6": "입술의 말: 아군 후방 STRIKER의 공격속도 45% 증가"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": "Perfect: 5개의 범위 내의 인물에게 공격력의 150% 피해",
+        "5": "Perfect: 5개의 범위 내의 인물에게 공격력의 150% 피해",
+        "6": "Perfect: 5개의 범위 내의 인물에게 공격력의 300% 피해"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "내리갈굼: 학생 타입 보유 인물과 함께 편성 시(공격/방어 상관없이) 그 인물의 최대 체력 20% 증가",
+        "6": "내리갈굼: 학생 타입 보유 인물과 함께 편성 시(공격/방어 상관없이) 그 인물의 최대 체력 60% 증가"
+      },
+      "skill_mechanics": {
+        "effect_type": "positional_bomb_line",
+        "cost": 2,
+        "params": {
+          "4": {
+            "multiplier": 150
+          },
+          "5": {
+            "multiplier": 150
+          },
+          "6": {
+            "multiplier": 300
+          }
+        }
+      },
+      "skill_categories": [
+        "red"
+      ],
+      "star_mechanics": {
+        "effect_type": "haste_boost_to_rear_striker",
+        "params": {
+          "3": {
+            "haste_percent": 15
+          },
+          "4": {
+            "haste_percent": 15
+          },
+          "5": {
+            "haste_percent": 15
+          },
+          "6": {
+            "haste_percent": 45
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "team_type_hp_buff",
+        "params": {
+          "5": {
+            "percent": 20,
+            "type": "Student"
+          },
+          "6": {
+            "percent": 60,
+            "type": "Student"
+          }
+        }
+      }
+    },
+    {
       "name": "서민석",
       "designer_user_id": 4,
       "job_class": "학생",
@@ -1109,6 +1632,7 @@
         "기본": "sms/basic"
       },
       "description": "책 읽는 모습이 정서적 귀감이 됩니다.",
+      "gacha_quote": "바람에 몸을 맡겨봐! 자, 나풀 나풀 날아라~!",
       "range": "원거리",
       "attack_type": "Student",
       "defense_type": "Parent",
@@ -1120,7 +1644,9 @@
         "5": 2.4,
         "6": 12
       },
-      "exp_subjects": ["영어"],
+      "exp_subjects": [
+        "영어"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -1147,6 +1673,7 @@
       },
       "skill_mechanics": {
         "effect_type": "aoe_gendered_damage",
+        "cost": 5,
         "params": {
           "5": {
             "male_multiplier": 150,
@@ -1162,7 +1689,9 @@
           }
         }
       },
-      "skill_categories": ["red"],
+      "skill_categories": [
+        "red"
+      ],
       "star_mechanics": {
         "effect_type": "ally_gender_stat_percent",
         "params": {
@@ -1211,6 +1740,7 @@
         "수영복": "sjh/swimsuit"
       },
       "description": "쓸모가 많습니다. 물론 인게임 내에서요.",
+      "gacha_quote": "이제부터 진짜 모험을 시작합니다! 여러분 우리 모두 독서 RPG를 합시다!",
       "range": "근거리",
       "attack_type": "Student",
       "defense_type": "Student",
@@ -1222,7 +1752,9 @@
         "5": 2.5,
         "6": 13
       },
-      "exp_subjects": ["독서"],
+      "exp_subjects": [
+        "독서"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -1249,6 +1781,7 @@
       },
       "skill_mechanics": {
         "effect_type": "stun_target",
+        "cost": 3,
         "params": {
           "5": {
             "seconds": 2,
@@ -1264,7 +1797,10 @@
           }
         }
       },
-      "skill_categories": ["yellow", "red"],
+      "skill_categories": [
+        "yellow",
+        "red"
+      ],
       "star_mechanics": {
         "effect_type": "teammate_stat_percent",
         "params": {
@@ -1312,6 +1848,7 @@
         "기본": "student/basic"
       },
       "description": "직접 찾아가보세요.",
+      "gacha_quote": "도마 내리면 뭐가 있나고? ... 하아아아~~(황토색 아지랑이가 피어오르며 임냄새를 풍기는 소리)",
       "range": "근거리",
       "attack_type": "Student",
       "defense_type": "Student",
@@ -1323,7 +1860,9 @@
         "5": 2.2,
         "6": 11
       },
-      "exp_subjects": ["국어"],
+      "exp_subjects": [
+        "국어"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -1350,6 +1889,7 @@
       },
       "skill_mechanics": {
         "effect_type": "aoe_enemy_damage",
+        "cost": 4,
         "params": {
           "5": {
             "multiplier": 200
@@ -1362,7 +1902,9 @@
           }
         }
       },
-      "skill_categories": ["red"],
+      "skill_categories": [
+        "red"
+      ],
       "star_mechanics": {
         "effect_type": "self_stat_percent",
         "params": {
@@ -1395,6 +1937,119 @@
       }
     },
     {
+      "name": "김크장",
+      "designer_user_id": 4,
+      "job_class": "시간 강사",
+      "gender": "남",
+      "unit_role": "supporter",
+      "outfits": {
+        "기본": "chris/basic"
+      },
+      "description": "Don't say me Ching Chong! I'm American!",
+      "gacha_quote": "Hey, listen to me, guys. ChatGPT로 과제 날먹하지 마세요.",
+      "range": "원거리",
+      "attack_type": "Teacher",
+      "defense_type": "Student",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "exp_subjects": [],
+      "silver_multiplier": {
+        "1": 1.2,
+        "2": 1.8,
+        "3": 1.8,
+        "4": 1.8,
+        "5": 2.4,
+        "6": 12
+      },
+      "silver_subjects": [
+        "영어"
+      ],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "외국인 노동자: STRIKER 아군 전체에게 각각 최대 체력의 10% 보호막 부여",
+        "4": "외국인 노동자: STRIKER 아군 전체에게 각각 최대 체력의 10% 보호막 부여",
+        "5": "외국인 노동자: STRIKER 아군 전체에게 각각 최대 체력의 10% 보호막 부여",
+        "6": "외국인 노동자: STRIKER 아군 전체에 최대체력 50% 보호막 부여한 상태에서 시작"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": "GPT 킬러: 공격 대상에게 자신의 공격력의 250%만큼 피해. 마지막 탄환은 적중 시 1초 기절",
+        "5": "GPT 킬러: 공격 대상에게 자신의 공격력의 250%만큼 피해. 마지막 탄환은 적중 시 1초 기절",
+        "6": "GPT 킬러: 공격 대상에게 자신의 공격력의 500%만큼 피해. 마지막 탄환은 적중 시 3초 기절"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "어울리기: 방임석과 함께 편성 시 방임석의 공격속도 30%증가",
+        "6": "어울리기: 방임석과 함께 편성 시 방임석의 공격속도 90%증가"
+      },
+      "skill_mechanics": {
+        "effect_type": "stun_target",
+        "cost": 4,
+        "params": {
+          "4": {
+            "multiplier": 250,
+            "seconds": 1.0,
+            "bullet_count": 5
+          },
+          "5": {
+            "multiplier": 250,
+            "seconds": 1.0,
+            "bullet_count": 5
+          },
+          "6": {
+            "multiplier": 500,
+            "seconds": 3.0,
+            "bullet_count": 5
+          }
+        }
+      },
+      "skill_categories": [
+        "red",
+        "yellow"
+      ],
+      "star_mechanics": {
+        "effect_type": "grant_shield_to_strikers_percent_max_hp",
+        "params": {
+          "3": {
+            "percent": 10
+          },
+          "4": {
+            "percent": 10
+          },
+          "5": {
+            "percent": 10
+          },
+          "6": {
+            "percent": 50
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "teammate_haste_by_name",
+        "partner_name": "방임석",
+        "params": {
+          "5": {
+            "haste_percent": 30
+          },
+          "6": {
+            "haste_percent": 90
+          }
+        }
+      }
+    },
+    {
       "name": "청년",
       "designer_user_id": 2,
       "job_class": "초심자",
@@ -1416,7 +2071,9 @@
         "5": 2.5,
         "6": 1.0
       },
-      "exp_subjects": ["독서"],
+      "exp_subjects": [
+        "독서"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -1443,6 +2100,7 @@
       },
       "skill_mechanics": {
         "effect_type": "bonus_damage_knockback",
+        "cost": 5,
         "params": {
           "5": {
             "multiplier": 300
@@ -1455,7 +2113,10 @@
           }
         }
       },
-      "skill_categories": ["red", "yellow"],
+      "skill_categories": [
+        "red",
+        "yellow"
+      ],
       "star_mechanics": {
         "effect_type": "self_stat_percent",
         "params": {
@@ -1498,6 +2159,7 @@
         "기본": "mage_weak/basic"
       },
       "description": "미디어실에 상주하는 최약체 마법사입니다.",
+      "gacha_quote": "인간의 강함을 모르는 네놈의 환상, 내가 부숴주마!",
       "range": "근거리",
       "attack_type": "Student",
       "defense_type": "Student",
@@ -1509,7 +2171,9 @@
         "5": 2.2,
         "6": 11
       },
-      "exp_subjects": ["영어"],
+      "exp_subjects": [
+        "영어"
+      ],
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
@@ -1522,9 +2186,9 @@
         "1": null,
         "2": null,
         "3": null,
-        "4": "환상살: 자신에게 1.5초간 모든 피해를 무효화하는 보호막 부여",
-        "5": "환상살: 자신에게 1.5초간 모든 피해를 무효화하는 보호막 부여",
-        "6": "환상살: 자신에게 3초간 모든 피해를 무효화하는 보호막 부여"
+        "4": "환상살: 1.5초간 모든 피해를 무효화",
+        "5": "환상살: 1.5초간 모든 피해를 무효화",
+        "6": "환상살: 3초간 모든 피해를 무효화"
       },
       "trait_effects": {
         "1": null,
@@ -1536,6 +2200,7 @@
       },
       "skill_mechanics": {
         "effect_type": "self_shield_duration",
+        "cost": 3,
         "params": {
           "5": {
             "seconds": 1.5
@@ -1548,7 +2213,9 @@
           }
         }
       },
-      "skill_categories": ["blue"],
+      "skill_categories": [
+        "blue"
+      ],
       "star_mechanics": {
         "effect_type": "self_rear_priority",
         "params": {

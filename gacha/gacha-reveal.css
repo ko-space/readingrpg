@@ -106,6 +106,59 @@
     opacity: 1;
 }
 
+/* 가챠 시네마틱 티저 바로 뒤에 이어지는 "즉시 진입" 모드(instant-entry, gacha-cinematic.js)는 확대
+   자체를 없애고(확인된 요청 - 다시 없애달라고 함) 투명도만 트랜지션한다 - 이미 티저에서 몸통이 확대돼
+   보였으므로 여기서 또 작은 크기부터 커지면 어색하다. scale(1)을 양쪽 상태 모두에 고정한다. */
+.gacha-reveal-overlay.instant-entry .reveal-character-wrap {
+    transform: scale(1);
+}
+
+/* 신규 전용(확인된 요청, gacha-cinematic.js의 _preEnlarged 참고): 티저에서 이미 "상체"까지 확대해서
+   보여줬으므로, 최종 화면에서 다시 확대되는 연출 없이 처음부터 확대된 상태로 등장한다 - 중복(dup-slide)
+   처럼 scale(1)에서 시작해 애니메이션으로 커지는 대신, 그냥 이 크기로 고정해서 시작한다. transform-origin을
+   위쪽에 고정해 확대가 아래쪽(하체)으로만 번지게 하는 것도 dup-slide와 동일하다. */
+.gacha-reveal-overlay.instant-entry.pre-enlarged .reveal-character-wrap {
+    transform-origin: center top;
+    transform: scale(1.35);
+}
+
+/* 확대된 크기(scale(1.35))를 유지한 채 이동만 재생되도록, 일반 slide-left(이동만)보다 더 구체적인
+   이 선택자로 덮어쓴다 - transform-origin도 유지해야 이동 중에도 머리가 잘리지 않는다. */
+.gacha-reveal-overlay.pre-enlarged.slide-left .reveal-character-wrap {
+    transform-origin: center top;
+    transform: translateX(-16vw) scale(1.35);
+}
+
+/* 즉시 진입 모드에서는 이 배경(bg-{등급}.webp)이 직전 티저의 몸통 카메라 워크 배경(RARITY_BG,
+   gacha-cinematic.js)과 완전히 같은 파일이다(확인된 요청) - 굳이 0->1로 새로 페이드인시킬 이유가
+   없다. 원래는 doors-open이 붙을 때까지(스윕이 지나가는 동안, 최대 몇백 ms) opacity:0으로 비어있어서,
+   티저 레이어가 사라지는 순간과 이 배경이 다시 보이는 순간 사이에 아무것도 안 덮인 빈 틈이 생겨
+   로비가 순간적으로 비쳤다(확인된 버그) - 그냥 처음부터(instant-entry가 붙는 그 순간, 트랜지션 없이)
+   그대로 계속 보이게 해서 그 틈 자체를 없앤다. */
+.gacha-reveal-overlay.instant-entry .reveal-bg {
+    transition: none;
+    opacity: 1;
+}
+
+/* 상체를 비춘 뒤 배경이 하얘졌던 것과 이어지도록, 최종 화면도 "하얀 상태"에서 시작해 서서히 원래
+   색으로 돌아온다(확인된 요청) - reveal-stage 전체(배경+캐릭터) 위를 덮는 흰 막을 인스턴트 진입
+   시작 시점엔 티저의 화이트닝과 같은 농도(0.4)로 깔아두고, doors-open과 함께 0으로 걷어낸다. */
+.reveal-instant-whiten {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.8s ease;
+}
+.gacha-reveal-overlay.instant-entry .reveal-instant-whiten {
+    opacity: 0.4;
+}
+.gacha-reveal-overlay.instant-entry.doors-open .reveal-instant-whiten {
+    opacity: 0;
+}
+
 .reveal-character-img {
     position: relative;
     z-index: 2;
@@ -129,29 +182,37 @@
     50% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 20px rgba(90, 220, 120, 1)) drop-shadow(0 0 36px rgba(60, 200, 100, 0.55)); }
 }
 
+/* 영웅 림 글로우 색도 배경 아우라(.reveal-character-glow.rarity-영웅)와 동일하게 보랏빛(#c9a3f5
+   계열)으로 맞춘다(확인된 요청 - 원래는 빨강/주황이었음, 형태(불규칙 화염 느낌)는 그대로 유지). */
 .reveal-character-img.rarity-영웅 { animation: rim-hero 1.3s ease-in-out infinite; }
 @keyframes rim-hero {
-    0%, 100% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 14px rgba(255, 100, 50, 0.8)); }
-    25% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 22px rgba(255, 140, 40, 1)); }
-    50% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 10px rgba(230, 60, 20, 0.6)); }
-    75% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 26px rgba(255, 120, 30, 1)); }
+    0%, 100% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 14px rgba(201, 163, 245, 0.8)); }
+    25% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 22px rgba(215, 185, 250, 1)); }
+    50% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 10px rgba(160, 110, 220, 0.6)); }
+    75% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 26px rgba(190, 150, 245, 1)); }
 }
 
+/* 전설 림 글로우 색도 배경 아우라와 동일하게 gacha-cinematic.js의 RARITY_BURST_COLOR.전설(#f5da8a)에
+   정확히 맞춘다(확인된 요청). */
 .reveal-character-img.rarity-전설 { animation: rim-legendary 3.5s ease-in-out infinite; }
 @keyframes rim-legendary {
-    0%, 100% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 16px rgba(255, 225, 140, 0.85)) drop-shadow(0 0 32px rgba(255, 190, 80, 0.4)); }
-    50% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 26px rgba(255, 225, 140, 1)) drop-shadow(0 0 46px rgba(255, 190, 80, 0.6)); }
+    0%, 100% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 16px rgba(245, 218, 138, 0.85)) drop-shadow(0 0 32px rgba(235, 185, 80, 0.4)); }
+    50% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 26px rgba(245, 218, 138, 1)) drop-shadow(0 0 46px rgba(235, 185, 80, 0.6)); }
 }
 
+/* 신화 림 글로우도 배경 아우라와 동일하게 무지개로 맞춘다(확인된 요청 - 원래는 흰색이었음).
+   drop-shadow는 단일 색만 가능해 conic-gradient처럼 한 프레임에 여러 색을 두를 순 없으므로,
+   RAINBOW_STOPS(gacha-cinematic.js)와 같은 색상을 keyframe마다 순서대로 돌려 시간에 따라
+   색이 도는 것으로 "무지개" 느낌을 낸다. */
 .reveal-character-img.rarity-신화 { animation: rim-mythic 1s ease-in-out infinite; }
 @keyframes rim-mythic {
-    0%, 100% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 14px rgba(255, 255, 255, 0.7)); }
-    15% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 26px rgba(255, 255, 255, 1)); }
-    30% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 12px rgba(255, 255, 255, 0.6)); }
-    45% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 30px rgba(255, 255, 255, 1)); }
-    60% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 14px rgba(255, 255, 255, 0.65)); }
-    75% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 24px rgba(255, 255, 255, 0.95)); }
-    90% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 16px rgba(255, 255, 255, 0.7)); }
+    0%, 100% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 18px rgba(255, 201, 201, 0.9)); }
+    15% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 26px rgba(255, 224, 179, 1)); }
+    30% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 18px rgba(255, 246, 179, 0.85)); }
+    45% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 28px rgba(194, 247, 209, 1)); }
+    60% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 18px rgba(191, 230, 255, 0.85)); }
+    75% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 28px rgba(214, 199, 255, 1)); }
+    90% { filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 18px rgba(255, 201, 240, 0.85)); }
 }
 
 /* 모집한 캐릭터 사진 뒤에서 은은하게 퍼지는 배경 아우라 (림 글로우와 별개로, 전체적인 분위기 조명 역할) */
@@ -184,7 +245,8 @@
     animation: aura-pulse-rare 2.1s ease-in-out infinite;
 }
 
-/* 영웅: 붉은색, 타오르는 느낌 - 완전한 원이 아니라 모양 자체가 일렁이는 불규칙한 화염 형태 */
+/* 영웅: 보랏빛, 타오르는 느낌 - 완전한 원이 아니라 모양 자체가 일렁이는 불규칙한 화염 형태(색만
+   gacha-cinematic.js의 RARITY_BURST_COLOR.영웅(#c9a3f5)에 맞춤 - 확인된 요청, 원래는 붉은색이었음) */
 @keyframes aura-flicker-hero {
     0%, 100% { opacity: 0.65; transform: scale(1) rotate(0deg); border-radius: 50% 50% 50% 50%; }
     25% { opacity: 0.9; transform: scale(1.12) rotate(-3deg); border-radius: 45% 55% 60% 40%; }
@@ -192,11 +254,13 @@
     75% { opacity: 1; transform: scale(1.18) rotate(-1deg); border-radius: 62% 38% 55% 45%; }
 }
 .reveal-character-glow.rarity-영웅 {
-    background: radial-gradient(circle, rgba(255, 100, 50, 0.9) 0%, rgba(230, 50, 20, 0.35) 45%, rgba(120, 10, 10, 0) 75%);
+    background: radial-gradient(circle, rgba(201, 163, 245, 0.9) 0%, rgba(160, 110, 220, 0.35) 45%, rgba(90, 40, 140, 0) 75%);
     animation: aura-flicker-hero 1.3s ease-in-out infinite;
 }
 
-/* 전설: 금색, 신성한 느낌 - 은은하게 커졌다 작아지며, 뒤에서 빛줄기가 천천히 회전 + 잔잔한 반짝임 */
+/* 전설: 금색, 신성한 느낌 - 은은하게 커졌다 작아지며, 뒤에서 빛줄기가 천천히 회전 + 잔잔한 반짝임
+   (색을 gacha-cinematic.js의 RARITY_BURST_COLOR.전설(#f5da8a)에 정확히 맞춤 - 확인된 요청, 원래도
+   같은 금색 계열이었지만 정확히 일치하진 않았음) */
 @keyframes aura-holy-legendary {
     0%, 100% { opacity: 0.8; transform: scale(1); }
     50% { opacity: 1; transform: scale(1.18); }
@@ -207,7 +271,7 @@
 }
 .reveal-character-glow.rarity-전설 {
     position: absolute;
-    background: radial-gradient(circle, rgba(255, 235, 170, 0.95) 0%, rgba(255, 195, 90, 0.4) 45%, rgba(200, 140, 20, 0) 75%);
+    background: radial-gradient(circle, rgba(245, 218, 138, 0.95) 0%, rgba(235, 185, 80, 0.4) 45%, rgba(180, 120, 20, 0) 75%);
     animation: aura-holy-legendary 3.5s ease-in-out infinite;
 }
 .reveal-character-glow.rarity-전설::before {
@@ -219,7 +283,10 @@
     animation: aura-rays-spin 7s linear infinite;
 }
 
-/* 신화: 흰색, 번쩍번쩍 - 가장 밝고 빠르게 강약이 반복 + 사방에서 반짝이는 파티클 */
+/* 신화: 무지개, 번쩍번쩍 - 가장 밝고 빠르게 강약이 반복 + 사방에서 반짝이는 파티클(색을
+   gacha-cinematic.js의 RARITY_BURST_COLOR.신화("rainbow", RAINBOW_STOPS와 동일한 색상)에 맞춤 -
+   확인된 요청, 원래는 흰색이었음). conic-gradient로 무지개를 칠하고, 기존과 같은 모양의 원형
+   페이드(mask-image)를 씌워서 가장자리로 갈수록 옅어지는 오라 형태 자체는 그대로 유지한다. */
 @keyframes aura-flash-mythic {
     0%, 100% { opacity: 0.55; transform: scale(1); }
     15% { opacity: 1; transform: scale(1.22); }
@@ -230,7 +297,9 @@
     90% { opacity: 0.65; transform: scale(1.05); }
 }
 .reveal-character-glow.rarity-신화 {
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.4) 40%, rgba(255, 255, 255, 0) 70%);
+    background: conic-gradient(from 0deg, #ffc9c9, #ffe0b3, #fff6b3, #c2f7d1, #bfe6ff, #d6c7ff, #ffc9f0, #ffc9c9);
+    -webkit-mask-image: radial-gradient(circle, rgba(0, 0, 0, 0.98) 0%, rgba(0, 0, 0, 0.4) 40%, rgba(0, 0, 0, 0) 70%);
+    mask-image: radial-gradient(circle, rgba(0, 0, 0, 0.98) 0%, rgba(0, 0, 0, 0.4) 40%, rgba(0, 0, 0, 0) 70%);
     animation: aura-flash-mythic 1s ease-in-out infinite;
 }
 
@@ -263,6 +332,18 @@
 .gacha-reveal-overlay.slide-left .reveal-character-wrap {
     transform: translateX(-16vw);
     transition: transform 0.6s cubic-bezier(0.42, 0, 0.58, 1); /* 가속+감속 */
+}
+
+/* 중복 모집 전용(확인된 요청, gacha-cinematic.js의 _dupSlideSync 참고): slide-left와 같은 이동량이지만
+   확대까지 함께 일어난다 - 화면을 지나가는 빛줄기(gc-sweep)와 보조를 맞춰야 해서 transition-duration은
+   CSS가 아니라 실행 시점에 인라인으로 지정된다(gacha-reveal.js). transform-origin을 위쪽(center top)에
+   고정해서 확대가 아래쪽(하체)으로만 번지게 한다 - 중앙 기준으로 확대하면 머리 위까지 잘려나가는데,
+   요청받은 건 "하체 일부"만 안 보이게 하는 것이라 머리는 원래 위치 그대로 유지해야 한다. */
+.gacha-reveal-overlay.dup-slide .reveal-character-wrap {
+    transform-origin: center top;
+    transform: translateX(-16vw) scale(1.35);
+    transition-property: transform;
+    transition-timing-function: cubic-bezier(0.3, 0, 0.2, 1);
 }
 
 /* ===== 옆 정보 패널: 참고 이미지의 흰 서류 카드 느낌 ===== */

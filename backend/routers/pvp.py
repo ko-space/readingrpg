@@ -9,7 +9,7 @@ from schemas import PvpDefenseRequest, PvpBattleRequest
 from security import get_current_user
 from battle_core import ENABLE_SUPPORTER_SLOT
 from battle_engine import compute_unit_stats, build_team, simulate_battle
-from achievements import check_and_grant_achievements, get_equipped_title_info
+from achievements import check_and_grant_achievements, get_equipped_title_info, get_character_catalog
 
 router = APIRouter(prefix="/pvp", tags=["pvp"])
 
@@ -44,14 +44,58 @@ def _count_batter_ally_kills(events: list, side: str) -> int:
     return count
 
 
+# build_stat_change_dicts(battle_core.py)가 star_effect_resolve/trait_resolve 둘 다에 공통으로 실어
+# 보내는 필드 -> 상태 카테고리 이름 매핑. 이 함수가 처리하는 필드 목록과 정확히 같은 순서/이름으로
+# 맞춰둬야 새 필드(예: haste/shield)가 추가돼도 여기서 자동으로 잡힌다.
+_STAT_CHANGE_FIELD_CATEGORIES = {
+    "atk": ("atk_up", "atk_down"),
+    "hp": ("maxhp_up", "maxhp_down"),
+    "crit": ("crit_up", None),
+    "crit_chance": ("crit_chance_up", None),
+    "rear_priority": ("rear_priority", None),
+    "haste": ("haste_up", None),
+    "shield": ("shield", None),
+}
+
+
+def _add_categories_from_changes(add, changes, side):
+    """star_effect_resolve/trait_resolve가 공유하는 detail.changes(build_stat_change_dicts 형식)를
+    범용으로 훑어서 카테고리를 채운다 - 캐릭터 이름/effect_type을 몰라도 되므로, 새 특성/성급 효과가
+    추가돼도 이 필드 목록만 맞으면 자동으로 잡힌다(프론트 상태 아이콘 처리와 같은 철학)."""
+    for change in changes or []:
+        if change.get("target_side") != side:
+            continue
+        name = change.get("target")
+        for field, (pos_cat, neg_cat) in _STAT_CHANGE_FIELD_CATEGORIES.items():
+            sign = change.get(field, 0)
+            if sign > 0 and pos_cat:
+                add(name, pos_cat)
+            elif sign < 0 and neg_cat:
+                add(name, neg_cat)
+
+
 # 방임석의 물감(paint)은 소모 자원이지 "상태"가 아니므로 집계하지 않는다.
 def _collect_ally_status_categories(events: list, side: str) -> dict:
     """이 편(side)의 아군 유닛 이름별로, 이번 전투에서 발현된 서로 다른 "상태 종류" 집합을 모아
-    돌려준다({유닛명: {"stun", "atk_up", ...}}). 실제로 몇 종류나 겹쳤는지는 호출부가 len()으로 판정."""
+    돌려준다({유닛명: {"stun", "atk_up", ...}}). 실제로 몇 종류나 겹쳤는지는 호출부가 len()으로 판정.
+    서포터 본인에게는 상태가 붙지 않는다(전장에 없는 존재라 로스터 행/상태 아이콘 자체가 없음) -
+    서포터가 소환한 전장의 소환물(국회의사당 등)은 자기 이름으로 따로 잡히는 별개의 유닛이라 제외
+    대상이 아니다. 현재 등록된 서포터는 전부 자기 자신을 대상으로 하는 효과가 없어 우연히 문제가 안
+    되지만, 나중에 자기 버프형 서포터가 추가돼도 안전하도록 이름으로 명시적으로 걸러낸다."""
+    supporter_name = next(
+        (
+            card.get("name")
+            for event in events
+            if event.get("event_type") == "cost_init" and event.get("side") == side
+            for card in event.get("cards", []) or []
+            if card.get("slot") == "supporter"
+        ),
+        None,
+    )
     categories: dict[str, set] = {}
 
     def add(name, category):
-        if name:
+        if name and name != supporter_name:
             categories.setdefault(name, set()).add(category)
 
     for event in events:
@@ -94,24 +138,32 @@ def _collect_ally_status_categories(events: list, side: str) -> dict:
                     add(h.get("target"), "heal")
             elif effect == "self_type_swap_heal" and actor_side == side and detail.get("healed_amount"):
                 add(actor, "heal")
+            elif effect == "revive_dead_striker" and detail.get("target_side") == side:
+                add(detail.get("target"), "revive")
 
         elif etype == "basic_attack" and event.get("target_stunned"):
             target_side = "defender" if actor_side == "attacker" else "attacker"
             if target_side == side:
                 add(event.get("target"), "stun")
 
-        elif etype == "star_effect_resolve":
-            for change in detail.get("changes", []) or []:
-                if change.get("target_side") != side:
-                    continue
-                name = change.get("target")
-                if change.get("atk", 0) > 0: add(name, "atk_up")
-                if change.get("atk", 0) < 0: add(name, "atk_down")
-                if change.get("hp", 0) > 0: add(name, "maxhp_up")
-                if change.get("hp", 0) < 0: add(name, "maxhp_down")
-                if change.get("crit", 0) > 0: add(name, "crit_up")
-                if change.get("crit_chance", 0) > 0: add(name, "crit_chance_up")
-                if change.get("rear_priority", 0) > 0: add(name, "rear_priority")
+        elif etype in ("star_effect_resolve", "trait_resolve"):
+            # 특성(trait_resolve)도 성급 효과와 완전히 같은 changes 포맷을 쓴다(build_stat_change_dicts
+            # 공유) - 예전엔 star_effect_resolve만 처리해서 특성 기반 버프/디버프 전체(팀 타입 체력
+            # 버프 등)가 이 업적 집계에서 통째로 빠져 있었다.
+            _add_categories_from_changes(add, detail.get("changes"), side)
+
+        elif etype == "periodic_star_resolve" and detail.get("target_side", actor_side) == side and not detail.get("missed"):
+            # 신 "제 1 권한" 등 - N초마다 반복되는 성급 효과. 지금은 회복류만 있어 heal로 묶는다.
+            # missed(대상이 이동 중이라 하트가 안 맞아 회복 자체가 실패)면 실제로 아무 상태도 발현되지
+            # 않은 것이므로 집계에서 제외한다.
+            add(detail.get("target"), "heal")
+
+        elif etype == "periodic_trait_resolve" and detail.get("target_side", actor_side) == side:
+            # 신 "제 3 권한" 등 - N초마다 반복되는 특성 효과. 지금은 보호막류만 있어 shield로 묶는다.
+            add(detail.get("target"), "shield")
+
+        elif etype == "lifesteal_status_resolve" and actor_side == side and detail.get("active"):
+            add(actor, "lifesteal")
 
         elif etype == "neglect_status_resolve" and actor_side == side and detail.get("active"):
             add(actor, "damage_reduction")
@@ -305,17 +357,27 @@ def set_defense_team(
     ):
         raise HTTPException(status_code=400, detail="전방과 후방에 같은 캐릭터를 넣을 수 없습니다.")
 
+    # 서포터는 기본공격 없이 스킬만 쓰는 역할이라 전방/후방(기본공격 슬롯)엔 배치할 수 없다 - 프론트
+    # 드롭다운(arena.js)에서 이미 걸러주지만, API를 직접 호출하는 경로까지 막으려면 여기서도 확인해야 한다.
+    def _is_supporter(character: Character) -> bool:
+        catalog = get_character_catalog(character.name)
+        return bool(catalog and catalog.get("unit_role") == "supporter")
+
     front = None
     if req.front_character_id is not None:
         front = db.query(Character).filter(Character.id == req.front_character_id, Character.user_id == user.id).first()
         if not front:
             raise HTTPException(status_code=404, detail="보유하지 않은 캐릭터입니다.")
+        if _is_supporter(front):
+            raise HTTPException(status_code=400, detail="서포터는 전방에 배치할 수 없습니다.")
 
     back = None
     if req.back_character_id is not None:
         back = db.query(Character).filter(Character.id == req.back_character_id, Character.user_id == user.id).first()
         if not back:
             raise HTTPException(status_code=404, detail="보유하지 않은 캐릭터입니다.")
+        if _is_supporter(back):
+            raise HTTPException(status_code=400, detail="서포터는 후방에 배치할 수 없습니다.")
 
     if front and back and front.name == back.name:
         raise HTTPException(status_code=400, detail="전방과 후방에 같은 이름의 캐릭터를 중복으로 넣을 수 없습니다.")
@@ -331,6 +393,8 @@ def set_defense_team(
         )
         if not supporter:
             raise HTTPException(status_code=404, detail="보유하지 않은 캐릭터입니다.")
+        if not _is_supporter(supporter):
+            raise HTTPException(status_code=400, detail="서포터 자리엔 서포터만 배치할 수 있습니다.")
         striker_names = {c.name for c in (front, back) if c}
         if supporter.name in striker_names:
             raise HTTPException(status_code=400, detail="서포터에 전방/후방과 같은 이름의 캐릭터를 중복으로 넣을 수 없습니다.")
@@ -380,6 +444,14 @@ def _character_to_unit(character: Character | None, owner_level: int, slot: str)
     # 건너뜀), 처음부터 None으로 시작해도 그대로 안전하다.
     if character is None:
         return None
+    # 서포터는 전장에 나서지 않고(공격도 피격도 없음) 체력 개념 자체가 없다("서포터는 죽지 않음") -
+    # 예전엔 그래서 hp=1을 더미로 강제했었는데, compute_unit_stats가 계산하는 실제 hp는 어차피 항상
+    # 0보다 커서(battle_engine._cost_rotation_units의 hp > 0 로테이션 참여 검사 통과에는) 더미가
+    # 필요 없었다. 그런데 이 더미가 max_hp까지 1로 덮어써서, 김국회 "국회의사당"(summon_into_ranged_slot)
+    # 처럼 서포터 자신의 real max_hp를 읽어 소환물 체력을 정하는 스킬이 생기자 소환물이 항상 체력 1로
+    # 소환되는 버그로 이어졌다 - 실제 운영 전투 로그에서 확인됨(국회의사당 max_hp가 1이라 아무 공격에나
+    # 즉사). 서포터는 _all_slots/_alive_units(공격 대상 후보)에 애초에 없어서 실제 hp를 그대로 둬도
+    # 어딘가에 표시되거나 깎일 일은 없다.
     return compute_unit_stats(character.name, character.star, owner_level, slot)
 
 
@@ -392,6 +464,7 @@ def _team_unit_view(unit: dict | None, character: Character | None):
         "name": unit["name"],
         "max_hp": unit["max_hp"],
         "is_melee": unit["is_melee"],
+        "melee_speed_ratio": unit.get("melee_speed_ratio"),
         "outfit": character.outfit,
         "star": character.star,
     }
@@ -506,8 +579,8 @@ def run_battle(
     for _ in range(_count_batter_ally_kills(result["events"], "attacker")):
         db.add(ActivityLog(user_id=user.id, activity_type="pvp_evt_01"))
 
-    if _max_ally_status_category_count(result["events"], "attacker") >= 6:
-        db.add(ActivityLog(user_id=user.id, activity_type="ally_status_diversity_6plus"))
+    if _max_ally_status_category_count(result["events"], "attacker") >= 7:
+        db.add(ActivityLog(user_id=user.id, activity_type="pvp_evt_02"))
 
     db.commit()
     db.refresh(log)
@@ -543,10 +616,12 @@ def run_battle(
         "attacker_team": {
             "front": _team_unit_view(attacker_team["front"], attacker_front),
             "back": _team_unit_view(attacker_team["back"], attacker_back),
+            "supporter": _team_unit_view(attacker_team["supporter"], attacker_supporter),
         },
         "defender_team": {
             "front": _team_unit_view(defender_team["front"], defender_front),
             "back": _team_unit_view(defender_team["back"], defender_back),
+            "supporter": _team_unit_view(defender_team["supporter"], defender_supporter),
         },
     }
 

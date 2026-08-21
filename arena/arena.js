@@ -35,6 +35,9 @@
         if (modalBox) modalBox.classList.remove("arena-expanded");
         if (choiceView) choiceView.hidden = false;
         if (contentEl) contentEl.hidden = true;
+        const liveContentEl = document.getElementById("live-content");
+        if (liveContentEl) liveContentEl.hidden = true;
+        showLiveView("live-choice-view"); // 다음에 다시 들어올 때 항상 선택 화면부터 시작
         await updatePvpChoiceAvailability();
     }
 
@@ -369,11 +372,14 @@
         }
 
         // 전방/후방은 최소 한 명만 있으면 되므로 "없음"을 선택할 수 있게 맨 앞에 넣어둔다.
-        const optionsHtml = myInventory
+        // 서포터는 기본공격 없이 스킬만 쓰는 역할이라 전방/후방(기본공격 슬롯)에는 배치할 수 없다 -
+        // striker(또는 unit_role 미지정 - 기존 캐릭터 전원 기본값)만 후보로 남긴다.
+        const strikerOptionsHtml = myInventory
+            .filter((c) => c.unit_role !== "supporter")
             .map((c) => `<option value="${c.character_id}">${c.name} (${c.rarity} ★${c.star})</option>`)
             .join("");
-        frontSelect.innerHTML = emptyOptionHtml + optionsHtml;
-        backSelect.innerHTML = emptyOptionHtml + optionsHtml;
+        frontSelect.innerHTML = emptyOptionHtml + strikerOptionsHtml;
+        backSelect.innerHTML = emptyOptionHtml + strikerOptionsHtml;
         // 조력자 칸에는 unit_role이 "supporter"인 캐릭터만 배치할 수 있다 - 지금 도감 전원이
         // "striker"라 실제로는 항상 "없음"만 뜨지만, 서포터 캐릭터가 추가되면 자동으로 채워진다.
         const supporterOptionsHtml = myInventory
@@ -478,9 +484,113 @@
         }
     }
 
+    // ── 1:1 친선전(실시간) - 방 만들기/입장하기 ──────────────────────
+    // 실제 대전 화면(arena-live.html)에서 웹소켓/Realtime 연결과 "상대 기다리는 중" 진행 상황을
+    // 전부 처리하므로, 여기서는 방 코드 발급/입장 요청만 하고 sessionStorage로 역할(role)과
+    // room_code를 넘겨준 뒤 이동한다(pvp_battle_result와 동일한 패턴).
+    function showLiveChoice() {
+        if (choiceView) choiceView.hidden = true;
+        const liveContentEl = document.getElementById("live-content");
+        if (liveContentEl) liveContentEl.hidden = false;
+        showLiveView("live-choice-view");
+    }
+
+    function showLiveView(viewId) {
+        ["live-choice-view", "live-host-view", "live-join-view"].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.hidden = id !== viewId;
+        });
+    }
+
+    function backToArenaChoice() {
+        const liveContentEl = document.getElementById("live-content");
+        if (liveContentEl) liveContentEl.hidden = true;
+        if (choiceView) choiceView.hidden = false;
+    }
+
+    async function hostLiveRoom() {
+        const errorEl = document.getElementById("live-host-error");
+        const statusEl = document.getElementById("live-host-status");
+        const codeEl = document.getElementById("live-room-code-display");
+        errorEl.hidden = true;
+        codeEl.textContent = "------";
+        statusEl.textContent = "방을 만드는 중...";
+        showLiveView("live-host-view");
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/pvp_live/rooms`, { method: "POST", headers: authHeaders() });
+            const data = await res.json();
+            if (!res.ok) {
+                statusEl.textContent = "";
+                errorEl.textContent = data.detail || "방을 만들지 못했어요.";
+                errorEl.hidden = false;
+                return;
+            }
+            codeEl.textContent = data.room_code;
+            statusEl.textContent = "대전 화면으로 이동합니다...";
+            // my_roster/my_profile을 함께 저장해서, arena-live.js가 match_found를 기다리지 않고
+            // 페이지가 뜨자마자 바로 내 로스터/프로필을 그릴 수 있게 한다(확인된 요청).
+            sessionStorage.setItem("pvp_live_room", JSON.stringify({
+                role: "host", room_code: data.room_code, my_roster: data.my_roster, my_profile: data.my_profile,
+            }));
+            if (typeof showLobbyEnteringOverlay === "function") showLobbyEnteringOverlay();
+            // 방금 발급된 코드를 잠깐이라도 눈으로 확인/복사할 시간을 준 뒤 이동한다(어차피
+            // arena-live.html 첫 화면에서도 같은 코드를 계속 보여준다).
+            setTimeout(() => { window.location.href = "arena-live.html"; }, 1200);
+        } catch (err) {
+            statusEl.textContent = "";
+            errorEl.textContent = "서버에 연결할 수 없어요.";
+            errorEl.hidden = false;
+        }
+    }
+
+    function openLiveJoinView() {
+        document.getElementById("live-join-error").hidden = true;
+        const input = document.getElementById("live-code-input");
+        if (input) input.value = "";
+        showLiveView("live-join-view");
+        input?.focus();
+    }
+
+    // 실제 입장 API(POST /pvp_live/rooms/{code}/join) 호출은 여기서 하지 않는다 - 그 요청 자체가
+    // 서버 안에서 guest_ready 재전송(최대 1.2초)을 끝낸 뒤에야 응답하는데, 그동안 호스트가 이미
+    // match_found를 브로드캐스트해버릴 수 있다. 이 페이지(홈 화면 모달)의 게스트 브라우저는 아직
+    // Realtime 채널을 구독하기 전이라 그 브로드캐스트를 그대로 놓친다(확인된 경합) - 그래서 형식
+    // 검증만 여기서 하고, 실제 join 호출은 arena-live.js가 채널 구독을 먼저 끝낸 뒤에 하도록 미룬다.
+    function submitJoinLiveRoom() {
+        const input = document.getElementById("live-code-input");
+        const errorEl = document.getElementById("live-join-error");
+        const code = (input?.value || "").trim();
+        errorEl.hidden = true;
+
+        if (!/^\d{6}$/.test(code)) {
+            errorEl.textContent = "6자리 숫자 코드를 입력해주세요.";
+            errorEl.hidden = false;
+            return;
+        }
+
+        sessionStorage.setItem("pvp_live_room", JSON.stringify({ role: "guest", room_code: code }));
+        if (typeof showLobbyEnteringOverlay === "function") showLobbyEnteringOverlay();
+        window.location.href = "arena-live.html";
+    }
+
     document.querySelectorAll('[data-modal-target="modal-arena"]').forEach((btn) => {
         btn.addEventListener("click", showArenaChoice);
     });
 
     document.getElementById("arena-choice-pvp")?.addEventListener("click", enterPvp);
+
+    document.getElementById("arena-choice-live")?.addEventListener("click", showLiveChoice);
+    document.getElementById("live-choice-back-btn")?.addEventListener("click", backToArenaChoice);
+    document.getElementById("live-choice-host")?.addEventListener("click", hostLiveRoom);
+    document.getElementById("live-host-cancel-btn")?.addEventListener("click", () => showLiveView("live-choice-view"));
+    document.getElementById("live-choice-join")?.addEventListener("click", openLiveJoinView);
+    document.getElementById("live-join-back-btn")?.addEventListener("click", () => showLiveView("live-choice-view"));
+    document.getElementById("live-join-submit-btn")?.addEventListener("click", submitJoinLiveRoom);
+    document.getElementById("live-code-input")?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") submitJoinLiveRoom();
+    });
+    document.getElementById("live-code-input")?.addEventListener("input", (e) => {
+        e.target.value = e.target.value.replace(/\D/g, "").slice(0, 6);
+    });
 })();

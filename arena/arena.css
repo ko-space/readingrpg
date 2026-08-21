@@ -3,7 +3,8 @@
    이 게임의 기존 골드/크림 팔레트로 바꿨다. */
 
 .pvp-modal-box {
-    max-width: 380px;
+    /* 지역입장 모달(.dungeon-modal-box, dungeon.css)과 너비를 맞춘다(확인된 요청). */
+    max-width: 560px;
     transition: max-width 0.45s cubic-bezier(0.22, 0.9, 0.3, 1), min-height 0.45s cubic-bezier(0.22, 0.9, 0.3, 1);
 }
 
@@ -58,6 +59,112 @@
     font-size: 11px;
     font-weight: bold;
     color: #a05a2c;
+}
+
+/* ── 1:1 친선전 - 방 만들기/입장하기 (modal-arena 안, arena.js가 토글) ── */
+#live-content {
+    text-align: center;
+}
+
+.live-choice-desc,
+.live-host-desc {
+    font-size: 13px;
+    color: var(--text-dark, #4a3c2a);
+    opacity: 0.8;
+    margin: 6px 0 16px;
+    line-height: 1.5;
+}
+
+.live-choice-row {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 16px;
+}
+
+.live-choice-btn {
+    flex: 1;
+    background: var(--panel-bg, #f6ecd9);
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 12px;
+    padding: 16px 12px;
+    font-weight: 900;
+    font-size: 15px;
+    color: var(--text-dark, #4a3c2a);
+    cursor: pointer;
+}
+
+.live-choice-btn:hover:not(:disabled) {
+    box-shadow: 0 0 14px rgba(232, 184, 75, 0.7);
+    transform: translateY(-2px);
+}
+
+.live-choice-btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.live-back-btn {
+    background: none;
+    border: none;
+    color: var(--text-dark, #4a3c2a);
+    opacity: 0.7;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 8px;
+}
+
+.live-back-btn:hover {
+    opacity: 1;
+}
+
+.live-room-code {
+    font-size: 42px;
+    font-weight: 900;
+    letter-spacing: 8px;
+    color: var(--text-dark, #4a3c2a);
+    background: var(--panel-bg, #f6ecd9);
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 12px;
+    padding: 18px 12px;
+    margin: 4px 0 16px;
+    font-variant-numeric: tabular-nums;
+}
+
+.live-waiting-text {
+    font-size: 14px;
+    font-weight: 700;
+    color: #a05a2c;
+    margin-bottom: 16px;
+}
+
+.live-error-text {
+    font-size: 13px;
+    font-weight: 700;
+    color: #c0392b;
+    margin: 4px 0 12px;
+}
+
+.live-code-input {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 8px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-dark, #4a3c2a);
+    background: var(--panel-bg, #f6ecd9);
+    border: 2px solid var(--panel-border, #c9a86a);
+    border-radius: 12px;
+    padding: 14px 12px;
+    margin: 4px 0 14px;
+}
+
+.live-code-input:focus {
+    outline: none;
+    box-shadow: 0 0 14px rgba(232, 184, 75, 0.7);
 }
 
 /* ── 메인 화면: 좌(배너/랭크/방어편성/액션) / 우(제목/후보목록) 2열 ── */

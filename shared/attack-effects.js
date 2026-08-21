@@ -18,9 +18,10 @@ let attackEffectsConfig = {
     resolveUnitEl: (key) => key,
     fieldEl: null,
     layerEl: null,
-    showTypeLabel: null, // (key, "weak"|"resist") - 로스터 상성 라벨(있는 화면만)
-    showCritLabel: null, // (key) - 치명타 라벨(있는 화면만)
+    showTypeLabel: null, // (key, "weak"|"resist", damage, isCrit) - 로스터 상성 라벨(있는 화면만)
+    showDamageLabel: null, // (key, damage, isCrit) - 피해 숫자 라벨(있는 화면만)
     effectLaunchDelayMs: 180, // playGoldenSelfDestruct의 detonate 진입 시각 - 호출 화면의 EFFECT_LAUNCH_DELAY_MS와 일치해야 함
+    getSpeedMultiplier: () => 1, // 배속 연동(아래 speedMs 참고) - 호출 화면이 안 넘기면 항상 1배(고정 속도)
 };
 
 function initAttackEffects(config) {
@@ -29,9 +30,18 @@ function initAttackEffects(config) {
         fieldEl: config.fieldEl,
         layerEl: config.layerEl || config.fieldEl,
         showTypeLabel: config.showTypeLabel || null,
-        showCritLabel: config.showCritLabel || null,
+        showDamageLabel: config.showDamageLabel || null,
         effectLaunchDelayMs: config.effectLaunchDelayMs || 180,
+        getSpeedMultiplier: config.getSpeedMultiplier || (() => 1),
     };
+}
+
+// 투사체/이펙트 재생 시간을 배속에 맞춰 늘이거나 줄인다 - 걷기(speedScale)와 캐스팅 애니메이션
+// (playCastFrames)은 이미 playbackSpeed에 연동돼 있는데, 이 파일의 투사체 durationMs들은 전부 고정된
+// 실제 ms 상수라 배속을 늦춰도 항상 같은 속도로 날아가는 불일치가 있었다 - 모든 setTimeout/CSS
+// transition/animateArcMotion 재생 시간에 이 함수를 거치게 해서 나머지 연출과 같은 배속을 타게 한다.
+function speedMs(ms) {
+    return ms * attackEffectsConfig.getSpeedMultiplier();
 }
 
 // 문자열 키(예: "attacker-front")면 페이지가 알려준 방식으로 리졸브하고, 이미 DOM 엘리먼트면 그대로 쓴다.
@@ -44,6 +54,16 @@ function fieldRelativeCenter(el) {
     const fieldRect = attackEffectsConfig.fieldEl.getBoundingClientRect();
     const rect = el.getBoundingClientRect();
     return { x: rect.left + rect.width / 2 - fieldRect.left, y: rect.top + rect.height / 2 - fieldRect.top };
+}
+
+// 짧은 시간에 같은 대상이 여러 번 맞으면(다단히트/근처 아군 동시 피격 등) 피해 숫자 팝업들이 전부
+// 같은 지점에서 시작해 서로 겹쳐 안 읽히는 문제가 있었다 - 작은 원(반지름 jitterRadius) 안의 균등한
+// 무작위 지점만큼 중심에서 살짝 어긋난 좌표를 돌려준다(showDamageLabel/showTypeLabel 전용). 반지름을
+// sqrt(난수)로 스케일해야 넓이 기준으로 고르게 퍼진다(그냥 난수*r만 쓰면 중심 쪽으로 쏠림).
+function jitterPoint(center, jitterRadius) {
+    const angle = Math.random() * Math.PI * 2;
+    const r = Math.sqrt(Math.random()) * jitterRadius;
+    return { x: center.x + Math.cos(angle) * r, y: center.y + Math.sin(angle) * r };
 }
 
 // imgEl 안에서 (fracX, fracY) 비율 위치에 해당하는 화면 좌표를 필드 기준 상대좌표로 계산한다.
@@ -83,15 +103,25 @@ function angleDeg(start, end) {
     return Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI;
 }
 
+// "화면 맨 끝" 폴백 전용(김크장/김국회처럼 서포터라 전장에 스프라이트가 없는 시전자) - .battle-field는
+// 좌우 292px 로스터 패널 + 22px 간격을 낀 3단 그리드의 가운데 칸이라, 필드 자신의 경계(0~fieldRect.width)는
+// 실제 화면(뷰포트) 가장자리보다 훨씬 안쪽이다. 필드가 아니라 진짜 뷰포트 가장자리를 기준으로 계산해서
+// 필드 상대좌표로 변환한다 - side가 "defender"면 오른쪽(로스터 패널까지 지난) 가장자리, 아니면 왼쪽.
+function viewportEdgeXRelativeToField(side, fieldRect) {
+    const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+    return side === "defender" ? viewportWidth - fieldRect.left + 20 : -fieldRect.left - 20;
+}
+
 // 포물선 이동 공용 로직: 직선 보간 + 사인 곡선으로 위로 솟았다가 내려오는 오프셋을 매 프레임 계산한다.
 // el은 이미 layer에 붙어있어야 하고, 도착하면 el을 제거하고 onArrive를 부른다. startTime은 반드시
 // "첫 프레임이 실제로 실행되는 시각"으로 잡아야 한다 - 안 그러면 메인 스레드가 바빴던 직후 첫 콜백이
 // 늦게 불릴 때 progress가 곧장 1로 계산돼서 투사체가 순간이동해버린다.
 function animateArcMotion(el, start, end, durationMs, arcHeight, onArrive) {
+    const scaledDurationMs = speedMs(durationMs); // 이 함수 하나로 크레파스/하트/책/대포알 등 대부분의 포물선 투사체가 배속에 연동된다
     let startTime = null;
     function frame(now) {
         if (startTime === null) startTime = now;
-        const progress = Math.min(1, (now - startTime) / durationMs);
+        const progress = Math.min(1, (now - startTime) / scaledDurationMs);
         const x = start.x + (end.x - start.x) * progress;
         const y = start.y + (end.y - start.y) * progress - Math.sin(progress * Math.PI) * arcHeight;
         el.style.left = `${x}px`;
@@ -121,14 +151,15 @@ function spawnProjectile(actorKeyOrEl, targetKeyOrEl, onArrive) {
     // 시작 위치를 반드시 한 번 리플로우로 "확정"시킨 뒤에 트랜지션을 걸어야 한다 - 안 그러면 브라우저가
     // 두 상태 변경을 하나로 묶어버려서 투사체가 날아가는 동작 없이 곧장 목표 지점에 나타날 수 있다.
     void dot.offsetWidth;
-    dot.style.transition = `left ${PROJECTILE_TRAVEL_MS}ms linear, top ${PROJECTILE_TRAVEL_MS}ms linear`;
+    const travelMs = speedMs(PROJECTILE_TRAVEL_MS);
+    dot.style.transition = `left ${travelMs}ms linear, top ${travelMs}ms linear`;
     dot.style.left = `${end.x}px`;
     dot.style.top = `${end.y}px`;
 
     setTimeout(() => {
         dot.remove();
         onArrive();
-    }, PROJECTILE_TRAVEL_MS);
+    }, travelMs);
 }
 
 // 포물선: 직선 보간 + 사인 곡선(기본 원거리 폴백용).
@@ -166,14 +197,15 @@ function spawnPaintProjectile(actorKeyOrEl, targetKeyOrEl, colorClass, onArrive)
     layer.appendChild(dot);
 
     void dot.offsetWidth;
-    dot.style.transition = `left ${PROJECTILE_TRAVEL_MS}ms linear, top ${PROJECTILE_TRAVEL_MS}ms linear`;
+    const travelMs = speedMs(PROJECTILE_TRAVEL_MS);
+    dot.style.transition = `left ${travelMs}ms linear, top ${travelMs}ms linear`;
     dot.style.left = `${end.x}px`;
     dot.style.top = `${end.y}px`;
 
     setTimeout(() => {
         dot.remove();
         onArrive();
-    }, PROJECTILE_TRAVEL_MS);
+    }, travelMs);
 }
 
 // 스킬("제목은 관객이 정하세요") - 포물선. colorClass: 물감 없으면 흰색, 있으면 소모한 물감 색.
@@ -211,6 +243,82 @@ function spawnCrayonProjectile(actorKeyOrEl, targetKeyOrEl, colorClass, onArrive
     animateArcMotion(dot, start, end, PROJECTILE_TRAVEL_MS * 1.6, 60, onArrive);
 }
 
+// ===== 김국회 전용: 대포알(cannon_basic_attack.html 참고 데모 포팅) =====
+// 국회의사당 기본공격과 "일당 독재" 패시브 스플래시가 함께 쓴다 - 포신 발사(머즐 플래시) -> 탄도
+// 비행(크레파스와 같은 회전+포물선 방식, animateArcMotion 재사용) -> 착탄 폭발(임팩트 버스트) 순서.
+// 포신이 스프라이트의 오른쪽 위쪽에 있어서(확인된 설계), 정중앙이 아니라 이 지점에서 발사된다 -
+// 임소정의 ELECTRIC_ORIGIN_BASIC과 동일한 패턴(imageContentPoint, 좌우 반전 자동 보정).
+const PARLIAMENT_CANNON_ORIGIN = { fx: 1, fy: 0.1 };
+
+function spawnCannonMuzzleFlash(x, y) {
+    const layer = attackEffectsConfig.layerEl;
+    if (!layer) return;
+    // CSS의 animation(cannon-muzzle-flash-pop 등)은 고정 시간으로 선언돼있어 배속과 무관하게 항상
+    // 같은 속도로 돈다 - animationDuration을 인라인으로 덮어써서 CSS 쪽도 speedMs에 맞춰 늘이거나
+    // 줄이고, 제거 타이밍(setTimeout)도 같은 값을 써서 애니메이션이 실제로 끝난 뒤에 지운다.
+    const flashMs = speedMs(200);
+    const flash = document.createElement("div");
+    flash.className = "cannon-muzzle-flash";
+    flash.style.left = `${x}px`;
+    flash.style.top = `${y}px`;
+    flash.style.animationDuration = `${flashMs}ms`;
+    layer.appendChild(flash);
+    setTimeout(() => flash.remove(), flashMs);
+
+    // 참고 데모(cannon_basic_attack.html)의 burst(muzzleP,10,105,.22,'spark') - 포신에서 스파크
+    // 파티클이 사방으로 튀는 부분을 CSS 애니메이션으로 재현(캔버스 대신 - 기본공격마다 매번 도는
+    // 가벼운 이펙트라 개별 div가 더 싸다). 각도/거리를 매번 무작위로 흩어서 진짜 파편처럼 보이게 한다.
+    const sparkMs = speedMs(240);
+    const SPARK_COUNT = 9;
+    for (let i = 0; i < SPARK_COUNT; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 26 + Math.random() * 30;
+        const spark = document.createElement("div");
+        spark.className = "cannon-spark";
+        spark.style.left = `${x}px`;
+        spark.style.top = `${y}px`;
+        spark.style.setProperty("--spark-dx", `${Math.cos(angle) * dist}px`);
+        spark.style.setProperty("--spark-dy", `${Math.sin(angle) * dist}px`);
+        spark.style.animationDuration = `${sparkMs}ms`;
+        layer.appendChild(spark);
+        setTimeout(() => spark.remove(), sparkMs);
+    }
+}
+
+function spawnCannonShellProjectile(actorKeyOrEl, targetKeyOrEl, onArrive, casterSide, useBulletSprite = false) {
+    const actorImg = resolveEffectEl(actorKeyOrEl);
+    const targetImg = resolveEffectEl(targetKeyOrEl);
+    const layer = attackEffectsConfig.layerEl;
+    const fieldEl = attackEffectsConfig.fieldEl;
+    if (!layer || !fieldEl || !targetImg) { onArrive(); return; }
+
+    // 시전자 스프라이트를 못 찾으면(김국회처럼 서포터라 전장에 위치가 없는 경우) 김크장의 GPT 킬러
+    // (playGptKillerVolley)와 동일하게 필드가 아니라 진짜 화면(뷰포트) 가장자리에서 발사한다
+    // (viewportEdgeXRelativeToField) - casterSide로 소속 진영 쪽을 고른다.
+    const fieldRect = fieldEl.getBoundingClientRect();
+    const start = actorImg
+        ? imageContentPoint(actorImg, PARLIAMENT_CANNON_ORIGIN.fx, PARLIAMENT_CANNON_ORIGIN.fy)
+        : { x: viewportEdgeXRelativeToField(casterSide, fieldRect), y: fieldRect.height * 0.4 - 40 };
+    const end = fieldRelativeCenter(targetImg);
+
+    spawnCannonMuzzleFlash(start.x, start.y);
+
+    const shell = document.createElement("div");
+    shell.className = "cannon-shell";
+    // 국회의사당 본인의 기본공격만 static/objects의 전용 탄환 이미지를 쓴다(확인된 요청) - "일당 독재"
+    // 패시브 스플래시(useBulletSprite 없이 호출됨)는 원래 대포알 모양 그대로 유지한다. 뒤쪽 불꽃(::after)은
+    // attack-effects.css의 .cannon-shell-sprite::after가 위치만 재조정할 뿐 모양/색은 그대로 둔다.
+    if (useBulletSprite) {
+        shell.classList.add("cannon-shell-sprite");
+        shell.style.backgroundImage = `url(${API_BASE_URL}/static/objects/parliament_bullet.webp)`;
+    }
+    shell.style.transform = `rotate(${angleDeg(start, end)}deg)`;
+    layer.appendChild(shell);
+
+    const arcHeight = Math.max(28, Math.min(62, Math.abs(end.x - start.x) * 0.12));
+    animateArcMotion(shell, start, end, PROJECTILE_TRAVEL_MS * 2, arcHeight, onArrive);
+}
+
 // 스킬("엑스칼리버") - 진분홍+푸른 크레파스 두 개가 나란히 직선으로 동시에 대상에게 날아간다.
 function playDualCrayonSkillProjectile(actorKeyOrEl, targetKeyOrEl, onArrive) {
     const actorImg = resolveEffectEl(actorKeyOrEl);
@@ -222,7 +330,7 @@ function playDualCrayonSkillProjectile(actorKeyOrEl, targetKeyOrEl, onArrive) {
     const end = fieldRelativeCenter(targetImg);
     const angle = angleDeg(start, end);
     const rad = (angle * Math.PI) / 180;
-    const durationMs = PROJECTILE_TRAVEL_MS * 1.4;
+    const durationMs = speedMs(PROJECTILE_TRAVEL_MS * 1.4);
 
     let onArriveScheduled = false;
     ["crayon-pink", "crayon-blue"].forEach((colorClass, i) => {
@@ -260,7 +368,7 @@ function spawnMeteorProjectile(actorKeyOrEl, targetKeyOrEl, onArrive) {
     const start = fieldRelativeCenter(actorImg);
     const end = fieldRelativeCenter(targetImg);
     const angle = angleDeg(start, end);
-    const durationMs = PROJECTILE_TRAVEL_MS * 1.5;
+    const durationMs = speedMs(PROJECTILE_TRAVEL_MS * 1.5);
 
     const el = document.createElement("div");
     el.className = "meteor-projectile";
@@ -279,6 +387,55 @@ function spawnMeteorProjectile(actorKeyOrEl, targetKeyOrEl, onArrive) {
         el.remove();
         onArrive();
     }, durationMs);
+}
+
+// ===== 배 전용: 대상 머리 위에서 떨어지는 감옥 ("유배 보내기") =====
+// 다른 투사체와 달리 캐스터에서 날아가는 게 아니라 대상 바로 위에서 아래로 떨어진다. 피격판정은 감옥이
+// 실제로 대상에게 닿는 시점(떨어지는 애니메이션이 끝나는 순간)에 나야 하므로, onLand(removeFn)이 그
+// 시점에 불린다 - removeFn을 호출부가 직접 들고 있다가(기절 지속시간은 재생 배속/되감기에 따라 실제
+// ms가 달라지므로, 그 환산은 이 공유 파일이 아니라 각 화면 자신의 realMsUntilSimTime이 맡는다) 기절이
+// 끝나는 시뮬레이션 시각에 맞춰 직접 불러서 감옥을 치운다.
+function dropPrisonOnTarget(targetKeyOrEl, onLand) {
+    const targetImg = resolveEffectEl(targetKeyOrEl);
+    const layer = attackEffectsConfig.layerEl;
+    const fieldEl = attackEffectsConfig.fieldEl;
+    if (!layer || !fieldEl || !targetImg) { onLand(() => {}); return; }
+
+    // fieldRelativeCenter는 대상의 세로 "중앙"을 주는데, .prison-drop-effect의 transform이
+    // translate(-50%, -100%)라 top 좌표가 감옥의 "바닥"이 된다 - 중앙에 맞추면 감옥이 캐릭터 몸통
+    // 중간에서 멈춰버린다. 캐릭터 스프라이트의 실제 바닥(발밑, getBoundingClientRect().bottom)까지
+    // 떨어지도록 착지 지점을 다시 계산한다.
+    const fieldRect = fieldEl.getBoundingClientRect();
+    const imgRect = targetImg.getBoundingClientRect();
+    const groundX = imgRect.left + imgRect.width / 2 - fieldRect.left;
+    const groundY = imgRect.bottom - fieldRect.top;
+    const fallMs = speedMs(380);
+
+    const el = document.createElement("img");
+    el.className = "prison-drop-effect";
+    el.src = `${API_BASE_URL}/static/objects/back_prison.webp`;
+    el.style.left = `${groundX}px`;
+    el.style.top = `${groundY - 260}px`;
+    layer.appendChild(el);
+
+    void el.offsetWidth;
+    el.style.transition = `top ${fallMs}ms cubic-bezier(0.55, 0, 1, 0.45)`;
+    el.style.top = `${groundY}px`;
+
+    let removed = false;
+    const removeFn = () => {
+        if (removed) return;
+        removed = true;
+        // 캐릭터가 죽을 때와 같은 실선무늬 스캔 디졸브(death-dissolve, arena-battle.css)로 사라지게
+        // 한다 - 이 이펙트는 arena/devtest 공용이라 캐릭터 CSS에 기대지 않고 같은 키프레임을 여기
+        // (attack-effects.css)에도 복제해뒀다. 애니메이션이 끝난 뒤에야 실제로 DOM에서 지운다.
+        el.classList.add("prison-dissolving");
+        setTimeout(() => el.remove(), speedMs(1100));
+    };
+    setTimeout(() => {
+        el.classList.add("prison-drop-landed");
+        onLand(removeFn);
+    }, fallMs);
 }
 
 // ===== 강 희 전용: 얼굴 쪽에서 뿜어져 나오는 좁은 부채꼴 초록 입냄새(가스) ("생화학 구취 브레스") =====
@@ -302,7 +459,7 @@ function spawnGasBreathStream(actorKeyOrEl, onArrive) {
     const end = { x: endX, y: start.y };
     const length = Math.hypot(end.x - start.x, end.y - start.y);
     const angle = angleDeg(start, end);
-    const durationMs = 1150;
+    const durationMs = speedMs(1150);
 
     const wrap = document.createElement("div");
     wrap.className = "gas-breath-wrap";
@@ -788,7 +945,7 @@ function playElectricBolt(actorKeyOrEl, targetKeyOrEl, isUlt, onArrive, origin) 
     }
     requestAnimationFrame(frame);
 
-    if (onArrive) setTimeout(onArrive, 80);
+    if (onArrive) setTimeout(onArrive, speedMs(80));
 }
 
 // ===== 서민석 전용: 하트 모양 투사체 ("고백") - 포물선. 대상 여성이면 heart-red, 아니면 heart-pink =====
@@ -816,7 +973,7 @@ function spawnHealingHeart(targetKeyOrEl, onArrive) {
 
     const end = fieldRelativeCenter(targetImg);
     const start = { x: end.x, y: end.y - 130 };
-    const durationMs = 1000;
+    const durationMs = speedMs(1000);
 
     const wrap = document.createElement("div");
     wrap.className = "healing-heart-wrap";
@@ -840,25 +997,30 @@ function spawnHealingHeart(targetKeyOrEl, onArrive) {
 }
 
 // ===== 피격/오라(범용) =====
-function flashHit(keyOrEl, isCrit, typeMultiplier) {
+// damage(선택)가 있으면 피해 숫자를 함께 띄운다. weak/resist 글자가 뜨는 타격이면 별도로 뜨는 게
+// 아니라 그 글자 자신의 두 번째 줄로(같은 팝업 안에 <br>) 곧바로 붙어서 나온다(showTypeLabel이 damage를
+// 받아 처리). 아무 글자도 없는 평범한 타격이면 showDamageLabel이 대상 머리 위 기본 위치에 독립적으로
+// 띄운다. 치명타는 더 이상 "치명타!" 글자를 따로 띄우지 않는다 - isCrit을 그대로 넘겨서, 숫자(위 둘 중
+// 어느 쪽으로 뜨든) 뒤에 붉은 가시 돋친 타원 배경만 추가로 얹는다(showTypeLabel/showDamageLabel의
+// isCrit 처리, CSS .label-damage-crit-burst 참고).
+function flashHit(keyOrEl, isCrit, typeMultiplier, damage) {
     const imgEl = resolveEffectEl(keyOrEl);
     if (!imgEl) return;
 
     const key = typeof keyOrEl === "string" ? keyOrEl : null;
+    let typeKind = null;
     if (typeof typeMultiplier === "number" && key) {
-        if (typeMultiplier > 1) attackEffectsConfig.showTypeLabel?.(key, "weak");
-        else if (typeMultiplier < 1) attackEffectsConfig.showTypeLabel?.(key, "resist");
+        if (typeMultiplier > 1) typeKind = "weak";
+        else if (typeMultiplier < 1) typeKind = "resist";
     }
 
-    if (isCrit) {
-        imgEl.classList.add("crit-flash");
-        if (key) attackEffectsConfig.showCritLabel?.(key);
-        setTimeout(() => imgEl.classList.remove("crit-flash"), 400);
-        return;
-    }
+    imgEl.classList.add(isCrit ? "crit-flash" : "hit-flash");
+    setTimeout(() => imgEl.classList.remove(isCrit ? "crit-flash" : "hit-flash"), isCrit ? 400 : 250);
 
-    imgEl.classList.add("hit-flash");
-    setTimeout(() => imgEl.classList.remove("hit-flash"), 250);
+    if (key) {
+        if (typeKind) attackEffectsConfig.showTypeLabel?.(key, typeKind, damage, isCrit);
+        else if (damage != null) attackEffectsConfig.showDamageLabel?.(key, damage, isCrit);
+    }
 }
 
 const EFFECT_AURA_COLORS = {
@@ -899,6 +1061,7 @@ const RANGED_ATTACK_STYLE = {
     "서민석": "book",            // 책 던지기 - 포물선, 계속 회전
     "이의진": "eye_laser",       // 눈에서 발사되는 레이저 - type1(빨강)/type2(청록) 두 가지, isType2로 분기
     "방임석": "paint_gold",      // 물감 투척 - 직선, 항상 황금빛(기본공격은 물감 색과 무관)
+    "국회의사당": "cannon",      // 대포알 - 포신 발사(머즐 플래시) -> 포물선 비행 -> 착탄 폭발
 };
 
 // style 문자열(RANGED_ATTACK_STYLE의 값) 기준으로 실제 전용 연출 함수를 호출한다. 호출부는
@@ -918,6 +1081,7 @@ function playRangedAttackByStyle(style, actorKeyOrEl, targetKeyOrEl, onArrive, o
     else if (style === "book") spawnBookProjectile(actorKeyOrEl, targetKeyOrEl, onArrive);
     else if (style === "eye_laser") spawnEyeLaserBeam(actorKeyOrEl, targetKeyOrEl, opts.isType2 ? "type2" : "type1", onArrive);
     else if (style === "paint_gold") spawnPaintProjectile(actorKeyOrEl, targetKeyOrEl, "paint-gold", onArrive);
+    else if (style === "cannon") spawnCannonShellProjectile(actorKeyOrEl, targetKeyOrEl, onArrive, undefined, true);
     else if (style === "arc") spawnProjectileArc(actorKeyOrEl, targetKeyOrEl, onArrive);
     else spawnProjectile(actorKeyOrEl, targetKeyOrEl, onArrive);
 }
@@ -960,7 +1124,7 @@ function spawnEyeLaserBeam(actorKeyOrEl, targetKeyOrEl, variant, onArrive) {
     const end = fieldRelativeCenter(targetImg);
     const distance = Math.hypot(end.x - start.x, end.y - start.y);
     const angle = angleDeg(start, end);
-    const durationMs = Math.max(110, distance * 0.6);
+    const durationMs = speedMs(Math.max(110, distance * 0.6));
 
     const wrap = document.createElement("div");
     wrap.className = `eye-laser-wrap eye-laser-${variant}`;
@@ -1018,8 +1182,8 @@ function playInstantFlash(actorKeyOrEl, targetKeyOrEl, onArrive) {
     flash.style.left = `${pos.x}px`;
     flash.style.top = `${pos.y}px`;
     layer.appendChild(flash);
-    setTimeout(() => flash.remove(), 250);
-    setTimeout(onArrive, 80);
+    setTimeout(() => flash.remove(), speedMs(250));
+    setTimeout(onArrive, speedMs(80));
 }
 
 // 이종복 전용: "F", "=", "m", "a" 네 글자가 0.1초 간격으로 직선 발사된다.
@@ -1036,6 +1200,7 @@ function playTextParticles(actorKeyOrEl, targetKeyOrEl, onArrive, onLetterArrive
 
     const start = fieldRelativeCenter(actorImg);
     const end = fieldRelativeCenter(targetImg);
+    const travelMs = speedMs(PROJECTILE_TRAVEL_MS);
 
     letters.forEach((ch, i) => {
         setTimeout(() => {
@@ -1046,15 +1211,15 @@ function playTextParticles(actorKeyOrEl, targetKeyOrEl, onArrive, onLetterArrive
             el.style.top = `${start.y}px`;
             layer.appendChild(el);
             void el.offsetWidth;
-            el.style.transition = `left ${PROJECTILE_TRAVEL_MS}ms linear, top ${PROJECTILE_TRAVEL_MS}ms linear`;
+            el.style.transition = `left ${travelMs}ms linear, top ${travelMs}ms linear`;
             el.style.left = `${end.x}px`;
             el.style.top = `${end.y}px`;
-            setTimeout(() => el.remove(), PROJECTILE_TRAVEL_MS + 50);
+            setTimeout(() => el.remove(), travelMs + 50);
             setTimeout(() => {
                 if (onLetterArrive) onLetterArrive(i);
                 if (i === letters.length - 1) onArrive();
-            }, PROJECTILE_TRAVEL_MS);
-        }, i * 100);
+            }, travelMs);
+        }, speedMs(i * 100));
     });
 }
 
@@ -1330,6 +1495,1043 @@ function playGoldenSelfDestruct(actorKeyOrEl) {
             fieldEl.style.transform = "";
         }
 
+        requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+}
+
+
+// ===== 신 "제 2 권한"(부활) 전용 =====
+// 참고 데모(preview.html)의 4단계(지면 섬광 -> 룬 서클/링 확장 -> 상승 파티클 -> 여운)를 캐릭터
+// 스프라이트 크기에 맞게 이식했다. 데모는 캐릭터 자체를 캔버스로 직접 그리지만, 실제 게임은 진짜
+// <img> 스프라이트가 있으므로 그건 CSS(.revive-rising, attack-effects.css)로 등장시키고, 여기서는
+// 그 주변의 지면 섬광/룬 서클/링/파티클만 국소 캔버스로 그린다. 최적화 원칙은 playGoldenSelfDestruct와
+// 동일: 필드 전체 캔버스를 만들되 매 프레임 실제로 그려지는 좁은 영역만 clearRect하고, 파티클은
+// 개수를 낮게 캡(최대 18개)한 채 미리 그려둔 작은 스프라이트를 drawImage로 재사용한다.
+const reviveEffectActive = {};
+// unitKey -> revive-rising을 새로 붙일 때마다 증가하는 토큰. 그 클래스를 지우는 setTimeout이 자기
+// 토큰이 여전히 최신인지 확인해서, 그 사이 다시 죽었다 부활한 새 인스턴스의 revive-rising까지 잘못
+// 지우는 걸 막는다(스킬 쿨다운상 사실상 불가능에 가깝지만, 방어적으로).
+const reviveRiseTokens = {};
+
+// onRise: 지면 섬광이 끝나고 캐릭터가 실제로 다시 나타나야 하는 순간(약 220ms 후)에 정확히 한 번
+// 호출된다 - 호출부(arena-battle.js)가 여기서 renderUnit/로그/상태 아이콘 등 "부활 처리 자체"를
+// 맡는다. 이 함수 자신은 캐릭터에 revive-rising 클래스를 붙였다 떼는 것과 순수 시각 효과만 담당한다.
+function playReviveEffect(unitKeyOrEl, onRise) {
+    const imgEl = resolveEffectEl(unitKeyOrEl);
+    const layer = attackEffectsConfig.layerEl;
+    const fieldEl = attackEffectsConfig.fieldEl;
+    if (!layer || !fieldEl || !imgEl) { if (onRise) onRise(); return; }
+    const unitKey = typeof unitKeyOrEl === "string" ? unitKeyOrEl : imgEl;
+
+    reviveEffectActive[unitKey] = true;
+
+    const fieldRect = fieldEl.getBoundingClientRect();
+    const imgRect = imgEl.getBoundingClientRect();
+    const cx = imgRect.left + imgRect.width / 2 - fieldRect.left;
+    const cy = imgRect.bottom - fieldRect.top - 4;
+    const radius = Math.max(30, imgRect.width * 0.62);
+
+    const dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+    const canvas = document.createElement("canvas");
+    canvas.className = "revive-effect-canvas";
+    canvas.style.width = `${fieldRect.width}px`;
+    canvas.style.height = `${fieldRect.height}px`;
+    canvas.width = Math.round(fieldRect.width * dpr);
+    canvas.height = Math.round(fieldRect.height * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layer.appendChild(canvas);
+
+    // 파티클 공용 스프라이트 두 종류(청록/금빛)를 미리 그려두고 매 프레임 drawImage로 재사용한다
+    // (golden-self-destruct의 spark 패턴과 동일한 이유 - arc()를 파티클마다 매번 그리는 것보다 훨씬 싸다).
+    function makeDot(colorStops) {
+        const c = document.createElement("canvas");
+        c.width = c.height = 32;
+        const g = c.getContext("2d");
+        const grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+        colorStops.forEach(([stop, color]) => grad.addColorStop(stop, color));
+        g.fillStyle = grad;
+        g.fillRect(0, 0, 32, 32);
+        return c;
+    }
+    const moteSprite = makeDot([[0, "rgba(255,255,255,1)"], [0.35, "rgba(160,235,255,.9)"], [1, "rgba(120,210,255,0)"]]);
+    const goldSprite = makeDot([[0, "rgba(255,250,230,1)"], [0.35, "rgba(255,224,140,.9)"], [1, "rgba(255,200,90,0)"]]);
+
+    let particles = [];
+    let rings = [];
+    let risen = false;
+
+    function spawnBurst() {
+        for (let i = 0; i < 18; i++) {
+            particles.push({
+                x: cx + (Math.random() - 0.5) * radius * 1.1,
+                y: cy + (Math.random() - 0.5) * radius * 0.4,
+                vx: (Math.random() - 0.5) * 14,
+                vy: -(50 + Math.random() * 90),
+                size: 3 + Math.random() * 4,
+                life: 0, maxLife: 0.5 + Math.random() * 0.5,
+                gold: Math.random() < 0.3,
+            });
+        }
+    }
+
+    const FLASH_MS = speedMs(220);
+    const RISE_MS = speedMs(430);
+    const AFTER_MS = speedMs(500);
+    const TOTAL_MS = FLASH_MS + RISE_MS + AFTER_MS;
+
+    const startMs = performance.now();
+    let lastMs = startMs;
+
+    function frame(now) {
+        const dt = Math.min(0.033, (now - lastMs) / 1000);
+        lastMs = now;
+        const t = now - startMs;
+
+        let flashPower, ringPower;
+        if (t < FLASH_MS) {
+            flashPower = t / FLASH_MS;
+            ringPower = flashPower * 0.5;
+        } else if (t < FLASH_MS + RISE_MS) {
+            if (!risen) {
+                risen = true;
+                rings.push({ r: radius * 0.6, a: 0.4, life: 0, max: 0.6 });
+                rings.push({ r: radius * 0.8, a: 0.28, life: 0, max: 0.75 });
+                spawnBurst();
+                imgEl.classList.remove("dying", "death-fallback-filter");
+                void imgEl.offsetWidth;
+                imgEl.classList.add("revive-rising");
+                if (onRise) onRise();
+                // .revive-rising(attack-effects.css)의 애니메이션(revive-sprite-rise) 자체는 0.85초짜리
+                // 1회성인데, 클래스를 안 지우면 애니메이션이 끝난 뒤에도 계속 붙어있는다 - CSS 캐스케이드
+                // 상 이후 발동되는 .battle-unit-img.walking(walk-bob, arena-battle.css)의 animation
+                // 선언이 이 클래스의 뒤늦은 스타일시트 로드 순서 때문에 영원히 밀려서, 부활한 캐릭터는
+                // 전용 걷기 프레임(walk_N.webp)이 없는 한 걸을 때 통통 튀는 효과가 다시 죽을 때까지
+                // 평생 안 나오는 버그로 이어졌다. 애니메이션 재생 시간(0.85초, CSS와 반드시 일치)만큼
+                // 기다렸다가 지워서 그 이후엔 walking 클래스가 정상적으로 애니메이션을 가져가게 한다.
+                const riseToken = (reviveRiseTokens[unitKey] = (reviveRiseTokens[unitKey] || 0) + 1);
+                setTimeout(() => {
+                    if (reviveRiseTokens[unitKey] === riseToken) imgEl.classList.remove("revive-rising");
+                }, 850);
+            }
+            const p = (t - FLASH_MS) / RISE_MS;
+            flashPower = 1;
+            ringPower = 1 - p * 0.2;
+        } else if (t < TOTAL_MS) {
+            const p = (t - FLASH_MS - RISE_MS) / AFTER_MS;
+            flashPower = Math.max(0, 1 - p);
+            ringPower = Math.max(0, 0.8 - p * 0.8);
+        } else {
+            canvas.remove();
+            reviveEffectActive[unitKey] = false;
+            return;
+        }
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.life += dt;
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.vy += 40 * dt;
+            if (p.life >= p.maxLife) particles.splice(i, 1);
+        }
+        for (let i = rings.length - 1; i >= 0; i--) {
+            const r = rings[i];
+            r.life += dt;
+            r.r += radius * 0.9 * dt;
+            if (r.life >= r.max) rings.splice(i, 1);
+        }
+
+        // playGoldenSelfDestruct와 동일한 이유로 필드 전체가 아니라 캐릭터 주변 좁은 영역만 지운다 -
+        // 위(상승 파티클)로 더 넓게, 아래(지면)로는 좁게 잡는다.
+        const clearR = radius * 2.6;
+        const clearX = Math.max(0, cx - clearR);
+        const clearYTop = Math.max(0, cy - clearR * 1.6);
+        const clearYBottom = Math.min(fieldRect.height, cy + clearR * 0.5);
+        const clearW = Math.min(fieldRect.width, cx + clearR) - clearX;
+        ctx.clearRect(clearX, clearYTop, clearW, clearYBottom - clearYTop);
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+
+        if (flashPower > 0.01) {
+            ctx.globalAlpha = 0.10 + flashPower * 0.22;
+            ctx.fillStyle = "#68ebff";
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, radius * (0.85 + flashPower * 0.2), radius * 0.32, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 0.06 + flashPower * 0.14;
+            ctx.fillStyle = "#ffe07f";
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, radius * 0.6, radius * 0.22, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        if (ringPower > 0.01) {
+            ctx.globalAlpha = 0.14 + ringPower * 0.3;
+            ctx.strokeStyle = "#9ceeff";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, radius * 0.68, radius * 0.24, 0, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        for (const r of rings) {
+            const rp = r.life / r.max;
+            ctx.globalAlpha = r.a * (1 - rp);
+            ctx.strokeStyle = "#9ceeff";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, r.r, r.r * 0.34, 0, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        for (const p of particles) {
+            const lp = p.life / p.maxLife;
+            ctx.globalAlpha = Math.max(0, 1 - lp);
+            const sprite = p.gold ? goldSprite : moteSprite;
+            ctx.drawImage(sprite, p.x - p.size, p.y - p.size, p.size * 2, p.size * 2);
+        }
+
+        ctx.restore();
+        requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+}
+
+
+// ============================================================================
+// ===== 보호막(수치형 - 김크장류 지원가가 부여) 공용 비주얼 =====
+// 이 캐릭터 하나가 아니라 "보호막"이라는 개념 자체의 고정 비주얼이다 - 앞으로 다른 캐릭터가 보호막을
+// 걸어도 여기 있는 함수들을 그대로 재사용한다. 참고 데모(foreign_worker_skills_HQ_readable_letters.html)의
+// SF 에너지 필드를 캐릭터 크기에 맞게 이식했다. 비싼 그라디언트/블러/육각형 패턴은 220x220 오프스크린
+// 캔버스에 딱 한 번만 그려두고(makeShieldAuraSprite, 지연 생성 후 캐시), 매 프레임에는 그 결과 이미지를
+// drawImage로 재사용만 한다 - 그래야 아군 전체가 동시에 보호막을 두르고 있어도 프레임마다 그라디언트를
+// 다시 계산하지 않아 가볍다.
+// ============================================================================
+
+function makeShieldAuraSprite() {
+    const c = document.createElement("canvas");
+    c.width = 220; c.height = 220;
+    const g = c.getContext("2d");
+    const cx = 110, cy = 110;
+
+    const rg = g.createRadialGradient(cx, cy - 8, 18, cx, cy, 101);
+    rg.addColorStop(0, "rgba(190,248,255,0)");
+    rg.addColorStop(0.52, "rgba(132,225,255,.035)");
+    rg.addColorStop(0.79, "rgba(120,220,255,.10)");
+    rg.addColorStop(1, "rgba(165,241,255,.025)");
+    g.fillStyle = rg;
+    g.beginPath(); g.arc(cx, cy, 100, 0, Math.PI * 2); g.fill();
+
+    g.save();
+    g.shadowColor = "#83e4ff";
+    g.shadowBlur = 16;
+    g.strokeStyle = "rgba(171,241,255,.78)";
+    g.lineWidth = 2.2;
+    g.beginPath(); g.arc(cx, cy, 92, 0, Math.PI * 2); g.stroke();
+    g.restore();
+
+    g.strokeStyle = "rgba(213,251,255,.34)";
+    g.lineWidth = 1;
+    g.beginPath(); g.arc(cx, cy, 84, 0, Math.PI * 2); g.stroke();
+
+    g.lineCap = "round";
+    for (let i = 0; i < 12; i++) {
+        const a = i * Math.PI * 2 / 12;
+        const gap = 0.17;
+        g.strokeStyle = i % 3 === 0 ? "rgba(217,252,255,.62)" : "rgba(126,226,255,.26)";
+        g.lineWidth = i % 3 === 0 ? 2.1 : 1.15;
+        g.beginPath();
+        g.arc(cx, cy, 97, a + gap, a + Math.PI / 7 - gap);
+        g.stroke();
+    }
+
+    for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4 - Math.PI / 8;
+        const x = cx + Math.cos(a) * 92, y = cy + Math.sin(a) * 92;
+        g.fillStyle = i % 2 ? "rgba(144,231,255,.72)" : "rgba(226,253,255,.92)";
+        g.beginPath(); g.arc(x, y, i % 2 ? 1.7 : 2.3, 0, Math.PI * 2); g.fill();
+    }
+
+    g.strokeStyle = "rgba(151,234,255,.09)";
+    g.lineWidth = 0.8;
+    const hexR = 19;
+    for (let row = -2; row <= 2; row++) {
+        for (let col = -2; col <= 2; col++) {
+            const hx = cx + col * 31 + (row & 1) * 15.5;
+            const hy = cy + row * 27;
+            if (Math.hypot(hx - cx, hy - cy) > 66) continue;
+            g.beginPath();
+            for (let k = 0; k < 6; k++) {
+                const a = Math.PI / 3 * k;
+                const x = hx + Math.cos(a) * hexR;
+                const y = hy + Math.sin(a) * hexR;
+                k ? g.lineTo(x, y) : g.moveTo(x, y);
+            }
+            g.closePath(); g.stroke();
+        }
+    }
+    return c;
+}
+
+let shieldAuraSprite = null;
+function getShieldAuraSprite() {
+    if (!shieldAuraSprite) shieldAuraSprite = makeShieldAuraSprite();
+    return shieldAuraSprite;
+}
+
+// 보호막을 두르고 있는 유닛 목록(unitKey들) - 여러 명이 동시에 보호막을 둘러도 캔버스 하나를 공유한다
+// (유닛마다 캔버스를 새로 만들지 않는다). 이 목록이 비면 루프 자체가 멈추고 캔버스도 지운다.
+const shieldAuraActive = new Set();
+let shieldAuraCanvas = null;
+let shieldAuraLoopRunning = false;
+
+function shieldAuraStep() {
+    if (shieldAuraActive.size === 0) {
+        shieldAuraLoopRunning = false;
+        if (shieldAuraCanvas) { shieldAuraCanvas.remove(); shieldAuraCanvas = null; }
+        return;
+    }
+    const fieldEl = attackEffectsConfig.fieldEl;
+    const layer = attackEffectsConfig.layerEl;
+    if (!fieldEl || !layer) { shieldAuraLoopRunning = false; return; }
+
+    const fieldRect = fieldEl.getBoundingClientRect();
+    if (!shieldAuraCanvas || !shieldAuraCanvas.isConnected) {
+        const dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+        shieldAuraCanvas = document.createElement("canvas");
+        shieldAuraCanvas.className = "shield-aura-canvas";
+        shieldAuraCanvas.style.width = `${fieldRect.width}px`;
+        shieldAuraCanvas.style.height = `${fieldRect.height}px`;
+        shieldAuraCanvas.width = Math.round(fieldRect.width * dpr);
+        shieldAuraCanvas.height = Math.round(fieldRect.height * dpr);
+        shieldAuraCanvas.getContext("2d").setTransform(dpr, 0, 0, dpr, 0, 0);
+        layer.appendChild(shieldAuraCanvas);
+    }
+    const ctx = shieldAuraCanvas.getContext("2d");
+    ctx.clearRect(0, 0, fieldRect.width, fieldRect.height);
+
+    const sprite = getShieldAuraSprite();
+    const t = performance.now() / 1000;
+    let i = 0;
+    for (const key of shieldAuraActive) {
+        i++;
+        const el = resolveEffectEl(key);
+        if (!el || !el.isConnected) continue;
+        const pos = fieldRelativeCenter(el);
+        const pulse = 1 + 0.03 * Math.sin(t * 2.4 + i * 1.7);
+        // 보호막 지름 = 히트박스(캐릭터 스프라이트) 높이 - 캐릭터마다 스프라이트 크기가 달라도
+        // 항상 그 캐릭터 몸에 딱 맞게 둘러지도록, 고정값 대신 매 프레임 실제 렌더 높이를 읽는다.
+        const hitboxHeight = el.getBoundingClientRect().height || 118;
+        const size = hitboxHeight * pulse;
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = 0.5 + 0.08 * Math.sin(t * 2.1 + i);
+        ctx.drawImage(sprite, pos.x - size / 2, pos.y - 8 - size / 2, size, size);
+        ctx.restore();
+    }
+    requestAnimationFrame(shieldAuraStep);
+}
+
+// unitKey에 보호막 오라를 켜거나 끈다 - 매 프레임 units[key].shield > 0 여부로 그냥 호출하면 된다
+// (이미 켜진 유닛을 다시 켜도, 이미 꺼진 유닛을 다시 꺼도 안전 - Set이라 중복이 없다).
+function setShieldAura(unitKey, active) {
+    if (!unitKey) return;
+    if (active) {
+        shieldAuraActive.add(unitKey);
+        if (!shieldAuraLoopRunning) {
+            shieldAuraLoopRunning = true;
+            requestAnimationFrame(shieldAuraStep);
+        }
+    } else {
+        shieldAuraActive.delete(unitKey);
+    }
+}
+
+// 보호막이 "막 생겼을 때"(전투 시작 시 부여 등) 1회 재생하는 확산 팝인 - 오라 스프라이트를 재사용해서
+// 별도 그라디언트 계산 없이 가볍다. 최대 620ms짜리 자기 완결형 캔버스 - 끝나면 스스로 지운다.
+function playShieldPop(unitKeyOrEl) {
+    const el = resolveEffectEl(unitKeyOrEl);
+    const layer = attackEffectsConfig.layerEl;
+    const fieldEl = attackEffectsConfig.fieldEl;
+    if (!layer || !fieldEl || !el) return;
+    let pos = fieldRelativeCenter(el);
+    const sprite = getShieldAuraSprite();
+
+    const dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+    const fieldRect = fieldEl.getBoundingClientRect();
+    const canvas = document.createElement("canvas");
+    canvas.className = "shield-pop-canvas";
+    canvas.style.width = `${fieldRect.width}px`;
+    canvas.style.height = `${fieldRect.height}px`;
+    canvas.width = Math.round(fieldRect.width * dpr);
+    canvas.height = Math.round(fieldRect.height * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layer.appendChild(canvas);
+
+    const startMs = performance.now();
+    const totalMs = 620;
+    function frame(now) {
+        const t = now - startMs;
+        if (t >= totalMs) { canvas.remove(); return; }
+        const k = t / totalMs;
+        const fade = 1 - k;
+        const ease = 1 - Math.pow(1 - k, 3);
+        // playShieldHit과 동일한 이유 - 부여되는 순간 대상이 아직 움직이는 중이어도(전투 시작 직후
+        // 첫걸음 등) 제자리에 고정되지 않고 계속 따라가도록 매 프레임 위치를 다시 잰다.
+        if (el.isConnected) pos = fieldRelativeCenter(el);
+        ctx.clearRect(0, 0, fieldRect.width, fieldRect.height);
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.translate(pos.x, pos.y - 16);
+        ctx.globalAlpha = fade * 0.78;
+        const size = 110 + ease * 96;
+        ctx.drawImage(sprite, -size / 2 - ease * 24, -size / 2 - ease * 24, size + ease * 48, size + ease * 48);
+        ctx.strokeStyle = `rgba(221,252,255,${fade * 0.86})`;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(0, 0, 45 + ease * 54, -2.7, -0.25);
+        ctx.stroke();
+        ctx.restore();
+        requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+}
+
+// 보호막이 완전히 깨졌을 때(0이 됐을 때) 짧게 터지는 링 + 파편 - 부분 흡수(타격)는 더 이상 연출하지
+// 않고, 이 "파괴" 순간에만 호출한다.
+function playShieldHit(unitKeyOrEl) {
+    const el = resolveEffectEl(unitKeyOrEl);
+    const layer = attackEffectsConfig.layerEl;
+    const fieldEl = attackEffectsConfig.fieldEl;
+    if (!layer || !fieldEl || !el) return;
+    let pos = fieldRelativeCenter(el);
+    pos.y -= 16;
+
+    const dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+    const fieldRect = fieldEl.getBoundingClientRect();
+    const canvas = document.createElement("canvas");
+    canvas.className = "shield-pop-canvas";
+    canvas.style.width = `${fieldRect.width}px`;
+    canvas.style.height = `${fieldRect.height}px`;
+    canvas.width = Math.round(fieldRect.width * dpr);
+    canvas.height = Math.round(fieldRect.height * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layer.appendChild(canvas);
+
+    const startMs = performance.now();
+    const totalMs = 460;
+    function frame(now) {
+        const t = now - startMs;
+        if (t >= totalMs) { canvas.remove(); return; }
+        const k = t / totalMs;
+        const fade = 1 - k;
+        // 대상이 아직 걷는 중(넉백/근접 이동)이어도 제자리에서 안 터지고 그 위치를 계속 따라가도록,
+        // 시작할 때 한 번만 좌표를 재는 게 아니라 매 프레임 다시 잰다(shieldAuraStep과 동일한 방식).
+        if (el.isConnected) {
+            pos = fieldRelativeCenter(el);
+            pos.y -= 16;
+        }
+        ctx.clearRect(0, 0, fieldRect.width, fieldRect.height);
+        ctx.save();
+        ctx.translate(pos.x, pos.y);
+        ctx.globalCompositeOperation = "lighter";
+        ctx.strokeStyle = `rgba(220,252,255,${fade * 0.9})`;
+        ctx.lineWidth = 2.3;
+        ctx.beginPath(); ctx.arc(0, 0, 58 + k * 22, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = `rgba(92,218,255,${fade * 0.55})`;
+        ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(0, 0, 62 + k * 15, 0, Math.PI * 2); ctx.stroke();
+
+        ctx.strokeStyle = `rgba(180,242,255,${fade * 0.75})`;
+        ctx.lineWidth = 1.6;
+        for (let i = 0; i < 8; i++) {
+            const a = i * Math.PI / 4 + 0.22;
+            const r1 = 52 + k * 15, r2 = 68 + k * 42;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
+            ctx.lineTo(Math.cos(a + 0.05) * r2, Math.sin(a + 0.05) * r2);
+            ctx.stroke();
+        }
+        ctx.restore();
+        requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+}
+
+// ============================================================================
+// ===== 김크장 전용: GPT 킬러 (N-O-G-P-T 5탄환 연속 발사) =====
+// 참고 데모의 고퀄 발사체(halo+dark core+letter+ring+fins)를 글자별로 캐시해서 재사용한다. 백엔드는
+// 탄환별로 대미지를 쪼개지 않고(이종복의 F=ma와 달리) 총합 한 번에 판정하므로, 이 함수는 순수하게
+// 연출만 담당하고 실제 피해/기절 반영은 호출부(arena-battle.js)가 마지막 글자 도착 시점에 처리한다.
+// ============================================================================
+
+const GPT_BULLET_LETTERS = ["N", "O", "G", "P", "T"];
+const gptBulletSprites = new Map();
+
+function makeGptBulletSprite(letter) {
+    const c = document.createElement("canvas");
+    c.width = 128; c.height = 128;
+    const g = c.getContext("2d");
+    const cx = 64, cy = 64;
+    const isT = letter === "T";
+    const coreGlow = isT ? "#ffe56c" : "#89ebff";
+    const outerGlow = isT ? "rgba(255,210,50,0)" : "rgba(52,188,255,0)";
+    const ringColor = isT ? "rgba(255,236,140,.95)" : "rgba(215,251,255,.95)";
+    const accentColor = isT ? "rgba(255,218,72,.68)" : "rgba(91,221,255,.68)";
+
+    const halo = g.createRadialGradient(cx, cy, 8, cx, cy, 56);
+    halo.addColorStop(0, "rgba(255,255,255,.95)");
+    halo.addColorStop(0.14, coreGlow);
+    halo.addColorStop(0.34, isT ? "rgba(255,226,92,.78)" : "rgba(128,234,255,.78)");
+    halo.addColorStop(0.62, isT ? "rgba(255,211,64,.20)" : "rgba(90,217,255,.20)");
+    halo.addColorStop(1, outerGlow);
+    g.fillStyle = halo;
+    g.beginPath(); g.arc(cx, cy, 56, 0, Math.PI * 2); g.fill();
+
+    const core = g.createRadialGradient(cx, cy - 3, 4, cx, cy, 27);
+    core.addColorStop(0, isT ? "rgba(85,65,0,.96)" : "rgba(8,29,39,.96)");
+    core.addColorStop(1, isT ? "rgba(40,29,0,.98)" : "rgba(2,15,22,.98)");
+    g.fillStyle = core;
+    g.beginPath(); g.arc(cx, cy, 24, 0, Math.PI * 2); g.fill();
+
+    g.save();
+    g.shadowColor = coreGlow;
+    g.shadowBlur = 14;
+    g.strokeStyle = ringColor;
+    g.lineWidth = 3;
+    g.beginPath(); g.arc(cx, cy, 26, 0, Math.PI * 2); g.stroke();
+    g.restore();
+
+    g.strokeStyle = accentColor;
+    g.lineWidth = 1.8;
+    g.beginPath(); g.arc(cx, cy, 34, -1.0, 0.55); g.stroke();
+    g.beginPath(); g.arc(cx, cy, 34, 1.25, 2.75); g.stroke();
+    g.beginPath(); g.arc(cx, cy, 34, 3.45, 5.1); g.stroke();
+
+    g.fillStyle = accentColor;
+    for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 2 + 0.35;
+        g.save(); g.translate(cx, cy); g.rotate(a);
+        g.beginPath(); g.moveTo(31, -2.2); g.lineTo(43, 0); g.lineTo(31, 2.2); g.closePath(); g.fill();
+        g.restore();
+    }
+
+    // 글자: 두꺼운 외곽선 2겹 + 흰 채움 - 작은 스프라이트 안에서도 또렷이 읽히도록.
+    g.textAlign = "center"; g.textBaseline = "middle";
+    g.font = "1000 42px Arial Black,Arial,sans-serif";
+    g.lineJoin = "round"; g.miterLimit = 2;
+    g.lineWidth = 8;
+    g.strokeStyle = isT ? "#2a2000" : "#02131c";
+    g.strokeText(letter, cx, cy + 1);
+    g.lineWidth = 3;
+    g.strokeStyle = isT ? "rgba(255,236,155,.85)" : "rgba(180,244,255,.85)";
+    g.strokeText(letter, cx, cy + 1);
+    g.fillStyle = "#ffffff";
+    g.fillText(letter, cx, cy + 1);
+
+    g.fillStyle = "rgba(255,255,255,.28)";
+    g.beginPath(); g.arc(cx - 7, cy - 8, 4, 0, Math.PI * 2); g.fill();
+
+    return c;
+}
+
+function getGptBulletSprite(letter) {
+    if (!gptBulletSprites.has(letter)) gptBulletSprites.set(letter, makeGptBulletSprite(letter));
+    return gptBulletSprites.get(letter);
+}
+
+function drawGptBullet(ctx, b, nowSec) {
+    const sprite = getGptBulletSprite(b.letter);
+    const isT = b.letter === "T";
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.lineCap = "round";
+
+    // trail 최대 7포인트 고정이라 연산량이 항상 일정하다.
+    if (b.trail.length > 1) {
+        for (let i = 1; i < b.trail.length; i++) {
+            const a = i / b.trail.length;
+            const [x1, y1] = b.trail[i - 1];
+            const [x2, y2] = b.trail[i];
+            ctx.strokeStyle = isT ? `rgba(255,225,88,${a * 0.13})` : `rgba(91,217,255,${a * 0.13})`;
+            ctx.lineWidth = 5 + a * 8;
+            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+            ctx.strokeStyle = isT ? `rgba(255,250,198,${a * 0.42})` : `rgba(207,250,255,${a * 0.42})`;
+            ctx.lineWidth = 0.8 + a * 2.0;
+            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        }
+    }
+
+    ctx.translate(b.x, b.y);
+    const spin = nowSec * 3.5 + b.phase;
+    ctx.rotate(spin);
+    ctx.strokeStyle = isT ? "rgba(255,231,105,.48)" : "rgba(138,235,255,.40)";
+    ctx.lineWidth = 1.1;
+    ctx.beginPath(); ctx.arc(0, 0, 20, -1.1, 0.7); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, 25, 1.9, 3.9); ctx.stroke();
+    ctx.rotate(-spin);
+    ctx.drawImage(sprite, -32, -32, 64, 64);
+    ctx.restore();
+}
+
+function drawGptFxEffect(ctx, e) {
+    const k = e.t / e.d;
+    const fade = 1 - k;
+    if (e.type === "hit") {
+        ctx.save(); ctx.translate(e.x, e.y);
+        ctx.globalCompositeOperation = "lighter";
+        ctx.strokeStyle = `rgba(194,247,255,${fade * 0.82})`;
+        ctx.lineWidth = 2.2;
+        for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2 + 0.18;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a) * 7, Math.sin(a) * 7);
+            ctx.lineTo(Math.cos(a) * (17 + k * 32), Math.sin(a) * (17 + k * 32));
+            ctx.stroke();
+        }
+        ctx.strokeStyle = `rgba(93,220,255,${fade * 0.55})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, 0, 9 + k * 30, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+    } else if (e.type === "muzzle") {
+        ctx.save(); ctx.translate(e.x, e.y);
+        ctx.globalCompositeOperation = "lighter";
+        ctx.rotate(k * 0.7);
+        ctx.fillStyle = `rgba(204,249,255,${fade * 0.72})`;
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+            const a = i * Math.PI / 4;
+            const r = i % 2 ? 6 + k * 10 : 18 + k * 25;
+            const xx = Math.cos(a) * r, yy = Math.sin(a) * r;
+            i ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy);
+        }
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = `rgba(112,226,255,${fade * 0.7})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, 0, 8 + k * 25, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+    }
+}
+
+// actorKeyOrEl에서 targetKeyOrEl로 N-O-G-P-T 5글자를 0.13초 간격으로 순차 발사한다. 시전자가 필드
+// 왼쪽에 있으면 화면 왼쪽 끝에서, 오른쪽에 있으면 오른쪽 끝에서 발사한다(spawnGasBreathStream과 같은
+// 판정 방식 - 원래 스킬 설명의 "왼쪽(상대는 오른쪽) 끝에서 살짝 윗부분"과 일치). onLetterArrive(i)는
+// 글자 하나(마지막 T 포함)가 도착할 때마다 호출 - 실제 피해/기절 반영은 호출부가 마지막 글자에서 담당.
+// onArrive는 5발이 전부 도착한 뒤 1회 호출.
+function playGptKillerVolley(actorKeyOrEl, targetKeyOrEl, onArrive, onLetterArrive, casterSide) {
+    const actorImg = resolveEffectEl(actorKeyOrEl);
+    const targetImg = resolveEffectEl(targetKeyOrEl);
+    const layer = attackEffectsConfig.layerEl;
+    const fieldEl = attackEffectsConfig.fieldEl;
+    if (!layer || !fieldEl || !targetImg) { if (onArrive) onArrive(); return; }
+
+    const fieldRect = fieldEl.getBoundingClientRect();
+    // 시전자 스프라이트를 못 찾으면(김크장처럼 서포터라 전장에 위치가 없는 경우) 필드가 아니라 진짜
+    // 화면(뷰포트) 가장자리에서 발사한다(viewportEdgeXRelativeToField) - casterSide로 소속 진영 쪽을 고른다.
+    const actorPos = actorImg
+        ? fieldRelativeCenter(actorImg)
+        : { x: viewportEdgeXRelativeToField(casterSide, fieldRect), y: fieldRect.height * 0.4 };
+    const originX = actorPos.x;
+    const originY = actorPos.y - 40;
+
+    const dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+    const canvas = document.createElement("canvas");
+    canvas.className = "gpt-killer-canvas";
+    canvas.style.width = `${fieldRect.width}px`;
+    canvas.style.height = `${fieldRect.height}px`;
+    canvas.width = Math.round(fieldRect.width * dpr);
+    canvas.height = Math.round(fieldRect.height * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layer.appendChild(canvas);
+
+    const bullets = [];
+    let effects = [];
+    let resolved = 0;
+    const total = GPT_BULLET_LETTERS.length;
+    const speed = 1100; // px/s
+    const dt = 1 / 60;
+
+    GPT_BULLET_LETTERS.forEach((letter, i) => {
+        setTimeout(() => {
+            bullets.push({ letter, x: originX, y: originY + i * 5, trail: [], phase: i * 1.37 });
+            effects.push({ type: "muzzle", x: originX, y: originY + i * 5, t: 0, d: 0.18 });
+        }, i * 130);
+    });
+
+    function frame() {
+        if (!targetImg.isConnected) { canvas.remove(); if (onArrive) onArrive(); return; }
+        ctx.clearRect(0, 0, fieldRect.width, fieldRect.height);
+        const targetPos = fieldRelativeCenter(targetImg);
+        const tx = targetPos.x, ty = targetPos.y - 14;
+        const nowSec = performance.now() / 1000;
+
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            const b = bullets[i];
+            const dx = tx - b.x, dy = ty - b.y;
+            const dist = Math.hypot(dx, dy);
+            const step = speed * dt;
+            b.trail.push([b.x, b.y]);
+            if (b.trail.length > 7) b.trail.shift();
+
+            if (dist <= Math.max(step, 18)) {
+                b.x = tx; b.y = ty;
+                drawGptBullet(ctx, b, nowSec);
+                bullets.splice(i, 1);
+                resolved++;
+                const letterIndex = GPT_BULLET_LETTERS.indexOf(b.letter);
+                effects.push({ type: "hit", x: tx, y: ty, t: 0, d: 0.30 });
+                if (onLetterArrive) onLetterArrive(letterIndex);
+            } else {
+                b.x += dx / dist * step;
+                b.y += dy / dist * step;
+                drawGptBullet(ctx, b, nowSec);
+            }
+        }
+
+        for (const e of effects) { e.t += dt; drawGptFxEffect(ctx, e); }
+        effects = effects.filter((e) => e.t < e.d);
+
+        if (resolved >= total && bullets.length === 0 && effects.length === 0) {
+            canvas.remove();
+            if (onArrive) onArrive();
+            return;
+        }
+        requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+}
+
+
+// ============================================================================
+// ===== 김룡환 전용: Perfect (10등분 전장 위치 기반 폭탄 5발 수직 낙하) =====
+// 참고 데모(perfect_skill_demo_vertical_2v2_semicircle.html)를 그대로 포팅 - 전장 상단에서 착탄점으로
+// 곧장 낙하하는 폭탄 5발, 착탄 시 반원형(지면 아래는 클립으로 가림)으로 터지는 폭발+범위링. 백엔드가
+// 보내는 impact_fractions(0~1, 공격자 후방=0~방어자 후방=1)는 이 화면의 실제 픽셀 좌표계와 무관한
+// 추상 좌표라, 항상 존재하는 홈 슬롯 4개(공격자 후방/전방, 방어자 전방/후방)의 실제 화면 X를 읽어
+// 구간별 선형보간으로 변환한다 - 그래야 화면 크기/레이아웃이 달라져도 착탄점이 항상 정확한 자리에 뜬다.
+// ============================================================================
+
+// 홈 슬롯 4개는 "지금 그 자리를 차지한 유닛이 어디 서 있는가"가 아니라 "전장의 그 구역 자체가 화면
+// 어디인가"를 나타내는 좌표축 기준점이어야 한다. 근접 유닛은 walker(tick)가 매 프레임 [data-unit]에
+// translateX를 직접 써서 실제로 걸어 다가가고, 죽거나 넉백당한 유닛은 그 transform이 그대로 남는다
+// (applyKnockback 등) - fieldRelativeCenter(라이브 rect)를 그대로 쓰면 상대가 한 명뿐이라 그 자리로
+// 근접 유닛들이 몰려 있을 때 방어자 전방/후방 두 기준점이 사실상 같은 화면 위치로 겹쳐버려서, 폭탄
+// 5발의 착탄점이 넓게 퍼지지 못하고 한 지점(그 몰려있는 자리)에만 우르르 떨어지는 것처럼 보인다.
+// transform을 동기적으로 껐다 재는 measureHomeRect와 같은 방식으로 "홈(전투 시작) 위치"를 읽어야
+// 항상 4개 기준점이 화면에 고르게 퍼진 채로 유지된다.
+function fieldRelativeHomeCenter(el) {
+    const fieldRect = attackEffectsConfig.fieldEl.getBoundingClientRect();
+    // 근접 유닛의 걷기(startMeleeWalker)와 넉백(applyKnockback)은 전달받은 el(.battle-unit-img) 자신이
+    // 아니라 그 부모(.battle-unit, [data-unit])에 인라인 translateX를 건다 - el 자신의 transform만
+    // 지워서는(예전 버전) 이 이동이 전혀 안 지워져서, 실제로 걸어간 만큼 "홈" 위치가 계속 어긋났다.
+    // el 자신의 transform(좌우 반전 scaleX)은 그대로 둬야 하므로 부모만 따로 잠깐 지운다.
+    const parent = el.closest("[data-unit]") || el;
+    const saved = parent.style.transform;
+    parent.style.transform = "none";
+    const rect = el.getBoundingClientRect();
+    parent.style.transform = saved;
+    return { x: rect.left + rect.width / 2 - fieldRect.left, y: rect.top + rect.height / 2 - fieldRect.top };
+}
+
+// fraction(0~1)을 필드 기준 {x,y} 픽셀 좌표로 변환. Y는 전열(공격자 전방-방어자 전방) 대치선의 평균
+// 높이를 "지면"으로 삼는다 - 두 팀 캐릭터가 실제로 서 있는 높이라 폭발이 발밑 근처에서 터지는 것처럼 보인다.
+function bombLineImpactPoint(fraction) {
+    const refs = [
+        { frac: 0, key: "attacker-back" },
+        { frac: 1 / 3, key: "attacker-front" },
+        { frac: 2 / 3, key: "defender-front" },
+        { frac: 1, key: "defender-back" },
+    ].map((r) => {
+        const el = resolveEffectEl(r.key);
+        return el ? { frac: r.frac, pos: fieldRelativeHomeCenter(el) } : null;
+    }).filter(Boolean);
+    if (refs.length < 2) return null;
+
+    let lo = refs[0], hi = refs[refs.length - 1];
+    for (let i = 0; i < refs.length - 1; i++) {
+        if (fraction >= refs[i].frac && fraction <= refs[i + 1].frac) { lo = refs[i]; hi = refs[i + 1]; break; }
+    }
+    const span = hi.frac - lo.frac;
+    const t = span > 0 ? (fraction - lo.frac) / span : 0;
+    const x = lo.pos.x + (hi.pos.x - lo.pos.x) * t;
+
+    // 폭발이 "캐릭터 위에 떨어져서" 맞히는 게 아니라 "땅에 닿아 터진 범위 안에 캐릭터가 서 있어서"
+    // 맞는 것이므로, 반원 클립의 밑변(지면)은 캐릭터의 몸 중심이 아니라 발밑(히트박스 바닥)과
+    // 맞아야 한다 - fieldRelativeCenter의 y(세로 중심) 대신 실제 바닥(rect.bottom)을 쓴다.
+    const frontEls = [resolveEffectEl("attacker-front"), resolveEffectEl("defender-front")].filter(Boolean);
+    const fieldRect = attackEffectsConfig.fieldEl.getBoundingClientRect();
+    const groundY = frontEls.length
+        ? frontEls.reduce((sum, el) => sum + (el.getBoundingClientRect().bottom - fieldRect.top), 0) / frontEls.length
+        : lo.pos.y;
+    return { x, y: groundY };
+}
+
+let bombLineSprite = null;
+function getBombLineSprite() {
+    if (bombLineSprite) return bombLineSprite;
+    const c = document.createElement("canvas");
+    c.width = 128; c.height = 128;
+    const g = c.getContext("2d");
+    const cx = 64, cy = 64;
+
+    const halo = g.createRadialGradient(cx, cy, 8, cx, cy, 58);
+    halo.addColorStop(0, "rgba(255,255,255,.95)");
+    halo.addColorStop(0.16, "rgba(255,231,150,.95)");
+    halo.addColorStop(0.38, "rgba(255,191,62,.82)");
+    halo.addColorStop(0.65, "rgba(255,170,35,.18)");
+    halo.addColorStop(1, "rgba(255,144,16,0)");
+    g.fillStyle = halo;
+    g.beginPath(); g.arc(cx, cy, 58, 0, Math.PI * 2); g.fill();
+
+    const core = g.createRadialGradient(cx, cy - 3, 4, cx, cy, 24);
+    core.addColorStop(0, "rgba(72,37,4,.98)");
+    core.addColorStop(1, "rgba(27,12,1,.98)");
+    g.fillStyle = core;
+    g.beginPath(); g.arc(cx, cy, 22, 0, Math.PI * 2); g.fill();
+
+    g.save();
+    g.shadowColor = "#ffd973";
+    g.shadowBlur = 16;
+    g.strokeStyle = "rgba(255,239,178,.98)";
+    g.lineWidth = 3;
+    g.beginPath(); g.arc(cx, cy, 24, 0, Math.PI * 2); g.stroke();
+    g.restore();
+
+    g.strokeStyle = "rgba(255,204,93,.72)";
+    g.lineWidth = 2;
+    g.beginPath(); g.arc(cx, cy, 31, -1.02, 0.6); g.stroke();
+    g.beginPath(); g.arc(cx, cy, 31, 1.1, 2.7); g.stroke();
+    g.beginPath(); g.arc(cx, cy, 31, 3.45, 5.0); g.stroke();
+
+    for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 2 + 0.35;
+        g.save(); g.translate(cx, cy); g.rotate(a);
+        g.fillStyle = "rgba(255,214,110,.68)";
+        g.beginPath(); g.moveTo(29, -2.4); g.lineTo(41, 0); g.lineTo(29, 2.4); g.closePath(); g.fill();
+        g.restore();
+    }
+
+    g.textAlign = "center"; g.textBaseline = "middle";
+    g.font = "1000 28px Arial Black,Arial,sans-serif";
+    g.lineWidth = 7;
+    g.strokeStyle = "#291400";
+    g.strokeText("!", cx, cy + 1);
+    g.lineWidth = 2.5;
+    g.strokeStyle = "rgba(255,240,173,.92)";
+    g.strokeText("!", cx, cy + 1);
+    g.fillStyle = "#ffffff";
+    g.fillText("!", cx, cy + 1);
+
+    bombLineSprite = c;
+    return c;
+}
+
+let bombLineExplosionSprite = null;
+function getBombLineExplosionSprite() {
+    if (bombLineExplosionSprite) return bombLineExplosionSprite;
+    const c = document.createElement("canvas");
+    c.width = 320; c.height = 320;
+    const g = c.getContext("2d");
+    const cx = 160, cy = 160;
+
+    const rg = g.createRadialGradient(cx, cy, 10, cx, cy, 130);
+    rg.addColorStop(0, "rgba(255,255,255,.95)");
+    rg.addColorStop(0.10, "rgba(255,241,184,.98)");
+    rg.addColorStop(0.24, "rgba(255,195,74,.95)");
+    rg.addColorStop(0.46, "rgba(255,130,35,.68)");
+    rg.addColorStop(0.70, "rgba(255,86,26,.30)");
+    rg.addColorStop(1, "rgba(255,86,26,0)");
+    g.fillStyle = rg;
+    g.beginPath(); g.arc(cx, cy, 130, 0, Math.PI * 2); g.fill();
+
+    g.save();
+    g.translate(cx, cy);
+    g.fillStyle = "rgba(255,239,166,.60)";
+    g.beginPath();
+    for (let i = 0; i < 12; i++) {
+        const a = i * Math.PI / 6;
+        const r = i % 2 ? 42 : 88;
+        const x = Math.cos(a) * r, y = Math.sin(a) * r;
+        if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.closePath(); g.fill();
+    g.restore();
+
+    g.save();
+    g.shadowColor = "#ffcf6b";
+    g.shadowBlur = 20;
+    g.strokeStyle = "rgba(255,240,180,.86)";
+    g.lineWidth = 4;
+    g.beginPath(); g.arc(cx, cy, 102, 0, Math.PI * 2); g.stroke();
+    g.restore();
+
+    bombLineExplosionSprite = c;
+    return c;
+}
+
+let bombLineRangeSprite = null;
+function getBombLineRangeSprite() {
+    if (bombLineRangeSprite) return bombLineRangeSprite;
+    const c = document.createElement("canvas");
+    c.width = 260; c.height = 260;
+    const g = c.getContext("2d");
+    const cx = 130, cy = 130;
+    g.strokeStyle = "rgba(255,223,125,.92)";
+    g.lineWidth = 3;
+    g.beginPath(); g.arc(cx, cy, 102, 0, Math.PI * 2); g.stroke();
+
+    g.strokeStyle = "rgba(255,173,70,.48)";
+    g.lineWidth = 10;
+    g.beginPath(); g.arc(cx, cy, 92, -0.7, 0.7); g.stroke();
+    g.beginPath(); g.arc(cx, cy, 92, 2.25, 3.9); g.stroke();
+
+    bombLineRangeSprite = c;
+    return c;
+}
+
+// impactFractions: 백엔드 detail.impact_fractions(길이 5, 0~1). onBombLand(bombIndex)는 폭탄이 실제로
+// 착탄하는 그 순간마다 호출 - 호출부(arena-battle.js)가 그 bomb_index에 해당하는 hits만 골라 데미지/
+// 체력바를 그 타이밍에 반영한다(GPT 킬러의 onLetterArrive와 동일한 "단계별 콜백" 패턴). onArrive는
+// 폭탄 5발 + 모든 폭발 이펙트가 완전히 끝난 뒤 1회 호출.
+function playPositionalBombLine(impactFractions, onArrive, onBombLand) {
+    const layer = attackEffectsConfig.layerEl;
+    const fieldEl = attackEffectsConfig.fieldEl;
+    if (!layer || !fieldEl || !impactFractions || !impactFractions.length) { if (onArrive) onArrive(); return; }
+
+    const points = impactFractions.map(bombLineImpactPoint);
+    if (points.some((p) => !p)) { if (onArrive) onArrive(); return; }
+
+    const LAUNCH_GAP_MS = 140;
+    const FALL_SPEED_PX_S = 1380;
+    const BLAST_DURATION = 0.48;
+    const DROP_MARK_DURATION = 0.20;
+    const START_Y_OFFSET = -520; // 전장 상단 바깥에서 낙하 시작(필드 높이와 무관하게 항상 화면 위에서 시작)
+
+    const dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+    const fieldRect = fieldEl.getBoundingClientRect();
+    const canvas = document.createElement("canvas");
+    canvas.className = "bomb-line-canvas";
+    canvas.style.width = `${fieldRect.width}px`;
+    canvas.style.height = `${fieldRect.height}px`;
+    canvas.width = Math.round(fieldRect.width * dpr);
+    canvas.height = Math.round(fieldRect.height * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layer.appendChild(canvas);
+
+    const bombSprite = getBombLineSprite();
+    const explosionSprite = getBombLineExplosionSprite();
+    const rangeSprite = getBombLineRangeSprite();
+
+    let bombs = [];
+    let effects = [];
+    let landed = 0;
+
+    points.forEach((p, i) => {
+        setTimeout(() => {
+            bombs.push({ index: i, x: p.x, y: p.y + START_Y_OFFSET, targetX: p.x, targetY: p.y, phase: i * 0.9 });
+            effects.push({ type: "dropMark", x: p.x, y: p.y + START_Y_OFFSET, t: 0, d: DROP_MARK_DURATION });
+        }, i * LAUNCH_GAP_MS);
+    });
+
+    function resolveExplosion(x, y, bombIndex) {
+        effects.push({ type: "explosion", x, y, t: 0, d: BLAST_DURATION });
+        landed++;
+        if (onBombLand) onBombLand(bombIndex);
+    }
+
+    function drawBomb(b, nowSec) {
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        const lg = ctx.createLinearGradient(b.x, b.y - 52, b.x, b.y + 2);
+        lg.addColorStop(0, "rgba(255,178,57,0)");
+        lg.addColorStop(0.65, "rgba(255,198,82,.22)");
+        lg.addColorStop(1, "rgba(255,253,220,.70)");
+        ctx.strokeStyle = lg;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(b.x, b.y - 46);
+        ctx.lineTo(b.x, b.y - 8);
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        ctx.rotate(nowSec * 4.0 + b.phase);
+        ctx.globalCompositeOperation = "lighter";
+        ctx.drawImage(bombSprite, -34, -34, 68, 68);
+        ctx.restore();
+    }
+
+    function drawEffect(e) {
+        const k = e.t / e.d;
+        const fade = 1 - k;
+        if (e.type === "dropMark") {
+            ctx.save();
+            ctx.translate(e.x, e.y);
+            ctx.globalCompositeOperation = "lighter";
+            ctx.strokeStyle = `rgba(255,221,133,${fade * 0.78})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(0, 0, 8 + k * 24, 0, Math.PI * 2); ctx.stroke();
+            ctx.restore();
+        } else if (e.type === "explosion") {
+            // 탄환 하나당 폭발도 하나 - 예전엔 "explosion"(중심 버스트)과 "range"(범위 링)를 서로 다른
+            // 길이의 타이머로 따로 재생해서, 하나가 먼저 꺼진 뒤에도 다른 하나가 잠깐 더 남아 있다가
+            // 꺼지는 게 "같은 자리에서 두 번 터지는" 것처럼 보였다. 이제 폭발 하나에 버스트+범위링을
+            // 같은 타이머(k/fade)로 함께 그려서 한 번만 터지고 한 번에 사라진다.
+            ctx.save();
+            ctx.translate(e.x, e.y);
+            // 지면 아래는 보이지 않도록 상반부만 클립(참고 데모와 동일한 "반원형" 처리) - 클립 기준선(0)이
+            // 이제 캐릭터 발밑(bombLineImpactPoint가 구하는 groundY)과 맞으므로, 폭발도 정확히 그 높이에서 잘린다.
+            ctx.beginPath();
+            ctx.rect(-260, -260, 520, 260);
+            ctx.clip();
+            ctx.globalCompositeOperation = "lighter";
+            const scale = 0.62 + k * 0.88;
+            ctx.globalAlpha = fade * 0.95;
+            ctx.drawImage(explosionSprite, -160 * scale, -160 * scale, 320 * scale, 320 * scale);
+            ctx.strokeStyle = `rgba(255,239,181,${fade * 0.9})`;
+            ctx.lineWidth = 3.2;
+            ctx.beginPath(); ctx.arc(0, 0, 32 + k * 84, Math.PI, Math.PI * 2); ctx.stroke();
+
+            const rangeScale = 0.68 + k * 0.64;
+            ctx.globalAlpha = fade * 0.55;
+            ctx.drawImage(rangeSprite, -130 * rangeScale, -130 * rangeScale, 260 * rangeScale, 260 * rangeScale);
+            ctx.restore();
+        }
+    }
+
+    const dt = 1 / 60;
+    function frame(now) {
+        const nowSec = now / 1000;
+        ctx.clearRect(0, 0, fieldRect.width, fieldRect.height);
+
+        for (let i = bombs.length - 1; i >= 0; i--) {
+            const b = bombs[i];
+            const step = FALL_SPEED_PX_S * dt;
+            if (b.y + step >= b.targetY) {
+                b.y = b.targetY;
+                resolveExplosion(b.targetX, b.targetY, b.index);
+                bombs.splice(i, 1);
+            } else {
+                b.y += step;
+                drawBomb(b, nowSec);
+            }
+        }
+
+        for (const e of effects) { e.t += dt; drawEffect(e); }
+        effects = effects.filter((e) => e.t < e.d);
+
+        if (landed >= points.length && bombs.length === 0 && effects.length === 0) {
+            canvas.remove();
+            if (onArrive) onArrive();
+            return;
+        }
         requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);

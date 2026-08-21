@@ -17,9 +17,14 @@
     <header class="inventory-list-header">
         <button class="inventory-back-button inventory-list-back" id="inventory-list-back" type="button" aria-label="뒤로가기">‹</button>
         <h2 class="inventory-title">인벤토리</h2>
-        <div class="inventory-tabs" role="tablist">
-            <button class="inventory-tab active" id="inventory-character-tab" type="button">인물</button>
-            <button class="inventory-tab" id="inventory-item-tab" type="button">아이템</button>
+        <div class="inventory-tabs" id="inventory-role-tabs" role="tablist">
+            <button class="inventory-tab active" id="inventory-role-tab-all" type="button">ALL</button>
+            <button class="inventory-tab inventory-tab-icon inventory-tab-striker" id="inventory-role-tab-striker" type="button" aria-label="스트라이커">
+                <span class="inventory-tab-icon-mask"></span>
+            </button>
+            <button class="inventory-tab inventory-tab-icon inventory-tab-supporter" id="inventory-role-tab-supporter" type="button" aria-label="서포터">
+                <span class="inventory-tab-icon-mask"></span>
+            </button>
         </div>
     </header>
 
@@ -60,7 +65,7 @@
             <div class="inventory-info-row"><span>공격 타입</span><strong id="inventory-info-attack">-</strong></div>
             <div class="inventory-info-row"><span>방어 타입</span><strong id="inventory-info-defense">-</strong></div>
         </div>
-        <div class="inventory-info-row inventory-info-row-wide"><span>EXP 배수</span><strong id="inventory-info-exp-rate">-</strong></div>
+        <div class="inventory-info-row inventory-info-row-wide"><span>배수</span><strong id="inventory-info-exp-rate">-</strong></div>
         <div class="inventory-info-row inventory-info-row-wide"><span>디자인</span><strong id="inventory-info-designer">-</strong></div>
 
         <div class="inventory-description" id="inventory-description"></div>

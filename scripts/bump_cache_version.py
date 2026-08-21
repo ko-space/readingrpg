@@ -32,6 +32,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # 참조가 없다(확인됨). 새 전체 페이지(head/script 태그를 직접 갖는 .html)를 추가하면 여기 리스트에도 추가해야 한다.
 TARGET_FILES = [
     "arena-battle.html",
+    "arena-live.html",
     "devtest.html",
     "home.html",
     "index.html",

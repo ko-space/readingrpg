@@ -1,23 +1,38 @@
 """
-스킬(Active) 효과 핸들러 모음. battle_engine.py의 메인 루프(simulate_battle)가 기본공격
-SKILL_TRIGGER_ATTACK_COUNT회 시전마다 호출한다.
+스킬(Active) 효과 핸들러 모음. battle_engine.py의 메인 루프(simulate_battle)가 팀 공유 코스트 풀이
+그 캐릭터의 코스트만큼 차서 스킬카드가 발동될 때(_tick_team_cost) 호출한다.
 명명 규칙(skill=active)은 battle_core.py 상단 참고.
 """
+import random
+
 from battle_core import (
-    AXIS_ATTACKER_BACK, AXIS_DEFENDER_BACK, CC_PRIORITY_KNOCKBACK, KNOCKBACK_POSITION_DISTANCE,
+    AXIS_ATTACKER_BACK, AXIS_DEFENDER_BACK,
+    CC_PRIORITY_KNOCKBACK, KNOCKBACK_POSITION_DISTANCE,
     _alive_target, _alive_units, _apply_damage, _apply_gendered_damage_bonus, _apply_stun,
-    _effective_gender, _interrupt_cast_if_casting, _new_status, _refresh_status_until,
+    _effective_gender, _interrupt_cast_if_casting, _is_unit_moving, _new_status, _refresh_status_until,
     _roll_damage_atk, _scale_params, get_type_multiplier,
 )
 
-# ───────────────────────── 스킬(skill) - 기본공격 3회 시전마다 발동 ─────────────────────────
+# ───────────────────────── 스킬(skill) - 팀 공유 코스트 풀이 차면 발동(코스트제) ─────────────────────────
 
 def _skill_self_stack_buff(caster, own_team, enemy_team, params, time_elapsed):
+    # 윤대웅 "카메라 업그레이드": params["stat"]로 어느 스탯에 쌓을지 정한다(atk 또는 haste - 확인된
+    # 요청으로 공격력에서 공격 속도로 변경, 중첩 규칙 자체는 동일). atk_percent_bonus/haste_percent는
+    # 여러 영구 소스가 함께 누적하는 필드라 통째로 대입하면 다른 소스(서포터 스탯 지원, star effect,
+    # 다른 특성 등)의 기여분을 지워버리는 버그가 난다 - 이 스킬이 지금까지 쌓아둔 자기 몫만 델타로
+    # 빼고 새 몫을 더해서, 다른 소스는 절대 건드리지 않는다(어느 stat이든 동일한 델타 패턴).
     status = caster["status"]
     if status["stack_count"] < params["max_stacks"]:
         status["stack_count"] += 1
-    status["atk_percent_bonus"] = status["stack_count"] * params["percent_per_stack"]
-    return {"stack_count": status["stack_count"], "atk_percent_bonus": status["atk_percent_bonus"]}
+    new_bonus = status["stack_count"] * params["percent_per_stack"]
+    stat = params.get("stat", "atk")
+    if stat == "haste":
+        status["haste_percent"] += new_bonus - status["stack_haste_bonus"]
+        status["stack_haste_bonus"] = new_bonus
+    else:
+        status["atk_percent_bonus"] += new_bonus - status["stack_atk_bonus"]
+        status["stack_atk_bonus"] = new_bonus
+    return {"stack_count": status["stack_count"], "percent_bonus": new_bonus, "stat": stat}
 
 
 def _skill_summon_clone(caster, own_team, enemy_team, params, time_elapsed):
@@ -52,11 +67,11 @@ def _skill_summon_clone(caster, own_team, enemy_team, params, time_elapsed):
     # "{시전자}의 복제체"로 부른다.
     clone = {
         "name": params.get("clone_name") or f"{caster['name']}의 복제체",
-        "hp": clone_max_hp, "max_hp": clone_max_hp, "atk": clone_atk, "star": caster["star"],
+        "hp": clone_max_hp, "max_hp": clone_max_hp, "shield": 0, "atk": clone_atk, "star": caster["star"],
         "is_melee": caster["is_melee"], "attack_type": caster["attack_type"], "defense_type": caster["defense_type"],
         "attack_interval": caster["attack_interval"], "next_attack_time": time_elapsed + caster["attack_interval"],
-        "attack_count": 0, "is_casting": False, "cast_end_time": None,
-        "skill_effect_type": None, "skill_params": None,
+        "is_casting": False, "cast_end_time": None,
+        "skill_effect_type": None, "skill_cost": None, "skill_params": None,
         "trait_effect_type": None, "trait_params": None, "trait_partner_name": None,
         "status": _new_status(), "is_clone": True,
         # 이벤트의 actor_slot으로 실려나가 프론트가 이름이 아니라 슬롯으로 이 유닛을 특정하게 해준다 -
@@ -165,8 +180,17 @@ def _skill_heal_ally_percent_max_hp(caster, own_team, enemy_team, params, time_e
     # 대상은 자기 자신의 최대 체력 기준으로 회복(팀 전체가 같은 % 회복률을 받되, 절대량은 다를 수 있음).
     # 이미 만피라 실제로는 안 깎여도(amount=0) 항상 heals에 넣는다 - 프론트가 "발동은 했는데 아무
     # 반응도 없다"가 되지 않도록 만피인 아군에게도 하트 연출 + "0 회복" 로그를 보여줄 수 있어야 한다.
+    # 대상이 아직 자기 기본공격 목표를 향해 이동 중이면(_is_unit_moving) 하트가 실제로 안 맞은 것으로
+    # 치고 회복 자체를 실패시킨다(missed=True) - 만피라서 0인 것과는 다른 경우라, 프론트는 이 플래그를
+    # 보고 하트는 떨어뜨리되 착지 효과(체력 갱신/오라/상태 아이콘)는 내지 않는다.
     heals = []
     for ally in _alive_units(own_team):
+        if _is_unit_moving(ally):
+            heals.append({
+                "target": ally["name"], "amount": 0,
+                "target_hp_after": ally["hp"], "target_max_hp": ally["max_hp"], "missed": True,
+            })
+            continue
         heal = round(ally["max_hp"] * params["percent"] / 100)
         before = ally["hp"]
         ally["hp"] = min(ally["max_hp"], ally["hp"] + heal)
@@ -211,7 +235,7 @@ def _skill_bonus_damage_knockback(caster, own_team, enemy_team, params, time_ela
     atk, is_crit = _roll_damage_atk(caster, time_elapsed)
     damage = atk * params["multiplier"] / 100 * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
-    dealt = _apply_damage(target, damage, time_elapsed)
+    dealt, raw_dealt = _apply_damage(target, damage, time_elapsed)
     target["next_attack_time"] = max(target["next_attack_time"], time_elapsed) + 1.0  # 밀쳐내기 = 다음 행동 1초 지연
     # 넉백도 CC기라 대상이 시전 중이었다면 취소한다 - CC 중 최우선순위(CC_PRIORITY_KNOCKBACK)라
     # "이번 틱 발동 예정" 보호(_interrupt_cast_if_casting 참고)를 뚫고 스턴/그 외 스킬은 확실히 끊되,
@@ -235,7 +259,7 @@ def _skill_bonus_damage_knockback(caster, own_team, enemy_team, params, time_ela
     target["position_settled_at"] = time_elapsed
 
     return {
-        "hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
+        "hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
         "interrupted_cast": interrupted_cast,
     }
 
@@ -249,8 +273,8 @@ def _skill_aoe_gendered_damage(caster, own_team, enemy_team, params, time_elapse
         atk, is_crit = _roll_damage_atk(caster, time_elapsed)
         damage = atk * mult / 100 * type_mult
         damage = _apply_gendered_damage_bonus(caster, t, damage)
-        dealt = _apply_damage(t, damage, time_elapsed)
-        hits.append({"target": t["name"], "_target_ref": t, "damage": dealt, "target_hp_after": t["hp"], "target_max_hp": t["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
+        dealt, raw_dealt = _apply_damage(t, damage, time_elapsed)
+        hits.append({"target": t["name"], "_target_ref": t, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": t["hp"], "target_max_hp": t["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
     return {"hits": hits}
 
 
@@ -295,8 +319,8 @@ def _skill_copy_target_skill(caster, own_team, enemy_team, params, time_elapsed)
     atk, is_crit = _roll_damage_atk(caster, time_elapsed)
     damage = atk * params["fallback_multiplier"] / 100 * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
-    dealt = _apply_damage(target, damage, time_elapsed)
-    return {"hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}]}
+    dealt, raw_dealt = _apply_damage(target, damage, time_elapsed)
+    return {"hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}]}
 
 
 def _skill_stun_target(caster, own_team, enemy_team, params, time_elapsed):
@@ -308,20 +332,50 @@ def _skill_stun_target(caster, own_team, enemy_team, params, time_elapsed):
         "hit": True, "target": target["name"], "_target_ref": target, "stun_seconds": params["seconds"],
         "interrupted_cast": interrupted_cast,
     }
-    # multiplier가 있으면(송주헌 "격차 벌리기") 기절과 함께 피해도 준다 - 없으면 예전처럼 순수 기절만.
+    # multiplier가 있으면(송주헌 "격차 벌리기"/김크장 "GPT 킬러") 기절과 함께 피해도 준다 - 없으면
+    # 예전처럼 순수 기절만. bullet_count가 있으면(김크장만 - 실제 기획대로 N-O-G-P-T 5탄환이 각자
+    # 전체 공격력의 1/5씩 독립적으로 명중 판정하는 진짜 다단히트다) 이종복 "F=ma"와 동일한 방식으로
+    # 탄환마다 크리티컬을 따로 굴려서 hits를 여러 개 만든다 - 없으면(송주헌) 기존처럼 단발 히트 하나.
     multiplier = params.get("multiplier")
     if multiplier:
         type_mult = get_type_multiplier(caster["attack_type"], target["defense_type"])
-        atk, is_crit = _roll_damage_atk(caster, time_elapsed)
-        damage = atk * multiplier / 100 * type_mult
-        damage = _apply_gendered_damage_bonus(caster, target, damage)
-        dealt = _apply_damage(target, damage, time_elapsed)
-        result["hits"] = [{
-            "target": target["name"], "_target_ref": target, "damage": dealt,
-            "target_hp_after": target["hp"], "target_max_hp": target["max_hp"],
-            "is_crit": is_crit, "type_multiplier": type_mult,
-        }]
+        bullet_count = params.get("bullet_count", 1)
+        hits = []
+        for _ in range(bullet_count):
+            atk, is_crit = _roll_damage_atk(caster, time_elapsed)
+            damage = (atk / bullet_count) * multiplier / 100 * type_mult
+            damage = _apply_gendered_damage_bonus(caster, target, damage)
+            dealt, raw_dealt = _apply_damage(target, damage, time_elapsed)
+            hits.append({
+                "target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt,
+                "target_hp_after": target["hp"], "target_max_hp": target["max_hp"],
+                "is_crit": is_crit, "type_multiplier": type_mult,
+            })
+        result["hits"] = hits
     return result
+
+
+def _skill_stun_rear_target(caster, own_team, enemy_team, params, time_elapsed):
+    # 배(유배 보내기): _skill_stun_target과 대부분 동일하지만, 대상 선정이 "가장 노출된(전방) 적"
+    # (_alive_target = _alive_units(enemy_team)[0])이 아니라 "가장 덜 노출된(후방) 적"
+    # (_alive_units(enemy_team)의 마지막 원소) - 최재혁의 rear_priority(_select_basic_attack_target)와
+    # 동일한 "노출도 역순" 정의를 그대로 재사용한다. 적이 1명뿐이면 앞뒤 구분 없이 그 1명이 곧 대상이다.
+    # 전용 effect_type(stun_rear_target)을 따로 둔 건 프론트가 감옥 낙하 이펙트를 이걸로 구분해야 해서다.
+    units = _alive_units(enemy_team)
+    if not units:
+        return {"hit": False}
+    target = units[-1]
+    type_mult = get_type_multiplier(caster["attack_type"], target["defense_type"])
+    atk, is_crit = _roll_damage_atk(caster, time_elapsed)
+    damage = atk * params["multiplier"] / 100 * type_mult
+    damage = _apply_gendered_damage_bonus(caster, target, damage)
+    dealt, raw_dealt = _apply_damage(target, damage, time_elapsed)
+    interrupted_cast = _apply_stun(target, time_elapsed + params["seconds"], time_elapsed)
+    return {
+        "hit": True, "target": target["name"], "_target_ref": target, "stun_seconds": params["seconds"],
+        "interrupted_cast": interrupted_cast,
+        "hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
+    }
 
 
 def _skill_aoe_enemy_damage(caster, own_team, enemy_team, params, time_elapsed):
@@ -331,8 +385,8 @@ def _skill_aoe_enemy_damage(caster, own_team, enemy_team, params, time_elapsed):
         atk, is_crit = _roll_damage_atk(caster, time_elapsed)
         damage = atk * params["multiplier"] / 100 * type_mult
         damage = _apply_gendered_damage_bonus(caster, t, damage)
-        dealt = _apply_damage(t, damage, time_elapsed)
-        hits.append({"target": t["name"], "_target_ref": t, "damage": dealt, "target_hp_after": t["hp"], "target_max_hp": t["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
+        dealt, raw_dealt = _apply_damage(t, damage, time_elapsed)
+        hits.append({"target": t["name"], "_target_ref": t, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": t["hp"], "target_max_hp": t["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
     return {"hits": hits}
 
 
@@ -344,8 +398,8 @@ def _skill_damage_hp_percent_plus_atk(caster, own_team, enemy_team, params, time
     atk, is_crit = _roll_damage_atk(caster, time_elapsed)
     damage = (target["hp"] * params["hp_percent"] / 100 + atk * params["atk_percent"] / 100) * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
-    dealt = _apply_damage(target, damage, time_elapsed)
-    return {"hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}]}
+    dealt, raw_dealt = _apply_damage(target, damage, time_elapsed)
+    return {"hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}]}
 
 
 def _skill_debuff_atk_and_damage(caster, own_team, enemy_team, params, time_elapsed):
@@ -364,9 +418,9 @@ def _skill_debuff_atk_and_damage(caster, own_team, enemy_team, params, time_elap
     atk, is_crit = _roll_damage_atk(caster, time_elapsed)
     damage = atk * params["multiplier"] / 100 * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
-    dealt = _apply_damage(target, damage, time_elapsed)
+    dealt, raw_dealt = _apply_damage(target, damage, time_elapsed)
     return {
-        "hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
+        "hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
         "debuff_seconds": params["debuff_seconds"],  # 프론트 상태 아이콘(공격력 감소)의 지속시간 표시용
         "debuff_target": target["name"],
     }
@@ -378,16 +432,183 @@ def _skill_aoe_all_others_damage(caster, own_team, enemy_team, params, time_elap
         if u is caster:
             continue
         atk, is_crit = _roll_damage_atk(caster, time_elapsed)
-        dealt = _apply_damage(u, atk * params["multiplier"] / 100, time_elapsed)
-        hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": 1.0})
+        dealt, raw_dealt = _apply_damage(u, atk * params["multiplier"] / 100, time_elapsed)
+        hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": 1.0})
     for u in _alive_units(enemy_team):
         type_mult = get_type_multiplier(caster["attack_type"], u["defense_type"])
         atk, is_crit = _roll_damage_atk(caster, time_elapsed)
         damage = atk * params["multiplier"] / 100 * type_mult
         damage = _apply_gendered_damage_bonus(caster, u, damage)
-        dealt = _apply_damage(u, damage, time_elapsed)
-        hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
+        dealt, raw_dealt = _apply_damage(u, damage, time_elapsed)
+        hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
     return {"hits": hits}
+
+
+def _skill_positional_bomb_line(caster, own_team, enemy_team, params, time_elapsed):
+    # 김룡환(Perfect): 전장(공격자 후방~방어자 후방) 축을 10등분해서, 축의 정중앙(전열 대치선)에서
+    # "적진 방향"으로 한 칸씩 옮겨가며 폭탄 5발을 쏜다 - 첫 발은 칸1, 이어서 칸2, 칸3, 칸4, 칸5(적 후방
+    # 라인) 순서. 적진 방향은 절대 좌표축 기준이 아니라 "이 캐스터가 공격자 편인가 수비자 편인가"에
+    # 따라 반대로 뒤집힌다(is_attacker_team) - 공격자 편이면 좌표가 커지는 쪽(방어자 후방 방향)으로,
+    # 수비자 편이면 좌표가 작아지는 쪽(공격자 후방 방향)으로. 이걸 안 뒤집으면 수비 조력자로 편성된
+    # 김룡환의 폭탄이 여전히 "방어자 후방 방향"으로만 나가서, 실제로는 자기 편을 쏘고 진짜 적(공격자
+    # 팀)은 못 맞히는 버그가 있었다.
+    total_span = AXIS_DEFENDER_BACK - AXIS_ATTACKER_BACK
+    zone_width = total_span / 10
+    center = (AXIS_ATTACKER_BACK + AXIS_DEFENDER_BACK) / 2
+    blast_half_width = zone_width / 2
+    # 캐릭터도 폭 0인 점이 아니라 히트박스만큼 폭을 가진 것으로 쳐준다("히트박스가 조금이라도
+    # 겹치면 맞아야 한다" - 확정된 설계). 화면상 캐릭터 스프라이트는 전부 같은 CSS 폭(.battle-unit)을
+    # 쓰므로 캐릭터별로 다르게 줄 필요 없이 공용 상수 하나면 된다 - 다만 축 좌표와 실제 픽셀은 서로
+    # 다른 체계라(백엔드는 픽셀을 모름) 정확한 환산이 아니라 근사치다. 폭탄 간격(zone_width=0.3)의
+    # 1/3 정도로 잡아서, 두 폭탄 정중앙 사이의 좁은 구간에 서 있을 때만 양쪽에 걸쳐 순차적으로
+    # 맞고(bomb_index가 달라 프론트가 각 착탄 순간에 따로 반영), 그 외에는 기존처럼 한 발만 맞는다.
+    CHARACTER_HITBOX_HALF_WIDTH = zone_width / 3
+    hit_range = blast_half_width + CHARACTER_HITBOX_HALF_WIDTH
+    direction = 1 if caster.get("is_attacker_team") else -1
+    # 적진 쪽 5칸 각각의 "중앙"에 떨어져야 한다 - 원래 i+1(칸 경계)로 배치돼 있어서 폭탄 판정 범위가
+    # 실제 칸보다 반 칸(zone_width/2)만큼 적진 쪽으로 밀려나 있었다. 근접끼리 정면으로 맞붙으면
+    # 자연스럽게 축의 정중앙(=칸 6의 시작점)에서 만나는데, 그 위치가 1호 폭탄(칸 6) 판정 범위에
+    # 살짝(zone_width/2) 못 미쳐서 항상 빗나가는 버그가 있었다 - i+0.5로 칸 중앙에 맞춰 고쳤다.
+    impact_points = [center + direction * zone_width * (i + 0.5) for i in range(5)]
+
+    # 프론트가 착탄점을 화면 픽셀로 옮길 수 있도록, 축 좌표 대신 "전장 전체(공격자 후방~방어자 후방)
+    # 대비 몇 %지점인가"(0~1)로 정규화해서 함께 실어보낸다 - 프론트는 AXIS_* 상수를 몰라도 된다.
+    impact_fractions = [(p - AXIS_ATTACKER_BACK) / total_span for p in impact_points]
+
+    hits = []
+    for bomb_index, impact in enumerate(impact_points):
+        for u in _alive_units(own_team):
+            if abs(u["position"] - impact) > hit_range:
+                continue
+            atk, is_crit = _roll_damage_atk(caster, time_elapsed)
+            dealt, raw_dealt = _apply_damage(u, atk * params["multiplier"] / 100, time_elapsed)
+            hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": 1.0, "bomb_index": bomb_index})
+        for u in _alive_units(enemy_team):
+            if abs(u["position"] - impact) > hit_range:
+                continue
+            type_mult = get_type_multiplier(caster["attack_type"], u["defense_type"])
+            atk, is_crit = _roll_damage_atk(caster, time_elapsed)
+            damage = atk * params["multiplier"] / 100 * type_mult
+            damage = _apply_gendered_damage_bonus(caster, u, damage)
+            dealt, raw_dealt = _apply_damage(u, damage, time_elapsed)
+            hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult, "bomb_index": bomb_index})
+    return {"hits": hits, "impact_fractions": impact_fractions}
+
+
+def _dead_striker_candidates(own_team):
+    return [u for u in (own_team.get("front"), own_team.get("back")) if u and u["hp"] <= 0]
+
+
+def _has_revivable_striker(caster, own_team, enemy_team):
+    return bool(_dead_striker_candidates(own_team))
+
+
+def _skill_revive_dead_striker(caster, own_team, enemy_team, params, time_elapsed):
+    # 신 "제 2 권한": 죽은 아군 STRIKER(전방/후방 - 둘 다 죽어 있으면 그중 무작위)를 최대 체력의
+    # hp_percent%로 되살린다. 부활 대상이 아예 없으면(둘 다 생존) SKILL_TARGET_AVAILABILITY_CHECKS의
+    # _has_revivable_striker가 battle_engine._tick_team_cost 단계에서 미리 걸러 코스트를 아예 소모하지
+    # 않고 그 턴을 건너뛰므로(CC로 못 쓰는 경우와 동일하게 취급), 이 핸들러는 항상 대상이 있다고
+    # 가정하고 호출된다.
+    candidates = _dead_striker_candidates(own_team)
+    target = random.choice(candidates)
+    hp_percent = params["hp_percent"]
+    target["hp"] = round(target["max_hp"] * hp_percent / 100)
+    return {
+        "target": target["name"], "_target_ref": target,
+        "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "hp_percent": hp_percent,
+    }
+
+
+PARLIAMENT_KNOCKBACK_DISTANCE = KNOCKBACK_POSITION_DISTANCE * 2  # "히트박스의 2배" - 슬롯 한 칸(1배) 기준
+
+
+def _unit_at_position(own_team, enemy_team, target_position):
+    """target_position(축 좌표)에 국회의사당이 소환된다고 가정했을 때, 그 히트박스와 조금이라도
+    겹치는 유닛을 찾는다(확인된 설계 - 정확히 같은 좌표일 필요는 없고 겹치기만 하면 됨). 히트박스
+    폭은 KNOCKBACK_POSITION_DISTANCE(전방-후방 슬롯 간 거리, 1칸)와 동일하게 취급해서, 두 유닛의
+    좌표 차이가 이 값보다 작으면(정확히 한 칸 이상 떨어져 있지 않으면) 겹친 것으로 본다. 여러 명이
+    동시에 겹치면 가장 가까운 쪽 하나만 대상으로 삼는다. 캐스터 소속과 무관하게 양 팀 전방/후방을
+    모두 검사한다(전투 중 이동/넉백으로 상대 팀 유닛이 그 자리까지 들어와 있을 수도 있으므로).
+    아무도 안 겹치면(원래 있던 아군이 전진했거나 죽는 등) None."""
+    closest, closest_dist = None, None
+    for team in (own_team, enemy_team):
+        for slot in ("front", "back"):
+            unit = team.get(slot)
+            if not unit or unit["hp"] <= 0:
+                continue
+            dist = abs(unit["position"] - target_position)
+            if dist < KNOCKBACK_POSITION_DISTANCE and (closest_dist is None or dist < closest_dist):
+                closest, closest_dist = unit, dist
+    return closest
+
+
+def _skill_summon_into_ranged_slot(caster, own_team, enemy_team, params, time_elapsed):
+    # 김국회 "국회의사당": 소환 위치는 항상 캐스터 소속 팀의 "후방(back)" 홈 좌표(전투 시작 시점 위치)로
+    # 고정이다 - 확인된 설계. 그 좌표에 지금 히트박스가 겹치는 유닛이 있으면(아군이든, 전투 중 이동/
+    # 넉백으로 들어온 적군이든) 히트박스 2배만큼 넉백시키고, 아무도 없으면(원래 있던 아군이 전진했거나
+    # 죽는 등) 넉백 없이 소환만 한다. 넉백 방향은 "밀려나는 유닛의 소속"이 아니라 "캐스터의 소속"으로
+    # 고정된다 - 캐스터가 공격자면 항상 방어자 방향(적진), 캐스터가 수비자면 항상 공격자 방향(적진).
+    # 그래서 아군이 적진 깊숙이 들어와 있는 상태에서 적의 국회의사당이 소환되면(적 팀 후방 자리에), 그
+    # 아군은 오히려 아군 방향으로 밀려난다(사용자가 명시한 시나리오) - 다른 소환수(윤영준/윤&호처럼
+    # 자기 자신이 뒤로 물러나는 summon_clone의 캐스터 넉백)와는 다른, 완전히 별개의 방향 규칙이다.
+    is_attacker_caster = caster["is_attacker_team"]
+    spawn_position = AXIS_ATTACKER_BACK if is_attacker_caster else AXIS_DEFENDER_BACK
+    target_key = "summon_back"
+    replaced = own_team.get(target_key)
+
+    building_max_hp = round(caster["max_hp"] * params["hp_percent"] / 100)
+    building_atk = round(caster["atk"] * params["atk_percent"] / 100)
+    duration = params["duration_seconds"]
+    building = {
+        "name": "국회의사당",
+        "hp": building_max_hp, "max_hp": building_max_hp, "shield": 0, "atk": building_atk, "star": caster["star"],
+        "is_melee": False, "attack_type": caster["attack_type"], "defense_type": caster["defense_type"],
+        "attack_interval": caster["attack_interval"], "next_attack_time": time_elapsed + caster["attack_interval"],
+        "is_casting": False, "cast_end_time": None,
+        "skill_effect_type": None, "skill_cost": None, "skill_params": None,
+        "trait_effect_type": None, "trait_params": None, "trait_partner_name": None,
+        "status": _new_status(), "is_clone": True,
+        "slot": target_key,
+        "melee_speed": None,
+        "position": spawn_position,
+        "position_settled_at": time_elapsed,
+        "is_attacker_team": is_attacker_caster,
+        "self_destruct_after_attack": False,
+        "gender_override": None,
+        # 20초 후 자동 소멸 - 다른 소환수는 없는 개념이라 battle_engine._expire_timed_summons가 이
+        # 필드가 있는 summon_front/summon_back만 매 틱 확인해서 시간이 되면 hp를 0으로 만든다.
+        "expire_at": time_elapsed + duration,
+    }
+    own_team[target_key] = building
+
+    occupant = _unit_at_position(own_team, enemy_team, spawn_position)
+    displaced_name = None
+    displaced_side = None
+    if occupant is not None:
+        displaced_name = occupant["name"]
+        displaced_side = "attacker" if occupant["is_attacker_team"] else "defender"
+        if is_attacker_caster:
+            occupant["position"] = min(AXIS_DEFENDER_BACK, occupant["position"] + PARLIAMENT_KNOCKBACK_DISTANCE)
+        else:
+            occupant["position"] = max(AXIS_ATTACKER_BACK, occupant["position"] - PARLIAMENT_KNOCKBACK_DISTANCE)
+        occupant["position_settled_at"] = time_elapsed
+
+    return {
+        "summoned": True, "building_name": building["name"], "building_hp": building_max_hp, "building_atk": building_atk,
+        "building_slot": target_key.replace("_", "-"),
+        "displaced_ally": displaced_name, "displaced_side": displaced_side, "duration_seconds": duration,
+    }
+
+
+def _has_any_paint(caster, own_team, enemy_team):
+    status = caster["status"]
+    return bool(status.get("paint_red", 0) or status.get("paint_blue", 0) or status.get("paint_yellow", 0))
+
+
+SKILL_TARGET_AVAILABILITY_CHECKS = {
+    "revive_dead_striker": _has_revivable_striker,
+    "consume_paint_multi_effect": _has_any_paint,
+}
 
 
 def _skill_consume_paint_multi_effect(caster, own_team, enemy_team, params, time_elapsed):
@@ -395,6 +616,9 @@ def _skill_consume_paint_multi_effect(caster, own_team, enemy_team, params, time
     # 발동한다. "1개당" 수치는 색깔별로 각각 따로 발동하는 게 아니라(개별 히트 N번) 개수만큼 배수로
     # 늘려서 색깔당 딱 한 번만 적용한다(윤대웅의 자가 스택 버프와 같은 "총량 스케일링" 방식) - 그래야
     # 크리티컬/기절 판정도 색깔당 1번으로 끝난다. 세 색을 동시에 보유했으면 세 효과 모두 함께 발동한다.
+    # 물감이 하나도 없으면(신의 부활 대상 없음과 동일하게) SKILL_TARGET_AVAILABILITY_CHECKS의
+    # _has_any_paint가 battle_engine._tick_team_cost 단계에서 미리 걸러 코스트를 아예 소모하지 않고
+    # 그 턴을 건너뛰므로, 이 핸들러는 항상 최소 한 색은 보유했다고 가정하고 호출된다.
     status = caster["status"]
     red = status.get("paint_red", 0)
     blue = status.get("paint_blue", 0)
@@ -405,23 +629,6 @@ def _skill_consume_paint_multi_effect(caster, own_team, enemy_team, params, time
 
     detail = {"red": red, "blue": blue, "yellow": yellow}
 
-    if not (red or blue or yellow):
-        # 물감이 하나도 없으면 대신 강한 단일 피해
-        target = _alive_target(enemy_team)
-        if target is None:
-            return {"hit": False}
-        type_mult = get_type_multiplier(caster["attack_type"], target["defense_type"])
-        atk, is_crit = _roll_damage_atk(caster, time_elapsed)
-        damage = atk * params["no_paint_multiplier"] / 100 * type_mult
-        damage = _apply_gendered_damage_bonus(caster, target, damage)
-        dealt = _apply_damage(target, damage, time_elapsed)
-        detail["hits"] = [{
-            "target": target["name"], "_target_ref": target, "damage": dealt,
-            "target_hp_after": target["hp"], "target_max_hp": target["max_hp"],
-            "is_crit": is_crit, "type_multiplier": type_mult,
-        }]
-        return detail
-
     if red:
         target = _alive_target(enemy_team)
         if target is not None:
@@ -429,25 +636,28 @@ def _skill_consume_paint_multi_effect(caster, own_team, enemy_team, params, time
             atk, is_crit = _roll_damage_atk(caster, time_elapsed)
             damage = atk * (params["red_percent_per_paint"] * red) / 100 * type_mult
             damage = _apply_gendered_damage_bonus(caster, target, damage)
-            dealt = _apply_damage(target, damage, time_elapsed)
+            dealt, raw_dealt = _apply_damage(target, damage, time_elapsed)
             detail["hits"] = [{
-                "target": target["name"], "_target_ref": target, "damage": dealt,
+                "target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt,
                 "target_hp_after": target["hp"], "target_max_hp": target["max_hp"],
                 "is_crit": is_crit, "type_multiplier": type_mult,
             }]
 
     if blue:
         # 체력이 가장 낮은 아군(자신 포함) - "자신을 제외한"이라는 조건이 없으므로 자신도 대상이 될 수 있다.
+        # 회복이 아니라 보호막 부여로 변경(확인된 요청) - "1개당" 수치는 다른 색과 동일하게 개수만큼
+        # 배수로 늘려서 한 번에 적용한다(예: 2개 중첩이면 5%*2=10% 보호막을 한 번에 부여).
         lowest = min(_alive_units(own_team), key=lambda u: u["hp"], default=None)
         if lowest is not None:
-            heal_amount = round(lowest["max_hp"] * (params["blue_percent_per_paint"] * blue) / 100)
-            before = lowest["hp"]
-            lowest["hp"] = min(lowest["max_hp"], lowest["hp"] + heal_amount)
-            # 아군 대상 회복이라 항상 시전자와 같은 편 - 이영웅의 death_heal_ally와 동일하게 _target_ref 없이
-            # target_side를 프론트가 event.side로 바로 판정하게 둔다.
-            detail["heals"] = [{
-                "target": lowest["name"], "amount": lowest["hp"] - before,
+            shield_amount = round(lowest["max_hp"] * (params["blue_percent_per_paint"] * blue) / 100)
+            lowest["shield"] = lowest.get("shield", 0) + shield_amount
+            # 아군 대상이라 항상 시전자와 같은 편 - 이영웅의 death_heal_ally와 동일하게 _target_ref 없이
+            # target_side를 프론트가 event.side로 바로 판정하게 둔다. HP는 안 바뀌므로 target_hp_after는
+            # 지금 값 그대로 실어서 프론트의 captureAndApplyHp가 HP를 덮어써도 값이 그대로 유지되게 한다.
+            detail["shields"] = [{
+                "target": lowest["name"], "amount": shield_amount,
                 "target_hp_after": lowest["hp"], "target_max_hp": lowest["max_hp"],
+                "target_shield_after": lowest["shield"],
             }]
 
     if yellow:
@@ -473,9 +683,13 @@ SKILL_EFFECT_HANDLERS = {
     "aoe_gendered_damage": _skill_aoe_gendered_damage,
     "copy_target_skill": _skill_copy_target_skill,
     "stun_target": _skill_stun_target,
+    "stun_rear_target": _skill_stun_rear_target,
     "aoe_enemy_damage": _skill_aoe_enemy_damage,
     "damage_hp_percent_plus_atk": _skill_damage_hp_percent_plus_atk,
     "debuff_atk_and_damage": _skill_debuff_atk_and_damage,
     "aoe_all_others_damage": _skill_aoe_all_others_damage,
     "consume_paint_multi_effect": _skill_consume_paint_multi_effect,
+    "positional_bomb_line": _skill_positional_bomb_line,
+    "revive_dead_striker": _skill_revive_dead_striker,
+    "summon_into_ranged_slot": _skill_summon_into_ranged_slot,
 }
