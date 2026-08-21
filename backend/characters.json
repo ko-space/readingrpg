@@ -381,7 +381,7 @@
       },
       "skill_mechanics": {
         "effect_type": "summon_clone",
-        "cost": 6,
+        "cost": 5,
         "params": {
           "5": {
             "hp_percent": 15,
@@ -492,7 +492,7 @@
       },
       "skill_mechanics": {
         "effect_type": "summon_into_ranged_slot",
-        "cost": 4,
+        "cost": 8,
         "params": {
           "4": {
             "atk_percent": 50,
@@ -1575,7 +1575,7 @@
       },
       "skill_mechanics": {
         "effect_type": "positional_bomb_line",
-        "cost": 2,
+        "cost": 5,
         "params": {
           "4": {
             "multiplier": 150
