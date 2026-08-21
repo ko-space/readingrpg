@@ -1170,8 +1170,12 @@ body {
    전술대회 [Active] 발동이 "기본공격 3회"에서 팀 공유 코스트 풀로 바뀌면서 추가된 UI. 서버가 보내는
    cost_init/cost_rate_change/cast_start(cost_* 필드)/cost_turn_skip 이벤트를 arena-battle.js가
    해석해서 이 블록을 채운다. ===================================================== */
+/* position:fixed(뷰포트 기준)로 화면 맨 아래에 고정한다(확인된 버그 수정) - 예전엔 .battle-field
+   (position:relative, min-height:430px) 기준 absolute였는데, 좁고 짧은 화면에서는 .battle-field
+   자체가 실제 뷰포트(100vh)보다 커져서 그 "바닥"이 화면 밖으로 밀려나 코스트바가 안 보였다.
+   .battle-screen이 정확히 100vw/100vh라 fixed로 바꿔도 시각적 위치는 그대로 유지된다. */
 .cost-dock {
-    position: absolute;
+    position: fixed;
     right: 6px;
     bottom: 4px;
     z-index: 4;
