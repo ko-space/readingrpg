@@ -151,10 +151,11 @@ def log_login_activity(db: Session, user_id: int) -> None:
         db.add(ActivityLog(user_id=user_id, activity_type="login"))
         db.commit()
     _grant_patch_0727_mail_if_eligible(db, user_id)
+    _grant_maintenance_0821_mail_if_eligible(db, user_id)
 
 
 
-# 일회성 이벤트: 7/27(KST) 
+# 일회성 이벤트: 7/27(KST)
 PATCH_0727_MAIL_TITLE = "7.27 패치 보상입니다"
 PATCH_0727_MAIL_GOLD = 200
 PATCH_0727_DATE = "2026-07-27"
@@ -169,4 +170,28 @@ def _grant_patch_0727_mail_if_eligible(db: Session, user_id: int) -> None:
     ).first()
     if not exists:
         db.add(Mail(user_id=user_id, title=PATCH_0727_MAIL_TITLE, gold_amount=PATCH_0727_MAIL_GOLD))
+        db.commit()
+
+
+# 일회성 이벤트: 8/21(KST) 하루만 받을 수 있는 점검 보상
+MAINTENANCE_0821_MAIL_TITLE = "점검 보상입니다"
+MAINTENANCE_0821_MAIL_GOLD = 200
+MAINTENANCE_0821_MAIL_SILVER = 2000
+MAINTENANCE_0821_DATE = "2026-08-21"
+
+
+def _grant_maintenance_0821_mail_if_eligible(db: Session, user_id: int) -> None:
+    if _daily_period_key() != MAINTENANCE_0821_DATE:
+        return
+    exists = db.query(Mail).filter(
+        Mail.user_id == user_id,
+        Mail.title == MAINTENANCE_0821_MAIL_TITLE,
+    ).first()
+    if not exists:
+        db.add(Mail(
+            user_id=user_id,
+            title=MAINTENANCE_0821_MAIL_TITLE,
+            gold_amount=MAINTENANCE_0821_MAIL_GOLD,
+            silver_amount=MAINTENANCE_0821_MAIL_SILVER,
+        ))
         db.commit()
