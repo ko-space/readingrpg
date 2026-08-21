@@ -108,7 +108,7 @@
 
 .notice-detail-box {
     position: relative;
-    width: min(94vw, 1040px);
+    width: min(90vw, 820px);
     max-height: min(90vh, 880px);
     display: flex;
     flex-direction: column;
@@ -148,7 +148,10 @@
 .notice-detail-image {
     display: block;
     width: 100%;
-    max-height: 220px;
+    /* 공지 이미지(assets/notices/*)가 전부 1672x941(약 16:9)로 통일돼 있어서, 고정 높이로 잘라내는
+       대신 실제 비율 그대로 보이게 한다(확인된 요청) - 모달 폭이 바뀌어도 이미지가 항상 원본 비율을
+       유지한다. */
+    aspect-ratio: 1672 / 941;
     object-fit: cover;
     border-bottom: 3px solid #e8c04b;
 }
@@ -172,10 +175,6 @@
     line-height: 1.7;
     color: #d9d4bd;
     white-space: pre-wrap;
-}
-
-.notice-detail-image {
-    max-height: 320px;
 }
 
 .notice-detail-body .notice-red {
