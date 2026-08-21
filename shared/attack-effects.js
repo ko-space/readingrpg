@@ -451,11 +451,18 @@ function spawnGasBreathStream(actorKeyOrEl, onArrive) {
     const fieldRect = fieldEl.getBoundingClientRect();
     const start = fieldRelativeCenter(actorImg);
     start.y -= 60; // 얼굴 높이 정도로 살짝 위에서 시작
-    // 적은 항상 시전자 반대편 진영에 있으므로, 시전자가 필드 중앙보다 왼쪽에 있으면 오른쪽 끝을,
-    // 오른쪽에 있으면 왼쪽 끝(0)을 향해 뿜는다. 예전엔 항상 오른쪽 끝(fieldRect.width)으로 고정돼
-    // 있어서, 상대편(오른쪽 진영)의 강 희가 시전하면 가스가 적 쪽(왼쪽)이 아니라 계속 화면 오른쪽
-    // 바깥으로 나가 거꾸로 나가는 것처럼 보였다.
-    const endX = start.x < fieldRect.width / 2 ? fieldRect.width : 0;
+    // 적은 항상 시전자 반대편 진영에 있다 - attacker는 왼쪽 끝(fieldRect.width)을, defender는
+    // 오른쪽... 이 아니라 그 반대(viewportEdgeXRelativeToField와 같은 관례: attacker=왼쪽 진영이라
+    // 오른쪽 끝을 향해, defender=오른쪽 진영이라 왼쪽 끝(0)을 향해) 뿜는다. actorKeyOrEl의
+    // "attacker-"/"defender-" 접두어(데이터 키)로 소속 진영을 판정한다 - 예전엔 시전자의 "지금 화면
+    // 위치"(필드 중앙 기준 좌/우)로 판정했는데, 근접 접근 등으로 시전자가 걸어서 필드 중앙을 넘어간
+    // 상태(예: 상대편 강 희가 맵 끝까지 이동한 뒤 시전)에서는 실제 소속 진영과 반대로 판정돼 브레스가
+    // 거꾸로 나가는 버그가 있었다(확인된 버그). 진영을 알 수 없는 호출(레이드 프로토타입처럼 DOM
+    // 엘리먼트를 직접 넘기는 경우)만 기존 위치 기반 추정으로 되돌아간다.
+    const side = typeof actorKeyOrEl === "string" ? actorKeyOrEl.split("-")[0] : null;
+    const endX = side === "attacker" ? fieldRect.width
+        : side === "defender" ? 0
+        : (start.x < fieldRect.width / 2 ? fieldRect.width : 0);
     const end = { x: endX, y: start.y };
     const length = Math.hypot(end.x - start.x, end.y - start.y);
     const angle = angleDeg(start, end);
