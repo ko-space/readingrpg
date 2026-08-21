@@ -2212,7 +2212,7 @@ NOTICES = [
     },
     {
         "title": "[특별 픽업 모집 예고]",
-        "image_file": "assets/notices/y&h.webp",
+        "image_file": "assets/notices/supporter.webp",
         "body": (
             "새로운 특별 픽업 모집이 시작될 예정입니다!\n\n"
             "8/21 21:30 ~ 8/24 21:29: ★1 김크장, ★2 김룡환\n"
