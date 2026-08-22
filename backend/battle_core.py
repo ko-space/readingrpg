@@ -598,20 +598,23 @@ def _refresh_status_until(status, until_key, new_until, time_elapsed):
 
 
 def _apply_damage(target, amount, time_elapsed):
-    """실드(shield_until)가 떠 있으면 피해를 0으로 만든다. 방임석의 "방임" 상태가 활성이면
+    """실드(shield_until)가 떠 있으면 피해를 0으로 만든다(=무적). 방임석의 "방임" 상태가 활성이면
     (neglect_active) 대신 받는 피해를 dr_percent만큼 줄인다 - 실드와 동시에 걸릴 일은 없다(둘 다 self
     전용 상태라 서로 다른 캐릭터에게만 각각 있음). 그 다음, 수치형 보호막(target["shield"] - 김크장류
     지원가가 부여하는 최대 체력 비례 보호막)이 남아있으면 먼저 거기서 깎고, 다 깎고도 남은 만큼만
     체력에서 깎는다.
 
-    반환값은 (dealt, raw_amount) 튜플. dealt는 실제로 체력에서 깎인 순수 피해 - 흡혈/처치 판정/로그의
-    "피해량" 등 게임 로직에는 항상 이 값을 써야 한다(보호막으로 막은 양은 안 잡힘). raw_amount는 실드/
-    방임 감쇄가 적용되기 "전" 원래 맞았어야 할 피해량(반올림만 적용) - 무적 상태라 dealt=0이어도
-    raw_amount는 원래 위력 그대로다. 프론트 피해 숫자 표시 전용(실드에 완전히 막혀도 0이 아니라 "원래
-    이만큼 맞았을 것"을 보여줘야 공격이 허공에 씹힌 것처럼 안 보인다) - 그 외 로직은 절대 이 값을
-    쓰면 안 된다(막힌 피해로 흡혈/처치 판정이 나면 안 되므로)."""
+    반환값은 (dealt, raw_amount, invincible_block) 튜플. dealt는 실제로 체력에서 깎인 순수 피해 -
+    흡혈/처치 판정/로그의 "피해량" 등 게임 로직에는 항상 이 값을 써야 한다(보호막으로 막은 양은 안
+    잡힘). raw_amount는 실드/방임 감쇄가 적용되기 "전" 원래 맞았어야 할 피해량(반올림만 적용) - 무적
+    상태라 dealt=0이어도 raw_amount는 원래 위력 그대로다. 프론트 피해 숫자 표시 전용(수치형 보호막에
+    완전히 막혀도 0이 아니라 "원래 이만큼 맞았을 것"을 보여줘야 공격이 허공에 씹힌 것처럼 안 보인다) -
+    그 외 로직은 절대 이 값을 쓰면 안 된다(막힌 피해로 흡혈/처치 판정이 나면 안 되므로). invincible_block은
+    이 히트가 "무적"(shield_until) 때문에 막혔는지 - 수치형 보호막으로 막힌 경우는 여기 해당하지 않는다
+    (확인된 요청 - 무적일 때만 프론트가 피해 숫자 대신 MISS를 보여준다, 보호막으로 막힌 건 그대로 숫자 표시)."""
     raw_amount = max(0, round(amount))
-    if target["status"]["shield_until"] is not None and time_elapsed < target["status"]["shield_until"]:
+    invincible_block = target["status"]["shield_until"] is not None and time_elapsed < target["status"]["shield_until"]
+    if invincible_block:
         amount = 0
     elif target.get("neglect_active") and target.get("neglect_config"):
         amount *= (1 - target["neglect_config"]["dr_percent"] / 100)
@@ -621,7 +624,7 @@ def _apply_damage(target, amount, time_elapsed):
         target["shield"] -= absorbed
         amount -= absorbed
     target["hp"] = max(0, target["hp"] - amount)
-    return amount, raw_amount
+    return amount, raw_amount, invincible_block
 
 
 def _maybe_grant_low_hp_shield(target, target_team, time_elapsed):

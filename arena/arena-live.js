@@ -121,8 +121,9 @@
         const label = document.createElement("div");
         label.className = `type-label type-${kind}`;
         const text = kind === "weak" ? "Weak" : "Resist";
+        const damageText = damage === "MISS" ? "MISS" : Math.round(damage).toLocaleString();
         label.innerHTML = damage != null
-            ? `<span class="label-text">${text}</span><br><span class="label-damage label-damage-${kind}${isCrit ? " label-damage-crit-burst" : ""}">${Math.round(damage).toLocaleString()}</span>`
+            ? `<span class="label-text">${text}</span><br><span class="label-damage label-damage-${kind}${isCrit ? " label-damage-crit-burst" : ""}">${damageText}</span>`
             : text;
         label.style.left = `${jittered.x}px`;
         label.style.top = `${jittered.y}px`;
@@ -138,7 +139,7 @@
         const jittered = jitterPoint({ x: pos.x, y: pos.y - 30 }, 16);
         const label = document.createElement("div");
         label.className = `damage-label${isCrit ? " label-damage-crit-burst" : ""}`;
-        label.textContent = Math.round(damage).toLocaleString();
+        label.textContent = damage === "MISS" ? "MISS" : Math.round(damage).toLocaleString();
         label.style.left = `${jittered.x}px`;
         label.style.top = `${jittered.y}px`;
         layer.appendChild(label);

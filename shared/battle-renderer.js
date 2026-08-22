@@ -1731,7 +1731,7 @@ async function playReturnFrames(key) {
                 if (shieldBefore > 0 && hit.target_shield_after <= 0) playShieldHit(hitKey);
             }
             renderUnit(hitKey);
-            flashHit(hitKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
+            flashHit(hitKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage, hit.invincible_block);
         });
     }
     // 투사체/캔버스 연출(운석, 가스 숨결, 땅불, 물감 등)이 실제로 대상에 "도착"하는 순간까지 화면
@@ -1837,7 +1837,7 @@ function dispatchEvent(event) {
             const onLand = () => {
                 if (wasAlreadyDead) return;
                 renderUnit(hitKey);
-                flashHit(hitKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
+                flashHit(hitKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage, hit.invincible_block);
                 // 배 "개량한복" - 이 스플래시 포탄이 실제로 착탄하는 이 순간에 맞춰 무적 이펙트도 함께.
                 grantLowHpShieldVisual(hitKey, hit.target, hit.low_hp_shield_seconds, event.time);
             };
@@ -2269,7 +2269,7 @@ function dispatchEvent(event) {
                     if (!wasAlreadyDead) {
                         if (lastHit) {
                             renderUnit(stunTargetKey);
-                            flashHit(stunTargetKey, lastHit.is_crit, lastHit.type_multiplier, lastHit.shown_damage ?? lastHit.damage);
+                            flashHit(stunTargetKey, lastHit.is_crit, lastHit.type_multiplier, lastHit.shown_damage ?? lastHit.damage, lastHit.invincible_block);
                         }
                         flashEffectAura(stunTargetKey, "cc");
                         // 김크장 "GPT 킬러": N-O-G-P-T 5탄환이 순차로 날아가는 동안 실제 재생이 밀리므로,
@@ -2297,7 +2297,7 @@ function dispatchEvent(event) {
                     // 다른 배우 이벤트가 그 사이 이 대상을 이미 더 낮은 체력으로 반영해뒀을 수 있으니
                     // 절대 진짜 현재 체력보다 높게 보여주지 않는다.
                     renderUnit(stunTargetKey, gptDisplayHp == null ? undefined : Math.max(battleRendererConfig.units[stunTargetKey].hp, gptDisplayHp));
-                    flashHit(stunTargetKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
+                    flashHit(stunTargetKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage, hit.invincible_block);
                 }, event.side);
             } else {
                 if (gptHits.length) applySkillHits(event);
@@ -2334,7 +2334,7 @@ function dispatchEvent(event) {
                     if (!wasAlreadyDead) {
                         if (hit) {
                             renderUnit(stunTargetKey);
-                            flashHit(stunTargetKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
+                            flashHit(stunTargetKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage, hit.invincible_block);
                         }
                         flashEffectAura(stunTargetKey, "cc");
                         setStatusIcon(stunTargetKey, "stun", {
@@ -2359,7 +2359,7 @@ function dispatchEvent(event) {
                 spawnMeteorProjectile(actorKey, targetKey, () => {
                     if (wasAlreadyDead) return;
                     renderUnit(targetKey);
-                    flashHit(targetKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
+                    flashHit(targetKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage, hit.invincible_block);
                     battleRendererConfig.appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail.hits)}`, event.side);
                 });
             } else {
@@ -2409,7 +2409,7 @@ function dispatchEvent(event) {
                     const hitKey = findHitKey(hit.target, hit.target_side);
                     if (!hitKey) return;
                     renderUnit(hitKey);
-                    flashHit(hitKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
+                    flashHit(hitKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage, hit.invincible_block);
                 });
             });
             battleRendererConfig.appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail?.hits)}`, event.side);
@@ -2470,7 +2470,7 @@ function dispatchEvent(event) {
                     const hitKey = findHitKey(hit.target, hit.target_side);
                     if (!hitKey) return;
                     renderUnit(hitKey);
-                    flashHit(hitKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
+                    flashHit(hitKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage, hit.invincible_block);
                 }
             );
             battleRendererConfig.appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail.hits)}`, event.side);
@@ -2496,7 +2496,7 @@ function dispatchEvent(event) {
                         const wasAlreadyDead = captureAndApplyHp(hitKey, hit.target_hp_after, hit.target_shield_after);
                         if (wasAlreadyDead) return;
                         renderUnit(hitKey);
-                        flashHit(hitKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
+                        flashHit(hitKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage, hit.invincible_block);
                     });
                 }
             );
@@ -2607,7 +2607,7 @@ function dispatchEvent(event) {
                     spawnPaintSkillProjectile(actorKey, targetKey, "paint-red", () => {
                         if (wasAlreadyDead) return;
                         renderUnit(targetKey);
-                        flashHit(targetKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage);
+                        flashHit(targetKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage, hit.invincible_block);
                     });
                 }
 
@@ -2806,7 +2806,8 @@ function dispatchEvent(event) {
                 const lastBulletHit = event.bullet_hits ? event.bullet_hits[event.bullet_hits.length - 1] : null;
                 const hitIsCrit = lastBulletHit ? lastBulletHit.is_crit : event.is_crit;
                 const hitDamage = lastBulletHit ? (lastBulletHit.shown_damage ?? lastBulletHit.damage) : (event.shown_damage ?? event.damage);
-                flashHit(targetKey, hitIsCrit, event.type_multiplier, hitDamage);
+                const hitInvincibleBlock = lastBulletHit ? lastBulletHit.invincible_block : event.invincible_block;
+                flashHit(targetKey, hitIsCrit, event.type_multiplier, hitDamage, hitInvincibleBlock);
                 // 배 "개량한복" - 이 타격(F=ma면 마지막 탄환 고유의 값, 아니면 이 공격 전체)이 막
                 // target을 50% 미만으로 떨어뜨렸으면 지금(=실제 착탄 시점) 무적 이펙트를 재생한다.
                 // 앞선 탄환이 원인이었던 경우는 onLetterArrive 쪽에서 이미 처리한다.
@@ -2900,7 +2901,7 @@ function dispatchEvent(event) {
                     // (동시 진행 애니메이션), 절대 진짜 현재 체력보다 높게(덜 깎인 것처럼) 보여주지 않는다.
                     renderUnit(targetKey, bulletDisplayHp == null ? undefined : Math.max(battleRendererConfig.units[targetKey].hp, bulletDisplayHp));
                     // 탄환마다 크리티컬을 독립적으로 굴리므로(백엔드), 그 탄환 고유의 is_crit로 반짝인다.
-                    flashHit(targetKey, bulletHits[i].is_crit, event.type_multiplier, bulletHits[i].shown_damage ?? bulletHits[i].damage);
+                    flashHit(targetKey, bulletHits[i].is_crit, event.type_multiplier, bulletHits[i].shown_damage ?? bulletHits[i].damage, bulletHits[i].invincible_block);
                     // 배 "개량한복" - 마지막 탄환이 아니라 이 중간 탄환이 target을 50% 미만으로
                     // 떨어뜨린 경우는 여기서(그 탄환 자신이 실제로 착탄하는 이 순간) 처리한다.
                     grantLowHpShieldVisual(targetKey, event.target, bulletHits[i].low_hp_shield_seconds, event.time);

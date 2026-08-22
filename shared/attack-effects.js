@@ -1018,7 +1018,10 @@ function spawnHealingHeart(targetKeyOrEl, onArrive) {
 // 띄운다. 치명타는 더 이상 "치명타!" 글자를 따로 띄우지 않는다 - isCrit을 그대로 넘겨서, 숫자(위 둘 중
 // 어느 쪽으로 뜨든) 뒤에 붉은 가시 돋친 타원 배경만 추가로 얹는다(showTypeLabel/showDamageLabel의
 // isCrit 처리, CSS .label-damage-crit-burst 참고).
-function flashHit(keyOrEl, isCrit, typeMultiplier, damage) {
+// invincibleBlock: 이 타격이 대상의 "무적"(shield_until - 배의 개량한복 등)에 막혔는지
+// (backend/battle_core.py _apply_damage 참고, 수치형 보호막으로 막힌 경우는 여기 해당 없음 -
+// 확인된 요청). true면 숫자 대신 "MISS"를 보여준다.
+function flashHit(keyOrEl, isCrit, typeMultiplier, damage, invincibleBlock) {
     const imgEl = resolveEffectEl(keyOrEl);
     if (!imgEl) return;
 
@@ -1032,9 +1035,10 @@ function flashHit(keyOrEl, isCrit, typeMultiplier, damage) {
     imgEl.classList.add(isCrit ? "crit-flash" : "hit-flash");
     setTimeout(() => imgEl.classList.remove(isCrit ? "crit-flash" : "hit-flash"), isCrit ? 400 : 250);
 
+    const displayDamage = invincibleBlock ? "MISS" : damage;
     if (key) {
-        if (typeKind) attackEffectsConfig.showTypeLabel?.(key, typeKind, damage, isCrit);
-        else if (damage != null) attackEffectsConfig.showDamageLabel?.(key, damage, isCrit);
+        if (typeKind) attackEffectsConfig.showTypeLabel?.(key, typeKind, displayDamage, isCrit);
+        else if (displayDamage != null) attackEffectsConfig.showDamageLabel?.(key, displayDamage, isCrit);
     }
 }
 

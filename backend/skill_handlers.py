@@ -6,7 +6,7 @@
 import random
 
 from battle_core import (
-    AXIS_ATTACKER_BACK, AXIS_DEFENDER_BACK,
+    AXIS_ATTACKER_BACK, AXIS_ATTACKER_FRONT, AXIS_DEFENDER_BACK, AXIS_DEFENDER_FRONT,
     CC_PRIORITY_KNOCKBACK, KNOCKBACK_POSITION_DISTANCE,
     _alive_target, _alive_units, _apply_damage, _apply_gendered_damage_bonus, _apply_stun,
     _effective_gender, _interrupt_cast_if_casting, _is_unit_moving, _new_status, _refresh_status_until,
@@ -247,7 +247,7 @@ def _skill_bonus_damage_knockback(caster, own_team, enemy_team, params, time_ela
     atk, is_crit = _roll_damage_atk(caster, time_elapsed)
     damage = atk * params["multiplier"] / 100 * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
-    dealt, raw_dealt = _apply_damage(target, damage, time_elapsed)
+    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
     target["next_attack_time"] = max(target["next_attack_time"], time_elapsed) + 1.0  # 밀쳐내기 = 다음 행동 1초 지연
     # 넉백도 CC기라 대상이 시전 중이었다면 취소한다 - CC 중 최우선순위(CC_PRIORITY_KNOCKBACK)라
     # "이번 틱 발동 예정" 보호(_interrupt_cast_if_casting 참고)를 뚫고 스턴/그 외 스킬은 확실히 끊되,
@@ -271,7 +271,7 @@ def _skill_bonus_damage_knockback(caster, own_team, enemy_team, params, time_ela
     target["position_settled_at"] = time_elapsed
 
     return {
-        "hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
+        "hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
         "interrupted_cast": interrupted_cast,
     }
 
@@ -285,8 +285,8 @@ def _skill_aoe_gendered_damage(caster, own_team, enemy_team, params, time_elapse
         atk, is_crit = _roll_damage_atk(caster, time_elapsed)
         damage = atk * mult / 100 * type_mult
         damage = _apply_gendered_damage_bonus(caster, t, damage)
-        dealt, raw_dealt = _apply_damage(t, damage, time_elapsed)
-        hits.append({"target": t["name"], "_target_ref": t, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": t["hp"], "target_max_hp": t["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
+        dealt, raw_dealt, invincible_block = _apply_damage(t, damage, time_elapsed)
+        hits.append({"target": t["name"], "_target_ref": t, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": t["hp"], "target_max_hp": t["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
     return {"hits": hits}
 
 
@@ -331,8 +331,8 @@ def _skill_copy_target_skill(caster, own_team, enemy_team, params, time_elapsed)
     atk, is_crit = _roll_damage_atk(caster, time_elapsed)
     damage = atk * params["fallback_multiplier"] / 100 * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
-    dealt, raw_dealt = _apply_damage(target, damage, time_elapsed)
-    return {"hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}]}
+    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
+    return {"hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}]}
 
 
 def _skill_stun_target(caster, own_team, enemy_team, params, time_elapsed):
@@ -357,9 +357,10 @@ def _skill_stun_target(caster, own_team, enemy_team, params, time_elapsed):
             atk, is_crit = _roll_damage_atk(caster, time_elapsed)
             damage = (atk / bullet_count) * multiplier / 100 * type_mult
             damage = _apply_gendered_damage_bonus(caster, target, damage)
-            dealt, raw_dealt = _apply_damage(target, damage, time_elapsed)
+            dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
             hits.append({
                 "target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt,
+                "invincible_block": invincible_block,
                 "target_hp_after": target["hp"], "target_max_hp": target["max_hp"],
                 "is_crit": is_crit, "type_multiplier": type_mult,
             })
@@ -381,12 +382,12 @@ def _skill_stun_rear_target(caster, own_team, enemy_team, params, time_elapsed):
     atk, is_crit = _roll_damage_atk(caster, time_elapsed)
     damage = atk * params["multiplier"] / 100 * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
-    dealt, raw_dealt = _apply_damage(target, damage, time_elapsed)
+    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
     interrupted_cast = _apply_stun(target, time_elapsed + params["seconds"], time_elapsed)
     return {
         "hit": True, "target": target["name"], "_target_ref": target, "stun_seconds": params["seconds"],
         "interrupted_cast": interrupted_cast,
-        "hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
+        "hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
     }
 
 
@@ -397,8 +398,8 @@ def _skill_aoe_enemy_damage(caster, own_team, enemy_team, params, time_elapsed):
         atk, is_crit = _roll_damage_atk(caster, time_elapsed)
         damage = atk * params["multiplier"] / 100 * type_mult
         damage = _apply_gendered_damage_bonus(caster, t, damage)
-        dealt, raw_dealt = _apply_damage(t, damage, time_elapsed)
-        hits.append({"target": t["name"], "_target_ref": t, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": t["hp"], "target_max_hp": t["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
+        dealt, raw_dealt, invincible_block = _apply_damage(t, damage, time_elapsed)
+        hits.append({"target": t["name"], "_target_ref": t, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": t["hp"], "target_max_hp": t["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
     return {"hits": hits}
 
 
@@ -410,8 +411,8 @@ def _skill_damage_hp_percent_plus_atk(caster, own_team, enemy_team, params, time
     atk, is_crit = _roll_damage_atk(caster, time_elapsed)
     damage = (target["hp"] * params["hp_percent"] / 100 + atk * params["atk_percent"] / 100) * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
-    dealt, raw_dealt = _apply_damage(target, damage, time_elapsed)
-    return {"hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}]}
+    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
+    return {"hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}]}
 
 
 def _skill_debuff_atk_and_damage(caster, own_team, enemy_team, params, time_elapsed):
@@ -430,9 +431,9 @@ def _skill_debuff_atk_and_damage(caster, own_team, enemy_team, params, time_elap
     atk, is_crit = _roll_damage_atk(caster, time_elapsed)
     damage = atk * params["multiplier"] / 100 * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
-    dealt, raw_dealt = _apply_damage(target, damage, time_elapsed)
+    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
     return {
-        "hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
+        "hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
         "debuff_seconds": params["debuff_seconds"],  # 프론트 상태 아이콘(공격력 감소)의 지속시간 표시용
         "debuff_target": target["name"],
     }
@@ -444,15 +445,15 @@ def _skill_aoe_all_others_damage(caster, own_team, enemy_team, params, time_elap
         if u is caster:
             continue
         atk, is_crit = _roll_damage_atk(caster, time_elapsed)
-        dealt, raw_dealt = _apply_damage(u, atk * params["multiplier"] / 100, time_elapsed)
-        hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": 1.0})
+        dealt, raw_dealt, invincible_block = _apply_damage(u, atk * params["multiplier"] / 100, time_elapsed)
+        hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": 1.0})
     for u in _alive_units(enemy_team):
         type_mult = get_type_multiplier(caster["attack_type"], u["defense_type"])
         atk, is_crit = _roll_damage_atk(caster, time_elapsed)
         damage = atk * params["multiplier"] / 100 * type_mult
         damage = _apply_gendered_damage_bonus(caster, u, damage)
-        dealt, raw_dealt = _apply_damage(u, damage, time_elapsed)
-        hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
+        dealt, raw_dealt, invincible_block = _apply_damage(u, damage, time_elapsed)
+        hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
     return {"hits": hits}
 
 
@@ -493,8 +494,8 @@ def _skill_positional_bomb_line(caster, own_team, enemy_team, params, time_elaps
             if abs(u["position"] - impact) > hit_range:
                 continue
             atk, is_crit = _roll_damage_atk(caster, time_elapsed)
-            dealt, raw_dealt = _apply_damage(u, atk * params["multiplier"] / 100, time_elapsed)
-            hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": 1.0, "bomb_index": bomb_index})
+            dealt, raw_dealt, invincible_block = _apply_damage(u, atk * params["multiplier"] / 100, time_elapsed)
+            hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": 1.0, "bomb_index": bomb_index})
         for u in _alive_units(enemy_team):
             if abs(u["position"] - impact) > hit_range:
                 continue
@@ -502,8 +503,8 @@ def _skill_positional_bomb_line(caster, own_team, enemy_team, params, time_elaps
             atk, is_crit = _roll_damage_atk(caster, time_elapsed)
             damage = atk * params["multiplier"] / 100 * type_mult
             damage = _apply_gendered_damage_bonus(caster, u, damage)
-            dealt, raw_dealt = _apply_damage(u, damage, time_elapsed)
-            hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "shown_damage": raw_dealt, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult, "bomb_index": bomb_index})
+            dealt, raw_dealt, invincible_block = _apply_damage(u, damage, time_elapsed)
+            hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult, "bomb_index": bomb_index})
     return {"hits": hits, "impact_fractions": impact_fractions}
 
 
@@ -557,12 +558,18 @@ def _unit_at_position(own_team, enemy_team, target_position):
 def _skill_summon_into_ranged_slot(caster, own_team, enemy_team, params, time_elapsed):
     # 김국회 "국회의사당": 소환 위치는 항상 캐스터 소속 팀의 "후방(back)" 홈 좌표(전투 시작 시점 위치)로
     # 고정이다 - 확인된 설계. 그 좌표에 지금 히트박스가 겹치는 유닛이 있으면(아군이든, 전투 중 이동/
-    # 넉백으로 들어온 적군이든) 히트박스 2배만큼 넉백시키고, 아무도 없으면(원래 있던 아군이 전진했거나
-    # 죽는 등) 넉백 없이 소환만 한다. 넉백 방향은 "밀려나는 유닛의 소속"이 아니라 "캐스터의 소속"으로
-    # 고정된다 - 캐스터가 공격자면 항상 방어자 방향(적진), 캐스터가 수비자면 항상 공격자 방향(적진).
-    # 그래서 아군이 적진 깊숙이 들어와 있는 상태에서 적의 국회의사당이 소환되면(적 팀 후방 자리에), 그
-    # 아군은 오히려 아군 방향으로 밀려난다(사용자가 명시한 시나리오) - 다른 소환수(윤영준/윤&호처럼
-    # 자기 자신이 뒤로 물러나는 summon_clone의 캐스터 넉백)와는 다른, 완전히 별개의 방향 규칙이다.
+    # 넉백으로 들어온 적군이든) 히트박스 2배만큼 넉백시킨다.
+    #
+    # 넉백 방향은 "밀려나는 유닛이 캐스터와 같은 편인지"에 따라 완전히 다르다(확인된 버그 수정 - 예전엔
+    # 항상 "캐스터의 적진 방향"으로만 밀어서, 캐스터 자신의 아군이 제 집 자리에 가만히 있던 흔한 경우에도
+    # 그 아군을 통째로 반대편 진영 코앞까지(예: 수비자 후방(AXIS_DEFENDER_BACK) -> 공격자 전방
+    # (AXIS_ATTACKER_FRONT)) 날려버렸다 - 상대편 진영에 아군이 소환되는 것처럼 보이는 버그였다):
+    # - 밀려나는 유닛이 캐스터와 다른 편(적이 캐스터 자기 진영 뒷자리까지 침투해 있던 경우)이면, 기존과
+    #   동일하게 캐스터의 적진 방향(=그 침입자 본인의 소속 방향)으로 끝까지 밀어서 침입자를 자기 진영
+    #   쪽으로 쫓아낸다.
+    # - 밀려나는 유닛이 캐스터와 같은 편(가장 흔한 경우 - 캐스터 자신의 아군이 제 자리에 있었을 뿐)이면,
+    #   정상 넉백(bonus_damage_knockback)과 동일하게 "그 유닛 자기 진영 범위 안"에서만(전방 쪽으로)
+    #   밀어낸다 - 건물에게 뒷자리를 내주고 앞으로 한 걸음 물러나는 정도로, 진영을 벗어나지 않는다.
     is_attacker_caster = caster["is_attacker_team"]
     spawn_position = AXIS_ATTACKER_BACK if is_attacker_caster else AXIS_DEFENDER_BACK
     target_key = "summon_back"
@@ -599,10 +606,19 @@ def _skill_summon_into_ranged_slot(caster, own_team, enemy_team, params, time_el
     if occupant is not None:
         displaced_name = occupant["name"]
         displaced_side = "attacker" if occupant["is_attacker_team"] else "defender"
-        if is_attacker_caster:
-            occupant["position"] = min(AXIS_DEFENDER_BACK, occupant["position"] + PARLIAMENT_KNOCKBACK_DISTANCE)
+        if occupant["is_attacker_team"] != is_attacker_caster:
+            # 캐스터 자기 진영 뒷자리까지 들어와 있던 적 침입자 - 캐스터의 적진 방향(=침입자 본인의
+            # 소속 방향)으로 끝까지 밀어낸다(기존 설계 그대로).
+            if is_attacker_caster:
+                occupant["position"] = min(AXIS_DEFENDER_BACK, occupant["position"] + PARLIAMENT_KNOCKBACK_DISTANCE)
+            else:
+                occupant["position"] = max(AXIS_ATTACKER_BACK, occupant["position"] - PARLIAMENT_KNOCKBACK_DISTANCE)
+        elif occupant["is_attacker_team"]:
+            # 캐스터 자신의 아군(공격자 편) - 자기 진영 범위(AXIS_ATTACKER_BACK~FRONT) 밖으로 안 나가게.
+            occupant["position"] = min(AXIS_ATTACKER_FRONT, occupant["position"] + PARLIAMENT_KNOCKBACK_DISTANCE)
         else:
-            occupant["position"] = max(AXIS_ATTACKER_BACK, occupant["position"] - PARLIAMENT_KNOCKBACK_DISTANCE)
+            # 캐스터 자신의 아군(수비자 편) - 자기 진영 범위(AXIS_DEFENDER_FRONT~BACK) 밖으로 안 나가게.
+            occupant["position"] = max(AXIS_DEFENDER_FRONT, occupant["position"] - PARLIAMENT_KNOCKBACK_DISTANCE)
         occupant["position_settled_at"] = time_elapsed
 
     return {
@@ -649,9 +665,10 @@ def _skill_consume_paint_multi_effect(caster, own_team, enemy_team, params, time
             atk, is_crit = _roll_damage_atk(caster, time_elapsed)
             damage = atk * (params["red_percent_per_paint"] * red) / 100 * type_mult
             damage = _apply_gendered_damage_bonus(caster, target, damage)
-            dealt, raw_dealt = _apply_damage(target, damage, time_elapsed)
+            dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
             detail["hits"] = [{
                 "target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt,
+                "invincible_block": invincible_block,
                 "target_hp_after": target["hp"], "target_max_hp": target["max_hp"],
                 "is_crit": is_crit, "type_multiplier": type_mult,
             }]
