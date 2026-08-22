@@ -430,10 +430,11 @@
                 <div class="trade-card-portrait">
                     <img alt="${escapeHtml(group.name)}" loading="lazy" decoding="async">
                     ${isLocked ? `<span class="trade-card-badge">${isDefending ? "출전 중" : "장착 중"}</span>` : ""}
+                    ${group.count > 1 ? `<span class="trade-card-count">×${group.count}</span>` : ""}
                     <div class="trade-card-star-overlay">${stars(group.star)}</div>
                 </div>
                 <div class="trade-card-name">${escapeHtml(group.name)}</div>
-                <div class="trade-card-meta">${group.count}명 보유</div>
+                <div class="trade-card-meta">★${group.star} · ${isLocked ? (isDefending ? "출전 중" : "장착 중") : "등록 가능"}</div>
             `;
             const img = card.querySelector("img");
             loadImageWithFallback(img, group.outfit, ["idle.webp"]);

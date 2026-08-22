@@ -1802,12 +1802,26 @@ const shieldAuraActive = new Set();
 let shieldAuraCanvas = null;
 let shieldAuraLoopRunning = false;
 
-function shieldAuraStep() {
+// 보호막이 걸린 유닛이 있는 한 이 루프는 전투 내내(보통 걷기보다 훨씬 오래) 돈다 - 60fps 그대로
+// 돌리면 유닛마다 매 프레임 getBoundingClientRect(강제 리플로우)를 반복해 지속적인 렉의 큰 원인이
+// 됐다(확인됨). 펄스 자체가 완만해서(Math.sin 주기 ~2.6초) 초당 20회 정도로 다시 그려도 눈에 띄는
+// 차이가 없어, 실제 갱신은 이 간격으로 스로틀한다.
+const SHIELD_AURA_REDRAW_INTERVAL_MS = 50;
+let shieldAuraLastDrawMs = 0;
+
+function shieldAuraStep(nowMs) {
     if (shieldAuraActive.size === 0) {
         shieldAuraLoopRunning = false;
         if (shieldAuraCanvas) { shieldAuraCanvas.remove(); shieldAuraCanvas = null; }
         return;
     }
+    const now = nowMs || performance.now();
+    if (now - shieldAuraLastDrawMs < SHIELD_AURA_REDRAW_INTERVAL_MS) {
+        requestAnimationFrame(shieldAuraStep);
+        return;
+    }
+    shieldAuraLastDrawMs = now;
+
     const fieldEl = attackEffectsConfig.fieldEl;
     const layer = attackEffectsConfig.layerEl;
     if (!fieldEl || !layer) { shieldAuraLoopRunning = false; return; }
@@ -1834,11 +1848,13 @@ function shieldAuraStep() {
         i++;
         const el = resolveEffectEl(key);
         if (!el || !el.isConnected) continue;
-        const pos = fieldRelativeCenter(el);
+        // fieldRelativeCenter(el) 대신 rect를 한 번만 재서 위치/높이 둘 다 여기서 뽑는다 - 유닛당
+        // getBoundingClientRect 호출을 2회에서 1회로 줄인다(펄스 크기 = 히트박스 높이라 rect.height를
+        // 그대로 재사용).
+        const rect = el.getBoundingClientRect();
+        const pos = { x: rect.left + rect.width / 2 - fieldRect.left, y: rect.top + rect.height / 2 - fieldRect.top };
         const pulse = 1 + 0.03 * Math.sin(t * 2.4 + i * 1.7);
-        // 보호막 지름 = 히트박스(캐릭터 스프라이트) 높이 - 캐릭터마다 스프라이트 크기가 달라도
-        // 항상 그 캐릭터 몸에 딱 맞게 둘러지도록, 고정값 대신 매 프레임 실제 렌더 높이를 읽는다.
-        const hitboxHeight = el.getBoundingClientRect().height || 118;
+        const hitboxHeight = rect.height || 118;
         const size = hitboxHeight * pulse;
         ctx.save();
         ctx.globalCompositeOperation = "lighter";
