@@ -207,8 +207,17 @@ def _skill_self_shield_duration(caster, own_team, enemy_team, params, time_elaps
     return {"shield_seconds": params["seconds"]}
 
 
+def _can_cast_type_swap(caster, own_team, enemy_team):
+    # 이의진 "염색체 변환": type2(Parent, 여성) 상태에서는 카드 코스트가 다 차도 액티브를 다시 못
+    # 쓴다(확인된 요청) - type1로는 기본공격 3회 후 battle_engine._advance_type2_attack_count_and_maybe_revert가
+    # 자동으로만 되돌린다. 코스트는 소모되지 않고 그 턴만 건너뛴다(신/방임석과 동일한 패턴).
+    return caster["attack_type"] != "Parent"
+
+
 def _skill_self_type_swap_heal(caster, own_team, enemy_team, params, time_elapsed):
-    # 이의진 "염색체 변환": attack_type을 Student(type1)<->Parent(type2) 사이로 토글하고 자힐.
+    # 이의진 "염색체 변환": attack_type을 Student(type1)<->Parent(type2) 사이로 토글하고 자힐(방향과
+    # 무관하게 매번 회복 - 확인된 요청: type1->type2 전환 시에도, 기본공격 3회로 자동 복귀할 때도
+    # 둘 다 회복이 적용돼야 하므로 이 핸들러가 방향을 안 가리고 항상 회복하는 동작을 그대로 재사용한다).
     # type2(Parent) 상태가 되면 이후 기본공격이 남성 적을 기절시키는 플래그(type2_stun_seconds)를 켜고,
     # type1(Student)로 돌아오면 그 플래그를 끈다 - 실제 스턴 적용은 _do_basic_attack에서 처리.
     new_type = "Parent" if caster["attack_type"] == "Student" else "Student"
@@ -217,6 +226,9 @@ def _skill_self_type_swap_heal(caster, own_team, enemy_team, params, time_elapse
     before = caster["hp"]
     caster["hp"] = min(caster["max_hp"], caster["hp"] + heal)
     caster["type2_stun_seconds"] = params["type2_stun_seconds"] if new_type == "Parent" else 0
+    # type2에 새로 진입할 때마다 기본공격 카운트를 0부터 다시 센다(정상 흐름에서는 자동 복귀 직전에
+    # 이미 0으로 리셋돼 있지만, 방어적으로 여기서도 명시적으로 맞춘다).
+    caster["type2_attack_count"] = 0
     # type2(Parent)가 되면 다른 캐릭터의 성별 조건부 효과(예: 김남옥의 "대상이 여성이면 기절") 판정에서도
     # 여성으로 취급된다 - _effective_gender가 gender_override를 CHARACTER_GENDER보다 우선해서 읽는다.
     caster["gender_override"] = "여" if new_type == "Parent" else None
@@ -608,6 +620,7 @@ def _has_any_paint(caster, own_team, enemy_team):
 SKILL_TARGET_AVAILABILITY_CHECKS = {
     "revive_dead_striker": _has_revivable_striker,
     "consume_paint_multi_effect": _has_any_paint,
+    "self_type_swap_heal": _can_cast_type_swap,
 }
 
 

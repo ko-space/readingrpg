@@ -373,7 +373,11 @@ function renderCostSide(side, simNow) {
         const noPaintAvailable = card.name === "방임석" && !["paint_red", "paint_blue", "paint_yellow"].some(
             (iconId) => statusIconState[unitKey]?.[iconId]
         );
-        const blocked = !dead && (onCooldown || Boolean(statusIconState[unitKey]?.stun?.sources?.size) || noRevivableTarget || noPaintAvailable);
+        // 이의진 "염색체 변환"(self_type_swap_heal): type2(여성) 상태에서는 코스트가 다 차도 못 쓴다
+        // (백엔드 _can_cast_type_swap과 동일한 판정) - isType2는 skill_resolve 디스패치 시점에 이미
+        // units[unitKey]에 갱신해두는 값을 그대로 재사용한다(신/방임석과 같은 패턴).
+        const isType2Locked = card.name === "이의진" && Boolean(units[unitKey]?.isType2);
+        const blocked = !dead && (onCooldown || Boolean(statusIconState[unitKey]?.stun?.sources?.size) || noRevivableTarget || noPaintAvailable || isType2Locked);
         el.classList.toggle("is-dead", dead);
         el.classList.toggle("is-blocked", blocked);
         const fill = dead ? 0 : Math.min(1, st.displayed / card.card_cost);

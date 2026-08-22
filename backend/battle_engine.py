@@ -71,6 +71,38 @@ def _apply_type2_stun_if_active(unit, target, time_elapsed):
     return 0, False
 
 
+def _advance_type2_attack_count_and_maybe_revert(unit, side, own_team, time_elapsed, events):
+    """이의진 type2(Parent) 상태에서 기본공격을 3회 사용하면 자동으로 [Active](self_type_swap_heal)를
+    다시 시전해 type1로 돌아온다(확인된 요청) - type2 동안은 카드를 다시 눌러도 못 쓰므로
+    (SKILL_TARGET_AVAILABILITY_CHECKS의 이의진 전용 판정 참고), type1로 돌아오는 유일한 경로다.
+    코스트/카드 발동과 무관한 자동 발동이라 _tick_team_cost를 거치지 않고 여기서 직접
+    is_casting/cast_end_time을 세팅해서 기존 시전 파이프라인(윈드업 애니메이션 -> skill_resolve에서
+    핸들러 호출, battle_engine의 메인 루프 758행 부근)에 그대로 태운다 - 핸들러(_skill_self_type_swap_heal)
+    자체는 방향과 무관하게 매번 토글+회복하므로 수정 없이 재사용된다. type2가 아니면(방금 type1 상태로
+    기본공격했을 뿐이면) 아무 일도 하지 않는다. 기본공격이 진행 중인 시전을 시작하는 일은 없다 -
+    시전 중인 유닛은 애초에 이 함수 호출 지점(_do_basic_attack)까지 도달하지 않는다(메인 루프가
+    is_casting이면 기본공격 단계 전에 continue)."""
+    if not unit.get("type2_stun_seconds"):
+        return
+    unit["type2_attack_count"] = unit.get("type2_attack_count", 0) + 1
+    if unit["type2_attack_count"] < 3:
+        return
+    unit["type2_attack_count"] = 0
+
+    interval = _effective_interval(unit, time_elapsed)
+    unit["is_casting"] = True
+    unit["cast_end_time"] = time_elapsed + SKILL_CAST_INTERVAL_MULTIPLIER * interval
+    events.append({
+        "time": time_elapsed, "event_type": "cast_start", "side": side,
+        "actor": unit["name"], "actor_slot": unit.get("slot"),
+        "effect_type": unit["skill_effect_type"],
+        "duration": SKILL_CAST_INTERVAL_MULTIPLIER * interval,
+        # 코스트를 소모하는 진짜 발동이 아니므로 코스트 관련 필드는 전부 비워둔다 - 프론트가
+        # cost_pool이 null이면 게이지 갱신/카드 반짝임을 그냥 건너뛴다(shared/battle-renderer.js).
+        "cost_spent": 0, "cost_pool": None, "next_slot": None,
+    })
+
+
 def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events, resolved_target=None):
     """기본공격 처리. 김남옥만 예외적으로(★4부터, star_effects 문구 기준) 적 2인 모두를 타격한다
     (주 대상 100%, 나머지 25%) - 기존 star_effects 문구("주 대상 100%, 다른 적 25%")와 확정된 공격
@@ -83,6 +115,7 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events, res
     targets = _alive_units(enemy_team)
     if not targets:
         return
+    _advance_type2_attack_count_and_maybe_revert(unit, side, own_team, time_elapsed, events)
     if unit["name"] == "김남옥" and unit.get("star", 1) >= 3:
         for i, target in enumerate(targets):
             mult = 1.0 if i == 0 else 0.25
