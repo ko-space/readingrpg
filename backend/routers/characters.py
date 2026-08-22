@@ -269,6 +269,20 @@ def get_character_inventory(
     }
 
 
+@router.get("/inventory-detailed")
+def get_character_inventory_detailed(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """거래소 등록 화면 전용 - 인벤토리 "목록"(/inventory)은 캐릭터당 가장 높은 성급 한 줄로
+    접어서 보여주지만(_collapse_to_highest_star), 거래소는 어떤 성급 사본을 등록할지 직접
+    골라야 해서 접으면 안 된다(예: ★5는 방어 편성에 쓰는 중이고 여분인 ★3만 팔고 싶은 경우,
+    접힌 목록으로는 애초에 ★3 사본을 고를 방법이 없다 - 확인된 버그). 강화 화면
+    (get_enhancement_inventory)과 같은 이유로 같은 데이터 소스(_build_inventory_rows, 성급별
+    분리)를 쓰되, 강화 확률표 등 강화 전용 필드 없이 순수 보유 목록만 반환한다."""
+    return {"characters": _build_inventory_rows(user)}
+
+
 @router.get("/enhancement")
 def get_enhancement_inventory(
     db: Session = Depends(get_db),
