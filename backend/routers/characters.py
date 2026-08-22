@@ -185,8 +185,8 @@ def _collapse_to_highest_star(rows: list[dict]) -> list[dict]:
     "장착하기"를 다시 눌러도 이미 장착된 낮은 성급이 아니라 엉뚱한 높은 성급 카드를 장착해버리는
     문제가 생긴다.
 
-    star_counts는 성급 1~5(5는 5성 이상 전부 합산 - 현재 강화 최고 성급은 6까지 가능하지만 표시는
-    5개 구간으로 고정, 확인된 요청) 순서로 보유 수를 담은 길이 5 배열이다."""
+    star_counts는 성급 1~6(6성도 따로 표시, 확인된 요청 - 예전엔 5성 구간에 6성까지 합산했었다) 순서로
+    보유 수를 담은 길이 6 배열이다."""
     by_name: dict[str, list[dict]] = defaultdict(list)
     for row in rows:
         by_name[row["name"]].append(row)
@@ -197,9 +197,9 @@ def _collapse_to_highest_star(rows: list[dict]) -> list[dict]:
         equipped_row = next((r for r in group_rows if r["is_equipped"]), None)
         representative = equipped_row or highest
 
-        star_counts = [0, 0, 0, 0, 0]
+        star_counts = [0, 0, 0, 0, 0, 0]
         for r in group_rows:
-            star_counts[min(r["star"], 5) - 1] += r["count"]
+            star_counts[min(r["star"], 6) - 1] += r["count"]
 
         entry = dict(highest)
         entry["star_counts"] = star_counts
