@@ -390,16 +390,20 @@
     animation: ground-fire-shake 420ms ease-out;
 }
 
-/* ── 서민석 스킬 전용: 하트 모양 투사체(포물선). 대상이 남성이면 분홍, 여성이면 붉은색. ── */
+/* ── 서민석 스킬 전용: 하트 모양 투사체(포물선). 대상이 남성이면 분홍, 여성이면 붉은색. ──
+   SVG 벡터 하트(shared/attack-effects.js의 HEART_SVG_MARKUP)를 쓴다 - 플랫폼마다 다르게 렌더링되는
+   유니코드 이모지(❤) 대신이라 항상 동일하게 보이고, fill="currentColor"라 이 color 값 그대로
+   분홍/빨강이 반영된다(확인된 버그 수정 - 이모지는 iOS에서 색이 안 먹혔음). */
 .heart-projectile {
     position: absolute;
+    width: 26px;
+    height: 24px;
     margin-left: -13px;
-    margin-top: -13px;
-    font-size: 26px;
-    line-height: 1;
-    text-shadow: 0 0 8px currentColor;
+    margin-top: -12px;
+    filter: drop-shadow(0 0 6px currentColor);
     pointer-events: none;
 }
+.heart-projectile svg { width: 100%; height: 100%; display: block; }
 .heart-projectile.heart-pink { color: #ff6fb0; }
 .heart-projectile.heart-red { color: #e0263f; }
 
@@ -431,10 +435,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 30px;
     color: #4ee06a;
-    text-shadow: 0 0 10px #4ee06a, 0 0 4px #fff;
+    filter: drop-shadow(0 0 10px #4ee06a) drop-shadow(0 0 4px #fff);
 }
+.healing-heart-glyph svg { width: 30px; height: 27px; display: block; }
 .healing-heart-cross {
     position: absolute;
     inset: 0;
