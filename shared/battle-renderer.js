@@ -898,14 +898,17 @@ function measureHomeRect(el) {
     return rect;
 }
 
-// 지금 실제로 적용돼있는 translateX 값을 읽는다(누적 이동을 위해 필요).
+// 지금 실제로 적용돼있는 translateX 값을 읽는다(누적 이동을 위해 필요) - getComputedStyle 대신
+// 인라인 style.transform 문자열을 직접 읽는다. 이 el(유닛 래퍼)의 transform은 이 파일의 tick()/
+// applyKnockback()만 인라인으로 쓰고(둘 다 translateX(...) 형태), CSS 클래스/애니메이션은 이
+// 래퍼가 아니라 자식 .battle-unit-img에만 걸리므로(예: walk-bob) 항상 정확하다. getComputedStyle은
+// 호출할 때마다 강제 리플로우를 유발해서, 근접 유닛이 여러 명 동시에 걷는 매 프레임마다(tick())
+// 성능에 큰 비용이었다(확인된 렉 원인) - style.transform은 그냥 문자열 읽기라 리플로우가 없다.
 function getCurrentTranslateX(el) {
-    const value = window.getComputedStyle(el).transform;
-    if (!value || value === "none") return 0;
-    const match = value.match(/matrix\(([^)]+)\)/);
-    if (!match) return 0;
-    const parts = match[1].split(",").map(Number);
-    return parts[4] || 0;
+    const value = el.style.transform;
+    if (!value) return 0;
+    const match = value.match(/translateX\((-?[\d.]+)px\)/);
+    return match ? Number(match[1]) : 0;
 }
 
 // 청년 전용(bonus_damage_knockback): 대상을 "후방으로 이동"한 것으로 취급한다 - 밀려난 뒤 원래

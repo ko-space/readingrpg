@@ -138,12 +138,17 @@ async def join_room(room_code: str, db: Session = Depends(get_db), user: User = 
 def _make_manual_cost_gate(state: dict):
     """_tick_team_cost가 실제 발동 직전에 부르는 게이트. 그 진영이 오토면 항상 통과, 아니면 그
     진영에서 "지금 이 카드 써줘" 요청이 대기 중일 때만 1회성으로 통과시키고 소비한다(같은 요청으로
-    다음 카드까지 연달아 나가지 않도록)."""
+    다음 카드까지 연달아 나가지 않도록).
+    통과시킬 때마다 사유를 로그로 남긴다 - "클릭도 AUTO도 안 켰는데 스킬이 발동됐다"는 재현 안 되는
+    제보가 있어서(확인 필요), 다음에 재현되면 실제로 activate_skill/set_auto가 그 시점에 도착했는지
+    서버 로그만으로 바로 확인할 수 있게 해둔다."""
     def gate(side_name, unit):
         if state["auto"].get(side_name):
+            print(f"[pvp_live] 발동 허용: side={side_name} actor={unit['name']} 사유=auto")
             return True
         if state["pending_activate"].get(side_name):
             state["pending_activate"][side_name] = False
+            print(f"[pvp_live] 발동 허용: side={side_name} actor={unit['name']} 사유=pending_activate(수동 클릭)")
             return True
         return False
     return gate
@@ -263,17 +268,26 @@ async def host_anchor(websocket: WebSocket, room_code: str, token: str = "", db:
         state["guest_nickname"] = payload.get("nickname")
         guest_ready_event.set()
 
+    # "클릭도 AUTO도 안 켰는데 스킬이 자동 발동됐다"는 재현 안 되는 제보 조사용 - 실제로 어느 쪽에서
+    # 언제 무슨 payload가 도착하는지 서버 로그에 전부 남긴다(side가 예상 밖 값이면 그것도 그대로 남아
+    # 원인 추적에 쓸 수 있다).
     def on_activate_skill(message):
         payload = message.get("payload", {})
         side = payload.get("side")
+        print(f"[pvp_live] activate_skill 수신: raw_side={side!r}, payload={payload}")
         if side in state["pending_activate"]:
             state["pending_activate"][side] = True
+        else:
+            print(f"[pvp_live] activate_skill 무시됨(알 수 없는 side): {side!r}")
 
     def on_set_auto(message):
         payload = message.get("payload", {})
         side = payload.get("side")
+        print(f"[pvp_live] set_auto 수신: raw_side={side!r}, payload={payload}")
         if side in state["auto"]:
             state["auto"][side] = bool(payload.get("auto"))
+        else:
+            print(f"[pvp_live] set_auto 무시됨(알 수 없는 side): {side!r}")
 
     def on_guest_leave(key, current, left):
         # 프레즌스 leave는 실제로 끊긴 뒤 약 3초 정도 지연되어 감지된다(Realtime API 실측 확인) -
