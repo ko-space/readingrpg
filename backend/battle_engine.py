@@ -123,7 +123,7 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events, res
             atk, is_crit = _roll_damage_atk(unit, time_elapsed)
             damage = atk * mult * type_mult
             damage = _apply_gendered_damage_bonus(unit, target, damage)
-            dealt, raw_dealt = _apply_damage(target, damage, time_elapsed)
+            dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
             # 배 "개량한복": 이 피해로 target이 막 체력 50% 미만이 됐으면(그리고 target 소속 팀에
             # low_hp_shield_config가 걸려있으면) 그 즉시(이 타격 이벤트 자체에 실어서) 무적을 부여한다 -
             # battle_engine._apply_low_hp_shield_grant(매 틱 스윕)를 그대로 두면 다음 틱에야 감지돼서,
@@ -134,7 +134,7 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events, res
             events.append({
                 "time": time_elapsed, "event_type": "basic_attack", "side": side, "type_multiplier": type_mult,
                 "actor": unit["name"], "actor_slot": unit.get("slot"), "target": target["name"], "damage": dealt,
-                "shown_damage": raw_dealt,
+                "shown_damage": raw_dealt, "invincible_block": invincible_block,
                 "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "target_shield_after": target.get("shield", 0),
                 "is_crit": is_crit,
                 "target_stunned": bool(stun_seconds), "stun_seconds": stun_seconds,
@@ -167,7 +167,7 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events, res
                 bullet_atk, bullet_is_crit = _roll_damage_atk(unit, time_elapsed)
                 bullet_damage = (bullet_atk / BULLET_COUNT) * type_mult
                 bullet_damage = _apply_gendered_damage_bonus(unit, target, bullet_damage)
-                bullet_dealt, bullet_raw_dealt = _apply_damage(target, bullet_damage, time_elapsed)
+                bullet_dealt, bullet_raw_dealt, bullet_invincible_block = _apply_damage(target, bullet_damage, time_elapsed)
                 dealt += bullet_dealt
                 raw_dealt += bullet_raw_dealt
                 # 배 "개량한복" - 4탄환 중 정확히 어느 탄환이 target을 50% 미만으로 떨어뜨렸는지가
@@ -175,18 +175,19 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events, res
                 # bullet_hits마다(top-level이 아니라) 개별적으로 판정해 붙인다.
                 bullet_low_hp_shield_seconds = _maybe_grant_low_hp_shield(target, enemy_team, time_elapsed)
                 bullet_hits.append({
-                    "damage": bullet_dealt, "shown_damage": bullet_raw_dealt,
+                    "damage": bullet_dealt, "shown_damage": bullet_raw_dealt, "invincible_block": bullet_invincible_block,
                     "target_hp_after": target["hp"], "target_shield_after": target.get("shield", 0), "is_crit": bullet_is_crit,
                     "low_hp_shield_seconds": bullet_low_hp_shield_seconds,
                 })
                 any_crit = any_crit or bullet_is_crit
             is_crit = any_crit
             low_hp_shield_seconds = None  # 이미 위에서 탄환별로 붙였으므로 top-level에는 안 실어보낸다.
+            invincible_block = all(bh["invincible_block"] for bh in bullet_hits)  # 4발 전부 무적에 막혔을 때만 top-level도 MISS 취급
         else:
             atk, is_crit = _roll_damage_atk(unit, time_elapsed)
             damage = atk * type_mult
             damage = _apply_gendered_damage_bonus(unit, target, damage)
-            dealt, raw_dealt = _apply_damage(target, damage, time_elapsed)
+            dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
             low_hp_shield_seconds = _maybe_grant_low_hp_shield(target, enemy_team, time_elapsed)
         stun_seconds, interrupted_cast = _apply_type2_stun_if_active(unit, target, time_elapsed)
         # 최재혁 6성 "+": 후방 우선 타겟(target)이 이 공격에서 죽지 않고 생존하면, 그 시점부터 전투가
@@ -235,7 +236,7 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events, res
         events.append({
             "time": time_elapsed, "event_type": "basic_attack", "side": side, "type_multiplier": type_mult,
             "actor": unit["name"], "actor_slot": unit.get("slot"), "target": target["name"], "damage": dealt,
-            "shown_damage": raw_dealt,
+            "shown_damage": raw_dealt, "invincible_block": invincible_block,
             "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "target_shield_after": target.get("shield", 0),
             "is_crit": is_crit,
             "target_stunned": bool(stun_seconds), "stun_seconds": stun_seconds,
@@ -264,10 +265,11 @@ def _apply_ally_attack_splash(attacker_unit, side, own_team, enemy_team, hit_tar
         type_mult = get_type_multiplier(supporter["attack_type"], enemy["defense_type"])
         atk, is_crit = _roll_damage_atk(supporter, time_elapsed)
         damage = atk * percent / 100 * type_mult
-        dealt, raw_dealt = _apply_damage(enemy, damage, time_elapsed)
+        dealt, raw_dealt, invincible_block = _apply_damage(enemy, damage, time_elapsed)
         low_hp_shield_seconds = _maybe_grant_low_hp_shield(enemy, enemy_team, time_elapsed)
         hits.append({
             "target": enemy["name"], "_target_ref": enemy, "damage": dealt, "shown_damage": raw_dealt,
+            "invincible_block": invincible_block,
             "target_hp_after": enemy["hp"], "target_max_hp": enemy["max_hp"],
             "is_crit": is_crit, "type_multiplier": type_mult,
             "low_hp_shield_seconds": low_hp_shield_seconds,
