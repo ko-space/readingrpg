@@ -960,7 +960,6 @@ const HEART_SVG_MARKUP = `
     <svg viewBox="0 0 32 29" xmlns="http://www.w3.org/2000/svg">
         <path d="M16 28C16 28 1 18.5 1 9.7C1 4.6 5 1 9.6 1C12.7 1 15 2.7 16 5.3C17 2.7 19.3 1 22.4 1C27 1 31 4.6 31 9.7C31 18.5 16 28 16 28Z"
               fill="currentColor" stroke="rgba(0,0,0,0.18)" stroke-width="0.6"/>
-        <path d="M9 6.5C7 6.9 5.4 8.7 5.1 11" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>
     </svg>
 `;
 

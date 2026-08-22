@@ -436,7 +436,7 @@
     align-items: center;
     justify-content: center;
     color: #4ee06a;
-    filter: drop-shadow(0 0 10px #4ee06a) drop-shadow(0 0 4px #fff);
+    filter: drop-shadow(0 0 8px #4ee06a);
 }
 .healing-heart-glyph svg { width: 30px; height: 27px; display: block; }
 .healing-heart-cross {
