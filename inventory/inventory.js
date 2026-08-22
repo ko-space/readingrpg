@@ -41,7 +41,7 @@
     // 성급 한 줄만 대표로 보여주면서(백엔드 _collapse_to_highest_star) 그 자리에 전체 성급 분포를
     // 대신 보여준다). star_counts가 없는(옛 캐시 등) 경우를 대비해 0으로 채운 배열을 기본값으로 둔다.
     function starCountsText(group) {
-        const counts = group.star_counts || [0, 0, 0, 0, 0];
+        const counts = group.star_counts || [0, 0, 0, 0, 0, 0];
         return counts.map((n) => `${n}명`).join(" · ");
     }
 
