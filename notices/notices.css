@@ -145,6 +145,16 @@
     background: rgba(0, 0, 0, .55);
 }
 
+/* 사진/제목/본문을 한 스크롤 영역으로 묶는다(확인된 버그 수정) - 예전엔 사진+제목이 이 박스 밖(고정)에
+   있고 .notice-detail-body만 자체적으로 스크롤돼서, 사진이 항상 화면 위쪽 자리를 차지한 채 본문이
+   보기 힘들 정도로 좁게 눌려있었다. 이제 사진까지 포함해서 통째로 스크롤/드래그되고, 닫기(X) 버튼만
+   .notice-detail-box에 남아 스크롤과 무관하게 항상 같은 자리에 보인다. */
+.notice-detail-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
 .notice-detail-image {
     display: block;
     width: 100%;
@@ -170,7 +180,6 @@
 
 .notice-detail-body {
     padding: 10px 20px 22px;
-    overflow-y: auto;
     font-size: 13px;
     line-height: 1.7;
     color: #d9d4bd;
