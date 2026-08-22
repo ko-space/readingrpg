@@ -57,7 +57,7 @@
     let marketCap = 10; // /market/ 응답의 market_cap(서버 backend/routers/market.py의 MARKET_CAP)
     let registeredToday = 0; // /market/my-listings 응답의 registered_today
     let dailyRegisterLimit = 2; // /market/my-listings 응답의 daily_limit(DAILY_REGISTER_LIMIT)
-    let myInventory = []; // /characters/inventory의 characters 배열(보유 인물 그룹, 같은 이름+성급 묶음)
+    let myInventory = []; // /characters/inventory-detailed의 characters 배열(같은 이름+성급 묶음, 성급별로 분리됨)
     let pvpDefenseIds = new Set(); // 지금 전술대회 방어 편성(전방/후방)에 쓰이는 캐릭터 id
     let selectedListing = null; // 거래 탭에서 선택된 매물
     let selectedGroup = null;   // 등록 탭에서 선택된 내 인물 그룹
@@ -247,7 +247,11 @@
 
     async function loadMyInventory() {
         try {
-            const res = await fetch(`${API_BASE_URL}/characters/inventory`, { headers: authHeaders() });
+            // 인벤토리 목록용 /characters/inventory는 캐릭터당 가장 높은 성급 한 줄로 접어서 내려준다
+            // (인벤토리 화면 전용 요청) - 거래소는 어떤 성급 사본을 팔지 직접 골라야 하므로(강화
+            // 화면처럼) 접지 않은 /inventory-detailed를 쓴다(확인된 버그: 접힌 데이터로는 방어
+            // 편성에 안 쓰는 낮은 성급 여분이 있어도 그 성급을 골라 등록할 방법이 없었다).
+            const res = await fetch(`${API_BASE_URL}/characters/inventory-detailed`, { headers: authHeaders() });
             const data = await res.json();
             myInventory = data.characters || [];
             renderRegisterGrid();
@@ -260,7 +264,12 @@
         try {
             const res = await fetch(`${API_BASE_URL}/pvp/defense`, { headers: authHeaders() });
             const data = await res.json();
-            pvpDefenseIds = new Set([data.front?.id, data.back?.id].filter((id) => id != null));
+            // 서포터 슬롯도 방어 편성에 포함된다(전방/후방과 동일하게 등록 불가 대상이어야 함) -
+            // 예전엔 front/back만 넣어서 서포터가 출전 중이어도 "출전 중" 표시 없이 등록 가능했다
+            // (확인된 버그).
+            pvpDefenseIds = new Set(
+                [data.front?.id, data.back?.id, data.supporter?.id].filter((id) => id != null)
+            );
         } catch (err) {
             console.error("전술대회 방어 편성 정보를 불러오지 못했어요.", err);
             pvpDefenseIds = new Set();
