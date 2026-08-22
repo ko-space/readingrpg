@@ -42,8 +42,8 @@ PICKUP_SCHEDULE = [
         "banner_name": "픽업모집",
         "image_file": "pickup-banner-new4.webp",
         "characters": [
-            {"character_name": "김크장", "point_cost": 10, "rate_up": 0.3333},
-            {"character_name": "김룡환", "point_cost": 20, "rate_up": 0.3333},
+            {"character_name": "김크장", "point_cost": 10, "rate_up": 0.6667},
+            {"character_name": "김룡환", "point_cost": 20, "rate_up": 0.6667},
         ],
     },
     {
@@ -51,8 +51,8 @@ PICKUP_SCHEDULE = [
         "banner_name": "픽업모집",
         "image_file": "pickup-banner-new5.webp",
         "characters": [
-            {"character_name": "배", "point_cost": 30, "rate_up": 0.3333},
-            {"character_name": "김국회", "point_cost": 100, "rate_up": 0.2857},
+            {"character_name": "배", "point_cost": 30, "rate_up": 0.6667},
+            {"character_name": "김국회", "point_cost": 100, "rate_up": 0.5},
         ],
     },
     {
@@ -60,7 +60,7 @@ PICKUP_SCHEDULE = [
         "banner_name": "픽업모집",
         "image_file": "pickup-banner-new6.webp",
         "characters": [
-            {"character_name": "신", "point_cost": 200, "rate_up": 0.3333},
+            {"character_name": "신", "point_cost": 200, "rate_up": 0.6667},
         ],
     },
 ]
