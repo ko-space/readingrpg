@@ -561,16 +561,15 @@
         });
     }
 
-    // ── 수동 스킬 발동 + 오토 토글 (내 쪽 코스트덕만, arena-live.css가 상대 쪽은 pointer-events로
-    // 아예 막아둔다) - 클릭 자체는 "내가 보는 화면 기준 attacker"에서 일어나므로, 서버로 보낼 때는
-    // remapSideToken으로 진짜 서버 라벨(호스트=attacker/게스트=defender)로 되돌린다(자기 자신의
-    // 역함수라 그대로 다시 호출하면 됨). ────────────────────────────────────────────
+    // ── 수동 스킬 발동(내 쪽 코스트덕만, arena-live.css가 상대 쪽은 pointer-events로 아예 막아둔다) -
+    // 클릭 자체는 "내가 보는 화면 기준 attacker"에서 일어나므로, 서버로 보낼 때는 remapSideToken으로
+    // 진짜 서버 라벨(호스트=attacker/게스트=defender)로 되돌린다(자기 자신의 역함수라 그대로 다시
+    // 호출하면 됨). AUTO 기능은 없다(확인된 요청 - 항상 직접 눌러야만 발동됨) -
+    // .cost-auto-badge 자체도 arena-live.css에서 숨겨서 오해를 막는다. ──────────────────
     function sendBroadcast(eventName, payload) {
         if (!channel) return;
         channel.send({ type: "broadcast", event: eventName, payload });
     }
-
-    let autoOn = false;
 
     function setupManualControls() {
         const myDock = document.getElementById("cost-dock-attacker");
@@ -579,13 +578,6 @@
             const card = e.target.closest(".cost-card.is-ready");
             if (card) {
                 sendBroadcast("activate_skill", { side: remapSideToken("attacker") });
-                return;
-            }
-            const badge = e.target.closest(".cost-auto-badge");
-            if (badge) {
-                autoOn = !autoOn;
-                badge.classList.toggle("is-on", autoOn);
-                sendBroadcast("set_auto", { side: remapSideToken("attacker"), auto: autoOn });
             }
         });
     }

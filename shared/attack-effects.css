@@ -90,6 +90,12 @@
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
+    /* 이 이미지는 투명 배경이라 .cannon-shell의 box-shadow(항상 엘리먼트의 사각형 박스 기준으로
+       그려짐 - 투명 영역까지 포함해 불길이 네모나게 보이던 원인, 확인된 버그)를 꺼서 대신
+       filter:drop-shadow로 바꾼다 - drop-shadow는 알파 채널 기준으로 그려져 실제 탄환 모양을
+       따라 불길이 감싸듯 나온다. */
+    box-shadow: none;
+    filter: drop-shadow(0 0 5px rgba(255, 175, 67, .9)) drop-shadow(0 0 11px rgba(255, 140, 40, .65));
 }
 .cannon-shell.cannon-shell-sprite::after {
     top: 50%;

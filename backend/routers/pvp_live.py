@@ -1,7 +1,8 @@
 """
 (1v1) 친선전 - 실시간 매치 라우터.
 전술대회(routers/pvp.py)와 달리 전투 전체를 미리 계산해서 한 번에 내려주지 않고, 실제 두 플레이어가
-접속한 상태에서 틱 단위로 진행되며 스킬카드를 직접 눌러 쓸 수 있다(오토도 선택 가능). 서버 상태는
+접속한 상태에서 틱 단위로 진행되며 스킬카드를 항상 직접 눌러야만 나간다(AUTO 없음 - 확인된 요청,
+원인 불명의 "스킬이 자동으로 써진다" 제보가 반복돼 자동 발동 경로 자체를 제거함). 서버 상태는
 전부 이 라우터 안, 그것도 호스트의 앵커 웹소켓 핸들러 함수 하나의 로컬 변수/클로저에만 존재한다 -
 별도 인메모리 "방 딕셔너리"가 없다(따라서 Cloud Run이 여러 인스턴스로 오토스케일돼도 "방 만들기"
 요청과 "웹소켓 연결"이 서로 다른 인스턴스로 가는 문제 자체가 생기지 않는다). 재접속은 지원하지 않는다
@@ -136,16 +137,11 @@ async def join_room(room_code: str, db: Session = Depends(get_db), user: User = 
 
 
 def _make_manual_cost_gate(state: dict):
-    """_tick_team_cost가 실제 발동 직전에 부르는 게이트. 그 진영이 오토면 항상 통과, 아니면 그
-    진영에서 "지금 이 카드 써줘" 요청이 대기 중일 때만 1회성으로 통과시키고 소비한다(같은 요청으로
-    다음 카드까지 연달아 나가지 않도록).
-    통과시킬 때마다 사유를 로그로 남긴다 - "클릭도 AUTO도 안 켰는데 스킬이 발동됐다"는 재현 안 되는
-    제보가 있어서(확인 필요), 다음에 재현되면 실제로 activate_skill/set_auto가 그 시점에 도착했는지
-    서버 로그만으로 바로 확인할 수 있게 해둔다."""
+    """_tick_team_cost가 실제 발동 직전에 부르는 게이트. 그 진영에서 "지금 이 카드 써줘" 요청이
+    대기 중일 때만 1회성으로 통과시키고 소비한다(같은 요청으로 다음 카드까지 연달아 나가지 않도록) -
+    AUTO 기능은 제거됐다(확인된 요청 - "스킬이 자동으로 써진다"는 원인 불명 제보가 반복돼서, 아예
+    자동 발동 경로 자체를 없애 항상 직접 눌러야만 나가게 함). 통과시킬 때마다 사유를 로그로 남긴다."""
     def gate(side_name, unit):
-        if state["auto"].get(side_name):
-            print(f"[pvp_live] 발동 허용: side={side_name} actor={unit['name']} 사유=auto")
-            return True
         if state["pending_activate"].get(side_name):
             state["pending_activate"][side_name] = False
             print(f"[pvp_live] 발동 허용: side={side_name} actor={unit['name']} 사유=pending_activate(수동 클릭)")
@@ -253,7 +249,6 @@ async def host_anchor(websocket: WebSocket, room_code: str, token: str = "", db:
     state = {
         "guest_user_id": None,
         "guest_nickname": None,
-        "auto": {"attacker": False, "defender": False},
         "pending_activate": {"attacker": False, "defender": False},
         "guest_left": False,
     }
@@ -280,15 +275,6 @@ async def host_anchor(websocket: WebSocket, room_code: str, token: str = "", db:
         else:
             print(f"[pvp_live] activate_skill 무시됨(알 수 없는 side): {side!r}")
 
-    def on_set_auto(message):
-        payload = message.get("payload", {})
-        side = payload.get("side")
-        print(f"[pvp_live] set_auto 수신: raw_side={side!r}, payload={payload}")
-        if side in state["auto"]:
-            state["auto"][side] = bool(payload.get("auto"))
-        else:
-            print(f"[pvp_live] set_auto 무시됨(알 수 없는 side): {side!r}")
-
     def on_guest_leave(key, current, left):
         # 프레즌스 leave는 실제로 끊긴 뒤 약 3초 정도 지연되어 감지된다(Realtime API 실측 확인) -
         # 매치 중 짧은 순단으로 오탐하는 것보다는, 이 정도 지연을 감수하고 확실히 끊겼을 때만 반응하는
@@ -297,7 +283,6 @@ async def host_anchor(websocket: WebSocket, room_code: str, token: str = "", db:
 
     channel.on_broadcast("guest_ready", on_guest_ready)
     channel.on_broadcast("activate_skill", on_activate_skill)
-    channel.on_broadcast("set_auto", on_set_auto)
     channel.on_presence_leave(on_guest_leave)
 
     async def watch_disconnect():
