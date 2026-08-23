@@ -140,13 +140,28 @@ def _make_manual_cost_gate(state: dict):
     """_tick_team_cost가 실제 발동 직전에 부르는 게이트. 그 진영에서 "지금 이 카드 써줘" 요청이
     대기 중일 때만 1회성으로 통과시키고 소비한다(같은 요청으로 다음 카드까지 연달아 나가지 않도록) -
     AUTO 기능은 제거됐다(확인된 요청 - "스킬이 자동으로 써진다"는 원인 불명 제보가 반복돼서, 아예
-    자동 발동 경로 자체를 없애 항상 직접 눌러야만 나가게 함). 통과시킬 때마다 사유를 로그로 남긴다."""
+    자동 발동 경로 자체를 없애 항상 직접 눌러야만 나가게 함). 통과시킬 때마다 사유를 로그로 남긴다.
+
+    (진짜 원인 확인) pending_activate는 유닛 단위가 아니라 진영 단위 플래그라, 클릭한 그 순간의
+    카드가 스턴/쿨다운/대상없음으로 "턴 스킵"돼 다음 카드로 로테이션 포인터가 넘어가버리면(이 게이트를
+    거치지 않고 _advance_cost_turn만 호출되는 경로) 대기 중이던 플래그가 소비되지 않은 채 그대로
+    남아있다가, 나중에 완전히 다른(플레이어가 클릭한 적 없는) 카드가 준비됐을 때 그 카드를 대신
+    발동시켜버렸다 - 이게 "분명 안 눌렀는데 오토처럼 나간다"는 제보의 실제 원인이었다. 턴이 게이트를
+    거치지 않고 스킵될 때마다 discard()로 그 대기 플래그를 함께 버려서, 클릭은 오직 "클릭한 바로 그
+    카드가 다음으로 발동 자격을 얻을 때"에만 유효하게 만든다."""
     def gate(side_name, unit):
         if state["pending_activate"].get(side_name):
             state["pending_activate"][side_name] = False
             print(f"[pvp_live] 발동 허용: side={side_name} actor={unit['name']} 사유=pending_activate(수동 클릭)")
             return True
         return False
+
+    def discard(side_name):
+        if state["pending_activate"].get(side_name):
+            state["pending_activate"][side_name] = False
+            print(f"[pvp_live] 대기 중이던 발동 요청 폐기: side={side_name} 사유=카드 턴 스킵(다른 카드로 자동 승계 방지)")
+
+    gate.discard = discard
     return gate
 
 
