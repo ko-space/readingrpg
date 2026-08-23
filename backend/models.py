@@ -210,6 +210,20 @@ class UserCgUnlock(Base):
     unlocked_at = Column(DateTime, default=datetime.utcnow)
 
 
+class StorySecret(Base):
+    """스토리모드의 히든 콘텐츠 트리거 정답값(예: 히든 엔딩 키워드) - 실제 값은 절대 이 저장소(공개
+    GitHub)에 커밋되지 않는다. seed.py는 private_seed.py(gitignore됨, 로컬/서버에만 존재)가 있을 때만
+    이 테이블을 채우고, 없으면 조용히 건너뛴다(신규 체크아웃/CI에서 에러 없이 동작해야 하므로). 여러
+    스토리 파트가 추가될 걸 감안해 story_id로 구분한다."""
+    __tablename__ = "story_secrets"
+    __table_args__ = (UniqueConstraint("story_id", "key", name="uq_story_secret"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    story_id = Column(String, nullable=False)  # 예: "ep1_yoondaewoong"
+    key = Column(String, nullable=False)        # 예: "hidden_ending_keyword"
+    value = Column(String, nullable=False)
+
+
 class Region(Base):
     __tablename__ = "regions"
 

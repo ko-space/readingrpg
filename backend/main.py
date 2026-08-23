@@ -8,7 +8,7 @@ from database import Base, engine
 import models
 from character_visibility import seed_character_visibility
 from schema_evolution import evolve_schema
-from seed import seed_shop_items, seed_regions, seed_achievements, seed_gacha_banners, seed_enhancement_items, seed_quests, seed_currency_items, seed_notices, seed_challenges, seed_market_state
+from seed import seed_shop_items, seed_regions, seed_achievements, seed_gacha_banners, seed_enhancement_items, seed_quests, seed_currency_items, seed_notices, seed_challenges, seed_market_state, seed_story_secrets
 from routers import users, logs, gacha, shop, regions, ranking, characters, auth, pvp, pvp_live, achievements, devtest, quests, story, notices, mailbox, challenges, market
 
 MAX_STARTUP_RETRIES = 5
@@ -39,6 +39,7 @@ seed_currency_items()
 seed_notices()
 seed_challenges()
 seed_market_state()
+seed_story_secrets()
 
 app = FastAPI()
 

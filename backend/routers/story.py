@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from database import get_db
-from models import User, Item, UserItem, UserStoryProgress, UserCgUnlock, ActivityLog
+from models import User, Item, UserItem, UserStoryProgress, UserCgUnlock, ActivityLog, StorySecret
 from schemas import StoryProgressRequest, StoryUnlockCgRequest, StoryConsumeTicketRequest
 from security import get_current_user
 from achievements import check_and_grant_achievements
@@ -38,6 +38,13 @@ def get_story_state(
             UserCgUnlock.user_id == user.id, UserCgUnlock.story_id == story_id
         ).all()
     ]
+    # 히든 엔딩 트리거 키워드 등 - 실제 값은 저장소(공개 GitHub)에 없고 DB(story_secrets)에서만
+    # 온다(seed.py의 seed_story_secrets 참고). private_seed.py가 없는 환경에서는 그냥 빈 딕셔너리라
+    # 프론트가 키워드를 못 받아 히든 콘텐츠만 조용히 비활성화된다(다른 기능엔 영향 없음).
+    secrets = {
+        row.key: row.value
+        for row in db.query(StorySecret).filter(StorySecret.story_id == story_id).all()
+    }
 
     return {
         "progress": (
@@ -46,6 +53,7 @@ def get_story_state(
         ),
         "unlocked_cgs": unlocked_cgs,
         "ticket_balance": _ticket_balance(db, user),
+        "secrets": secrets,
     }
 
 

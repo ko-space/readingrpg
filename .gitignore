@@ -1,5 +1,7 @@
 # .gitignore
 .env
+# 히든 업적 조건/보상, 스토리 히든 콘텐츠 정답값 - 절대 커밋하지 않는다(backend/private_seed.py 상단 주석 참고).
+backend/private_seed.py
 __pycache__/
 *.pyc
 .venv/

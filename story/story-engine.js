@@ -19,6 +19,10 @@ let ticketBalance = 0;
 let cachedProgress = null;      // {scene_key, state} | null
 let currentSceneKey = null;     // 지금 플레이 중인 씬(메뉴의 "저장 및 종료"가 저장할 체크포인트)
 let unlockedCgSet = new Set();  // CG_GALLERY_ITEMS의 id 모음(서버에서 받아온 값을 그대로 캐시)
+// storySecrets: 히든 엔딩 트리거 키워드 등 - 실제 값은 이 파일(공개 저장소)에 없고 /story/state
+// 응답으로만 온다(backend/routers/story.py 참고). 저장소를 읽어서는 알아낼 수 없게 하려는 목적이라,
+// 네트워크 탭까지 막지는 못한다(확인된 요청 - 그 수준까지는 안 막아도 됨).
+let storySecrets = {};
 let autoUseTickets = localStorage.getItem(AUTO_USE_STORAGE_KEY) === "1";
 
 function withPlayerName(str) {
@@ -54,6 +58,7 @@ async function fetchStoryState() {
         cachedProgress = state.progress || null;
         unlockedCgSet = new Set(state.unlocked_cgs || []);
         ticketBalance = state.ticket_balance || 0;
+        storySecrets = state.secrets || {};
     }
 
     PLAYER.name = PLAYER_NAME;
@@ -2820,7 +2825,11 @@ function showScene6JuheonHighInput(){
   showComposeInput((typed)=>{
     const hasHidden = typed.includes('히든 업적') || typed.includes('히든업적');
     const hasBanjuk = typed.includes('반죽동');
-    const hasHiddenEndingKeyword = typed.includes('[REDACTED]');
+    // 히든 엔딩 키워드는 이 파일에 없다 - /story/state가 내려준 storySecrets에서만 가져온다(위
+    // storySecrets 선언부 주석 참고). 값이 아직 없으면(private_seed.py 미설정 등) 빈 문자열이라
+    // includes('')가 항상 true가 되는 걸 막기 위해 명시적으로 false 처리한다.
+    const hiddenEndingKeyword = storySecrets.hidden_ending_keyword || "";
+    const hasHiddenEndingKeyword = hiddenEndingKeyword.length > 0 && typed.includes(hiddenEndingKeyword);
     const matchCount = [hasHidden, hasBanjuk, hasHiddenEndingKeyword].filter(Boolean).length;
 
     let outcome;
