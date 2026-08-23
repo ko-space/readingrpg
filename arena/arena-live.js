@@ -565,7 +565,9 @@
     // 클릭 자체는 "내가 보는 화면 기준 attacker"에서 일어나므로, 서버로 보낼 때는 remapSideToken으로
     // 진짜 서버 라벨(호스트=attacker/게스트=defender)로 되돌린다(자기 자신의 역함수라 그대로 다시
     // 호출하면 됨). AUTO 기능은 없다(확인된 요청 - 항상 직접 눌러야만 발동됨) -
-    // .cost-auto-badge 자체도 arena-live.css에서 숨겨서 오해를 막는다. ──────────────────
+    // .cost-auto-badge 자체도 arena-live.css에서 숨겨서 오해를 막는다. 로테이션(차례) 개념도 없다
+    // (확인된 요청 - 준비된 카드는 어느 것이든 클릭 가능) - 그래서 어느 카드를 클릭했는지(slot)까지
+    // 같이 보내야 서버가 "정확히 그 카드"만 발동시킬 수 있다. ──────────────────
     function sendBroadcast(eventName, payload) {
         if (!channel) return;
         channel.send({ type: "broadcast", event: eventName, payload });
@@ -577,7 +579,7 @@
         myDock.addEventListener("click", (e) => {
             const card = e.target.closest(".cost-card.is-ready");
             if (card) {
-                sendBroadcast("activate_skill", { side: remapSideToken("attacker") });
+                sendBroadcast("activate_skill", { side: remapSideToken("attacker"), slot: card.dataset.costSlot });
             }
         });
 
