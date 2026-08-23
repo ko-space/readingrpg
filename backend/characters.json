@@ -172,7 +172,7 @@
       },
       "skill_mechanics": {
         "effect_type": "revive_dead_striker",
-        "cost": 3,
+        "cost": 6,
         "params": {
           "4": {
             "hp_percent": 30
