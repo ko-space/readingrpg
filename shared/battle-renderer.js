@@ -2153,17 +2153,22 @@ function dispatchEvent(event) {
 
                 if (buildingEl) {
                     buildingEl.hidden = false;
-                    buildingEl.style.transform = "";
                     // 착지 지점은 전용 summon 슬롯의 기본 CSS 위치(대열 바깥쪽)가 아니라 후방 홈 좌표
                     // (히트박스가 겹치도록) - 그 자리 엘리먼트와의 화면상 델타를 구해서 summon 슬롯
                     // 기본 X 위에 더해준다(summon_clone이 caster 위치로 델타 보정하는 것과 동일한
-                    // 방식). measureHomeRect로 재는 이유: 이전 소환에서 넉백당한 아군이 그 슬롯
-                    // 엘리먼트에 남긴 인라인 transform(translateX)이 남아있으면 getBoundingClientRect가
-                    // "밀려난 뒤" 위치를 돌려줘서, 두 번째 소환부터 착지 지점이 엉뚱한 자리로 밀리는
-                    // 버그가 있었다 - 항상 "전투 시작" 순수 홈 위치를 기준으로 삼아야 한다.
+                    // 방식).
                     let baseX = getCurrentTranslateX(buildingEl);
                     if (rangedSlotEl) {
-                        const buildingRect = buildingEl.getBoundingClientRect();
+                        // buildingEl 자신도 measureHomeRect로 재야 한다(확인된 버그) - arena-battle.css의
+                        // .battle-unit[data-unit="X-summon-back"]은 스타일시트 자체에 임시 배치용
+                        // transform(translateX(calc(100%+90px)) 등, 대열 바깥으로 미리 빼두는 값)이
+                        // 걸려있어서, 인라인 style.transform을 빈 문자열("")로만 지우면 그 스타일시트
+                        // transform이 그대로 적용된 "밀려난" 위치가 측정된다("" 지우기는 인라인 값만
+                        // 없앨 뿐 캐스케이드가 스타일시트 규칙으로 폴백되기 때문) - 그 오염된 값을
+                        // 기준으로 델타를 계산하면 착지 지점이 원래 있어야 할 후방이 아니라 그 임시
+                        // 배치 위치만큼 안쪽(전방 쪽)으로 밀려서 보였다. measureHomeRect는 "none"으로
+                        // 명시적으로 지워서(캐스케이드를 완전히 무시) 진짜 정적 위치를 재므로 안전하다.
+                        const buildingRect = measureHomeRect(buildingEl);
                         const slotRect = measureHomeRect(rangedSlotEl);
                         baseX += slotRect.left - buildingRect.left;
                     }
