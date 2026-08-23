@@ -531,10 +531,10 @@ def _tick_team_cost(team, enemy_team, side_name, time_elapsed, events, manual_co
     """팀 공유 코스트를 이번 틱만큼 채우고, 지금 차례인 스킬카드가 발동 가능하면 발동시킨다. 유닛별
     기본공격 루프와 완전히 분리된, 팀당 1회 호출되는 단계다(메인 루프에서 그 팀의 슬롯 순회보다
     먼저 호출됨).
-    manual_cost_gate(side_name, unit)가 주어지면(실시간 (1v1) 친선전 전용), 자격 검사(코스트/CC/쿨다운/
-    대상 유무)를 모두 통과한 뒤 실제 발동 직전에 이걸 한 번 더 물어봐서 False면 이번 틱은 그냥 대기한다
-    (코스트도 포인터도 그대로 유지 - 다음 틱에 다시 물어봄). None이면(기존 전술대회/devtest 두 호출부)
-    완전히 기존과 동일하게 자격만 되면 즉시 발동한다."""
+    manual_cost_gate가 주어지면(실시간 (1v1) 친선전 전용) 로테이션 자체를 쓰지 않고 _tick_team_cost_manual로
+    넘긴다(확인된 요청 - 사람이 직접 클릭으로 순서를 정하므로 "차례"를 강제할 이유가 없음, 준비된 카드
+    아무거나 클릭 가능해야 함). None이면(기존 전술대회/devtest 두 호출부) 완전히 기존과 동일하게 로테이션
+    포인터가 가리키는 카드 하나만 검사해 자격이 되면 즉시 발동한다."""
     roster = _cost_rotation_units(team)
 
     seconds_per_point = COST_SECONDS_PER_POINT_BY_ALIVE.get(len(roster))
@@ -550,6 +550,10 @@ def _tick_team_cost(team, enemy_team, side_name, time_elapsed, events, manual_co
         team["cost"] = min(TEAM_COST_MAX, team["cost"] + TICK / seconds_per_point)
 
     if not roster:
+        return
+
+    if manual_cost_gate is not None:
+        _tick_team_cost_manual(team, enemy_team, side_name, time_elapsed, events, roster, manual_cost_gate)
         return
 
     current_i, unit = _current_cost_turn(team, roster)
@@ -574,8 +578,6 @@ def _tick_team_cost(team, enemy_team, side_name, time_elapsed, events, manual_co
             "next_slot": COST_ROTATION_SLOTS[(current_i + 1) % len(COST_ROTATION_SLOTS)],
         })
         _advance_cost_turn(team, current_i)
-        if manual_cost_gate is not None:
-            manual_cost_gate.discard(side_name)
         return
 
     last_cast = unit.get("_last_cast_time")
@@ -592,8 +594,6 @@ def _tick_team_cost(team, enemy_team, side_name, time_elapsed, events, manual_co
             "next_slot": COST_ROTATION_SLOTS[(current_i + 1) % len(COST_ROTATION_SLOTS)],
         })
         _advance_cost_turn(team, current_i)
-        if manual_cost_gate is not None:
-            manual_cost_gate.discard(side_name)
         return
 
     availability_check = SKILL_TARGET_AVAILABILITY_CHECKS.get(unit.get("skill_effect_type"))
@@ -609,8 +609,6 @@ def _tick_team_cost(team, enemy_team, side_name, time_elapsed, events, manual_co
             "next_slot": COST_ROTATION_SLOTS[(current_i + 1) % len(COST_ROTATION_SLOTS)],
         })
         _advance_cost_turn(team, current_i)
-        if manual_cost_gate is not None:
-            manual_cost_gate.discard(side_name)
         return
 
     # CC(기절 등)가 오래 지속되는 동안엔 코스트 풀이 막힘과 무관하게 계속 차서(위 seconds_per_point
@@ -623,9 +621,6 @@ def _tick_team_cost(team, enemy_team, side_name, time_elapsed, events, manual_co
     last_team_cast = team.get("_last_cast_time")
     if last_team_cast is not None and time_elapsed - last_team_cast < SKILL_CARD_COOLDOWN_SECONDS:
         return
-
-    if manual_cost_gate and not manual_cost_gate(side_name, unit):
-        return  # (1v1) 친선전 수동 발동 대기 - 코스트/포인터 유지, 다음 틱에 다시 물어봄
 
     # ── 발동: 기존 cast_start -> (SKILL_CAST_INTERVAL_MULTIPLIER * interval) -> skill_resolve 절차는
     #        한 글자도 바뀌지 않는다. 바뀐 건 "언제 시작하는가"뿐이다. ──
@@ -646,6 +641,53 @@ def _tick_team_cost(team, enemy_team, side_name, time_elapsed, events, manual_co
         "cost_pool": round(team["cost"], 3),
         "next_slot": COST_ROTATION_SLOTS[team["cost_turn_index"]],
     })
+
+
+def _tick_team_cost_manual(team, enemy_team, side_name, time_elapsed, events, roster, manual_cost_gate):
+    """(1v1 실시간 친선전 전용) 확인된 요청 - 사람이 직접 클릭으로 순서를 정하므로 "차례"라는 개념
+    자체가 필요 없다. 로테이션 포인터(cost_turn_index)를 아예 쓰지 않고, 매 틱 로스터의 모든 카드를
+    독립적으로 검사해서(코스트 충분 / CC(기절·방임) 아님 / 카드별 연속사용 쿨다운 아님 / 대상 있음 -
+    신 부활 대상 없음·방임석 물감 없음·이의진 성별 잠금 등 SKILL_TARGET_AVAILABILITY_CHECKS 전부
+    포함) 자격을 통과한 카드 중 실제로 클릭된 바로 그 카드(manual_cost_gate가 유닛 slot으로 판정)만
+    발동시킨다. 클릭이 대응하는 카드가 아직 자격 미달이면 그냥 대기만 하고(포인터 개념이 없으니
+    "다른 카드로 새는" 일 자체가 구조적으로 불가능하다), 팀 공유 코스트 풀/발동 직후 팀 전체
+    쿨다운(SKILL_CARD_COOLDOWN_SECONDS)은 기존 자동 로테이션 경로와 완전히 동일하게 적용한다."""
+    last_team_cast = team.get("_last_cast_time")
+    if last_team_cast is not None and time_elapsed - last_team_cast < SKILL_CARD_COOLDOWN_SECONDS:
+        return
+
+    for _, unit in roster:
+        if unit["is_casting"]:
+            continue
+        cost = unit["skill_cost"]
+        if team["cost"] < cost:
+            continue
+        if _is_action_blocked(unit, time_elapsed):
+            continue
+        last_cast = unit.get("_last_cast_time")
+        if last_cast is not None and time_elapsed - last_cast < SKILL_CARD_COOLDOWN_SECONDS:
+            continue
+        availability_check = SKILL_TARGET_AVAILABILITY_CHECKS.get(unit.get("skill_effect_type"))
+        if availability_check and not availability_check(unit, team, enemy_team):
+            continue
+
+        if not manual_cost_gate(side_name, unit):
+            continue
+
+        team["cost"] -= cost
+        team["_last_cast_time"] = time_elapsed
+        interval = _effective_interval(unit, time_elapsed)
+        unit["is_casting"] = True
+        unit["cast_end_time"] = time_elapsed + SKILL_CAST_INTERVAL_MULTIPLIER * interval
+        events.append({
+            "time": time_elapsed, "event_type": "cast_start", "side": side_name,
+            "actor": unit["name"], "actor_slot": unit.get("slot"),
+            "effect_type": unit["skill_effect_type"],
+            "duration": SKILL_CAST_INTERVAL_MULTIPLIER * interval,
+            "cost_spent": cost,
+            "cost_pool": round(team["cost"], 3),
+        })
+        return  # 공유 코스트 풀 특성상 한 틱엔 최대 한 장만 발동(명시적으로도 보장)
 
 
 def _tick_one_periodic_effect(unit, kind, handlers, own_team, enemy_team, side_name, time_elapsed, events):

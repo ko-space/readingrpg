@@ -28,7 +28,7 @@ import supabase as supabase_sdk
 from database import get_db
 from models import Character, User
 from security import get_current_user, get_current_user_ws
-from battle_core import ENABLE_SUPPORTER_SLOT, MAX_BATTLE_DURATION, TICK, _team_alive
+from battle_core import COST_ROTATION_SLOTS, ENABLE_SUPPORTER_SLOT, MAX_BATTLE_DURATION, TICK, _team_alive
 from battle_engine import _init_battle, _resolve_battle_outcome, _simulate_tick, build_team
 from achievements import get_equipped_title_info
 from routers.pvp import _character_to_unit, _ensure_defense_assigned, _get_equipped_outfit, _has_defense_team, _team_unit_view
@@ -137,31 +137,21 @@ async def join_room(room_code: str, db: Session = Depends(get_db), user: User = 
 
 
 def _make_manual_cost_gate(state: dict):
-    """_tick_team_cost가 실제 발동 직전에 부르는 게이트. 그 진영에서 "지금 이 카드 써줘" 요청이
-    대기 중일 때만 1회성으로 통과시키고 소비한다(같은 요청으로 다음 카드까지 연달아 나가지 않도록) -
-    AUTO 기능은 제거됐다(확인된 요청 - "스킬이 자동으로 써진다"는 원인 불명 제보가 반복돼서, 아예
-    자동 발동 경로 자체를 없애 항상 직접 눌러야만 나가게 함). 통과시킬 때마다 사유를 로그로 남긴다.
-
-    (진짜 원인 확인) pending_activate는 유닛 단위가 아니라 진영 단위 플래그라, 클릭한 그 순간의
-    카드가 스턴/쿨다운/대상없음으로 "턴 스킵"돼 다음 카드로 로테이션 포인터가 넘어가버리면(이 게이트를
-    거치지 않고 _advance_cost_turn만 호출되는 경로) 대기 중이던 플래그가 소비되지 않은 채 그대로
-    남아있다가, 나중에 완전히 다른(플레이어가 클릭한 적 없는) 카드가 준비됐을 때 그 카드를 대신
-    발동시켜버렸다 - 이게 "분명 안 눌렀는데 오토처럼 나간다"는 제보의 실제 원인이었다. 턴이 게이트를
-    거치지 않고 스킵될 때마다 discard()로 그 대기 플래그를 함께 버려서, 클릭은 오직 "클릭한 바로 그
-    카드가 다음으로 발동 자격을 얻을 때"에만 유효하게 만든다."""
+    """_tick_team_cost_manual(battle_engine.py)이 로스터의 각 카드를 검사할 때마다 부르는 게이트.
+    로테이션(차례) 자체가 없는 1v1 전용 설계라(확인된 요청 - 사람이 직접 클릭하니 순서를 강제할
+    이유가 없음, 준비된 카드 아무거나 클릭 가능해야 함) state["pending_activate"][side]에는 "지금
+    막 클릭된 카드의 slot"(front/back/supporter)이 들어있다 - 지금 검사 중인 유닛의 slot이 정확히
+    그것과 일치할 때만 1회성으로 통과시키고 비운다. 슬롯이 다르면(요청한 카드가 아직 자격 미달이거나
+    다른 카드를 검사 중인 경우) 그냥 대기만 하고 소비하지 않으므로, 클릭한 적 없는 다른 카드로
+    잘못 넘어가는 일(과거 로테이션 기반 설계에서 있었던 버그)이 구조적으로 불가능하다. 통과시킬
+    때마다 사유를 로그로 남긴다."""
     def gate(side_name, unit):
-        if state["pending_activate"].get(side_name):
-            state["pending_activate"][side_name] = False
-            print(f"[pvp_live] 발동 허용: side={side_name} actor={unit['name']} 사유=pending_activate(수동 클릭)")
+        wanted_slot = state["pending_activate"].get(side_name)
+        if wanted_slot is not None and wanted_slot == unit.get("slot"):
+            state["pending_activate"][side_name] = None
+            print(f"[pvp_live] 발동 허용: side={side_name} actor={unit['name']} slot={wanted_slot} 사유=pending_activate(수동 클릭)")
             return True
         return False
-
-    def discard(side_name):
-        if state["pending_activate"].get(side_name):
-            state["pending_activate"][side_name] = False
-            print(f"[pvp_live] 대기 중이던 발동 요청 폐기: side={side_name} 사유=카드 턴 스킵(다른 카드로 자동 승계 방지)")
-
-    gate.discard = discard
     return gate
 
 
@@ -264,7 +254,7 @@ async def host_anchor(websocket: WebSocket, room_code: str, token: str = "", db:
     state = {
         "guest_user_id": None,
         "guest_nickname": None,
-        "pending_activate": {"attacker": False, "defender": False},
+        "pending_activate": {"attacker": None, "defender": None},
         "guest_left": False,
     }
     guest_ready_event = asyncio.Event()
@@ -278,17 +268,15 @@ async def host_anchor(websocket: WebSocket, room_code: str, token: str = "", db:
         state["guest_nickname"] = payload.get("nickname")
         guest_ready_event.set()
 
-    # "클릭도 AUTO도 안 켰는데 스킬이 자동 발동됐다"는 재현 안 되는 제보 조사용 - 실제로 어느 쪽에서
-    # 언제 무슨 payload가 도착하는지 서버 로그에 전부 남긴다(side가 예상 밖 값이면 그것도 그대로 남아
-    # 원인 추적에 쓸 수 있다).
     def on_activate_skill(message):
         payload = message.get("payload", {})
         side = payload.get("side")
+        slot = payload.get("slot")
         print(f"[pvp_live] activate_skill 수신: raw_side={side!r}, payload={payload}")
-        if side in state["pending_activate"]:
-            state["pending_activate"][side] = True
+        if side in state["pending_activate"] and slot in COST_ROTATION_SLOTS:
+            state["pending_activate"][side] = slot
         else:
-            print(f"[pvp_live] activate_skill 무시됨(알 수 없는 side): {side!r}")
+            print(f"[pvp_live] activate_skill 무시됨(알 수 없는 side 또는 slot): side={side!r} slot={slot!r}")
 
     def on_guest_leave(key, current, left):
         # 프레즌스 leave는 실제로 끊긴 뒤 약 3초 정도 지연되어 감지된다(Realtime API 실측 확인) -
