@@ -574,6 +574,8 @@ def _tick_team_cost(team, enemy_team, side_name, time_elapsed, events, manual_co
             "next_slot": COST_ROTATION_SLOTS[(current_i + 1) % len(COST_ROTATION_SLOTS)],
         })
         _advance_cost_turn(team, current_i)
+        if manual_cost_gate is not None:
+            manual_cost_gate.discard(side_name)
         return
 
     last_cast = unit.get("_last_cast_time")
@@ -590,6 +592,8 @@ def _tick_team_cost(team, enemy_team, side_name, time_elapsed, events, manual_co
             "next_slot": COST_ROTATION_SLOTS[(current_i + 1) % len(COST_ROTATION_SLOTS)],
         })
         _advance_cost_turn(team, current_i)
+        if manual_cost_gate is not None:
+            manual_cost_gate.discard(side_name)
         return
 
     availability_check = SKILL_TARGET_AVAILABILITY_CHECKS.get(unit.get("skill_effect_type"))
@@ -605,6 +609,8 @@ def _tick_team_cost(team, enemy_team, side_name, time_elapsed, events, manual_co
             "next_slot": COST_ROTATION_SLOTS[(current_i + 1) % len(COST_ROTATION_SLOTS)],
         })
         _advance_cost_turn(team, current_i)
+        if manual_cost_gate is not None:
+            manual_cost_gate.discard(side_name)
         return
 
     # CC(기절 등)가 오래 지속되는 동안엔 코스트 풀이 막힘과 무관하게 계속 차서(위 seconds_per_point
