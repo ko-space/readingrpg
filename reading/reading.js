@@ -353,6 +353,10 @@
             duration: sessionType === "mock_exam" ? Math.round(durationMs / 60000) : undefined,
             accumulatedMs: getElapsedMs(),
             cutoffWallMs,
+            // isPaused/savedAtWallMs: 탭이 완전히 종료됐다가(아이패드가 백그라운드 탭을 메모리 확보용으로
+            // 강제 종료하는 경우) 다시 로드됐을 때만 쓰이는 값 - startSessionClock의 복구 분기 참고.
+            isPaused,
+            savedAtWallMs: Date.now(),
         });
     }
 
@@ -420,20 +424,44 @@
     }
 
     function startSessionClock() {
-        // 복구된 세션이 있으면 거기서 확정된 누적 시간부터 이어서 잰다 - 탭이 닫혀있던 구간은
-        // 세지 않는다(그 시간엔 실제로 독서를 안 했으니까). cutoffWallMs도 원래 세션이 시작될 때
-        // 계산해둔 값을 그대로 이어받아야, 탭을 닫았다 늦게 열어서 컷오프에 가까워진 경우에도
-        // 컷오프 자체가 새로 밀리지 않는다(이미 컷오프를 지난 세션은 여기까지 오지 않는다 -
+        // 복구된 세션이 있으면 거기서 확정된 누적 시간부터 이어서 잰다. cutoffWallMs도 원래 세션이
+        // 시작될 때 계산해둔 값을 그대로 이어받아야, 탭을 닫았다 늦게 열어서 컷오프에 가까워진
+        // 경우에도 컷오프 자체가 새로 밀리지 않는다(이미 컷오프를 지난 세션은 여기까지 오지 않는다 -
         // expiredSessionToBank로 먼저 걸러져 자동 제출된다).
         accumulatedMs = restoredSession ? Math.max(0, Number(restoredSession.accumulatedMs) || 0) : 0;
-        segmentStartMs = performance.now();
+
+        // 탭이 완전히 종료됐다가(아이패드 등이 메모리 확보를 위해 백그라운드 탭을 강제 종료) 다시
+        // 로드된 경우, visibilitychange 기반 라이브 보정(아래 이 함수 끝부분 - 탭이 살아있는 채로
+        // 멈췄다 깨어나는 경우만 대응)은 발동할 기회 자체가 없다 - 그 리스너와 hiddenSinceWallMs 같은
+        // 메모리 값이 이전 페이지 인스턴스와 함께 전부 사라졌기 때문이다(확인된 버그 - 세션 시작
+        // 직후 곧바로 백그라운드로 가서 40분 뒤 돌아오면 "이제서야 측정을 시작한 것"처럼 보임).
+        // 그래서 마지막 저장 시각(savedAtWallMs) 이후로 흐른 벽시계 시간을, "저장 당시 진행
+        // 중이었을 때만"(restoredSession.isPaused가 아닐 때만 - 일시정지 중에 떠나 있던 시간은
+        // 기존 설계대로 세지 않음) 누적에 더한다. 두 보정은 서로 배타적이다 - 라이브 보정은 탭이
+        // 살아남아야만 발동하고, 이 복구 보정은 탭이 죽어 페이지가 새로 로드돼야만 발동하므로
+        // (그래야 restoredSession이 존재) 같은 배경 구간이 이중으로 반영될 수 없다. 컷오프 이후
+        // 시각은 credit하지 않도록 Date.now() 대신 cutoffWallMs로 클램프한다(과거 시스템 시간 조작
+        // 방지와 동일한 이유 - 이미 isExpired()로 걸러진 세션만 여기 도달하지만, confirm() 대기 등으로
+        // 그 사이 시간이 흘러 컷오프를 넘겼을 수도 있는 경우까지 방어).
+        const restoredIsPaused = Boolean(restoredSession && restoredSession.isPaused);
         cutoffWallMs = (restoredSession && typeof restoredSession.cutoffWallMs === "number")
             ? restoredSession.cutoffWallMs
             : computeCutoffWallMs(Date.now());
+        if (restoredSession && !restoredIsPaused && typeof restoredSession.savedAtWallMs === "number") {
+            const effectiveNowWallMs = Math.min(Date.now(), cutoffWallMs);
+            const gapMs = Math.max(0, effectiveNowWallMs - restoredSession.savedAtWallMs);
+            accumulatedMs += gapMs;
+        }
+
+        segmentStartMs = performance.now();
         cutoffPerfMs = segmentStartMs + (cutoffWallMs - Date.now());
         sessionStarted = true;
+        isPaused = restoredIsPaused;
         document.getElementById("reading-pause-btn").hidden = false;
         document.getElementById("reading-end-btn").hidden = false;
+        if (sessionType !== "mock_exam") {
+            document.getElementById("reading-pause-btn").textContent = isPaused ? "재개" : "일시정지";
+        }
         tick();
         tickIntervalId = setInterval(tick, 1000);
 
