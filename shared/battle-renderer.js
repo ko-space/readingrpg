@@ -192,6 +192,12 @@ function setPortraitImage(imgEl, outfit, variant = "") {
 // 필드/cost_turn_skip) - 그 사이 구간은 순수 시간에 비례하는 선형 증가이므로, 프론트는 매 프레임
 // currentSimTime()과 마지막 키프레임(anchorCost)만으로 지금 값을 정확히 재구성한다. HP바가
 // "절대값 이벤트 + CSS transition 보간"으로 동작하는 것과 같은 철학이다.
+// 김국회 "국회의사당" 착지 지점 전용 - 각 진영 후방(back) 슬롯의 "전투 시작 시점" 고정 위치를
+// side별로 딱 한 번만 캐시한다(renderUnit이 처음 그 키를 그릴 때, 즉 아직 어떤 이동/넉백 이벤트도
+// 재생되기 전). 국회의사당은 실제 그 순간 후방 캐릭터가 어디로 이동해 있든(넉백/근접 접근 등) 항상
+// 이 고정 좌표에 소환돼야 하므로(확인된 요청) - 캐스트 시점에 그때그때 다시 재는 방식은 "지금 후방
+// 슬롯이 실제로 어디 있는지"를 반영해버려 요구사항과 어긋난다.
+const battleStartBackHomeRect = {}; // "attacker-back"/"defender-back" -> DOMRect(최초 1회 측정, 이후 불변)
 const costState = {}; // side -> {pool, max, secondsPerPoint, anchorSimTime, displayed, cards[]}
 let costDockRunning = false;
 // 스킬카드 연속 사용 방지 시각("${side}-${slot}" -> 이 시각(전투 내 시각) 전까지는 CC와 동일한 "막힘"
@@ -559,6 +565,13 @@ function renderUnit(key, hpOverride) {
 
     const battleEl = document.querySelector(`[data-unit="${key}"]`);
     if (!battleEl) return;
+
+    // renderUnit이 이 키를 그리는 첫 호출 = 아직 그 어떤 이동/넉백 이벤트도 처리되기 전(전투 시작
+    // 직전의 초기 렌더 패스) - 국회의사당 착지 지점이 쓸 "진짜 고정 후방 위치"를 여기서 딱 한 번만
+    // 캐시해둔다(battleStartBackHomeRect 선언부 주석 참고).
+    if (key.endsWith("-back") && !battleStartBackHomeRect[key]) {
+        battleStartBackHomeRect[key] = measureHomeRect(battleEl);
+    }
 
     const imgEl = battleEl.querySelector(".battle-unit-img");
     if (!imgEl) return;
@@ -2146,9 +2159,13 @@ function dispatchEvent(event) {
                 const displacedKey = event.detail.displaced_ally
                     ? findUnitKey(event.detail.displaced_side, event.detail.displaced_ally)
                     : null;
-                // 착지 지점은 항상 캐스터 소속 팀의 "후방(back)" 홈 좌표 - 그 슬롯 엘리먼트의 화면
-                // 위치를 기준으로 삼는다(거기 지금 실제로 누가 서 있는지와 무관하게 항상 같은 자리).
-                const rangedSlotEl = document.querySelector(`[data-unit="${event.side}-back"]`);
+                // 착지 지점은 항상 캐스터 소속 팀의 "전투 시작 시점" 후방(back) 고정 좌표 - 그 슬롯에
+                // 지금 실제로 누가 서 있는지, 그 캐릭터가 그 사이 얼마나 이동(걷기/넉백 등)했는지와
+                // 완전히 무관하다(확인된 요청 - battleStartBackHomeRect 선언부 주석 참고). 캐시가 없는
+                // 예외적인 경우(그 진영에 애초에 후방 캐릭터가 없었던 편성 등)에만 그 슬롯 엘리먼트를
+                // 지금 다시 재는 것으로 대체한다.
+                const backSlotKey = `${event.side}-back`;
+                const rangedSlotEl = document.querySelector(`[data-unit="${backSlotKey}"]`);
                 const buildingEl = document.querySelector(`[data-unit="${buildingKey}"]`);
 
                 if (buildingEl) {
@@ -2158,18 +2175,17 @@ function dispatchEvent(event) {
                     // 기본 X 위에 더해준다(summon_clone이 caster 위치로 델타 보정하는 것과 동일한
                     // 방식).
                     let baseX = getCurrentTranslateX(buildingEl);
-                    if (rangedSlotEl) {
-                        // buildingEl 자신도 measureHomeRect로 재야 한다(확인된 버그) - arena-battle.css의
-                        // .battle-unit[data-unit="X-summon-back"]은 스타일시트 자체에 임시 배치용
-                        // transform(translateX(calc(100%+90px)) 등, 대열 바깥으로 미리 빼두는 값)이
-                        // 걸려있어서, 인라인 style.transform을 빈 문자열("")로만 지우면 그 스타일시트
-                        // transform이 그대로 적용된 "밀려난" 위치가 측정된다("" 지우기는 인라인 값만
-                        // 없앨 뿐 캐스케이드가 스타일시트 규칙으로 폴백되기 때문) - 그 오염된 값을
-                        // 기준으로 델타를 계산하면 착지 지점이 원래 있어야 할 후방이 아니라 그 임시
-                        // 배치 위치만큼 안쪽(전방 쪽)으로 밀려서 보였다. measureHomeRect는 "none"으로
-                        // 명시적으로 지워서(캐스케이드를 완전히 무시) 진짜 정적 위치를 재므로 안전하다.
+                    // buildingEl 자신도 measureHomeRect로 재야 한다(확인된 버그) - arena-battle.css의
+                    // .battle-unit[data-unit="X-summon-back"]은 스타일시트 자체에 임시 배치용
+                    // transform(translateX(calc(100%+90px)) 등, 대열 바깥으로 미리 빼두는 값)이 걸려있어서,
+                    // 인라인 style.transform을 빈 문자열("")로만 지우면 그 스타일시트 transform이 그대로
+                    // 적용된 "밀려난" 위치가 측정된다("" 지우기는 인라인 값만 없앨 뿐 캐스케이드가
+                    // 스타일시트 규칙으로 폴백되기 때문) - measureHomeRect는 "none"으로 명시적으로
+                    // 지워서(캐스케이드를 완전히 무시) 진짜 정적 위치를 재므로 안전하다.
+                    const slotRect = battleStartBackHomeRect[backSlotKey]
+                        || (rangedSlotEl ? measureHomeRect(rangedSlotEl) : null);
+                    if (slotRect) {
                         const buildingRect = measureHomeRect(buildingEl);
-                        const slotRect = measureHomeRect(rangedSlotEl);
                         baseX += slotRect.left - buildingRect.left;
                     }
 
