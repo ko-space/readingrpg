@@ -3,9 +3,17 @@ from database import SessionLocal
 from models import (
     Item, Region, Achievement, GachaBanner, Quest, UserQuestClaim,
     UserItem, UserItemPurchase, UserDailyItemPurchase, Notice, Challenge,
-    UserChallengeClaim, MarketState,
+    UserChallengeClaim, MarketState, StorySecret,
 )
 from character_visibility import is_hidden_override
+
+# 히든 업적의 실제 조건/보상과 스토리 히든 콘텐츠의 정답값은 이 저장소(공개 GitHub)에 커밋하지 않는다 -
+# private_seed.py(.gitignore에 등록됨, 로컬/운영 서버에만 직접 올려둠)가 있으면 그걸 쓰고, 없으면(신규
+# 체크아웃, CI 등) 조용히 빈 값으로 넘어간다 - 히든 콘텐츠만 시딩이 안 될 뿐 나머지는 정상 동작해야 한다.
+try:
+    from private_seed import HIDDEN_ACHIEVEMENTS, STORY_SECRETS
+except ImportError:
+    HIDDEN_ACHIEVEMENTS, STORY_SECRETS = [], []
 
 with open("characters.json", "r", encoding="utf-8") as f:
     CHARACTER_POOL = json.load(f)
@@ -643,8 +651,10 @@ ACHIEVEMENTS = [
         "condition_params": {"item_name": "스토리모드 티켓"},
         "reward_gold": 500,
     },
-    # ── 히든 업적 ──────────────────────────────────────────
 ]
+
+# 히든 업적의 실제 조건/보상은 위 공개 목록에 없다 - private_seed.py(있으면)에서만 병합한다.
+ACHIEVEMENTS += HIDDEN_ACHIEVEMENTS
 
 
 def seed_achievements():
@@ -680,6 +690,33 @@ def seed_achievements():
                 ))
             changed = True
 
+        if changed:
+            db.commit()
+    finally:
+        db.close()
+
+
+def seed_story_secrets():
+    """STORY_SECRETS(private_seed.py, 없으면 빈 리스트)를 story_secrets 테이블에 upsert한다. 이 값
+    자체가 공개 저장소에 없으므로, private_seed.py가 없는 환경(신규 체크아웃/CI)에서는 그냥 아무
+    것도 하지 않는다 - 히든 콘텐츠 트리거만 동작 안 할 뿐 나머지 기능에는 영향이 없다."""
+    if not STORY_SECRETS:
+        return
+    db = SessionLocal()
+    try:
+        existing_rows = {
+            (row.story_id, row.key): row for row in db.query(StorySecret).all()
+        }
+        changed = False
+        for secret in STORY_SECRETS:
+            row = existing_rows.get((secret["story_id"], secret["key"]))
+            if row:
+                row.value = secret["value"]
+            else:
+                db.add(StorySecret(
+                    story_id=secret["story_id"], key=secret["key"], value=secret["value"],
+                ))
+            changed = True
         if changed:
             db.commit()
     finally:
