@@ -11,9 +11,9 @@ from character_visibility import is_hidden_override
 # private_seed.py(.gitignore에 등록됨, 로컬/운영 서버에만 직접 올려둠)가 있으면 그걸 쓰고, 없으면(신규
 # 체크아웃, CI 등) 조용히 빈 값으로 넘어간다 - 히든 콘텐츠만 시딩이 안 될 뿐 나머지는 정상 동작해야 한다.
 try:
-    from private_seed import HIDDEN_ACHIEVEMENTS, STORY_SECRETS
+    from private_seed import HIDDEN_ACHIEVEMENTS, STORY_SECRETS, HIDDEN_ITEM_REQUIREMENTS
 except ImportError:
-    HIDDEN_ACHIEVEMENTS, STORY_SECRETS = [], []
+    HIDDEN_ACHIEVEMENTS, STORY_SECRETS, HIDDEN_ITEM_REQUIREMENTS = [], [], {}
 
 with open("characters.json", "r", encoding="utf-8") as f:
     CHARACTER_POOL = json.load(f)
@@ -153,6 +153,9 @@ def seed_enhancement_items():
             {
                 "name": "초심자의 행운",
                 "source_character": None,
+                # required_achievement는 여기 없다 - 아래에서 HIDDEN_ITEM_REQUIREMENTS(private_seed.py)로
+                # 채운다. 어떤 업적이 필요한지 자체가 그 업적의 달성 조건에 대한 힌트라 공개 저장소에
+                # 남기지 않는다(확인된 요청).
                 "purchase_limit": 1,
                 "price": 1500,
                 "currency": "gold",  # 재화 이원화 이후에도 골드로 유지(다른 8종과 달리 실버로 안 바뀜)
@@ -212,6 +215,9 @@ def seed_enhancement_items():
                 "effect_params": {"destroy_delta": -10, "success_delta": 10},
             },
         ]
+        for item in items:
+            if item["name"] in HIDDEN_ITEM_REQUIREMENTS:
+                item["required_achievement"] = HIDDEN_ITEM_REQUIREMENTS[item["name"]]
 
         existing_rows = {row.name: row for row in db.query(Item).filter(Item.item_type == "enhancement").all()}
         changed = False
