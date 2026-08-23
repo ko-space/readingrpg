@@ -580,6 +580,16 @@
                 sendBroadcast("activate_skill", { side: remapSideToken("attacker") });
             }
         });
+
+        // AUTO 배지를 CSS(display:none)뿐 아니라 DOM에서 아예 제거한다(확인된 요청 - "버튼까지
+        // 완전히 없애줘") - buildCostDockHtml(shared/battle-renderer.js의 공용 코스트덕 템플릿)이
+        // cost_init을 받을 때마다 이 배지를 다시 만들어 넣으므로, MutationObserver로 나타나는 즉시
+        // 지운다(dispatchEvent 내부 타이밍에 의존하지 않는 가장 확실한 방법).
+        const stripAutoBadge = () => {
+            myDock.querySelectorAll(".cost-auto-badge").forEach((el) => el.remove());
+        };
+        stripAutoBadge();
+        new MutationObserver(stripAutoBadge).observe(myDock, { childList: true, subtree: true });
     }
 
     async function startAsHost() {
