@@ -488,13 +488,13 @@ body {
     box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.16);
 }
 
-/* 우리팀(attacker) 체력바 - 인물 방어타입과 무관하게 항상 연두색으로 통일(확인된 요청 - 그라데이션
+/* 우리팀(attacker) 체력바 - 로스터 좌측 강조선과 동일한 파란색으로 통일(확인된 요청 - 그라데이션
    없이 단색). */
 .roster-hp-fill {
     width: 100%;
     height: 100%;
-    background: #9acd32;
-    box-shadow: 0 0 7px rgba(154, 205, 50, 0.75) inset;
+    background: rgb(90, 167, 242);
+    box-shadow: 0 0 7px rgba(90, 167, 242, 0.75) inset;
     transition: width 0.25s ease-out;
 }
 
