@@ -157,6 +157,9 @@
             meleeSpeedRatio: rawUnit.melee_speed_ratio || 1,
             outfit: rawUnit.outfit,
             star: rawUnit.star,
+            // 로스터 체력바 색상용(상대팀만 방어타입별로 다르게 - arena-battle.css의
+            // [data-defense-type] 규칙 참고, 공격타입 스킬카드 색과 같은 계열).
+            defenseType: rawUnit.defense_type,
             style: RANGED_ATTACK_STYLE[rawUnit.name] || (rawUnit.is_melee ? "melee" : "straight"),
             isType2: false, // 이의진 전용: 염색체 변환(self_type_swap_heal) 스킬로 전투 중 true/false 토글됨
         };
