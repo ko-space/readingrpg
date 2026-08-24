@@ -519,6 +519,10 @@ function renderUnit(key, hpOverride) {
     const displayHp = hpOverride == null ? unit.hp : hpOverride;
 
     if (rosterEl) {
+        // 상대팀 체력바 색상을 방어타입별로 다르게 칠하기 위한 훅(arena-battle.css의
+        // [data-defense-type] 규칙 참고) - 우리팀은 defenseType과 무관하게 항상 단일 색이라
+        // 이 속성이 있어도 CSS가 defender 쪽만 참조한다.
+        if (unit.defenseType) rosterEl.dataset.defenseType = unit.defenseType;
         const hpFillEl = rosterEl.querySelector(".roster-hp-fill");
         const hpPercent = Math.max(0, (displayHp / unit.maxHp) * 100);
 

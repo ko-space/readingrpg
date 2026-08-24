@@ -467,6 +467,7 @@ def _team_unit_view(unit: dict | None, character: Character | None):
         "melee_speed_ratio": unit.get("melee_speed_ratio"),
         "outfit": character.outfit,
         "star": character.star,
+        "defense_type": unit["defense_type"],
     }
 
 

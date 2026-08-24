@@ -192,7 +192,7 @@ body {
 .player-panel[data-side="attacker"] .player-identity,
 .player-panel[data-side="attacker"] .roster-unit {
     box-shadow:
-        inset 5px 0 0 rgba(90, 167, 242, 0.88),
+        inset 5px 0 0 rgba(154, 205, 50, 0.88),
         0 5px 14px rgba(0, 0, 0, 0.22),
         var(--gold-glow, 0 0 10px rgba(232, 184, 75, 0.55));
 }
@@ -488,17 +488,29 @@ body {
     box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.16);
 }
 
+/* 우리팀(attacker) 체력바 - 인물 방어타입과 무관하게 항상 연두색으로 통일(확인된 요청) */
 .roster-hp-fill {
     width: 100%;
     height: 100%;
-    background: linear-gradient(to right, #4285f4, #5aa7f2, #7cc4ff);
-    box-shadow: 0 0 7px rgba(90, 167, 242, 0.75) inset;
+    background: linear-gradient(to right, #d9f27a, #9acd32, #5a7a1a);
+    box-shadow: 0 0 7px rgba(154, 205, 50, 0.75) inset;
     transition: width 0.25s ease-out;
 }
 
+/* 상대팀(defender) 체력바 - 인물별 방어타입에 맞춰 색을 다르게(공격타입 스킬카드 색과 동일 계열 -
+   .cost-card.type-* 참고: 부모=파랑/교사=빨강/학생=초록). data-defense-type이 없는 경우(구형 캐시 등)
+   를 대비해 기본값은 부모(파랑) 계열로 둔다. */
 .player-panel[data-side="defender"] .roster-hp-fill {
-    background: linear-gradient(to right, #e0645a, #ef7a6f, #ffc4ba);
-    box-shadow: 0 0 7px rgba(224, 100, 90, 0.7) inset;
+    background: linear-gradient(to right, #7db6ff, #2f6fd0, #12305e);
+    box-shadow: 0 0 7px rgba(47, 111, 208, 0.7) inset;
+}
+.player-panel[data-side="defender"] .roster-unit[data-defense-type="Teacher"] .roster-hp-fill {
+    background: linear-gradient(to right, #ff9a8a, #e0483a, #5e130c);
+    box-shadow: 0 0 7px rgba(224, 72, 58, 0.7) inset;
+}
+.player-panel[data-side="defender"] .roster-unit[data-defense-type="Student"] .roster-hp-fill {
+    background: linear-gradient(to right, #8ee49a, #2fae52, #0d4a1f);
+    box-shadow: 0 0 7px rgba(47, 174, 82, 0.7) inset;
 }
 
 .roster-unit-dead {
