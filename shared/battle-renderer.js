@@ -2392,12 +2392,21 @@ function dispatchEvent(event) {
                 battleRendererConfig.appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail.hits)}`, event.side);
             }
         } else if (dispatchEffectType === "aoe_gendered_damage" && actorKey) {
-            applySkillHits(event);
-            (event.detail?.hits || []).forEach((hit) => {
+            // 서민석 "고백" - 하트 투사체가 실제로 대상에 닿는 순간에 맞춰 피해/HP/피격 이펙트를
+            // 반영한다(가스 숨결·aoe_enemy_damage와 동일한 패턴, 확인된 요청). HP는 지금(이벤트
+            // 처리 시점) 즉시 반영하고(죽음 여부도 함께 캡처), 하트가 도착하는 시점엔 화면(렌더/
+            // 이펙트)만 갱신한다 - captureAndApplyHp 참고.
+            const heartHits = event.detail?.hits || [];
+            const heartDeadFlags = heartHits.map((hit) => captureAndApplyHp(findHitKey(hit.target, hit.target_side), hit.target_hp_after, hit.target_shield_after));
+            heartHits.forEach((hit, i) => {
                 const targetKey = findHitKey(hit.target, hit.target_side);
                 if (!targetKey) return;
                 const gender = effectiveGender(hit.target, targetKey);
-                spawnHeartProjectile(actorKey, targetKey, gender === "여" ? "heart-red" : "heart-pink", () => {});
+                spawnHeartProjectile(actorKey, targetKey, gender === "여" ? "heart-red" : "heart-pink", () => {
+                    if (heartDeadFlags[i]) return;
+                    renderUnit(targetKey);
+                    flashHit(targetKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage, hit.invincible_block);
+                });
             });
             battleRendererConfig.appendLog(`${event.actor}의 [Active] 발동! ${hitsSummaryText(event.detail?.hits)}`, event.side);
         } else if (dispatchEffectType === "debuff_atk_and_damage" && actorKey && event.detail?.hits?.length) {
