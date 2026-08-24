@@ -153,9 +153,11 @@ def seed_enhancement_items():
             {
                 "name": "초심자의 행운",
                 "source_character": None,
-                # required_achievement는 여기 없다 - 아래에서 HIDDEN_ITEM_REQUIREMENTS(private_seed.py)로
-                # 채운다. 어떤 업적이 필요한지 자체가 그 업적의 달성 조건에 대한 힌트라 공개 저장소에
-                # 남기지 않는다(확인된 요청).
+                # required_achievement/description(원래 문구는 그 업적 이름을 그대로 담은 말장난)은
+                # 여기 없다 - 아래에서 HIDDEN_ITEM_REQUIREMENTS(private_seed.py)가 있을 때만 실제
+                # 값으로 덮어쓴다. 어떤 업적이 필요한지 자체가 그 업적의 달성 조건에 대한 힌트라
+                # 공개 저장소에 남기지 않는다(확인된 요청). private_seed.py가 없는 환경에서는 이
+                # 기본값(제한 없음 + 일반 문구) 그대로 시딩된다.
                 "purchase_limit": 1,
                 "price": 1500,
                 "currency": "gold",  # 재화 이원화 이후에도 골드로 유지(다른 8종과 달리 실버로 안 바뀜)
@@ -217,7 +219,11 @@ def seed_enhancement_items():
         ]
         for item in items:
             if item["name"] in HIDDEN_ITEM_REQUIREMENTS:
-                item["required_achievement"] = HIDDEN_ITEM_REQUIREMENTS[item["name"]]
+                achievement_name = HIDDEN_ITEM_REQUIREMENTS[item["name"]]
+                item["required_achievement"] = achievement_name
+                # 원래 설명 문구("OOO입니다.")는 그 업적 이름을 그대로 담은 말장난이라, 실제 이름을
+                # 아는 여기(private_seed.py가 있는 환경)에서만 되살린다.
+                item["description"] = f"{achievement_name}입니다."
 
         existing_rows = {row.name: row for row in db.query(Item).filter(Item.item_type == "enhancement").all()}
         changed = False
