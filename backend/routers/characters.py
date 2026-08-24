@@ -804,9 +804,7 @@ def enhance_character(
             # 도전과제("강화 슈퍼 성공 누적 N회") 판정용 - 위 character_enhance_success와 별개로
             # 슈퍼 성공만 따로도 셀 수 있게 추가로 남긴다.
             db.add(ActivityLog(user_id=locked_user.id, activity_type="character_enhance_super_success"))
-        # 확률표(아이템 효과 반영 후) 기준 "성공" 계열(일반+슈퍼) 확률 합이 90% 이상이었던 성공 1회를
-        # 기록한다. dust_convert(마법 영약)는 확률표 자체가 다른 성격이라 여기(else 분기 안)에서는
-        # 애초에 해당 안 됨.
+        # dust_convert(마법 영약)는 확률표 자체가 다른 성격이라 여기(else 분기 안)에서는 애초에 해당 안 됨.
         if (rule.get("success", 0) + rule.get("super_success", 0)) >= 90:
             db.add(ActivityLog(user_id=locked_user.id, activity_type="enh_evt_03"))
     elif outcome == "destroy":
@@ -814,7 +812,6 @@ def enhance_character(
     if selected_user_items:
         db.add(ActivityLog(user_id=locked_user.id, activity_type="item_use"))
 
-    # 오페라 하우스 + 독서대를 "모두" 쓴 강화 성공을 캐릭터별로 기록한다.
     # ActivityLog에는 params 컬럼이 없어서 대상 캐릭터 이름을 activity_type 문자열에 함께 박는다.
     used_item_names = {item.name for item in item_defs}
     if outcome in ("success", "super_success") and {"윤영준의 오페라 하우스", "송주헌의 독서대"} <= used_item_names:
@@ -823,7 +820,6 @@ def enhance_character(
             activity_type=f"enh_evt_01:{req.character_name}",
         ))
 
-    # 최고 단계(★5 -> ★6) 강화를 아이템 없이 시도한 경우를 기록한다.
     if req.star == 5 and not item_defs:
         db.add(ActivityLog(user_id=locked_user.id, activity_type="enh_evt_02"))
 
