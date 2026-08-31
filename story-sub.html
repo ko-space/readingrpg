@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>서브 스토리 - 독서 RPG</title>
+<link rel="icon" href="logoicon.webp">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="story/story-sub.css?v=20260831">
+</head>
+<body>
+
+<div id="lobby-wrap">
+  <div id="lobby-stage">
+
+    <div id="lobby-home" class="lobby-screen show">
+      <div class="lobby-home-inner">
+        <div id="lobby-title">서브스토리</div>
+        <div class="lobby-menu">
+          <button class="lobby-btn" id="btn-episodes">Episode 선택</button>
+          <button class="lobby-btn" id="btn-exit">나가기</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="lobby-episodes" class="lobby-screen">
+      <div class="lobby-header">
+        <button class="lobby-back" id="episodes-back-btn">◀ 뒤로</button>
+        <span class="lobby-header-title">Episode 선택</span>
+      </div>
+      <div class="lobby-episode-list">
+        <div class="episode-story-card">
+          <div class="episode-story-thumb"><img src="" id="kimnamok-thumb" alt=""></div>
+          <div class="episode-story-info">
+            <div class="episode-story-name">김남옥</div>
+            <div class="episode-story-desc">김남옥은 어떻게 크레파스 회사 사장이 되었을까?</div>
+          </div>
+          <button class="episode-story-enter" id="btn-enter-kimnamok">입장</button>
+        </div>
+        <div class="episode-story-card locked">
+          <div class="episode-story-thumb"><span class="thumb-placeholder">?</span></div>
+          <div class="episode-story-info">
+            <div class="episode-story-name">이의진</div>
+            <div class="episode-story-desc">왜 이의진은 눈을 뜰 수 없게 되었을까?</div>
+          </div>
+          <button class="episode-story-enter" disabled>준비 중</button>
+        </div>
+        <div class="episode-story-card locked">
+          <div class="episode-story-thumb"><span class="thumb-placeholder">?</span></div>
+          <div class="episode-story-info">
+            <div class="episode-story-name">이종복</div>
+            <div class="episode-story-desc">왜 이종복은 인간으로 남아 있기를 거부했을까?</div>
+          </div>
+          <button class="episode-story-enter" disabled>준비 중</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 화(chapter) 선택 모달 - 화별 잠금/입장가능/재입장 상태는 story-sub-engine.js가 동적으로 그린다 -->
+<div id="chapter-modal">
+  <div class="chapter-modal-box">
+    <div class="chapter-modal-header">
+      <span class="chapter-modal-title" id="chapter-modal-title">오랜만의 재회</span>
+      <div class="vn-ticket-chip"><img class="vn-ticket-icon" src="assets/items/story_ticket.webp" alt="" onerror="this.style.display='none'"> <span id="vn-ticket-value">0</span></div>
+      <button class="chapter-modal-close" id="chapter-modal-close">✕</button>
+    </div>
+    <div class="chapter-list" id="chapter-list"></div>
+  </div>
+</div>
+
+<div id="stage">
+  <div id="scene-fade"></div>
+  <div id="time-card-overlay" aria-hidden="true">
+    <div id="time-card-text"></div>
+  </div>
+  <div id="bg-mood"></div>
+  <div id="bg-vignette"></div>
+
+  <div id="stage-top-btns">
+    <button id="zoom-btn" type="button">확대</button>
+    <button id="log-btn" type="button">대사</button>
+    <button id="menu-btn" type="button">메뉴</button>
+  </div>
+
+  <div id="char-left"><img id="char-left-img" src="" alt=""></div>
+  <div id="char-right"><img id="char-right-img" src="" alt=""></div>
+  <div id="char-center"><img id="char-center-img" src="" alt=""></div>
+
+  <div id="phone-layer">
+    <div id="phone-window">
+      <div id="phone-header"><span id="phone-icon">♠</span> BugoTalk</div>
+      <div id="phone-body">
+        <div id="phone-contacts"></div>
+        <div id="phone-chat">
+          <div id="chat-messages"></div>
+          <div id="phone-compose">
+            <input id="phone-compose-input" type="text" placeholder="메시지를 입력하세요" maxlength="60">
+            <button id="phone-compose-send">전송</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="letter-layer">
+    <div id="letter-stack">
+      <div id="letter-envelope"><img id="letter-envelope-img" src=""></div>
+      <div id="letter-paper">
+        <img id="letter-paper-img" src="">
+        <div id="letter-paper-text"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="dialogue-wrap">
+    <div id="nameplate">
+      <span id="name-main"></span>
+      <span class="sub" id="name-sub"></span>
+    </div>
+    <div id="box">
+      <div id="line-text"></div>
+      <div id="advance-hint">클릭해서 계속 ▶</div>
+    </div>
+  </div>
+
+  <!-- 화 종료 연출: 블러+비네트 -> "To Be Continued..." 슬라이드 -> 상하 커튼(가챠 도어를 세로로
+       바꾼 버전) 닫힘/열림 -> 흰 띠 다음화 배너 -> 페이드아웃 -> Episode 선택(화선택 모달까지) 복귀 -->
+  <div id="chapter-end-cinematic">
+    <div id="cec-tbc-text">To Be Continued...</div>
+    <div id="cec-curtain-top"></div>
+    <div id="cec-curtain-bottom"></div>
+    <div id="cec-banner">
+      <div id="cec-banner-text"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 화 입장 티켓 확인 모달 -->
+<div class="vn-ticket-modal" id="vn-ticket-confirm-modal">
+  <div class="vn-ticket-modal-box">
+    <div class="vn-ticket-modal-text" id="vn-ticket-confirm-text">티켓을 사용하여<br>이 화를 잠금 해제하시겠습니까?</div>
+    <div class="vn-ticket-modal-btns">
+      <button class="vn-ticket-modal-btn primary" id="vn-ticket-confirm-ok">확인</button>
+      <button class="vn-ticket-modal-btn" id="vn-ticket-confirm-cancel">취소</button>
+    </div>
+  </div>
+</div>
+
+<!-- 티켓 부족 모달 -->
+<div class="vn-ticket-modal" id="vn-ticket-insufficient-modal">
+  <div class="vn-ticket-modal-box">
+    <div class="vn-ticket-modal-text">티켓이 부족합니다</div>
+    <div class="vn-ticket-modal-btns">
+      <button class="vn-ticket-modal-btn primary" id="vn-ticket-insufficient-ok">확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- 대화 기록(대사) 모달 -->
+<div id="vn-log-modal" aria-hidden="true">
+  <div id="vn-log-modal-box">
+    <div id="vn-log-modal-header">
+      <div id="vn-log-modal-title">대화 기록</div>
+      <button id="vn-log-modal-close" type="button" aria-label="닫기">✕</button>
+    </div>
+    <div id="vn-log-modal-content"></div>
+  </div>
+</div>
+
+<!-- 스토리 진행 중 메뉴 모달 -->
+<div class="vn-ticket-modal" id="vn-menu-modal">
+  <div class="vn-ticket-modal-box">
+    <div class="vn-menu-title">메뉴</div>
+    <div class="vn-ticket-modal-btns">
+      <button class="vn-ticket-modal-btn primary" id="vn-menu-resume">이어하기</button>
+      <button class="vn-ticket-modal-btn" id="vn-menu-exit">종료</button>
+    </div>
+  </div>
+</div>
+
+<script src="shared/api-config.js?v=20260831"></script>
+<script src="shared/session-guard.js?v=20260831"></script>
+<script src="shared/nav-lock.js?v=20260831"></script>
+<script src="shared/avatar-crop.js?v=20260831"></script>
+<script src="story/scenario/sub1_kimnamok.js?v=20260831"></script>
+<script src="story/story-sub-engine.js?v=20260831"></script>
+</body>
+</html>

@@ -38,6 +38,7 @@ TARGET_FILES = [
     "index.html",
     "reading.html",
     "story-relationship.html",
+    "story-sub.html",
     "raid-prototype/index.html",
 ]
 

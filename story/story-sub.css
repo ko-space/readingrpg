@@ -1,0 +1,1095 @@
+/* 서브 스토리 공용 스타일. 오랜만의_재회_S1-13_프로토타입.html의 <style> 블록을 그대로 이식하되,
+   캐릭터 스탠딩 크기/클리핑 규칙만 story-relationship.css가 최근 적용받은 "1.5배 확대 + 아래쪽 1/3
+   클리핑"(#char-left/#char-right/#char-center 참고)으로 교체했다. 향후 추가되는 서브 스토리(이의진/
+   이종복 등)도 이 파일 + story/story-sub-engine.js를 그대로 재사용한다. */
+@font-face {
+  font-family: 'GyeonggiTitle';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2410-3@1.0/Title_Light.woff') format('woff');
+  font-weight: 300;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'GyeonggiTitle';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2410-3@1.0/Title_Medium.woff') format('woff');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'GyeonggiTitle';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2410-3@1.0/Title_Medium.woff') format('woff');
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'GyeonggiTitle';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2410-3@1.0/Title_Bold.woff') format('woff');
+  font-weight: 700;
+  font-display: swap;
+}
+:root{
+  --ink: #23262b;
+  --paper: #f6f3ec;
+  --accent: #8a6f4e;
+  --accent-soft: #cdbfa5;
+  --box-bg: rgba(20, 18, 22, 0.82);
+  --box-border: rgba(255,255,255,0.08);
+}
+*{box-sizing:border-box; margin:0; padding:0; font-family:inherit;}
+html,body{
+  height:100%;
+  font-family: "GyeonggiTitle","Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  background:#000;
+}
+body{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+}
+
+/* ===== 무대 (인연 스토리와 동일하게 16:9, PC 규격 통일 규칙 재사용) ===== */
+#stage{
+  position:relative;
+  width:min(100vw, calc(100vh * 1.7777778), 1280px);
+  height:auto;
+  max-width:1280px;
+  aspect-ratio: 16/9;
+  margin:auto;
+  overflow:hidden;
+  background:#000;
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 0 60px rgba(0,0,0,0.6);
+  transition: background-image .25s ease;
+  /* 대사/이름 등을 드래그로 긁어 선택하는 걸 막는다(story-relationship.css와 동일한 이유) - 화면을
+     빠르게 클릭해서 다음 대사로 넘기다 보면 실수로 텍스트가 드래그 선택되는 경우가 잦았다. */
+  user-select:none;
+  -webkit-user-select:none;
+}
+
+#stage-top-btns{
+  position:absolute;
+  top:10px; right:10px;
+  z-index:50;
+  display:flex;
+  gap:8px;
+}
+#stage-top-btns button{
+  font-size:11px;
+  font-family:inherit;
+  color:#fff;
+  background: rgba(0,0,0,0.45);
+  border:1px solid rgba(255,255,255,0.3);
+  padding:5px 12px;
+  border-radius:4px;
+  cursor:pointer;
+}
+#stage-top-btns button:hover{ background: rgba(0,0,0,0.7); }
+
+/* 확대(UI 숨기기) - 배경/스탠딩만 보이게 대사창과 상단 버튼(자기 자신 포함)을 숨긴다(story-relationship.css와
+   동일한 방식). 버튼이 같이 숨어버려서 다시 누를 수 없으므로, #stage 아무 곳이나 클릭하면 원래대로
+   돌아온다(story-sub-engine.js 참고). */
+#stage.ui-zoomed #dialogue-wrap,
+#stage.ui-zoomed #stage-top-btns{
+  display:none;
+}
+
+#scene-fade{
+  position:absolute;
+  inset:0;
+  z-index:999;
+  background:#000;
+  opacity:0;
+  pointer-events:none;
+  /* 사라질 때(암전 해제): 중앙(이동 시작점=완전히 덮인 상태)에서 천천히 출발해 끝(투명해지는 순간)으로
+     갈수록 빨라진다 - 가속(ease-in) 곡선. 다음화 커튼(#cec-curtain-top.reopen)과 동일한 곡선. */
+  transition: opacity .65s cubic-bezier(0.4, 0, 1, 1);
+}
+#scene-fade.active{
+  opacity:1;
+  pointer-events:auto;
+  /* 나타날 때(암전): 빠르게 시작해 중앙(다 덮이는 지점)에서 천천히 멈춘다 - 감속(ease-out) 곡선.
+     다음화 커튼(#cec-curtain-top.closed)과 동일한 곡선. */
+  transition: opacity .65s cubic-bezier(0, 0, 0.2, 1);
+}
+#scene-fade.white{ background:#fff; }
+
+#time-card-overlay{
+  position:absolute;
+  inset:0;
+  z-index:1000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  pointer-events:none;
+  opacity:0;
+  visibility:hidden;
+  /* visibility도 같이 transition에 넣어야, .show가 빠질 때 opacity가 1->0으로 서서히 줄어드는
+     동안은 visibility가 visible로 유지되다가 정확히 페이드가 끝나는 시점에만 hidden으로 바뀐다
+     (story-relationship.css와 동일 규칙 - opacity만 있으면 .show가 빠지는 즉시 visibility:hidden이
+     바로 적용돼서 opacity 애니메이션이 뒤에서 계속 진행 중이어도 화면엔 바로 사라진 것처럼 보인다). */
+  transition:opacity .65s ease, visibility .65s ease;
+}
+#time-card-overlay.show{
+  visibility:visible;
+  opacity:1;
+}
+#time-card-text{
+  color:#fff;
+  font-size:clamp(30px, 5vw, 60px);
+  font-weight:800;
+  letter-spacing:.08em;
+  text-shadow:0 4px 24px rgba(0,0,0,.85);
+  text-align:center;
+  white-space:pre-wrap;
+}
+#time-card-overlay.white #time-card-text{
+  color:#2a2620;
+  text-shadow:0 4px 24px rgba(255,255,255,.9);
+}
+
+#bg-mood{
+  position:absolute; inset:0;
+  background: rgba(20,15,10,0.06);
+  pointer-events:none;
+}
+#bg-vignette{
+  position:absolute; inset:0;
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.45) 100%);
+  pointer-events:none;
+}
+
+/* 캐릭터를 실제 크기의 1.5배로 확대해서 배치하되, 그중 아래쪽 1/3은 #stage의 overflow:hidden에
+   가려서 화면엔 항상 위쪽 2/3만 보인다 - story-relationship.css의 #char-left/#char-right/#char-center와
+   동일한 규칙(138%=92%*1.5, bottom:-46%=138%/3). 좌우 앵커(6%)는 이 프로토타입 고유 배치라 그대로
+   유지 - 크기 규칙과 무관한 값이다. */
+#char-left, #char-right{
+  position:absolute;
+  bottom:-46%;
+  height:138%;
+  z-index:1;
+  display:flex;
+  align-items:flex-end;
+  transition: opacity .5s ease, transform .5s ease, filter .35s ease;
+  opacity:0;
+  pointer-events:none;
+}
+#char-left{ left:6%; transform: translateY(18px); }
+#char-right{ right:6%; transform: translateY(18px); }
+#char-left.show, #char-right.show{ opacity:1; transform:translateY(0); }
+/* 2명 이상 동시에 등장했을 때, 지금 말하는 사람이 아닌 쪽을 어둡게 해서 상대적으로 말하는 쪽이
+   밝아 보이게 한다(인연 스토리와 동일 - story-sub-engine.js의 applySpeakingDim 참고). */
+#char-left.dim, #char-right.dim{ filter:brightness(0.5) saturate(0.65); }
+#char-left img, #char-right img{
+  height:100%;
+  object-fit:contain;
+  -webkit-user-drag:none;
+  user-select:none;
+}
+#char-center{
+  position:absolute;
+  bottom:-46%;
+  left:50%;
+  height:138%;
+  z-index:2;
+  display:flex;
+  align-items:flex-end;
+  transform: translate(-50%, 18px);
+  transition: opacity .5s ease, transform .5s ease, filter .35s ease;
+  opacity:0;
+  pointer-events:none;
+}
+#char-center.show{ opacity:1; transform:translate(-50%, 0); }
+#char-center.dim{ filter:brightness(0.5) saturate(0.65); }
+#char-center img{
+  height:100%;
+  object-fit:contain;
+  -webkit-user-drag:none;
+  user-select:none;
+}
+
+#dialogue-wrap{
+  position:absolute;
+  left:0; right:0; bottom:0;
+  padding: 0 4% 4%;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:0;
+  z-index:5;
+}
+#dialogue-wrap.hidden{ display:none; }
+
+#nameplate{
+  background: var(--accent);
+  color:#fff;
+  font-weight:700;
+  font-size:15px;
+  padding:6px 22px;
+  border-radius:6px 6px 0 0;
+  display:none;
+  align-items:baseline;
+  gap:8px;
+  letter-spacing:0.5px;
+}
+#nameplate .sub{
+  font-weight:400;
+  font-size:11px;
+  opacity:0.85;
+}
+
+#box{
+  width:100%;
+  min-height:118px;
+  background: var(--box-bg);
+  border:1px solid var(--box-border);
+  border-radius: 4px;
+  backdrop-filter: blur(6px);
+  padding: 22px 26px;
+  cursor:pointer;
+  position:relative;
+}
+#box.thought #line-text{ font-style: italic; color:#e7e2d8; }
+#box.narration{ background: rgba(10,10,12,0.72); }
+#box.narration #line-text{ color:#d9d4c8; text-align:left; }
+#box.speech #line-text{ text-align:left; }
+
+#line-text{
+  color:#fdfbf6;
+  font-size: 17px;
+  line-height:1.75;
+  white-space:pre-wrap;
+  min-height:3.5em;
+}
+
+#advance-hint{
+  position:absolute;
+  right:20px; bottom:14px;
+  font-size:12px;
+  color: rgba(255,255,255,0.55);
+  animation: blink 1.4s infinite;
+}
+@keyframes blink{ 0%,100%{opacity:.3;} 50%{opacity:1;} }
+
+/* ===== 화 종료 연출(다음화 예고) =====
+   순서: ①블러+비네트가 비교적 빠르게 서서히 덮인다 -> ②"To Be Continued..."가 오른쪽에서
+   슬라이드로 들어와 우하단에 멈춘다 -> ③1.5초 후 화면이 상하로(가챠 도어와 같은 방식이지만
+   좌우가 아닌 위아래 방향) 검게 닫힌다 -> ④닫히자마자 곧바로 다시 열리며, 열리는 순간 흰 띠 배너
+   (다음화 제목)가 드러나 있다 -> ⑤전체 페이드아웃 -> ⑥Episode 선택 화면 + 화 선택 모달로 복귀. */
+#chapter-end-cinematic{
+  position:absolute;
+  inset:0;
+  z-index:1500;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .4s ease;
+  overflow:hidden;
+}
+#chapter-end-cinematic.show{
+  opacity:1;
+  pointer-events:auto;
+}
+/* 블러+비네트: backdrop-filter로 뒤(배경/캐릭터)만 흐리게 하고, 이 레이어의 자식 요소(문구/커튼/배너)는
+   흐려지지 않는다(프로스티드 글래스 기법 - 자식은 backdrop-filter의 영향을 받지 않음). */
+#chapter-end-cinematic::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  backdrop-filter: blur(9px);
+  -webkit-backdrop-filter: blur(9px);
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.25) 40%, rgba(0,0,0,0.72) 100%);
+  transition: opacity .2s ease;
+}
+/* 두 번째 문(커튼) 닫힘 이후 - 블러/비네트를 완전히 걷어서 문이 다시 열렸을 때 뒤(로비)가 흐리지 않고
+   또렷하게 보이도록 한다. 문(커튼)은 이 레이어의 형제가 아니라 자식이지만 각자 독립적인 opacity/
+   transform을 갖고 있어서, 이 레이어 자체의 opacity(.show)는 그대로 둔 채 배경만 지워도 문제 없다. */
+#chapter-end-cinematic.no-backdrop::before{
+  opacity:0;
+}
+#cec-tbc-text{
+  position:absolute;
+  right:6%;
+  bottom:9%;
+  z-index:2;
+  color:#f6f0df;
+  font-size:clamp(18px, 3vw, 30px);
+  font-weight:700;
+  letter-spacing:0.12em;
+  text-shadow:0 4px 18px rgba(0,0,0,0.85);
+  opacity:0;
+  transform: translateX(160px);
+  transition: opacity .55s cubic-bezier(.15,.72,.22,1), transform .55s cubic-bezier(.15,.72,.22,1);
+}
+#cec-tbc-text.show{
+  opacity:1;
+  transform: translateX(0);
+}
+#cec-curtain-top, #cec-curtain-bottom{
+  position:absolute;
+  left:0; right:0;
+  height:52%;
+  background:#000;
+  z-index:3;
+  transition: transform .5s ease-in-out;
+}
+#cec-curtain-top{ top:0; transform: translateY(-100%); }
+#cec-curtain-bottom{ bottom:0; transform: translateY(100%); }
+/* 닫힐 때: 가장자리(끝부분, 이동 시작점)에서 빠르게 출발해 중앙(만나는 지점, 이동 끝)에서 천천히
+   멈춘다 - 감속(ease-out) 곡선. */
+#cec-curtain-top.closed, #cec-curtain-bottom.closed{
+  transition: transform .5s cubic-bezier(0, 0, 0.2, 1);
+  transform: translateY(0);
+}
+/* 열릴 때: 중앙(이동 시작점)에서 천천히 출발해 가장자리(이동 끝)로 갈수록 빨라진다 - 가속도처럼
+   보이는 가속(ease-in) 곡선. */
+#cec-curtain-top.reopen, #cec-curtain-bottom.reopen{
+  transition: transform .65s cubic-bezier(0.4, 0, 1, 1);
+}
+#cec-curtain-top.reopen{ transform: translateY(-100%); }
+#cec-curtain-bottom.reopen{ transform: translateY(100%); }
+/* 다음화 배너: 화면 정중앙을 가로지르는 흰 띠. 좌우는 골드 그라데이션 대각선 장식으로 화려하게. */
+#cec-banner{
+  position:absolute;
+  left:0; right:0;
+  top:50%;
+  transform: translateY(-50%);
+  z-index:1;
+  height:22%;
+  min-height:96px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  opacity:0;
+  transition: opacity .3s ease;
+  background: linear-gradient(90deg,
+    rgba(201,150,78,0.95) 0%, rgba(244,236,216,0.98) 12%,
+    #fdfbf6 20%, #fdfbf6 80%,
+    rgba(244,236,216,0.98) 88%, rgba(201,150,78,0.95) 100%);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.55);
+  border-top:2px solid #c9964e;
+  border-bottom:2px solid #c9964e;
+}
+#cec-banner::before, #cec-banner::after{
+  content:'';
+  position:absolute;
+  top:0; bottom:0;
+  width:16%;
+  background:
+    repeating-linear-gradient(135deg,
+      rgba(138,111,78,0.35) 0 6px,
+      transparent 6px 16px);
+  pointer-events:none;
+}
+#cec-banner::before{ left:0; mask-image: linear-gradient(90deg, black, transparent); -webkit-mask-image: linear-gradient(90deg, black, transparent); }
+#cec-banner::after{ right:0; mask-image: linear-gradient(270deg, black, transparent); -webkit-mask-image: linear-gradient(270deg, black, transparent); }
+#cec-banner.show{ opacity:1; }
+#cec-banner-text{
+  position:relative;
+  z-index:1;
+  text-align:center;
+  color:#3a2c1a;
+  font-weight:800;
+  line-height:1.5;
+  font-size:clamp(15px, 2.4vw, 22px);
+  letter-spacing:0.04em;
+}
+
+/* ===== 모모톡 스타일 채팅 UI (인연 스토리 BugoTalk과 완전히 동일 - story-relationship.css 그대로) ===== */
+#phone-layer{
+  position:absolute;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background: rgba(10,10,14,0.55);
+  z-index:4;
+  padding: 6% 5% 18%;
+}
+#phone-layer.show{ display:flex; }
+#phone-window{
+  width:100%;
+  height:100%;
+  max-width:640px;
+  background:#f3f1f6;
+  border-radius:10px;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+#phone-header{
+  background: linear-gradient(90deg,#6fc3ff,#4fb3ff);
+  color:#fff;
+  font-weight:700;
+  font-size:15px;
+  padding:10px 16px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  letter-spacing:0.5px;
+}
+#phone-icon{ font-size:14px; }
+#phone-body{
+  flex:1;
+  display:flex;
+  min-height:0;
+}
+#phone-contacts{
+  width:34%;
+  background:#fff;
+  border-right:1px solid #eae6f0;
+  overflow-y:auto;
+}
+.phone-contact{
+  padding:10px 12px;
+  font-size:12px;
+  font-weight:600;
+  color:#555;
+  border-bottom:1px solid #f2f0f5;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.phone-contact .avatar{
+  width:24px; height:24px;
+  border-radius:50%;
+  background:#5fbfff;
+  color:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:11px;
+  flex-shrink:0;
+}
+.phone-contact.active{
+  background:#eaf7ff;
+  color:#1e93d4;
+  border-left:3px solid #4fb3ff;
+}
+#phone-chat{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+}
+#chat-messages{
+  flex:1;
+  overflow-y:auto;
+  padding:14px 12px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.chat-bubble-row{
+  display:flex;
+  align-items:flex-end;
+  gap:6px;
+  max-width:82%;
+}
+.chat-bubble-row.out{
+  align-self:flex-end;
+  flex-direction:row-reverse;
+}
+.chat-bubble-row .avatar{
+  width:26px; height:26px;
+  border-radius:50%;
+  background:#5fbfff;
+  color:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:11px;
+  flex-shrink:0;
+}
+.chat-bubble{
+  padding:8px 12px;
+  border-radius:14px;
+  font-size:13px;
+  line-height:1.5;
+  word-break:break-word;
+}
+.chat-bubble-row.in .chat-bubble{
+  background:#fff;
+  color:#333;
+  border-bottom-left-radius:4px;
+  box-shadow:0 1px 2px rgba(0,0,0,0.08);
+}
+.chat-bubble-row.out .chat-bubble{
+  background:#ffd94f;
+  color:#3a2f00;
+  border-bottom-right-radius:4px;
+}
+
+#phone-compose{
+  display:none;
+  gap:8px;
+  padding:10px 12px;
+  border-top:1px solid #eae6f0;
+  background:#fff;
+}
+#phone-compose.show{ display:flex; }
+#phone-compose-input{
+  flex:1;
+  border:1px solid #dcdce2;
+  border-radius:16px;
+  padding:8px 14px;
+  font-size:13px;
+  font-family:inherit;
+  outline:none;
+  /* #stage 전체의 user-select:none과 무관하게, 입력창 안에서는 평소처럼 커서 이동/선택이 가능해야 한다. */
+  user-select:text;
+  -webkit-user-select:text;
+}
+#phone-compose-input:focus{ border-color:#4fb3ff; }
+#phone-compose-send{
+  background:#4fb3ff;
+  color:#fff;
+  border:none;
+  border-radius:16px;
+  padding:8px 16px;
+  font-size:13px;
+  font-family:inherit;
+  cursor:pointer;
+}
+
+/* ===== 편지 연출: 속지가 겉지 뒤에 숨어있다가 위로 올라오며 나타난 뒤, 커지면서 읽기 좋은 크기가 된다 ===== */
+#letter-layer{
+  position:absolute;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background: rgba(8,8,10,0.72);
+  z-index:4;
+}
+#letter-layer.show{ display:flex; }
+#letter-stack{
+  position:relative;
+  width:100%;
+  height:100%;
+}
+#letter-envelope{
+  position:absolute;
+  left:50%; top:50%;
+  width:38%;
+  max-width:300px;
+  z-index:2;
+  opacity:0;
+  transform: translate(-50%,-50%) scale(0.94);
+  transition: opacity .5s ease, transform .5s ease;
+  pointer-events:none;
+}
+#letter-envelope.show{ opacity:1; transform:translate(-50%,-50%) scale(1); }
+#letter-envelope img{ width:100%; display:block; filter:drop-shadow(0 12px 30px rgba(0,0,0,0.5)); }
+#letter-paper{
+  position:absolute;
+  left:50%; top:50%;
+  width:38%;
+  max-width:300px;
+  z-index:1;
+  opacity:0;
+  overflow:hidden;
+  transform: translate(-50%,-50%);
+  transform-origin:center center;
+  transition: opacity .3s ease, transform .8s ease, width .6s ease, max-width .6s ease;
+  pointer-events:none;
+}
+#letter-paper.rise{
+  opacity:1;
+  z-index:3;
+  transform: translate(-50%,-50%) translateY(-52%);
+}
+#letter-paper.enlarge{
+  width:84%;
+  max-width:680px;
+  transform: translate(-50%,-50%) translateY(0%);
+}
+#letter-paper img{ width:100%; display:block; filter:drop-shadow(0 16px 34px rgba(0,0,0,0.55)); }
+#letter-paper-text{
+  position:absolute;
+  inset:11% 20%;
+  overflow-y:auto;
+  overflow-x:hidden;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-family:'Nanum Pen Script', 'GyeonggiTitle', cursive;
+  font-size:clamp(19px, 2.5vw, 24px);
+  line-height:1.55;
+  color:#3a2c1a;
+  white-space:pre-wrap;
+  word-break:keep-all;
+  overflow-wrap:break-word;
+  text-align:center;
+  opacity:0;
+  transition: opacity .4s ease;
+}
+#letter-paper.enlarge #letter-paper-text{ opacity:1; }
+
+/* ===== 서브스토리 로비 (Episode 선택 화면) ===== */
+#lobby-wrap{
+  position:fixed;
+  inset:0;
+  z-index:100;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#000;
+}
+#lobby-wrap.hide{ display:none; }
+#lobby-stage{
+  position:relative;
+  width:min(100vw, calc(100vh * 1.7777778), 1280px);
+  aspect-ratio:16/9;
+  height:auto;
+  max-width:1280px;
+  overflow:hidden;
+  box-shadow:0 0 60px rgba(0,0,0,0.6);
+}
+.lobby-screen{
+  position:absolute;
+  inset:0;
+  background-size:cover;
+  background-position:center;
+  display:none;
+  flex-direction:column;
+}
+.lobby-screen.show{ display:flex; }
+.lobby-screen::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(180deg, rgba(10,8,6,0.55), rgba(10,8,6,0.72) 60%, rgba(6,5,4,0.85));
+}
+.lobby-home-inner{
+  position:relative;
+  z-index:1;
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:40px;
+  padding:0 8%;
+}
+#lobby-title{
+  color:#f4ecd8;
+  font-size:clamp(30px, 8vw, 42px);
+  font-weight:700;
+  letter-spacing:0.25em;
+  text-shadow:0 6px 24px rgba(0,0,0,0.7);
+}
+.lobby-menu{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  width:100%;
+  max-width:280px;
+}
+.lobby-btn{
+  font-family:inherit;
+  background:rgba(244,236,216,0.08);
+  border:1px solid rgba(244,236,216,0.5);
+  color:#f4ecd8;
+  padding:14px 0;
+  font-size:15px;
+  letter-spacing:0.15em;
+  border-radius:4px;
+  cursor:pointer;
+  transition: background .2s ease;
+}
+.lobby-btn:hover{ background:rgba(244,236,216,0.18); }
+.lobby-header{
+  position:relative;
+  z-index:1;
+  display:flex;
+  align-items:center;
+  padding:20px 5%;
+  gap:14px;
+  flex-shrink:0;
+}
+.lobby-back{
+  font-family:inherit;
+  background:none;
+  border:none;
+  color:#f4ecd8;
+  font-size:14px;
+  cursor:pointer;
+  letter-spacing:0.05em;
+}
+.lobby-header-title{
+  color:#f4ecd8;
+  font-size:17px;
+  font-weight:700;
+  letter-spacing:0.1em;
+}
+.lobby-episode-list{
+  position:relative;
+  z-index:1;
+  flex:1;
+  overflow-y:auto;
+  padding:8px 6% 30px;
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+.episode-story-card{
+  background:rgba(28,22,16,0.72);
+  border:1px solid rgba(244,236,216,0.28);
+  border-radius:8px;
+  padding:16px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+}
+.episode-story-thumb{
+  width:64px;
+  height:64px;
+  flex-shrink:0;
+  border-radius:6px;
+  overflow:hidden;
+  background:#111;
+  border:1px solid rgba(244,236,216,0.3);
+}
+.episode-story-thumb img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:top center;
+}
+.episode-story-info{ flex:1; min-width:0; }
+.episode-story-name{
+  color:#f4ecd8;
+  font-size:16px;
+  font-weight:700;
+  margin-bottom:4px;
+}
+.episode-story-desc{
+  color:#cdbfa5;
+  font-size:11.5px;
+  line-height:1.4;
+}
+.episode-story-enter{
+  font-family:inherit;
+  flex-shrink:0;
+  background:#8a6f4e;
+  color:#fff;
+  border:none;
+  padding:9px 16px;
+  border-radius:4px;
+  font-size:13px;
+  letter-spacing:0.08em;
+  cursor:pointer;
+}
+.episode-story-enter:hover{ filter:brightness(1.1); }
+.episode-story-card.locked{ opacity:0.55; }
+.episode-story-thumb .thumb-placeholder{
+  width:100%;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#cdbfa5;
+  font-size:24px;
+  font-weight:700;
+}
+.episode-story-enter:disabled{
+  background:#5a5347;
+  cursor:not-allowed;
+}
+.episode-story-enter:disabled:hover{ filter:none; }
+
+/* ===== 화(chapter) 선택 모달 ===== */
+#chapter-modal{
+  position:fixed;
+  inset:0;
+  z-index:200;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:rgba(6,5,4,0.78);
+}
+#chapter-modal.show{ display:flex; }
+.chapter-modal-box{
+  width:min(92vw, 460px);
+  max-height:82vh;
+  background:#1c1610;
+  border:1px solid rgba(244,236,216,0.28);
+  border-radius:10px;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+.chapter-modal-header{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:16px 18px;
+  border-bottom:1px solid rgba(244,236,216,0.15);
+}
+.chapter-modal-title{
+  flex:1;
+  color:#f4ecd8;
+  font-size:16px;
+  font-weight:700;
+  letter-spacing:0.05em;
+}
+.chapter-modal-close{
+  background:none;
+  border:none;
+  color:#cdbfa5;
+  font-size:16px;
+  cursor:pointer;
+  padding:4px 6px;
+}
+.vn-ticket-chip{
+  display:flex;
+  align-items:center;
+  gap:5px;
+  background:rgba(244,236,216,0.1);
+  border-radius:20px;
+  padding:4px 10px;
+  color:#f4ecd8;
+  font-size:12.5px;
+  font-weight:700;
+}
+.vn-ticket-icon{ width:16px; height:16px; object-fit:contain; }
+.chapter-list{
+  overflow-y:auto;
+  padding:14px 18px 20px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.chapter-btn{
+  font-family:inherit;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  background:rgba(244,236,216,0.06);
+  border:1px solid rgba(244,236,216,0.25);
+  border-radius:8px;
+  padding:14px 16px;
+  cursor:pointer;
+  text-align:left;
+  color:#f4ecd8;
+}
+.chapter-btn:hover{ background:rgba(244,236,216,0.14); }
+.chapter-btn-num{ font-size:13px; font-weight:700; color:var(--accent-soft); flex-shrink:0; }
+.chapter-btn-info{ flex:1; min-width:0; }
+.chapter-btn-title{ font-size:14.5px; font-weight:700; }
+.chapter-btn-subtitle{ font-size:11.5px; color:#cdbfa5; margin-top:2px; }
+.chapter-btn-status{ font-size:12px; flex-shrink:0; }
+.chapter-btn.chapter-unlocked .chapter-btn-status{ color:#9fd68c; }
+.chapter-btn.chapter-available .chapter-btn-status{
+  display:flex; align-items:center; gap:4px; color:#f4ecd8;
+}
+.chapter-btn.chapter-locked{
+  opacity:0.5;
+  filter:brightness(0.7);
+  cursor:not-allowed;
+  background:rgba(0,0,0,0.3);
+}
+.chapter-btn.chapter-locked:hover{ background:rgba(0,0,0,0.3); }
+.chapter-lock-icon{ width:15px; height:15px; object-fit:contain; }
+
+/* ===== 티켓 확인/부족 모달 (인연 스토리 .vn-ticket-modal을 이 팔레트로 축소 이식) ===== */
+.vn-ticket-modal{
+  position:fixed;
+  inset:0;
+  z-index:300;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:rgba(6,5,4,0.82);
+}
+.vn-ticket-modal.show{ display:flex; }
+.vn-ticket-modal-box{
+  width:min(88vw, 320px);
+  background:#1c1610;
+  border:1px solid rgba(244,236,216,0.28);
+  border-radius:10px;
+  padding:26px 22px;
+  text-align:center;
+}
+.vn-ticket-modal-text{
+  color:#f4ecd8;
+  font-size:14.5px;
+  line-height:1.7;
+  margin-bottom:18px;
+  white-space:pre-line;
+}
+.vn-ticket-modal-btns{
+  display:flex;
+  gap:10px;
+  justify-content:center;
+}
+.vn-ticket-modal-btn{
+  font-family:inherit;
+  flex:1;
+  border:none;
+  border-radius:4px;
+  padding:10px 0;
+  font-size:13.5px;
+  cursor:pointer;
+}
+.vn-ticket-modal-btn.primary{ background:var(--accent); color:#fff; }
+.vn-ticket-modal-btn:not(.primary){ background:rgba(244,236,216,0.12); color:#f4ecd8; }
+.vn-menu-title{
+  color:#f4ecd8;
+  font-size:18px;
+  font-weight:700;
+  letter-spacing:2px;
+  margin-bottom:20px;
+}
+
+/* ===== 대화 기록(대사 로그) 모달 (인연 스토리 #vn-log-modal을 이 팔레트로 이식) ===== */
+#vn-log-modal{
+  position:fixed;
+  inset:0;
+  z-index:2000;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:rgba(0,0,0,0.72);
+  padding:4% 6%;
+}
+#vn-log-modal.show{ display:flex; }
+#vn-log-modal-box{
+  width:min(640px, 100%);
+  max-height:88%;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  border:1px solid rgba(244,236,216,0.28);
+  border-radius:10px;
+  background:#1c1610;
+  box-shadow:0 18px 70px rgba(0,0,0,0.72);
+}
+#vn-log-modal-header{
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  gap:16px;
+  padding:14px 16px 14px 22px;
+  border-bottom:1px solid rgba(244,236,216,0.15);
+}
+#vn-log-modal-title{
+  flex:1;
+  color:#f4ecd8;
+  font-size:17px;
+  font-weight:700;
+  letter-spacing:2px;
+}
+#vn-log-modal-close{
+  width:32px;
+  height:32px;
+  border-radius:50%;
+  border:1px solid rgba(244,236,216,0.24);
+  background:rgba(244,236,216,0.07);
+  color:#fff;
+  cursor:pointer;
+  font-size:16px;
+  font-family:inherit;
+}
+#vn-log-modal-close:hover{ background:rgba(244,236,216,0.16); }
+#vn-log-modal-content{
+  min-height:0;
+  overflow-y:auto;
+  padding:20px 18px;
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+#vn-log-modal-content:empty::after{
+  content:'아직 재생된 대사가 없습니다.';
+  color:rgba(244,236,216,0.5);
+  font-size:13px;
+  text-align:center;
+  padding:20px 0;
+}
+.log-entry{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+}
+.log-avatar{
+  flex-shrink:0;
+  width:56px;
+  height:56px;
+  border-radius:14px;
+  overflow:hidden;
+  border:2px solid rgba(244,236,216,0.22);
+  background:#000;
+}
+.log-avatar img{
+  width:100%;
+  height:100%;
+  display:block;
+}
+.log-bubble-card{
+  position:relative;
+  min-width:0;
+  max-width:78%;
+  padding:10px 14px;
+  border-radius:10px;
+}
+.log-bubble-card-other{
+  background:#28221c;
+  border:1px solid rgba(244,236,216,0.12);
+}
+.log-bubble-card-other::before{
+  content:'';
+  position:absolute;
+  left:-7px;
+  top:16px;
+  width:0;
+  height:0;
+  border-style:solid;
+  border-width:7px 8px 7px 0;
+  border-color:transparent #28221c transparent transparent;
+}
+.log-speaker-name{
+  color:var(--accent);
+  font-size:13px;
+  font-weight:700;
+  margin-bottom:4px;
+}
+.log-bubble{
+  color:#f4ecd8;
+  font-size:14px;
+  line-height:1.6;
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+.log-entry-player{ justify-content:flex-end; }
+.log-bubble-card-player{
+  max-width:92%;
+  background:#2a2418;
+  border:1px solid rgba(201,150,78,0.35);
+}
+.log-bubble-card-player::after{
+  content:'';
+  position:absolute;
+  right:-7px;
+  top:16px;
+  width:0;
+  height:0;
+  border-style:solid;
+  border-width:7px 0 7px 8px;
+  border-color:transparent transparent transparent #2a2418;
+}
+.log-bubble-card-player .log-speaker-name{ color:#e0c896; }
+.log-monologue{
+  color:#f4ecd8;
+  font-size:13px;
+  font-style:italic;
+  line-height:1.6;
+  text-align:center;
+  white-space:pre-wrap;
+  word-break:break-word;
+  margin:0 4%;
+  padding:10px 16px;
+  border-radius:10px;
+  background:#17130f;
+}

@@ -1599,6 +1599,11 @@ function playReviveEffect(unitKeyOrEl, onRise) {
     const RISE_MS = speedMs(430);
     const AFTER_MS = speedMs(500);
     const TOTAL_MS = FLASH_MS + RISE_MS + AFTER_MS;
+    // revive-sprite-rise(attack-effects.css)는 0%에서 opacity:0으로 시작해 55% 지점에서야 opacity:1에
+    // 도달한다(그 뒤론 계속 1로 유지) - 즉 클래스를 붙인 시점 기준 55%가 지나야 캐릭터가 실제로 눈에
+    // 보인다. animationDuration을 speedMs에 맞게 인라인으로 늘이거나 줄이는 건 이 파일의 다른 이펙트
+    // (예: 위쪽 flash/spark)와 같은 관례다.
+    const REVIVE_RISE_CSS_MS = speedMs(850);
 
     const startMs = performance.now();
     let lastMs = startMs;
@@ -1620,19 +1625,26 @@ function playReviveEffect(unitKeyOrEl, onRise) {
                 spawnBurst();
                 imgEl.classList.remove("dying", "death-fallback-filter");
                 void imgEl.offsetWidth;
+                imgEl.style.animationDuration = `${REVIVE_RISE_CSS_MS}ms`;
                 imgEl.classList.add("revive-rising");
-                if (onRise) onRise();
-                // .revive-rising(attack-effects.css)의 애니메이션(revive-sprite-rise) 자체는 0.85초짜리
-                // 1회성인데, 클래스를 안 지우면 애니메이션이 끝난 뒤에도 계속 붙어있는다 - CSS 캐스케이드
-                // 상 이후 발동되는 .battle-unit-img.walking(walk-bob, arena-battle.css)의 animation
-                // 선언이 이 클래스의 뒤늦은 스타일시트 로드 순서 때문에 영원히 밀려서, 부활한 캐릭터는
-                // 전용 걷기 프레임(walk_N.webp)이 없는 한 걸을 때 통통 튀는 효과가 다시 죽을 때까지
-                // 평생 안 나오는 버그로 이어졌다. 애니메이션 재생 시간(0.85초, CSS와 반드시 일치)만큼
-                // 기다렸다가 지워서 그 이후엔 walking 클래스가 정상적으로 애니메이션을 가져가게 한다.
+                // onRise(renderUnit 등 "부활 처리 자체")는 클래스를 붙이는 이 순간이 아니라, 스프라이트가
+                // revive-sprite-rise의 55% 지점(opacity:1 도달)을 지나 실제로 눈에 보이기 시작하는
+                // 시점에 맞춰 지연 호출한다 - 안 그러면 캐릭터가 아직 완전히 투명한(opacity:0) 채인데
+                // 체력바만 먼저 꽉 차 보이는 버그가 있었다(전술대회 "신" 부활 스킬에서 실제로 리포트됨).
                 const riseToken = (reviveRiseTokens[unitKey] = (reviveRiseTokens[unitKey] || 0) + 1);
                 setTimeout(() => {
+                    if (reviveRiseTokens[unitKey] === riseToken && onRise) onRise();
+                }, REVIVE_RISE_CSS_MS * 0.55);
+                // .revive-rising(attack-effects.css)의 애니메이션(revive-sprite-rise) 자체는 1회성인데,
+                // 클래스를 안 지우면 애니메이션이 끝난 뒤에도 계속 붙어있는다 - CSS 캐스케이드 상 이후
+                // 발동되는 .battle-unit-img.walking(walk-bob, arena-battle.css)의 animation 선언이 이
+                // 클래스의 뒤늦은 스타일시트 로드 순서 때문에 영원히 밀려서, 부활한 캐릭터는 전용 걷기
+                // 프레임(walk_N.webp)이 없는 한 걸을 때 통통 튀는 효과가 다시 죽을 때까지 평생 안 나오는
+                // 버그로 이어졌다. 애니메이션 재생 시간(위에서 인라인으로 맞춘 REVIVE_RISE_CSS_MS와 반드시
+                // 일치)만큼 기다렸다가 지워서 그 이후엔 walking 클래스가 정상적으로 애니메이션을 가져가게 한다.
+                setTimeout(() => {
                     if (reviveRiseTokens[unitKey] === riseToken) imgEl.classList.remove("revive-rising");
-                }, 850);
+                }, REVIVE_RISE_CSS_MS);
             }
             const p = (t - FLASH_MS) / RISE_MS;
             flashPower = 1;

@@ -20,4 +20,8 @@
     document.getElementById("story-choice-relationship")?.addEventListener("click", () => {
         window.location.href = "story-relationship.html";
     });
+
+    document.getElementById("story-choice-sub")?.addEventListener("click", () => {
+        window.location.href = "story-sub.html";
+    });
 })();

@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>인연 스토리 - 독서 RPG</title>
 <link rel="icon" href="logoicon.webp">
-<link rel="stylesheet" href="story/story-relationship.css?v=20260824">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="story/story-relationship.css?v=20260831">
 </head>
 <body>
 
@@ -13,7 +15,7 @@
   <div id="lobby-stage">
 
     <div id="lobby-home" class="lobby-screen show">
-      <img id="lobby-cover" src="assets/story/ep1/lobby/cover.jpg" alt="">
+      <img id="lobby-cover" src="assets/story/ep2/lobby/cover.webp" alt="">
       <div id="lobby-title-overlay">
         <div id="lobby-game-title">인연 스토리</div>
       </div>
@@ -36,9 +38,9 @@
           <img src="assets/story/ep1/lobby/episode1_thumb.jpg" alt="">
           <div class="episode-card-label">Episode 1<br><span id="ep1-status">우정의 시작</span></div>
         </div>
-        <div class="episode-card locked">
-          <div class="episode-card-empty">?</div>
-          <div class="episode-card-label">Episode 2<br><span>준비 중</span></div>
+        <div class="episode-card" id="episode-card-2">
+          <img src="assets/story/ep2/lobby/episode2_thumb.webp" alt="">
+          <div class="episode-card-label">Episode 2<br><span id="ep2-status">귀환의 돌</span></div>
         </div>
         <div class="episode-card locked">
           <div class="episode-card-empty">?</div>
@@ -106,15 +108,55 @@
   <div id="bg-mood"></div>
   <div id="bg-vignette"></div>
 
+  <!-- Episode 2 신규 연출 전용 오버레이(story-engine.js triggerExplosion/setLetterbox/triggerGlitch/
+       triggerShockReveal 참고) - 평소엔 전부 비어있다가 필요한 순간에만 클래스 토글로 나타난다. -->
+  <div id="fx-flash"></div>
+  <div id="fx-shockwave"></div>
+  <div id="fx-letterbox-top"></div>
+  <div id="fx-letterbox-bottom"></div>
+  <div id="fx-glitch"></div>
+  <div id="fx-speedlines"></div>
+
+  <!-- Episode 2 소품(상자 자물쇠 등) 텍스트 입력 UI - 모모톡 채팅과 무관한 범용 입력이라
+       showComposeInput(모모톡 창이 열려 있어야만 보임)과 분리된 자체 오버레이를 쓴다 -->
+  <div id="prop-input-layer">
+    <div id="prop-input-box">
+      <div id="prop-input-label"></div>
+      <input id="prop-input-field" type="text" maxlength="60" autocomplete="off">
+      <button id="prop-input-confirm" type="button">확인</button>
+    </div>
+  </div>
+
+  <!-- Episode 2 편지 연출(story/story-sub-engine.js의 openLetter/closeLetter와 같은 방식) -->
+  <div id="letter-layer">
+    <div id="letter-stack">
+      <div id="letter-envelope"><img id="letter-envelope-img" src="" alt=""></div>
+      <div id="letter-paper">
+        <img id="letter-paper-img" src="" alt="">
+        <div id="letter-paper-text"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="stage-top-btns">
     <button id="zoom-btn" type="button">확대</button>
     <button id="log-btn" type="button">대사</button>
     <button id="menu-btn">메뉴</button>
   </div>
 
-  <div id="char-left"><img id="char-left-img" src="" alt="" decoding="async"></div>
-  <div id="char-center"><img id="char-center-img" src="" alt="" decoding="async"></div>
-  <div id="char-right"><img id="char-right-img" src="" alt="" decoding="async"></div>
+  <!-- tv-scan-mask/tv-scan-pattern: 통화/방송 스탠딩의 움직이는 실선무늬(story-relationship.css의
+       #char-*.tv-static 규칙, story-engine.js의 setCharTvStatic 참고). mask는 실루엣 모양으로 고정된 채
+       (--tv-mask-image로 지금 스탠딩과 같은 이미지를 마스크로 씀) 안쪽 무늬 레이어만 transform으로
+       계속 흘러내리게 해서, background-position 애니메이션이 유발하던 렉 없이 GPU 합성만으로 움직인다. -->
+  <div id="char-left"><img id="char-left-img" src="" alt="" decoding="async"><div class="tv-scan-mask"><div class="tv-scan-pattern"></div></div></div>
+  <div id="char-center"><img id="char-center-img" src="" alt="" decoding="async"><div class="tv-scan-mask"><div class="tv-scan-pattern"></div></div></div>
+  <div id="char-right"><img id="char-right-img" src="" alt="" decoding="async"><div class="tv-scan-mask"><div class="tv-scan-pattern"></div></div></div>
+
+  <!-- Episode 2 아이템 등장(귀환의 돌 등) - 중앙 캐릭터가 옆으로 비켜서는 동안 그 자리(살짝 위쪽)에
+       부드러운 사각형 컨테이너 안에서 아이템이 나타난다 -->
+  <div id="item-display">
+    <div id="item-display-box"><img id="item-display-img" src="" alt=""></div>
+  </div>
 
   <div id="phone-layer">
     <div id="phone-window">
@@ -163,6 +205,14 @@
   </div>
 </div>
 
+<!-- 신규: 티켓 소모 처리 대기 표시(요청됨) - 확인 모달을 닫은 뒤 서버 응답을 기다리는 동안 화면이
+     아무 반응 없이 멈춘 것처럼 보이던 문제(신고받아 수정) - 실제로 처리 중임을 보여준다. -->
+<div class="vn-ticket-modal" id="vn-scene-loading-modal">
+  <div class="vn-ticket-modal-box">
+    <div class="vn-loading-spinner"></div>
+  </div>
+</div>
+
 <!-- 신규: 티켓 부족 모달 -->
 <div class="vn-ticket-modal" id="vn-ticket-insufficient-modal">
   <div class="vn-ticket-modal-box">
@@ -205,10 +255,12 @@
   </div>
 </div>
 
-<script src="shared/api-config.js?v=20260824"></script>
-<script src="shared/session-guard.js?v=20260824"></script>
-<script src="shared/nav-lock.js?v=20260824"></script>
-<script src="shared/avatar-crop.js?v=20260824"></script>
-<script src="story/story-engine.js?v=20260824"></script>
+<script src="shared/api-config.js?v=20260831"></script>
+<script src="shared/session-guard.js?v=20260831"></script>
+<script src="shared/nav-lock.js?v=20260831"></script>
+<script src="shared/avatar-crop.js?v=20260831"></script>
+<script src="story/scenario/ep1_yoondaewoong.js?v=20260831"></script>
+<script src="story/scenario/ep2_choijaehyeok.js?v=20260831"></script>
+<script src="story/story-engine.js?v=20260831"></script>
 </body>
 </html>

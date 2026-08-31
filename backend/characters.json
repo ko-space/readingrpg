@@ -96,7 +96,7 @@
         "params": {
           "5": {
             "ally_type": "Student",
-            "dr_percent": 50
+            "dr_percent": 60
           },
           "6": {
             "ally_type": "Student",
@@ -263,9 +263,9 @@
         "1": null,
         "2": null,
         "3": null,
-        "4": "카메라 업그레이드: 전투 종료 시까지 자신의 공격 속도 15% 증가, 최대 6회 중첩",
-        "5": "카메라 업그레이드: 전투 종료 시까지 자신의 공격 속도 15% 증가, 최대 6회 중첩",
-        "6": "카메라 업그레이드: 전투 종료 시까지 자신의 공격 속도 30% 증가, 최대 6회 중첩"
+        "4": "카메라 업그레이드: 전투 종료 시까지 자신의 공격 속도 20% 증가, 최대 6회 중첩",
+        "5": "카메라 업그레이드: 전투 종료 시까지 자신의 공격 속도 20% 증가, 최대 6회 중첩",
+        "6": "카메라 업그레이드: 전투 종료 시까지 자신의 공격 속도 40% 증가, 최대 6회 중첩"
       },
       "trait_effects": {
         "1": null,
@@ -281,17 +281,17 @@
         "params": {
           "5": {
             "stat": "haste",
-            "percent_per_stack": 15,
+            "percent_per_stack": 20,
             "max_stacks": 6
           },
           "6": {
             "stat": "haste",
-            "percent_per_stack": 30,
+            "percent_per_stack": 40,
             "max_stacks": 6
           },
           "4": {
             "stat": "haste",
-            "percent_per_stack": 15,
+            "percent_per_stack": 20,
             "max_stacks": 6
           }
         }
@@ -1157,7 +1157,7 @@
       },
       "skill_mechanics": {
         "effect_type": "aoe_all_others_damage",
-        "cost": 3,
+        "cost": 4,
         "params": {
           "5": {
             "multiplier": 250
