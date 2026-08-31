@@ -204,7 +204,9 @@
                     showAchievementToast(data.new_achievements);
                 }
             };
-            if (typeof showCharacterReveal === "function" && data.new_characters?.length) {
+            if (typeof playQuestRewardCinematic === "function" && data.new_characters?.length) {
+                playQuestRewardCinematic(data.new_characters, notifyAchievements);
+            } else if (typeof showCharacterReveal === "function" && data.new_characters?.length) {
                 showCharacterReveal(data.new_characters, notifyAchievements);
             } else {
                 notifyAchievements();
@@ -238,8 +240,11 @@
             // 진실과 같다. 다시 불러올 필요 없음.
             if (typeof loadProfile === "function") await loadProfile();
             // 도전과제 보상은 업적 알림을 유발하지 않지만(백엔드가 new_achievements를 안 줌), 보상
-            // 캐릭터는 줄 수 있으므로 gacha.js와 동일하게 등장 연출을 재생한다.
-            if (typeof showCharacterReveal === "function" && data.new_characters?.length) {
+            // 캐릭터는 줄 수 있으므로 gacha.js 1회 모집과 동일한 등장 연출을 재생한다(간판인물 접근+빛
+            // 폭발 없이 문 열림->보석으로 시작, 확인된 요청).
+            if (typeof playQuestRewardCinematic === "function" && data.new_characters?.length) {
+                playQuestRewardCinematic(data.new_characters);
+            } else if (typeof showCharacterReveal === "function" && data.new_characters?.length) {
                 showCharacterReveal(data.new_characters);
             }
         } catch (error) {
@@ -287,7 +292,9 @@
                     showAchievementToast(data.new_achievements);
                 }
             };
-            if (typeof showCharacterReveal === "function" && data.new_characters?.length) {
+            if (typeof playQuestRewardCinematic === "function" && data.new_characters?.length) {
+                playQuestRewardCinematic(data.new_characters, notifyAchievements);
+            } else if (typeof showCharacterReveal === "function" && data.new_characters?.length) {
                 showCharacterReveal(data.new_characters, notifyAchievements);
             } else {
                 notifyAchievements();

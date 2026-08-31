@@ -772,7 +772,7 @@ function showEp2CrisisConvergenceChoice(){
    지금은 직접 저항(EP2_CRISIS_END_RESISTER_DIRECT) 경로만 구현돼 있고, 나머지 세 전투 경로는
    해당 전투의 2라운드 선택지 구현 시 자기만의 짧은 도입부 뒤에 이 TAIL을 이어붙이면 된다. */
 const EP2_CRISIS_END_RESISTER_TAIL = [
-  { type:'narration', text:'나는 눈을 떴다.', showBg:'player_home', noBgFade:true, whiteout:false, chars:{left:null, center:null, right:null} },
+  { type:'narration', text:'나는 눈을 떴다.', showBg:'player_home', whiteout:false, chars:{left:null, center:null, right:null} },
   { type:'narration', text:'익숙한 방이었다.' },
   { type:'line', speaker:EP2_PLAYER, text:'내가…… 언제 잠들었지?', bgm:'2-12. Moment' },
   { type:'thought', text:'무슨 꿈을 꾼 것 같았지만 기억나지 않았다.' },
@@ -3766,33 +3766,33 @@ const SCENE_FUNCS2 = {
    채우면 된다(다른 코드는 손댈 필요 없음).
    ========================================================= */
 const EP2_CG_GALLERY_ITEMS = [
-  { id:'ep2_end1',  title:'재혁 쌍욕 앤딩',            imageSrcs:[EP2_BG.end1] },
-  { id:'ep2_end2',  title:'비운의 저항자 앤딩',         imageSrcs:[EP2_BG.end2] },
-  { id:'ep2_end3',  title:'강 희 앤딩',                imageSrcs:[EP2_BG.end3] },
-  { id:'ep2_end4',  title:'재혁과 승리 앤딩',           imageSrcs:[EP2_BG.end4] },
-  { id:'ep2_end5',  title:'송주헌과 승리 앤딩',         imageSrcs:[EP2_BG.end5] },
-  { id:'ep2_end6',  title:'이영웅과 승리 앤딩',         imageSrcs:[EP2_BG.end6] },
-  { id:'ep2_end7',  title:'강승유와의 승리 앤딩',       imageSrcs:[EP2_BG.end7] },
-  { id:'ep2_end8',  title:'두 대마법사에 의한 죽음 앤딩', imageSrcs:[EP2_BG.end8] },
-  { id:'ep2_end9',  title:'김현재에 의한 죽음 앤딩',     imageSrcs:[EP2_BG.end9] },
-  { id:'ep2_end10', title:'최재혁의 희생 앤딩',         imageSrcs:[EP2_BG.end10] },
-  { id:'ep2_end11', title:'송주헌의 희생 앤딩',         imageSrcs:[EP2_BG.end11] },
-  { id:'ep2_end12', title:'김현재의 행복한 세상 앤딩',   imageSrcs:[EP2_BG.end12] },
-  { id:'ep2_end13', title:'임소정의 행복한 세상 앤딩',   imageSrcs:[EP2_BG.end13] },
-  { id:'ep2_end14', title:'이종복의 행복한 세상 앤딩',   imageSrcs:[EP2_BG.end14] },
-  { id:'ep2_end15', title:'그대로인 세상 앤딩',         imageSrcs:[EP2_BG.end15] },
-  { id:'ep2_end16', title:'김현재 방랑자 앤딩',         imageSrcs:[EP2_BG.end16] },
-  { id:'ep2_end17', title:'노란색 보석 방랑자 앤딩',     imageSrcs:[EP2_BG.end17] },
-  { id:'ep2_end18', title:'보라색 보석 방랑자 앤딩',     imageSrcs:[EP2_BG.end18] },
-  { id:'ep2_end19', title:'평범한 방랑자 앤딩',         imageSrcs:[EP2_BG.end19] },
+  { id:'ep2_end1',  title:'재혁 쌍욕 앤딩',            imageSrcs:[EP2_BG.end1], bgm:'Dinner Punch' },
+  { id:'ep2_end2',  title:'비운의 저항자 앤딩',         imageSrcs:[EP2_BG.end2], bgm:'2-12. Moment' },
+  { id:'ep2_end3',  title:'강 희 앤딩',                imageSrcs:[EP2_BG.end3], bgm:'Kurumi BGM' },
+  { id:'ep2_end4',  title:'재혁과 승리 앤딩',           imageSrcs:[EP2_BG.end4], bgm:'2-09. CrossFire' },
+  { id:'ep2_end5',  title:'송주헌과 승리 앤딩',         imageSrcs:[EP2_BG.end5], bgm:'You are the One arrange' },
+  { id:'ep2_end6',  title:'이영웅과 승리 앤딩',         imageSrcs:[EP2_BG.end6], bgm:'1-14. Sugar story' },
+  { id:'ep2_end7',  title:'강승유와의 승리 앤딩',       imageSrcs:[EP2_BG.end7], bgm:'Hello SY' },
+  { id:'ep2_end8',  title:'두 대마법사에 의한 죽음 앤딩', imageSrcs:[EP2_BG.end8], bgm:'09.Final Destination of Ark' },
+  { id:'ep2_end9',  title:'김현재에 의한 죽음 앤딩',     imageSrcs:[EP2_BG.end9], bgm:'2-09. Blood Stained Faith' },
+  { id:'ep2_end10', title:'최재혁의 희생 앤딩',         imageSrcs:[EP2_BG.end10], bgm:'1-13. Aira' },
+  { id:'ep2_end11', title:'송주헌의 희생 앤딩',         imageSrcs:[EP2_BG.end11], bgm:'2-07. Morose Dreamer' },
+  { id:'ep2_end12', title:'김현재의 행복한 세상 앤딩',   imageSrcs:[EP2_BG.end12], bgm:'2.11 Starry Confession' },
+  { id:'ep2_end13', title:'임소정의 행복한 세상 앤딩',   imageSrcs:[EP2_BG.end13], bgm:'Daily Repeat' },
+  { id:'ep2_end14', title:'이종복의 행복한 세상 앤딩',   imageSrcs:[EP2_BG.end14], bgm:'05. Luminous Memory' },
+  { id:'ep2_end15', title:'그대로인 세상 앤딩',         imageSrcs:[EP2_BG.end15], bgm:'Fading Static' },
+  { id:'ep2_end16', title:'김현재 방랑자 앤딩',         imageSrcs:[EP2_BG.end16], bgm:'1-08. Daily Routine 247' },
+  { id:'ep2_end17', title:'노란색 보석 방랑자 앤딩',     imageSrcs:[EP2_BG.end17], bgm:'Static in the Static' },
+  { id:'ep2_end18', title:'보라색 보석 방랑자 앤딩',     imageSrcs:[EP2_BG.end18], bgm:'I lost' },
+  { id:'ep2_end19', title:'평범한 방랑자 앤딩',         imageSrcs:[EP2_BG.end19], bgm:'Defective_Pixel' },
   // END20/21은 원본 부록에도 둘 다 그냥 "COLLECTOR END"로만 적혀 있다 - 서로 다른 엔딩이 아니라 컬렉터
   // 엔딩 하나가 CG 두 장을 함께 공개하는 것뿐이라, 플레이어에게 표시되는 엔딩 이름도 "COLLECTOR END"
   // 하나뿐이다(showEp2Ending('COLLECTOR END')가 TRUE_ENDING_GALLERY_IDS를 통해 이 둘을 한 번에
   // 해금한다 - unlockCG의 id==='true' 분기, ep1의 트루 엔딩과 동일한 방식). 도감 카드 제목에 "· 1"/"· 2"
   // 같은 구분자를 붙이지 않는다.
-  { id:'ep2_end20', title:'COLLECTOR END',            imageSrcs:[EP2_BG.end20] },
-  { id:'ep2_end21', title:'COLLECTOR END',            imageSrcs:[EP2_BG.end21] },
-  { id:'ep2_end22', title:'악당과의 협력 앤딩',         imageSrcs:[EP2_BG.end22] },
+  { id:'ep2_end20', title:'COLLECTOR END',            imageSrcs:[EP2_BG.end20], bgm:'Track_327' },
+  { id:'ep2_end21', title:'COLLECTOR END',            imageSrcs:[EP2_BG.end21], bgm:'Track_327' },
+  { id:'ep2_end22', title:'악당과의 협력 앤딩',         imageSrcs:[EP2_BG.end22], bgm:'11.Responsibility' },
 ];
 
 // 히든 엔딩(ep2_end22)과 컬렉터 엔딩 자신(ep2_end20/21)은 컬렉터 조건에 포함하지 않는다(ep1과 동일한 규칙).

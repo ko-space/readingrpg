@@ -418,7 +418,11 @@ function playBgm(key){
     return;
   }
 
-  const file = /\.[a-z0-9]+$/i.test(key) ? key : `${key}.mp3`;
+  // 확장자 판별은 실제 오디오 확장자 목록으로만 한다 - 예전엔 "점 + 영숫자로 끝나는가"만 봐서
+  // 'll.Responsibility'처럼 곡 제목 자체에 점이 들어간 키를 "이미 확장자가 붙었다"고 오판해 .mp3를
+  // 붙이지 않은 채로 존재하지 않는 파일을 요청하는 버그가 있었다(도감에서 히든 엔딩 CG의 bgm이
+  // 재생되지 않던 원인 - 신고받아 수정).
+  const file = /\.(mp3|ogg|wav|flac|m4a|aac)$/i.test(key) ? key : `${key}.mp3`;
   el.bgmPlayer.src = `${BGM_BASE}${file}`;
   el.bgmPlayer.currentTime = 0;
   // 브라우저의 자동재생 정책상, 사용자가 아직 페이지를 한 번도 클릭하지 않은 채로 재생을 시도하면
@@ -462,7 +466,7 @@ const SE = {
 };
 function playSe(key){
   if(!key) return;
-  const file = /\.[a-z0-9]+$/i.test(key) ? key : `${key}.ogg`;
+  const file = /\.(mp3|ogg|wav|flac|m4a|aac)$/i.test(key) ? key : `${key}.ogg`;
   const audio = new Audio(`${SE_BASE}${file}`);
   audio.volume = 0.85;
   audio.play().catch(()=>{});
@@ -2595,6 +2599,7 @@ function openGalleryModal(item){
 
   modal.classList.add('show');
   modal.setAttribute('aria-hidden', 'false');
+  if(item.bgm) playBgm(item.bgm);
 }
 
 function closeGalleryModal(){
@@ -2603,6 +2608,7 @@ function closeGalleryModal(){
 
   modal.classList.remove('show');
   modal.setAttribute('aria-hidden', 'true');
+  playBgm(null);
 }
 
 function showEnd(title){
