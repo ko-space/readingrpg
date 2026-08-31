@@ -333,6 +333,31 @@
         return token === runToken;
     }
 
+    // ── 퀘스트/도전과제 캐릭터 보상 전용 인트로: 간판인물 접근+빛 폭발 없이, 문이 닫혔다 열리면
+    // 곧장 배경(gc-intro-bg)이 드러나는 것으로 끝난다(확인된 요청 - "손가락 맞대고 터지는" 가챠
+    // 특유의 뽑기 연출은 빼고, 문 열림까지만 재사용). 뒤이어 playRarityGemReveal이 그 배경 위로
+    // 보석을 띄우면서 자연스럽게 이어진다.
+    async function playDoorOnlyIntro(overlay, token) {
+        const introLayer = q(overlay, "gc-intro-layer");
+        const blackout = q(overlay, "gc-blackout");
+
+        introLayer.classList.add("show");
+        blackout.classList.add("clear");
+
+        introLayer.classList.add("gc-doors-closed");
+        await wait(500);
+        if (token !== runToken) return false;
+
+        await wait(300); // 짧은 정적(playIntroPreamble과 동일한 타이밍)
+        if (token !== runToken) return false;
+        introLayer.classList.add("gc-doors-open");
+        await wait(700);
+        if (token !== runToken) return false;
+
+        introLayer.classList.remove("show", "gc-doors-closed", "gc-doors-open");
+        return token === runToken;
+    }
+
     // ── 10연차 전용: 보석 10개 미리보기 ────────────────────────────
     async function playMidSection(overlay, pulls, token) {
         const midLayer = q(overlay, "gc-mid-layer");
@@ -848,5 +873,59 @@
         await showSummary(overlay, pulls); // 클릭하면 풀리고, 그 안에서 오버레이도 함께 닫는다.
         if (token !== runToken) return { aborted: true };
         return { data };
+    };
+
+    // ── 퀘스트/도전과제 캐릭터 보상 전용(확인된 요청): 1회 모집과 같은 결과 화면(등급 보석 등장 ->
+    // 신규면 공격/방어 타입+대사+몸통 카메라 워크 -> showCharacterReveal)을 그대로 재사용하되, 앞부분의
+    // 간판인물 접근+빛 폭발(가챠 특유의 "뽑기" 연출)은 빼고 문이 닫혔다 열리면 곧장 배경에서 보석이
+    // 나오는 것으로 시작한다. 서버 응답을 이미 받은 뒤 호출하는 구조라(quests.js가 fetch 완료 후 호출)
+    // 1회/10연차와 달리 Promise가 아니라 캐릭터 배열을 직접 받는다.
+    // characters: [{ ...캐릭터 정보, is_duplicate, is_pickup }, ...] - challenges.py/achievements.py의
+    // new_characters 응답 형태 그대로. 여러 명이 한 번에 지급돼도(예: 도전과제가 캐릭터 여러 명을
+    // 한꺼번에 주는 경우) 10연차처럼 한 명씩 순차 재생하고, 신규 캐릭터는 항상 전체 재생된다(확인된
+    // 요청 - "신규 캐릭터는 그 연출도 볼 수 있게").
+    window.playQuestRewardCinematic = async function (characters, onClose) {
+        if (!characters || characters.length === 0) {
+            if (onClose) onClose();
+            return;
+        }
+        runToken++;
+        const token = runToken;
+        const overlay = getOverlay();
+        overlay.classList.add("no-transition", "open");
+        resetAll(overlay);
+        void overlay.offsetWidth;
+        overlay.classList.remove("no-transition");
+
+        const doorsOk = await playDoorOnlyIntro(overlay, token);
+        if (!doorsOk) {
+            overlay.classList.remove("open");
+            if (onClose) onClose();
+            return;
+        }
+
+        const pulls = characters.map((c) => ({ character: c, is_duplicate: c.is_duplicate, is_pickup: c.is_pickup }));
+        const multiple = pulls.length > 1;
+        const skipBtn = getSkipBtnEl();
+        const teasedThisBatch = new Set();
+
+        for (let i = 0; i < pulls.length; i++) {
+            if (token !== runToken) break;
+            const pull = pulls[i];
+            const isNew = isEffectivelyNew(pull, teasedThisBatch);
+            const skipThisOne = multiple && !isNew && skipRequested;
+            if (skipThisOne) continue;
+            if (isNew) teasedThisBatch.add(pull.character.name);
+
+            if (isNew) skipBtn.classList.remove("active");
+            const gemOk = await playRarityGemReveal(overlay, pull.character, token, isNew);
+            if (!gemOk) break;
+            const ok = await playOnePullReveal(overlay, pull, isNew, token, multiple);
+            if (!ok) break;
+        }
+
+        skipBtn.classList.remove("active");
+        overlay.classList.remove("open");
+        if (onClose) onClose();
     };
 })();

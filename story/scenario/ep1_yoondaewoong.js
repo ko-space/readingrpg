@@ -1405,19 +1405,19 @@ const CONTACT_LIST = [
   { key:'yeongwoong', name:'이영웅' },
 ];
 var CG_GALLERY_ITEMS = [
-  { id:'bad',          title:'BAD ENDING',        imageKeys:['end1_cg'] },
-  { id:'normal',       title:'평범한 일상 엔딩', imageKeys:['normal_end_photo'] },
-  { id:'juheon',       title:'송주헌 엔딩',       imageKeys:['juheon_end_photo'] },
-  { id:'seungyu',      title:'강승유 엔딩',       imageKeys:['seungyu_ending'] },
-  { id:'yeongwoong',   title:'이영웅 엔딩',       imageKeys:['yeongwoong_end_photo'] },
-  { id:'ganghee',      title:'강 희 엔딩',        imageKeys:['ganghee_end_photo'] },
+  { id:'bad',          title:'BAD ENDING',        imageKeys:['end1_cg'], bgm:'Dinner Punch' },
+  { id:'normal',       title:'평범한 일상 엔딩', imageKeys:['normal_end_photo'], bgm:'Fading Static' },
+  { id:'juheon',       title:'송주헌 엔딩',       imageKeys:['juheon_end_photo'], bgm:'You are the One' },
+  { id:'seungyu',      title:'강승유 엔딩',       imageKeys:['seungyu_ending'], bgm:'Midnight Trip' },
+  { id:'yeongwoong',   title:'이영웅 엔딩',       imageKeys:['yeongwoong_end_photo'], bgm:'Fading Echoes' },
+  { id:'ganghee',      title:'강 희 엔딩',        imageKeys:['ganghee_end_photo'], bgm:'Ganghee Portrait' },
 
-  { id:'true_seungyu',   title:'TRUE ENDING CG · 강승유',   trueEndingIndex:0 },
-  { id:'true_ganghee',   title:'TRUE ENDING CG · 강 희',    trueEndingIndex:1 },
-  { id:'true_yeongwoong',title:'TRUE ENDING CG · 이영웅',   trueEndingIndex:2 },
-  { id:'true_juheon',    title:'TRUE ENDING CG · 송주헌',   trueEndingIndex:3 },
+  { id:'true_seungyu',   title:'TRUE ENDING CG · 강승유',   trueEndingIndex:0, bgm:'Hello SY' },
+  { id:'true_ganghee',   title:'TRUE ENDING CG · 강 희',    trueEndingIndex:1, bgm:'Kurumi BGM' },
+  { id:'true_yeongwoong',title:'TRUE ENDING CG · 이영웅',   trueEndingIndex:2, bgm:'Static in the Static' },
+  { id:'true_juheon',    title:'TRUE ENDING CG · 송주헌',   trueEndingIndex:3, bgm:'You are the One arrange' },
 
-  { id:'hidden',       title:'HIDDEN ENDING',     imageKeys:['juheon_hidden_end_photo'] },
+  { id:'hidden',       title:'HIDDEN ENDING',     imageKeys:['juheon_hidden_end_photo'], bgm:'The Quiet Arrival' },
 ];
 // getGalleryImages()가 imageKeys+전역 BG[key]로 조회하면, Episode 2를 플레이해 activateEpisodeBundle이
 // BG를 Episode 2 것으로 바꿔치기한 뒤(도감으로 돌아왔을 때 등)에는 BG[key]가 전부 undefined가 되어 이미

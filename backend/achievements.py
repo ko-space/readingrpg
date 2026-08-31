@@ -100,6 +100,7 @@ def resolve_character_reveal_info(name: str, star: int) -> dict:
         return {
             "gender": None, "attack_type": None, "defense_type": None,
             "passive_name": None, "skill_name": None, "trait_name": None,
+            "gacha_quote": None,
         }
 
     return {
@@ -111,6 +112,10 @@ def resolve_character_reveal_info(name: str, star: int) -> dict:
         "passive_name": _first_unlocked_name(catalog.get("star_effects")) or "패시브",
         "skill_name": _first_unlocked_name(catalog.get("skill_effects")),
         "trait_name": _first_unlocked_name(catalog.get("trait_effects")),
+        # 가챠 1회 모집 시네마틱의 신규 캐릭터 티저(대사 인용)와 동일한 문구 - 퀘스트/도전과제 보상으로
+        # 받은 신규 캐릭터도 같은 티저를 재생하기 위해 필요(신고받아 추가, gacha.py가 자기 응답에서만
+        # 따로 붙이던 것을 공용 함수로 옮겨 퀘스트/업적 보상 경로에도 동일하게 적용).
+        "gacha_quote": catalog.get("gacha_quote"),
     }
 
 

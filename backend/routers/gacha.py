@@ -255,7 +255,6 @@ def _perform_one_pull(
             "rarity": rarity,
             "job_class": new_row.job_class,
             "description": picked_character["description"],
-            "gacha_quote": picked_character.get("gacha_quote"),
             "outfit": new_row.outfit,
             **resolve_character_reveal_info(new_row.name, new_row.star),
         },

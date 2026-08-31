@@ -214,6 +214,27 @@ def add_reading_log(
         )
     reading_minutes = min(reading_minutes, remaining_daily_cap)
 
+    # 같은 사용자가 방금 전(수십 초 이내)과 완전히 동일한 조건(던전/과목/유형/시간)으로 다시 제출하면
+    # 중복 저장으로 보고 거부한다 - 프론트가 응답을 못 받고 시간초과로 실패 처리해 버튼이 다시 눌리게
+    # 되는 경우(reading.js handleEndReading의 handledEnd 리셋, 또는 탭 2개/재시도 등) 서버는 이미 그
+    # 요청을 처리해 커밋까지 끝냈는데 같은 학습이 두 번 기록·보상되는 사고가 실제로 있었다(신고받아
+    # 추가). 저장/보상 반영 "전"에 검사해야 거부됐을 때 아무 것도 반영되지 않는다.
+    DUPLICATE_SUBMIT_WINDOW_SECONDS = 60
+    duplicate_cutoff = datetime.utcnow() - timedelta(seconds=DUPLICATE_SUBMIT_WINDOW_SECONDS)
+    duplicate_log = db.query(ReadingLog).filter(
+        ReadingLog.user_id == user.id,
+        ReadingLog.dungeon_name == log_data.dungeon_name,
+        ReadingLog.difficulty == log_data.difficulty,
+        ReadingLog.session_type == log_data.session_type,
+        ReadingLog.reading_minutes == reading_minutes,
+        ReadingLog.created_at >= duplicate_cutoff,
+    ).first()
+    if duplicate_log:
+        raise HTTPException(
+            status_code=409,
+            detail="같은 학습 기록이 방금 이미 저장됐어요. 잠시 후 다시 시도해 주세요.",
+        )
+
     equipped = _get_equipped_character(user)
     matched_subject = _resolve_matched_subject(log_data.session_type, log_data.difficulty)
     character_exp_multiplier = _equipped_character_exp_multiplier(equipped, matched_subject)
