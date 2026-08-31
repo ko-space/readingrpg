@@ -180,6 +180,19 @@ def seed_enhancement_items():
                 "effect_params": {"1": 5, "2": 10, "3": 25, "4": 50, "5": 75},
             },
             {
+                "name": "귀환의 돌",
+                "source_character": "최재혁",
+                "price": 0,  # 상점에서 팔지 않음(먼지와 동일하게 is_shop_active를 항상 False로 고정)
+                "currency": "silver",
+                "icon_file": "assets/items/return_stone.webp",
+                "description": "무엇이든 예외 없이 처음으로 되돌리는 힘을 지닌 돌입니다.",
+                # 최재혁의 마법 영약과 effect_type은 같지만(dust_convert), 성급별 확률표 대신 항상 100 -
+                # 성급과 무관하게 먼지 생성이 확정이다(요청됨).
+                "effect_type": "dust_convert",
+                "effect_params": {"1": 100, "2": 100, "3": 100, "4": 100, "5": 100},
+                "is_shop_active": False,
+            },
+            {
                 "name": "먼지",
                 "source_character": None,
                 "price": 0,  # 상점에서 팔지 않음(마법 영약 성공 시에만 획득) - is_shop_active를 항상 False로 고정
@@ -736,6 +749,7 @@ def seed_story_secrets():
 
 
 STORY_ID_EP1 = "ep1_yoondaewoong"
+STORY_ID_EP2 = "ep2_choijaehyeok"
 
 CHALLENGES = [
     # ── 스토리모드 도전과제: 인연 스토리 Episode 1 CG 갤러리 순서(story-engine.js의 CG_GALLERY_ITEMS)와
@@ -880,6 +894,188 @@ CHALLENGES = [
         "condition_type": "activity_total",
         "condition_value": 100,
         "condition_params": {"activity_type": "ep1_ending_reached"},
+        "reward_gold": 300,
+    },
+
+    # ── 스토리모드 도전과제: 인연 스토리 Episode 2 CG 갤러리 순서(ep2_choijaehyeok.js의
+    # EP2_CG_GALLERY_ITEMS)와 1:1로 대응한다 ──────────────────────────────────────────
+    {
+        "name": "인연 스토리 도감 Episode 2 No.1 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end1"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.2 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end2"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.3 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end3"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "강 희", "quantity": 1}],
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.4 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end4"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "최재혁", "quantity": 1}],
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.5 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end5"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "송주헌", "quantity": 1}],
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.6 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end6"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "이영웅", "quantity": 1}],
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.7 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end7"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "강승유", "quantity": 1}],
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.8 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end8"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.9 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end9"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.10 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end10"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.11 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end11"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.12 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end12"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "item", "name": "귀환의 돌", "quantity": 1}],
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.13 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end13"},
+        "reward_gold": 200,
+        "reward_items": [
+            {"type": "item", "name": "귀환의 돌", "quantity": 1},
+            {"type": "character", "name": "임소정", "quantity": 1},
+        ],
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.14 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end14"},
+        "reward_gold": 200,
+        "reward_items": [
+            {"type": "item", "name": "귀환의 돌", "quantity": 1},
+            {"type": "character", "name": "이종복", "quantity": 1},
+        ],
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.15 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end15"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "item", "name": "귀환의 돌", "quantity": 1}],
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.16 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end16"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.17 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end17"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "임소정", "quantity": 1}],
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.18 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end18"},
+        "reward_gold": 200,
+        "reward_items": [{"type": "character", "name": "이종복", "quantity": 1}],
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.19 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end19"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.20 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end20"},
+        "reward_gold": 200,
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.21 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end21"},
+        "reward_items": [
+            {"type": "character", "name": "이종복", "quantity": 1},
+            {"type": "character", "name": "임소정", "quantity": 1},
+            {"type": "character", "name": "이영웅", "quantity": 1},
+            {"type": "character", "name": "강승유", "quantity": 1},
+            {"type": "character", "name": "송주헌", "quantity": 1},
+            {"type": "character", "name": "강 희", "quantity": 1},
+            {"type": "character", "name": "최재혁", "quantity": 1},
+        ],
+    },
+    {
+        "name": "인연 스토리 도감 Episode 2 No.22 획득",
+        "condition_type": "cg_unlocked",
+        "condition_value": 1,
+        "condition_params": {"story_id": STORY_ID_EP2, "cg_id": "ep2_end22"},
         "reward_gold": 300,
     },
 

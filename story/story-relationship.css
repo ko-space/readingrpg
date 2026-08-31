@@ -373,6 +373,407 @@ html,body{
   }
 }
 
+/* 지진(rumble) - "쿠구구구……." 같은 지속적인 진동/긴장감 연출 전용(요청됨). impact-shake와 달리
+   확대/명암 플래시 없이 화면이 좌우로 살짝, 오래(1.2s) 흔들리기만 한다 - 한 번의 타격이 아니라
+   서서히 차오르는 힘/땅울림을 표현한다. */
+#stage.rumble-shake{
+  animation: rumbleShake 1.2s ease-in-out;
+}
+@keyframes rumbleShake{
+  0%, 100%{ transform:translate(0, 0); }
+  8%{ transform:translate(-4px, 1px); }
+  16%{ transform:translate(4px, -1px); }
+  24%{ transform:translate(-5px, 1px); }
+  32%{ transform:translate(4px, -2px); }
+  40%{ transform:translate(-4px, 1px); }
+  48%{ transform:translate(3px, -1px); }
+  56%{ transform:translate(-3px, 1px); }
+  64%{ transform:translate(2px, -1px); }
+  72%{ transform:translate(-2px, 1px); }
+  80%{ transform:translate(1px, 0); }
+  90%{ transform:translate(-1px, 0); }
+}
+
+/* ===== Episode 2 신규 연출(story-engine.js triggerExplosion/setLetterbox/triggerGlitch/
+   triggerShockReveal/triggerStaggerCollapse와 짝을 이룬다 - 어느 에피소드든 재사용 가능한 범용 오버레이) ===== */
+
+/* 화면 폭발 - 흰/주황 플래시 */
+#fx-flash{
+  position:absolute; inset:0; z-index:950;
+  background:radial-gradient(circle at center, rgba(255,244,214,0.95) 0%, rgba(255,176,64,0.55) 45%, rgba(255,176,64,0) 78%);
+  opacity:0; pointer-events:none;
+}
+#fx-flash.show{ animation: fxFlashBurst .6s cubic-bezier(.12,.85,.28,1); }
+#fx-flash.show.large{ animation-duration:.9s; }
+@keyframes fxFlashBurst{
+  0%{ opacity:0; }
+  10%{ opacity:1; }
+  100%{ opacity:0; }
+}
+
+/* 화면 폭발 - 확장형 충격파 링 */
+#fx-shockwave{
+  position:absolute; left:50%; top:50%; z-index:951;
+  width:40px; height:40px; margin:-20px 0 0 -20px;
+  border-radius:50%;
+  border:6px solid rgba(255,238,200,0.9);
+  box-shadow:0 0 30px 6px rgba(255,200,120,0.55);
+  opacity:0; pointer-events:none;
+}
+#fx-shockwave.show{ animation: fxShockwaveRing .6s cubic-bezier(.12,.85,.28,1); }
+#fx-shockwave.show.large{ animation-duration:.9s; }
+@keyframes fxShockwaveRing{
+  0%{ opacity:.95; transform:scale(0.3); border-width:10px; }
+  100%{ opacity:0; transform:scale(9); border-width:1px; }
+}
+
+/* 시네마틱 레터박스 - 상하 검은 띠 */
+#fx-letterbox-top, #fx-letterbox-bottom{
+  position:absolute; left:0; right:0; height:0;
+  background:#000; z-index:940; pointer-events:none;
+  transition:height .5s cubic-bezier(.22,.68,.24,1);
+}
+#fx-letterbox-top{ top:0; }
+#fx-letterbox-bottom{ bottom:0; }
+#fx-letterbox-top.show, #fx-letterbox-bottom.show{ height:11%; }
+
+/* 글리치/정전 - RGB 채널 분리 + 스캔라인 깜빡임 */
+#fx-glitch{
+  position:absolute; inset:0; z-index:945;
+  opacity:0; pointer-events:none;
+  background:repeating-linear-gradient(
+    to bottom,
+    rgba(255,255,255,0.05) 0px,
+    rgba(255,255,255,0.05) 1px,
+    transparent 2px,
+    transparent 4px
+  );
+  mix-blend-mode:screen;
+}
+#fx-glitch.show{ animation: fxGlitchFlicker .65s steps(2, end); }
+@keyframes fxGlitchFlicker{
+  0%{ opacity:0; box-shadow:none; }
+  10%{ opacity:.9; box-shadow: -6px 0 0 rgba(255,0,80,0.55), 6px 0 0 rgba(0,220,255,0.55); }
+  20%{ opacity:.2; box-shadow: 5px 0 0 rgba(255,0,80,0.5), -5px 0 0 rgba(0,220,255,0.5); }
+  32%{ opacity:.85; box-shadow: -9px 0 0 rgba(255,0,80,0.6), 9px 0 0 rgba(0,220,255,0.6); }
+  45%{ opacity:.1; box-shadow:none; }
+  58%{ opacity:.75; box-shadow: 4px 0 0 rgba(255,0,80,0.45), -4px 0 0 rgba(0,220,255,0.45); }
+  75%{ opacity:.3; }
+  100%{ opacity:0; box-shadow:none; }
+}
+
+/* 충격 리빌 - 방사형 스피드라인 버스트 */
+#fx-speedlines{
+  position:absolute; inset:0; z-index:952;
+  opacity:0; pointer-events:none;
+  background:
+    repeating-conic-gradient(
+      from 0deg,
+      rgba(255,255,255,0.9) 0deg 1.2deg,
+      rgba(255,255,255,0) 1.2deg 9deg
+    );
+  -webkit-mask-image:radial-gradient(circle at center, transparent 12%, #000 46%);
+  mask-image:radial-gradient(circle at center, transparent 12%, #000 46%);
+}
+#fx-speedlines.show{ animation: fxSpeedlineBurst .5s cubic-bezier(.1,.9,.25,1); }
+@keyframes fxSpeedlineBurst{
+  0%{ opacity:0; transform:scale(.4); }
+  22%{ opacity:1; transform:scale(1.1); }
+  100%{ opacity:0; transform:scale(1.6); }
+}
+
+/* 스탠딩 비틀거리다 쓰러짐 - 좌우로 휘청인 뒤 무릎이 꺾이듯 회전+하강하며 페이드.
+   #char-left/#char-center의 기본 transform 앵커는 translate(-50%, ...), #char-right는
+   translate(50%, ...)라(story-relationship.css 상단 #char-left/#char-right/#char-center 참고)
+   애니메이션 키프레임도 같은 앵커를 기준으로 흔들려야 원래 서 있던 자리에서 비틀거린다 - 그래서
+   왼쪽/가운데용과 오른쪽용 키프레임을 따로 둔다. */
+#char-left.stagger-collapse, #char-center.stagger-collapse{
+  animation: staggerCollapseLeftAnchor .95s cubic-bezier(.32,.02,.35,1) forwards;
+}
+#char-right.stagger-collapse{
+  animation: staggerCollapseRightAnchor .95s cubic-bezier(.32,.02,.35,1) forwards;
+}
+@keyframes staggerCollapseLeftAnchor{
+  0%{ transform:translate(-50%, 0) rotate(0deg); opacity:1; filter:brightness(1); }
+  15%{ transform:translate(calc(-50% - 22px), -4px) rotate(-6deg); }
+  32%{ transform:translate(calc(-50% + 18px), 0) rotate(5deg); }
+  48%{ transform:translate(calc(-50% - 10px), 2px) rotate(-3deg); filter:brightness(.85); }
+  90%{ transform:translate(-50%, 34%) rotate(78deg); opacity:1; filter:brightness(.6); }
+  100%{ transform:translate(-50%, 34%) rotate(78deg); opacity:0; filter:brightness(.6); }
+}
+@keyframes staggerCollapseRightAnchor{
+  0%{ transform:translate(50%, 0) rotate(0deg); opacity:1; filter:brightness(1); }
+  15%{ transform:translate(calc(50% - 22px), -4px) rotate(-6deg); }
+  32%{ transform:translate(calc(50% + 18px), 0) rotate(5deg); }
+  48%{ transform:translate(calc(50% - 10px), 2px) rotate(-3deg); filter:brightness(.85); }
+  90%{ transform:translate(50%, 34%) rotate(78deg); opacity:1; filter:brightness(.6); }
+  100%{ transform:translate(50%, 34%) rotate(78deg); opacity:0; filter:brightness(.6); }
+}
+
+/* 피격 시 캐릭터 스프라이트가 짧게 밝게/붉게 번쩍이는 효과 - 래퍼(#char-left 등)가 아니라 그 안쪽
+   img에 건다. 래퍼는 위치(translate) 애니메이션을 이미 쓰고 있어서(비틀거림 등) 같은 요소에 별도
+   transform 애니메이션을 더 걸면 서로 덮어써 버리지만, img 자신은 기본적으로 transform이 없으므로
+   충돌 없이 독립적으로 확대/색보정만 줄 수 있다. */
+#char-left-img.hit-flash, #char-center-img.hit-flash, #char-right-img.hit-flash{
+  animation: hitFlashPulse .35s ease-out;
+}
+@keyframes hitFlashPulse{
+  0%{ filter:brightness(1) saturate(1); }
+  30%{ filter:brightness(2.4) saturate(.25) drop-shadow(0 0 20px rgba(255,70,70,.85)); transform:scale(1.03); }
+  100%{ filter:brightness(1) saturate(1); transform:scale(1); }
+}
+
+/* 코미디성 개그 타격(강 희의 구취 브레스로 기절하는 김현재 등) - stagger-collapse처럼 쓰러지지 않고
+   통통 튀듯 흔들리다 원래대로 돌아온다. 역시 img에 걸어 래퍼의 위치 트랜지션과 충돌하지 않는다. */
+#char-left-img.comedy-bounce, #char-center-img.comedy-bounce, #char-right-img.comedy-bounce{
+  animation: comedyBounceWobble .55s cubic-bezier(.36,.07,.19,.97);
+  transform-origin:50% 100%;
+}
+@keyframes comedyBounceWobble{
+  0%{ transform:scale(1,1) rotate(0deg); }
+  18%{ transform:scale(1.1,.86) rotate(-7deg); }
+  40%{ transform:scale(.92,1.1) rotate(6deg); }
+  62%{ transform:scale(1.05,.95) rotate(-4deg); }
+  82%{ transform:scale(.98,1.02) rotate(2deg); }
+  100%{ transform:scale(1,1) rotate(0deg); }
+}
+
+/* 카메라 펀치인 - 대사 임팩트를 강조할 때 화면 전체가 아주 짧게 확대됐다가 되돌아온다(임팩트
+   흔들림 triggerImpactShake와 별개로, 흔들리지 않고 "훅 들어오는" 느낌만 준다). */
+#stage.camera-punch{
+  animation: cameraPunchZoom .4s cubic-bezier(.2,.9,.3,1);
+}
+@keyframes cameraPunchZoom{
+  0%{ transform:scale(1); }
+  35%{ transform:scale(1.045); }
+  100%{ transform:scale(1); }
+}
+
+/* 통화/화면(TV 중계, 영상통화 등) 속 인물 연출 - 살짝 흐릿한 화질 + 계속 흘러내리는 스캔라인 + 지지직
+   노이즈. 다른 fx-*(한 번 재생되고 스스로 사라짐)와 달리, 명시적으로 끌 때까지(tvStatic:null/false)
+   유지되는 지속형 연출이다 - 래퍼(#char-center 등) 하나에만 클래스를 토글하면 자식 img(흐림/보정)와
+   .tv-scan-mask(스캔라인)가 함께 반응한다. 청색조는 완전히 뺐다(요청됨 - grayscale+sepia+hue-rotate
+   조합이 원본 색과 무관하게 항상 파랗게 밀어붙이고 있었다); 남은 filter는 살짝 흐리고 대비만 준
+   "화면 너머로 보는" 정도의 중립 보정이다. */
+#char-left.tv-static #char-left-img,
+#char-center.tv-static #char-center-img,
+#char-right.tv-static #char-right-img{
+  filter: blur(.5px) saturate(1.05) brightness(.97) contrast(1.05);
+  animation: tvStaticFlicker 2.6s steps(2) infinite;
+}
+/* 스캔라인은 캐릭터의 실제 실루엣(투명 배경 제외 부분)에만 씌워져야 하므로 사각형 오버레이가 아니라
+   캐릭터 이미지 자체를 마스크로 쓴다 - story-engine.js의 setCharTvStatic이 지금 보이는 스탠딩과 같은
+   이미지 경로를 --tv-mask-image로 래퍼(#char-center 등)에 설정해주고, 커스텀 프로퍼티는 기본적으로
+   상속되므로 아래 자식 요소들도 그대로 이어받는다.
+   무늬가 실제로 움직이게(요청됨) 하되, mask가 걸린 요소 자신의 background-position을 애니메이션하면
+   매 프레임 전체를 다시 페인트해야 해서(예전에 그렇게 했다가 인물 등장 시 눈에 띄는 렉의 원인이었다)
+   두 레이어로 분리한다: .tv-scan-mask(래퍼의 바로 아래 자식, 실루엣 모양의 mask만 갖고 있고 그 자체는
+   전혀 움직이지 않는다)가 무늬를 실루엣 안으로만 잘라 보여주는 창 역할을 하고, 그 안의
+   .tv-scan-pattern(반복 그라디언트 배경은 고정)을 transform: translateY로만 움직인다.
+   repeating-linear-gradient는 요소 전체 영역에 이음매 없이 무한히 이어지는 패턴이라, "배경 자체"는
+   한 번만 페인트된 채로 요소를 translateY만 시켜도(합성 전용 속성이라 리페인트 없음) 무늬가 흐르는
+   것처럼 보인다 - 이동 거리를 무늬 주기(6px)의 배수로 맞춰 루프 이음매도 없앴다. */
+#char-left .tv-scan-mask,
+#char-center .tv-scan-mask,
+#char-right .tv-scan-mask{
+  position:absolute; inset:0;
+  overflow:hidden;
+  pointer-events:none;
+  opacity:0;
+  -webkit-mask-image: var(--tv-mask-image, none);
+  mask-image: var(--tv-mask-image, none);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+#char-left.tv-static .tv-scan-mask,
+#char-center.tv-static .tv-scan-mask,
+#char-right.tv-static .tv-scan-mask{
+  opacity:.85;
+  animation: tvNoiseFlicker .3s steps(3) infinite;
+}
+.tv-scan-pattern{
+  position:absolute;
+  left:0; right:0;
+  top:-24px; bottom:-24px; /* 위아래로 한 주기(24px)만큼 여유를 둬 이동 중에도 항상 화면을 덮는다 */
+  /* 실제 캐릭터 렌더링 크기(보통 화면 높이의 1/2~2/3)에서 1px/4px 주기는 너무 촘촘해 거의 안 보였다
+     - 선을 두껍게, 주기를 넓혀서 실제 게임 화면에서도 또렷이 보이게 한다. */
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.4) 0px, rgba(0,0,0,.4) 2px, transparent 2px, transparent 6px);
+  animation: tvScanlineDrift 1.1s linear infinite;
+  will-change: transform;
+}
+@keyframes tvScanlineDrift{
+  from{ transform: translateY(0); }
+  to{ transform: translateY(24px); } /* 6px 주기의 배수라 루프가 이음매 없이 이어진다 */
+}
+@keyframes tvStaticFlicker{
+  0%, 100%{ opacity:.88; }
+  38%{ opacity:.83; }
+  52%{ opacity:.88; }
+  71%{ opacity:.79; }
+  85%{ opacity:.88; }
+}
+@keyframes tvNoiseFlicker{
+  0%, 100%{ opacity:.85; }
+  33%{ opacity:1; }
+  66%{ opacity:.65; }
+}
+
+/* 아이템 등장(귀환의 돌 등) - 중앙 캐릭터가 옆으로 비켜서는 동안(#char-center.item-reveal-shift) 그
+   자리(살짝 위쪽)에 부드러운 라인의 사각형 컨테이너 안에서 아이템이 은은하게 떠오르듯 나타난다.
+   story-engine.js의 playItemReveal/playItemHide가 켜고 끈다. */
+#item-display{
+  position:absolute;
+  left:50%; top:42%;
+  transform:translate(-50%,-50%) scale(.82);
+  z-index:6;
+  opacity:0;
+  pointer-events:none;
+  transition: opacity .5s ease, transform .5s ease;
+}
+#item-display.show{
+  opacity:1;
+  transform:translate(-50%,-50%) scale(1);
+}
+#item-display-box{
+  width:min(42vw, 300px);
+  aspect-ratio:1/1;
+  background: rgba(18,16,26,0.55);
+  border:1px solid rgba(255,255,255,0.3);
+  border-radius:28px;
+  box-shadow:0 18px 46px rgba(0,0,0,0.45), inset 0 0 28px rgba(255,255,255,0.06);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-sizing:border-box;
+  overflow:hidden; /* 이미지가 사각형 테두리에 꽉 차도록 - 잘리는 부분이 있어도 됨(요청됨) */
+  backdrop-filter: blur(2px);
+}
+#item-display-img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  filter:drop-shadow(0 8px 20px rgba(0,0,0,0.4));
+}
+
+/* 화이트아웃 - #scene-fade는 기본적으로 검게 덮이지만(암전), 시간이동 등 "빛에 삼켜지는" 연출은
+   흰색으로 덮여야 자연스러워서 색만 바꾸는 보조 클래스를 둔다(story/story-sub.css의 동일 패턴 참고).
+   검은 암전(일반 씬 전환)은 대사창을 계속 가려야 맞지만, 화이트아웃은 반대로 다 하얘진 뒤에는 그 위에
+   대사가 보여야 한다(요청됨) - #scene-fade(z-index:999)가 #dialogue-wrap(기본 z-index:5)보다 항상
+  위에 있어서, .white일 때만 대사창을 그 위로 끌어올린다(story-engine.js의 playWhiteoutTextReveal이
+  실제로 다 하얘질 때까지는 대사창 자체를 숨겨두므로, 순서가 앞당겨져도 먼저 보이지는 않는다). */
+#scene-fade.white{ background:#fff; }
+#scene-fade.white ~ #dialogue-wrap{ z-index:1000; }
+
+/* 소품(상자 자물쇠 등) 텍스트 입력 - 모모톡 채팅 UI와 무관한 범용 입력 모달 */
+#prop-input-layer{
+  position:absolute; inset:0;
+  display:none;
+  align-items:center; justify-content:center;
+  background: rgba(5,5,8,0.78);
+  z-index:955;
+}
+#prop-input-layer.show{ display:flex; }
+#prop-input-box{
+  width:min(86%, 420px);
+  background:#14131c;
+  border:1px solid #3a3850;
+  border-radius:14px;
+  padding:22px 20px;
+  box-shadow:0 18px 50px rgba(0,0,0,0.55);
+  text-align:center;
+}
+#prop-input-label{
+  color:#e8e6f2;
+  font-size:15px;
+  margin-bottom:14px;
+  line-height:1.5;
+  white-space:pre-wrap;
+}
+#prop-input-field{
+  width:100%;
+  box-sizing:border-box;
+  background:#0b0a12;
+  border:1px solid #4a4768;
+  border-radius:8px;
+  color:#f2f0fa;
+  font-size:16px;
+  padding:10px 12px;
+  text-align:center;
+  letter-spacing:1px;
+  margin-bottom:14px;
+}
+#prop-input-field:focus{ border-color:#7d78ff; outline:none; }
+#prop-input-confirm{
+  background:#5d55ff;
+  color:#fff;
+  border:none;
+  border-radius:8px;
+  padding:9px 22px;
+  font-size:14px;
+  cursor:pointer;
+}
+#prop-input-confirm:hover{ background:#6e66ff; }
+
+/* 편지 연출(story/story-sub-engine.js의 openLetter/closeLetter와 같은 방식) - 겉지가 먼저 페이드인
+   되고, 속지가 그 뒤에서 위로 올라오며 나타난 뒤(rise), 확대되며(enlarge) 내용이 보인다. */
+#letter-layer{
+  position:absolute; inset:0;
+  display:none;
+  align-items:center; justify-content:center;
+  background: rgba(8,8,10,0.72);
+  z-index:960;
+}
+#letter-layer.show{ display:flex; }
+#letter-stack{ position:relative; width:100%; height:100%; }
+#letter-envelope{
+  position:absolute; left:50%; top:50%;
+  width:38%; max-width:300px;
+  z-index:2;
+  opacity:0;
+  transform: translate(-50%,-50%) scale(0.94);
+  transition: opacity .5s ease, transform .5s ease;
+}
+#letter-envelope.show{ opacity:1; transform:translate(-50%,-50%) scale(1); }
+#letter-envelope img{ width:100%; display:block; filter:drop-shadow(0 12px 30px rgba(0,0,0,0.5)); }
+#letter-paper{
+  position:absolute; left:50%; top:50%;
+  width:38%; max-width:300px;
+  z-index:1;
+  opacity:0;
+  overflow:hidden;
+  transform: translate(-50%,-50%);
+  transform-origin:center center;
+  transition: opacity .3s ease, transform .8s ease, width .6s ease, max-width .6s ease;
+  pointer-events:none;
+}
+#letter-paper.rise{
+  opacity:1; z-index:3;
+  transform: translate(-50%,-50%) translateY(-52%);
+}
+#letter-paper.enlarge{
+  width:84%; max-width:680px;
+  transform: translate(-50%,-50%) translateY(0%);
+}
+#letter-paper img{ width:100%; display:block; filter:drop-shadow(0 16px 34px rgba(0,0,0,0.55)); }
+#letter-paper-text{
+  position:absolute; inset:11% 20%;
+  overflow-y:auto; overflow-x:hidden;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Nanum Pen Script', 'GyeonggiTitle', cursive;
+  font-size:clamp(19px, 2.5vw, 24px);
+  line-height:1.55;
+  color:#3a2c1a;
+  white-space:pre-wrap;
+  word-break:keep-all;
+  overflow-wrap:break-word;
+  text-align:center;
+  opacity:0;
+  transition: opacity .4s ease;
+}
+#letter-paper.enlarge #letter-paper-text{ opacity:1; }
+
 /* 배경 위 은은한 톤 보정 */
 #bg-mood{
   position:absolute; inset:0;
@@ -420,6 +821,7 @@ html,body{
 #char-left.sprite-dip.sprite-dip-down{ opacity:.55; transform: translate(-50%, 14px); }
 #char-right.sprite-dip.sprite-dip-down{ opacity:.55; transform: translate(50%, 14px); }
 #char-left.mystery-silhouette,
+#char-center.mystery-silhouette,
 #char-right.mystery-silhouette{
   filter:brightness(0) !important;
   /* transition 자체엔 !important를 걸지 않는다 - JS(applyMysterySilhouetteImmediately)가
@@ -434,6 +836,7 @@ html,body{
 }
 
 #char-left.mystery-silhouette.mystery-revealing,
+#char-center.mystery-silhouette.mystery-revealing,
 #char-right.mystery-silhouette.mystery-revealing{
   filter:brightness(1) !important;
 }
@@ -469,6 +872,18 @@ html,body{
 #char-center.dim{ filter:brightness(.5) saturate(.65); }
 #char-center.sprite-dip{ transition: opacity .24s ease, transform .24s ease; }
 #char-center.sprite-dip.sprite-dip-down{ opacity:.55; transform: translate(-50%, 14px); }
+/* 아이템 등장(귀환의 돌 등) 중에는 중앙 캐릭터가 옆으로 비켜선다(story-engine.js의 playItemReveal 참고) -
+   .show와 같은 트랜지션(opacity/transform)을 그대로 타므로 등장/퇴장만큼이나 부드럽게 움직인다.
+   .show보다 더 구체적인 선택자(두 클래스 조합)로 써서 항상 .show의 기본 위치를 덮어쓰도록 한다. */
+#char-center.show.item-reveal-shift{ transform: translate(calc(-50% - 26vw), 0); }
+/* 아이템을 꺼내는 인물의 스탠딩 교체(dip)는 이미 옆으로 비켜선 상태(.item-reveal-shift) 위에서
+   벌어진다 - 두 클래스 모두 클래스 2개+ID 조합이라 명시도가 같아서, 이 결합 선택자 없이는 스타일시트상
+   더 뒤에 있는 .item-reveal-shift 쪽 transform(가로 이동)이 .sprite-dip-down의 transform(세로 dip)을
+   그냥 덮어써버려 캐릭터가 실제로는 하나도 안 내려가는 것처럼 보였다(강 희->강 희2와 똑같은 dip
+   연출이어야 한다는 요청과 어긋남). 클래스 3~4개 조합으로 명시도를 더 높여 가로 이동값은 유지한 채
+   세로 dip만 더해준다. */
+#char-center.show.item-reveal-shift.sprite-dip{ transform: translate(calc(-50% - 26vw), 0); }
+#char-center.show.item-reveal-shift.sprite-dip.sprite-dip-down{ transform: translate(calc(-50% - 26vw), 14px); }
 #char-center img{
   height:100%;
   object-fit:contain;
@@ -561,7 +976,12 @@ html,body{
   line-height:1.75;
   white-space:pre-wrap;
   min-height:3.5em;
+  transition: font-size .15s ease;
 }
+/* 절규·절박한 외침처럼 감정이 격해지는 대사는 line.emphasis:true로 표시해 폰트를 키운다(요청됨) -
+   narration/thought/speech 어느 타입이든 함께 붙을 수 있는 독립 클래스라 각 타입의 폰트 스타일(기울임체
+   등)은 그대로 두고 크기만 키운다. */
+#box.emphasis #line-text{ font-size: 23px; font-weight: 700; letter-spacing: .01em; }
 
 #advance-hint{
   position:absolute;
@@ -624,6 +1044,9 @@ html,body{
 #end-layer .affection{ font-size:14px; color: var(--accent-soft); line-height:1.8; }
 #end-layer.gameover{ background: rgba(30,4,4,0.93); }
 #end-layer.gameover h2{ color:#e8635a; letter-spacing:3px; }
+/* SAD END 전용 - gameover(BAD END/DEATH END)의 붉은 톤과 대비되는 푸른 톤(요청됨). */
+#end-layer.sadend{ background: rgba(4,10,30,0.93); }
+#end-layer.sadend h2{ color:#5a8fe8; letter-spacing:3px; }
 #restart-btn{
   margin-top:10px;
   background: var(--accent);
@@ -1334,6 +1757,16 @@ body{
   border-color: var(--accent);
 }
 .vn-ticket-modal-btn:hover{ filter:brightness(1.15); }
+
+.vn-loading-spinner{
+  width:36px; height:36px;
+  margin:0 auto;
+  border:3px solid rgba(255,255,255,0.2);
+  border-top-color: var(--accent);
+  border-radius:50%;
+  animation: vnLoadingSpin .8s linear infinite;
+}
+@keyframes vnLoadingSpin{ to{ transform:rotate(360deg); } }
 
 /* =====================================================
    신규: 대화 기록(대사 로그) 모달 - 도감 모달(#gallery-modal)과 같은 큰 스크롤 박스 구조를 쓰되,

@@ -199,7 +199,9 @@ def _pick_rarity() -> str:
     return "일반"  # 부동소수점 오차 대비 fallback
 
 
-def _perform_one_pull(db: Session, user: User, active_pickup_rates: dict, include_hidden: bool) -> dict:
+def _perform_one_pull(
+    db: Session, user: User, active_pickup_rates: dict, include_hidden: bool, forced_rarity: str | None = None
+) -> dict:
     """등급/캐릭터 추첨부터 DB 반영(Character/ActivityLog/GachaPullLog)까지 한 번의 뽑기 전체를 수행하고,
     그 결과를 프론트 획득 연출이 바로 쓸 수 있는 dict로 돌려준다. 골드 차감/포인트 적립은 호출부 책임.
 
@@ -214,8 +216,11 @@ def _perform_one_pull(db: Session, user: User, active_pickup_rates: dict, includ
     대신 Character 테이블을 직접 새로 쿼리한다. user.characters는 커밋 시점에만 자동으로 새로고침되는데
     (SQLAlchemy expire_on_commit 기본값), 이제 커밋을 매번 안 하므로 그 캐시가 낡은 채로 남아있을 수
     있다 - 직접 쿼리는 이 캐시를 아예 안 거치므로(session.autoflush=False라도 이 함수 자신이 이미
-    flush해뒀으므로) 항상 최신 상태를 본다."""
-    rarity = _pick_rarity()
+    flush해뒀으므로) 항상 최신 상태를 본다.
+
+    forced_rarity: 넘기면 _pick_rarity()로 등급을 뽑는 대신 이 등급으로 확정한다(10연차 마지막 뽑기의
+    "전부 일반이면 희귀 보장" 처리 전용 - pull_character_ten 참고). None이면 기존과 동일하게 확률 추첨."""
+    rarity = forced_rarity if forced_rarity is not None else _pick_rarity()
     picked_character = _pick_character_with_pickup(rarity, active_pickup_rates, include_hidden=include_hidden)
 
     owned_names = {row[0] for row in db.query(Character.name).filter(Character.user_id == user.id).all()}
@@ -304,6 +309,10 @@ def pull_character_ten(
     할인 없이 정가(GACHA_COST * 10) 그대로 - 사용자 확정. 도전과제 알림은 10번 전부 끝난 뒤 한 번만
     확인해서(단발과 동일하게 "요청당 1번" 유지) 토스트가 10개씩 뜨지 않게 한다.
 
+    최소 보장(10연차 전용, 단발에는 없음): 10번이 전부 "일반" 등급으로 나오면 마지막 한 장만 "희귀"로
+    바뀐다 - 아래 last_natural_rarity를 먼저 뽑아 자연 결과를 확인하고, 그 결과까지 포함해 10개 전부
+    일반일 때만 강제로 덮어쓰므로 원래 더 좋은 등급이 나올 자연 확률에는 전혀 손을 대지 않는다.
+
     _perform_one_pull이 매번 flush만 하고 실제 커밋은 이 함수 끝에서 딱 한 번만 한다 - 예전엔 10번 다
     각자 커밋해서(원격 DB 왕복마다 실제 디스크 fsync가 걸림) 그 지연이 그대로 쌓였고, 프론트 인트로
     연출이 다 끝난 뒤에도 응답을 한참 더 기다려야 해서 "간판인물이 다가간 뒤 빛 이펙트가 너무 늦게
@@ -323,7 +332,15 @@ def pull_character_ten(
 
     active_pickup_rates = _get_active_pickup_rates(db, banner_id)
     include_hidden = user.id == ADMIN_USER_ID
-    results = [_perform_one_pull(db, user, active_pickup_rates, include_hidden) for _ in range(10)]
+    results = [_perform_one_pull(db, user, active_pickup_rates, include_hidden) for _ in range(9)]
+
+    # 10연차 최소 보장: 앞선 9번 + 이번 마지막 판이 전부 "일반"이면, 마지막 판만 "희귀"로 강제한다.
+    # 등급을 먼저 미리 뽑아보고(_pick_rarity) 판정하므로, 전부 일반이 아닌 정상적인 경우엔 이 등급이
+    # 그대로 forced_rarity로 넘어가 확률 추첨과 완전히 동일하게 동작한다(이중 추첨이 아님).
+    last_natural_rarity = _pick_rarity()
+    all_normal = last_natural_rarity == "일반" and all(r["character"]["rarity"] == "일반" for r in results)
+    last_rarity = "희귀" if all_normal else last_natural_rarity
+    results.append(_perform_one_pull(db, user, active_pickup_rates, include_hidden, forced_rarity=last_rarity))
     db.commit()
 
     new_achievements, new_characters = check_and_grant_achievements(db, user)

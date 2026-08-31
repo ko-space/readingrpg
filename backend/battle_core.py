@@ -606,18 +606,22 @@ def _apply_damage(target, amount, time_elapsed):
 
     반환값은 (dealt, raw_amount, invincible_block) 튜플. dealt는 실제로 체력에서 깎인 순수 피해 -
     흡혈/처치 판정/로그의 "피해량" 등 게임 로직에는 항상 이 값을 써야 한다(보호막으로 막은 양은 안
-    잡힘). raw_amount는 실드/방임 감쇄가 적용되기 "전" 원래 맞았어야 할 피해량(반올림만 적용) - 무적
-    상태라 dealt=0이어도 raw_amount는 원래 위력 그대로다. 프론트 피해 숫자 표시 전용(수치형 보호막에
-    완전히 막혀도 0이 아니라 "원래 이만큼 맞았을 것"을 보여줘야 공격이 허공에 씹힌 것처럼 안 보인다) -
-    그 외 로직은 절대 이 값을 쓰면 안 된다(막힌 피해로 흡혈/처치 판정이 나면 안 되므로). invincible_block은
-    이 히트가 "무적"(shield_until) 때문에 막혔는지 - 수치형 보호막으로 막힌 경우는 여기 해당하지 않는다
-    (확인된 요청 - 무적일 때만 프론트가 피해 숫자 대신 MISS를 보여준다, 보호막으로 막힌 건 그대로 숫자 표시)."""
-    raw_amount = max(0, round(amount))
+    잡힘). raw_amount는 수치형 보호막이 흡수하기 "전" 피해량(반올림만 적용) - 프론트 피해 숫자 표시
+    전용(수치형 보호막에 완전히 막혀도 0이 아니라 "원래 이만큼 맞았을 것"을 보여줘야 공격이 허공에
+    씹힌 것처럼 안 보인다) - 그 외 로직은 절대 이 값을 쓰면 안 된다(막힌 피해로 흡혈/처치 판정이 나면
+    안 되므로). 단, 무적(shield_until)일 때만은 예외로 raw_amount가 감쇄 적용 전 원래 위력 그대로다
+    (확인된 요청 - 무적일 때만 프론트가 피해 숫자 대신 MISS를 보여준다, 보호막으로 막힌 건 그대로
+    숫자 표시) - 방임 감쇄는 무적과 달리 실제로 피해가 들어가는 상황이라, 화면에 뜨는 숫자도 감쇄가
+    반영된(실제로 깎일) 값으로 보여준다(확인된 요청). invincible_block은 이 히트가 "무적"(shield_until)
+    때문에 막혔는지."""
     invincible_block = target["status"]["shield_until"] is not None and time_elapsed < target["status"]["shield_until"]
     if invincible_block:
+        raw_amount = max(0, round(amount))
         amount = 0
-    elif target.get("neglect_active") and target.get("neglect_config"):
-        amount *= (1 - target["neglect_config"]["dr_percent"] / 100)
+    else:
+        if target.get("neglect_active") and target.get("neglect_config"):
+            amount *= (1 - target["neglect_config"]["dr_percent"] / 100)
+        raw_amount = max(0, round(amount))
     amount = max(0, round(amount))
     if target.get("shield"):
         absorbed = min(target["shield"], amount)

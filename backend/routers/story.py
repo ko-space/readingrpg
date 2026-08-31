@@ -124,6 +124,31 @@ def unlock_cg(
     return {"message": "CG가 해금되었습니다."}
 
 
+@router.post("/unlock-chapter")
+def unlock_chapter(
+    req: StoryUnlockCgRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """서브 스토리의 화(chapter) 단위 영구 잠금해제. /unlock-cg와 같은 UserCgUnlock 테이블을
+    재사용하지만(story_id+cg_id 자리에 story_id+chapter_id를 넣는 것뿐), 그쪽의 achievement 판정/
+    ep1 전용 ActivityLog는 붙이지 않는다 - 화 잠금해제는 CG 도감/히든 엔딩과 무관한 별개의 개념이라
+    같은 부작용을 공유하면 안 된다."""
+    existing = (
+        db.query(UserCgUnlock)
+        .filter(
+            UserCgUnlock.user_id == user.id,
+            UserCgUnlock.story_id == req.story_id,
+            UserCgUnlock.cg_id == req.cg_id,
+        )
+        .first()
+    )
+    if not existing:
+        db.add(UserCgUnlock(user_id=user.id, story_id=req.story_id, cg_id=req.cg_id))
+        db.commit()
+    return {"message": "잠금 해제되었습니다."}
+
+
 @router.post("/consume-ticket")
 def consume_ticket(
     req: StoryConsumeTicketRequest,

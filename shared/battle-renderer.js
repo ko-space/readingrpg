@@ -501,6 +501,25 @@ function playDeathSequence(key) {
     imgEl.classList.add("dying");
 }
 
+// 다단히트(F=ma/GPT 킬러)가 탄환별로 로스터 바를 단계적으로 보여주는 동안, 그 대상을 향한 "이번
+// 시퀀스의 표시용 hp"를 여기 남겨둔다. hpOverride만으로는 그 스킬 "자신의" renderUnit 호출만
+// 단계적으로 보이고, 그 몇 초 사이 같은 대상을 겨냥한 다른 배우의 이벤트가 override 없이
+// renderUnit(key)를 부르면 이미 최종값으로 반영된 unit.hp를 그대로 드러내서 탄환이 도착하기도
+// 전에 체력바가 먼저 줄어드는 것처럼 보였다(실제 확인된 버그). 그래서 hpOverride가 없을 때도
+// unit.hp보다 먼저 이 값을 본다 - 시퀀스가 끝나면(clearPendingDisplayHp) 지워서 그 뒤로는 다시
+// 진짜 unit.hp를 따른다.
+const pendingDisplayHp = {}; // unitKey -> number
+
+function setPendingDisplayHp(key, hp) {
+    if (key == null) return;
+    pendingDisplayHp[key] = hp;
+}
+
+function clearPendingDisplayHp(key) {
+    if (key == null) return;
+    delete pendingDisplayHp[key];
+}
+
 // hpOverride: 다단히트(F=ma/GPT 킬러)가 탄환별로 로스터 바를 단계적으로 보여줄 때만 넘긴다.
 // units[key].hp 자체는 이벤트 처리 시점에 이미 최종값으로 즉시 반영돼 있어서(다른 배우 이벤트와의
 // 순서 보장 때문 - 위 basic_attack 처리부 주석 참고), 그걸 그대로 그리면 첫 탄환에서 이미 다 깎인
@@ -516,7 +535,7 @@ function renderUnit(key, hpOverride) {
     const unit = units[key];
     const rosterEl = document.querySelector(`[data-roster="${key}"]`);
     const isDead = unit.hp <= 0;
-    const displayHp = hpOverride == null ? unit.hp : hpOverride;
+    const displayHp = hpOverride != null ? hpOverride : (pendingDisplayHp[key] != null ? pendingDisplayHp[key] : unit.hp);
 
     if (rosterEl) {
         // 상대팀 체력바 색상을 방어타입별로 다르게 칠하기 위한 훅(arena-battle.css의
@@ -2287,10 +2306,12 @@ function dispatchEvent(event) {
                 // 로스터 체력바 단계적 반영용 - captureAndApplyHp가 곧바로 최종 hp로 덮어쓰기 전의
                 // 값을 남겨둔다(이종복 F=ma의 targetHpBeforeThisAttack과 동일한 이유).
                 let gptDisplayHp = battleRendererConfig.units[stunTargetKey] ? battleRendererConfig.units[stunTargetKey].hp : null;
+                setPendingDisplayHp(stunTargetKey, gptDisplayHp);
                 const wasAlreadyDead = lastHit
                     ? captureAndApplyHp(stunTargetKey, lastHit.target_hp_after, lastHit.target_shield_after)
                     : false;
                 playGptKillerVolley(actorKey, stunTargetKey, () => {
+                    clearPendingDisplayHp(stunTargetKey); // 시퀀스 종료 - 이제부터는 다시 진짜 unit.hp를 따른다
                     if (!wasAlreadyDead) {
                         if (lastHit) {
                             renderUnit(stunTargetKey);
@@ -2321,7 +2342,9 @@ function dispatchEvent(event) {
                     if (hit.target_shield_after !== undefined) battleRendererConfig.units[stunTargetKey].shield = hit.target_shield_after;
                     // 다른 배우 이벤트가 그 사이 이 대상을 이미 더 낮은 체력으로 반영해뒀을 수 있으니
                     // 절대 진짜 현재 체력보다 높게 보여주지 않는다.
-                    renderUnit(stunTargetKey, gptDisplayHp == null ? undefined : Math.max(battleRendererConfig.units[stunTargetKey].hp, gptDisplayHp));
+                    const gptClampedDisplayHp = gptDisplayHp == null ? undefined : Math.max(battleRendererConfig.units[stunTargetKey].hp, gptDisplayHp);
+                    setPendingDisplayHp(stunTargetKey, gptClampedDisplayHp);
+                    renderUnit(stunTargetKey, gptClampedDisplayHp);
                     flashHit(stunTargetKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage, hit.invincible_block);
                 }, event.side);
             } else {
@@ -2830,6 +2853,7 @@ function dispatchEvent(event) {
         // (예: 전방이 죽어 후방이 새 전방이 됐는데, 상대 근접 유닛이 원래 타겟 자리에 멈춰있음).
 
         function applyHitVisual() {
+            clearPendingDisplayHp(targetKey); // F=ma 시퀀스 종료(단발 공격이면 애초에 설정된 적이 없어 no-op) - 이제부터는 다시 진짜 unit.hp를 따른다
             if (targetKey) {
                 renderUnit(targetKey);
                 // 이종복 "F=ma": event.is_crit/event.damage는 4탄환을 합산한 값이라, 마지막 탄환
@@ -2920,6 +2944,7 @@ function dispatchEvent(event) {
             // 깎인 것처럼 보인다. 탄환이 도착할 때마다 그 탄환의 실제 피해량만큼만 로컬로 깎아서
             // 단계적으로 보여주고, 사망 판정에 쓰이는 진짜 battleRendererConfig.units[targetKey].hp는 건드리지 않는다.
             let bulletDisplayHp = targetHpBeforeThisAttack;
+            if (bulletHits && !targetWasAlreadyDead && targetKey) setPendingDisplayHp(targetKey, bulletDisplayHp);
             const onLetterArrive = (bulletHits && !targetWasAlreadyDead && targetKey)
                 ? (i) => {
                     if (i >= bulletHits.length - 1) return;
@@ -2933,7 +2958,9 @@ function dispatchEvent(event) {
                     }
                     // 다른 배우 이벤트가 그 사이 이 대상을 이미 더 낮은 체력으로 반영해뒀을 수 있으니
                     // (동시 진행 애니메이션), 절대 진짜 현재 체력보다 높게(덜 깎인 것처럼) 보여주지 않는다.
-                    renderUnit(targetKey, bulletDisplayHp == null ? undefined : Math.max(battleRendererConfig.units[targetKey].hp, bulletDisplayHp));
+                    const bulletClampedDisplayHp = bulletDisplayHp == null ? undefined : Math.max(battleRendererConfig.units[targetKey].hp, bulletDisplayHp);
+                    setPendingDisplayHp(targetKey, bulletClampedDisplayHp);
+                    renderUnit(targetKey, bulletClampedDisplayHp);
                     // 탄환마다 크리티컬을 독립적으로 굴리므로(백엔드), 그 탄환 고유의 is_crit로 반짝인다.
                     flashHit(targetKey, bulletHits[i].is_crit, event.type_multiplier, bulletHits[i].shown_damage ?? bulletHits[i].damage, bulletHits[i].invincible_block);
                     // 배 "개량한복" - 마지막 탄환이 아니라 이 중간 탄환이 target을 50% 미만으로
