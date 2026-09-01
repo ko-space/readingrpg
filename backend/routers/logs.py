@@ -214,11 +214,17 @@ def add_reading_log(
         )
     reading_minutes = min(reading_minutes, remaining_daily_cap)
 
-    # 같은 사용자가 방금 전(수십 초 이내)과 완전히 동일한 조건(던전/과목/유형/시간)으로 다시 제출하면
-    # 중복 저장으로 보고 거부한다 - 프론트가 응답을 못 받고 시간초과로 실패 처리해 버튼이 다시 눌리게
-    # 되는 경우(reading.js handleEndReading의 handledEnd 리셋, 또는 탭 2개/재시도 등) 서버는 이미 그
-    # 요청을 처리해 커밋까지 끝냈는데 같은 학습이 두 번 기록·보상되는 사고가 실제로 있었다(신고받아
-    # 추가). 저장/보상 반영 "전"에 검사해야 거부됐을 때 아무 것도 반영되지 않는다.
+    # 같은 사용자가 방금 전(수십 초 이내)과 같은 조건(던전/과목/유형)으로 다시 제출하면 같은 세션의
+    # 재시도로 보고, 새로 기록·보상하지 않고 그때 이미 저장된 결과를 그대로 다시 돌려준다(신고받아
+    # 추가/수정). 프론트가 응답을 못 받고 시간초과로 실패 처리해 버튼이 다시 눌리게 되는 경우
+    # (reading.js handleEndReading의 handledEnd 리셋, 또는 탭 2개/재시도 등)에도, 클라이언트 쪽
+    # 타이머는 그사이 계속 흘러 재시도마다 reading_minutes가 조금씩 달라진다(신고 사례: 71→72→73분,
+    # 1분 간격 3연속 기록) - 그래서 reading_minutes까지 정확히 같아야 한다는 조건은 이 상황을 전혀
+    # 걸러내지 못했다(같은 세션인데도 매번 "새로운" 기록으로 통과됨). reading_minutes 조건을 빼고
+    # 사용자+던전+과목+유형만으로 매칭한다. 정상적으로 같은 조합을 1분 안에 두 번 학습하는 경우는
+    # 현실적으로 없다시피 하므로(세션당 최소 1분 이상 걸림) 오탐 위험은 낮다.
+    # 200으로 응답해야 프론트가 성공 경로(ReadingSession.clear() 포함)를 그대로 타서 세션이 확실히
+    # 종료된다 - 409로 응답해 실패 취급하면 handledEnd가 다시 풀려 그 재시도 루프가 반복될 수 있다.
     DUPLICATE_SUBMIT_WINDOW_SECONDS = 60
     duplicate_cutoff = datetime.utcnow() - timedelta(seconds=DUPLICATE_SUBMIT_WINDOW_SECONDS)
     duplicate_log = db.query(ReadingLog).filter(
@@ -226,14 +232,25 @@ def add_reading_log(
         ReadingLog.dungeon_name == log_data.dungeon_name,
         ReadingLog.difficulty == log_data.difficulty,
         ReadingLog.session_type == log_data.session_type,
-        ReadingLog.reading_minutes == reading_minutes,
         ReadingLog.created_at >= duplicate_cutoff,
-    ).first()
+    ).order_by(ReadingLog.created_at.desc()).first()
     if duplicate_log:
-        raise HTTPException(
-            status_code=409,
-            detail="같은 학습 기록이 방금 이미 저장됐어요. 잠시 후 다시 시도해 주세요.",
-        )
+        return {
+            "message": "같은 학습 기록이 방금 이미 저장됐어요. 이전 결과를 그대로 보여드려요.",
+            "gained_exp": duplicate_log.earned_exp,
+            "gained_gold": duplicate_log.earned_gold,
+            "gained_silver": duplicate_log.earned_silver,
+            "start_level": user.level,
+            "start_exp": user.total_exp,
+            "current_level": user.level,
+            "current_exp": user.total_exp,
+            "lifetime_exp": user.lifetime_exp,
+            "daily_reading_minutes": user.daily_reading_minutes,
+            "level_up": False,
+            "levels_gained": 0,
+            "new_achievements": [],
+            "new_characters": [],
+        }
 
     equipped = _get_equipped_character(user)
     matched_subject = _resolve_matched_subject(log_data.session_type, log_data.difficulty)
