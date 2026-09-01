@@ -55,6 +55,10 @@ function activateEpisodeBundle(bundle){
   TRUE_ENDING_GALLERY_IDS = bundle.TRUE_ENDING_GALLERY_IDS;
   ENDING_CG_ID_BY_TITLE = bundle.ENDING_CG_ID_BY_TITLE;
   autoUseTickets = localStorage.getItem(AUTO_USE_STORAGE_KEY) === "1";
+  // 상세화면(시작하기/이어하기 버튼)을 보는 동안 이 에피소드의 배경/캐릭터 이미지를 전부 미리 받아둔다
+  // (신고받아 추가 - preloadImages 선언부 주석 참고).
+  preloadImages(CHAR_IMG);
+  preloadImages(BG);
 }
 
 function withPlayerName(str) {
@@ -188,11 +192,20 @@ async function serverUnlockCG(id) {
     } catch (error) { /* 갤러리는 다음 /story/state 조회 시 다시 맞춰짐 */ }
 }
 
-// 캐릭터 이미지를 미리 브라우저 캐시에 올려둔다 - 안 그러면 그 인물이 씬에 처음 등장하는 순간에야
-// 다운로드+디코드가 시작돼서, 그 찰나 동안 스탠딩이 늦게 바뀌는 것처럼 보인다(특히 용량이 유독 컸던
+// 배경/캐릭터 이미지를 미리 브라우저 캐시에 올려둔다 - 안 그러면 그 배경/인물이 씬에 처음 등장하는
+// 순간에야 다운로드+디코드가 시작돼서, 그 찰나 동안 늦게 나타나는 것처럼 보인다(특히 용량이 유독 컸던
 // 강희/승유의 "정면 스탠딩" 변형에서 두드러졌다 - 그 png 3장은 webp로 다시 압축해서 실제 용량 자체도
-// 6~8배 줄였다). 로비/메뉴를 보는 동안 미리 받아두도록 스크립트 로드 시점에 곧바로 시작한다.
-Object.values(CHAR_IMG).forEach((src) => { new Image().src = src; });
+// 6~8배 줄였다). new Image().src만 지정해두면 실제 <img>/background-image에 쓰이기 전에도 브라우저가
+// 다운로드+디코드를 미리 끝내둔다.
+function preloadImages(srcMap){
+  Object.values(srcMap || {}).forEach((src) => { if(src) new Image().src = src; });
+}
+// 스크립트 로드 시점에는 아직 activateEpisodeBundle이 한 번도 안 불려서 CHAR_IMG가 ep1_yoondaewoong.js가
+// 심어둔 기본값(ep1 캐릭터) 그대로다 - 로비 화면을 보는 동안 일단 이것부터 예열한다. BG/ep2 쪽은
+// activateEpisodeBundle이 에피소드 카드를 누르는 즉시(시작하기 버튼을 누르기 전, 상세화면을 보는
+// 동안) 마저 예열한다(신고받아 추가 - 이전엔 배경은 아예 예열되지 않았고, 캐릭터도 스크립트 로드
+// 시점의 ep1 값만 한 번 예열돼서 Episode 2로 전환하면 다시 예열되지 않았다).
+preloadImages(CHAR_IMG);
 
 /* =========================================================
    엔진
