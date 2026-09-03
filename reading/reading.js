@@ -236,6 +236,8 @@
                                   // 페이지를 새로 열었을 때(performance.now()가 0으로 리셋됨)도 비교할 수 있다.
     let hiddenSinceWallMs = null; // 탭/화면이 안 보이게 된 시점의 Date.now() - 다시 보일 때 이 구간만 보정(아래 startSessionClock 참고)
     let hiddenSincePerfMs = null; // 같은 순간의 performance.now() - 벽시계와 비교해서 "실제로 모자란 만큼"만 계산하는 데 씀
+    let lastTickWallMs = null; // 마지막 tick() 실행 시각(Date.now()) - correctSuspendedGap 참고
+    let lastTickPerfMs = null; // 같은 순간의 performance.now()
 
     // segmentStartMs/accumulatedMs는 Date.now()가 아니라 performance.now()(모노토닉 시계) 기준이다 -
     // Date.now()는 기기의 날짜/시간 설정을 그대로 반영하므로, 세션 도중 사용자가 시스템 시간을 미래로
@@ -270,6 +272,39 @@
         return Math.floor(getElapsedMs() / 60000);
     }
 
+    // visibilitychange 기반 라이브 보정(아래)은 화면이 꺼졌다 켜지는 그 순간에 이벤트가 정확히
+    // 발생해야만 동작한다 - 그런데 아이패드/아이폰 Safari(특히 홈화면에 추가한 앱)는 화면을 오래
+    // 꺼둔 뒤(확인된 신고: 1시간 이상) 다시 켜도 visibilitychange 자체가 안 오거나, 탭이 완전히
+    // 정지됐다가 스냅샷만 보여주고 있다가 뒤늦게 깨어나는 등 이벤트에만 의존할 수 없는 경우가 있다
+    // (실제로 "11분에서 몇 시간 뒤에도 11분 그대로"로 재현 신고됨 - 즉 그 구간이 통째로 안 잡힘).
+    // 그래서 이벤트에 의존하지 않는 별도 안전망을 둔다 - setInterval(tick, 1000)이 재개되면(브라우저가
+    // 밀린 타이머를 어떻게 처리하든, 결국 다시 한 번은 실행된다) 매 tick마다 "저번 tick과 이번 tick
+    // 사이 실제로 흐른 벽시계 시간"과 "그 사이 performance.now()가 전진한 시간"을 비교해서, 그 차이가
+    // 정상적인 지연(백그라운드 쓰로틀링 등)의 범위를 크게 넘으면(3초 이상) 기기가 잠들어있었다고 보고
+    // segmentStartMs를 그만큼 앞당겨 보정한다. visibilitychange 보정과 계산식은 같지만, 이벤트 발생
+    // 여부와 무관하게 tick() 자체가 다시 돌기만 하면 항상 잡아낸다는 점이 다르다.
+    const SUSPEND_GAP_THRESHOLD_MS = 3000;
+    function correctSuspendedGap() {
+        if (lastTickWallMs == null || !sessionStarted || isPaused || handledEnd) return;
+        const wallDelta = Date.now() - lastTickWallMs;
+        const perfDelta = performance.now() - lastTickPerfMs;
+        const deficit = wallDelta - perfDelta;
+        if (deficit > SUSPEND_GAP_THRESHOLD_MS) {
+            segmentStartMs -= deficit;
+            // 화면이 아직(또는 다시) 숨겨진 채로 이 보정이 먼저 적용되면, 나중에 visibilitychange의
+            // "다시 보임" 핸들러가 여전히 hiddenSinceWallMs(화면이 처음 꺼졌던 시각)를 기준으로 또
+            // 계산해서 같은 공백을 두 번 보정하는 이중 반영 버그가 있었다(확인된 버그 - 화면이 꺼져있는
+            // 동안 브라우저가 밀린 tick을 먼저 한 번 흘려보내고, 그 뒤에야 visibilitychange가 오는
+            // 경우 재현됨). 여기서 hiddenSince* 기준도 지금 시각으로 함께 당겨두면, 나중에 오는
+            // visibilitychange는 "이미 보정된 지점부터"만 다시 재는 셈이 되어 남은 공백(대개 0에 가까움)만
+            // 계산한다.
+            if (hiddenSinceWallMs != null) {
+                hiddenSinceWallMs = Date.now();
+                hiddenSincePerfMs = performance.now();
+            }
+        }
+    }
+
     function togglePause() {
         if (!sessionStarted || handledEnd) return;
         if (isPaused) {
@@ -280,6 +315,12 @@
             accumulatedMs += Math.max(0, cappedNow - segmentStartMs);
             isPaused = true;
         }
+        // correctSuspendedGap이 "마지막 tick 이후 실제로 흐른 시간"을 보고 판단하는데, 일시정지 중에는
+        // 그 자체가 정상적으로 긴 간격일 수 있다(사용자가 몇 분씩 일시정지해둘 수 있음) - 이걸 기기가
+        // 잠들었던 것으로 오판해 재개 즉시 그 일시정지 시간까지 경과로 잘못 보정해버리면 안 되므로,
+        // 일시정지/재개 전환 시점마다 기준을 다시 잡아둔다.
+        lastTickWallMs = Date.now();
+        lastTickPerfMs = performance.now();
         document.getElementById("reading-pause-btn").textContent = isPaused ? "재개" : "일시정지";
         tick();
     }
@@ -361,6 +402,10 @@
     }
 
     function tick() {
+        correctSuspendedGap();
+        lastTickWallMs = Date.now();
+        lastTickPerfMs = performance.now();
+
         const stopwatchEl = document.getElementById("reading-stopwatch");
         stopwatchEl.classList.toggle("stopwatch-paused", isPaused);
         persistActiveSession();
@@ -493,6 +538,14 @@
             }
             hiddenSinceWallMs = null;
             hiddenSincePerfMs = null;
+            // 위에서 이미 이 공백을 보정했다면, 바로 아래에서 부르는 tick() 안의 correctSuspendedGap이
+            // "마지막 tick 이후"로 같은(또는 겹치는) 공백을 또 감지해서 segmentStartMs를 두 번 깎는
+            // 이중 보정 버그가 있었다(확인된 버그 - lastTickWallMs가 여전히 화면이 꺼지기 전 시각을
+            // 가리키고 있어서, 방금 처리한 공백과 사실상 같은 구간을 또 계산함). 여기서 기준을 지금
+            // 시각으로 미리 갱신해두면, tick()의 correctSuspendedGap은 deficit이 거의 0으로 계산돼
+            // 재보정하지 않는다.
+            lastTickWallMs = Date.now();
+            lastTickPerfMs = performance.now();
             if (sessionStarted && !handledEnd) tick();
         });
     }

@@ -513,18 +513,21 @@
             // 무관하게 항상 잠금 상태로 그린다(forceLocked) - 설명은 절대 클릭해서 못 보게 한다.
             // 코스트는 Active(전술대회 코스트제)에만 있는 개념이라 그 kind일 때만 넘긴다.
             const cost = kind === "active" ? g.active_skill_cost : null;
-            renderAbilityGroup(kind, meta, effectsByStar[key], findCanonicalAbilityName(effectsByStar), unowned, findUnlockStar(effectsByStar), cost);
+            renderAbilityGroup(kind, meta, effectsByStar[key], findCanonicalAbilityName(effectsByStar), unowned, findUnlockStar(effectsByStar), cost, g.star);
         });
     }
 
-    function renderAbilityGroup(kind, meta, text, canonicalName, forceLocked = false, unlockStar = null, cost = null) {
+    function renderAbilityGroup(kind, meta, text, canonicalName, forceLocked = false, unlockStar = null, cost = null, star = null) {
         const holder = document.getElementById(`inventory-ability-${kind}`);
         if (!holder) return;
         holder.innerHTML = "";
 
         const { desc } = splitAbilityText(text);
         const available = !forceLocked && isAbilityAvailable(text);
-        const label = canonicalName || meta.fallbackName;
+        let label = canonicalName || meta.fallbackName;
+        // 6성급 능력(패시브/액티브/스페셜 전부)은 강화된 최종형임을 나타내기 위해 이름 뒤에 +를
+        // 붙인다(확인된 요청) - 실제로 6성급이 해금된 상태(available)일 때만 붙는다.
+        if (available && Number(star) === 6) label += "+";
 
         const button = document.createElement("button");
         button.type = "button";
