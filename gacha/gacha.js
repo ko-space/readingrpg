@@ -19,6 +19,13 @@
     // 채로(placeholder "-") 버튼 활성화 여부를 판정해버리는 경합을 막기 위해서다. null이면 "아직 모름" -
     // 이 상태에선 버튼을 비활성 상태로 두고, loadPoints가 끝나 실제 값을 알게 되면 그때 다시 판정한다.
     let currentPoints = null;
+    // 1회/10회 모집 버튼도 포인트 픽업 버튼과 동일한 이유로 별도 변수로 들고 있는다(null=아직 모름 -
+    // 이 상태에선 GACHA_PULL1_COST/GACHA_PULL10_COST보다 항상 작게 비교돼 버튼이 비활성 상태로 유지됨).
+    let currentGold = null;
+    let pull1Btn = null;
+    let pull10Btn = null;
+    const GACHA_PULL1_COST = 100;   // gacha-partial.html의 "1회 모집 (100G)" 및 backend GACHA_COST와 동일
+    const GACHA_PULL10_COST = 1000; // gacha-partial.html의 "10회 모집 (1000G)" 및 backend GACHA_COST*10과 동일
 
     function authHeaders() {
         const token = localStorage.getItem("access_token");
@@ -138,6 +145,7 @@
             if (!res.ok) throw new Error(`${res.status}`);
             const data = await res.json();
             setPoints(data.user_info.gacha_points);
+            setGold(data.user_info.gold);
         } catch (err) {
             pointValueEl.textContent = "?";
         }
@@ -148,6 +156,19 @@
         currentPoints = value;
         pointValueEl.textContent = value;
         refreshPickupButtons(value);
+    }
+
+    // 골드가 부족해서 애초에 뽑을 수 없는 모집 버튼은 클릭 자체를 막는다(확인된 요청) - 서버가 어차피
+    // 거부하긴 하지만, 클릭 후 연출까지 시작됐다가 "골드가 부족합니다" alert로 실패하는 것보다
+    // 미리 비활성화해두는 게 낫다. null(아직 모름)이면 비교식이 항상 true가 되어 안전하게 비활성 유지.
+    function setGold(value) {
+        currentGold = value;
+        refreshPullButtons();
+    }
+
+    function refreshPullButtons() {
+        if (pull1Btn) pull1Btn.disabled = currentGold === null || currentGold < GACHA_PULL1_COST;
+        if (pull10Btn) pull10Btn.disabled = currentGold === null || currentGold < GACHA_PULL10_COST;
     }
 
     // ── 모집 버튼(1회/10회): 실제 /gacha/ 뽑기 API 호출 ──────────────
@@ -170,6 +191,7 @@
             // 골드/포인트는 서버에서 이미 차감/적립됐으니, 연출이 끝나길 기다리지 않고 결과를 아는
             // 즉시(빛 폭발 직전) 홈 화면 표시를 갱신한다.
             setPoints(data.gacha_points);
+            setGold(data.left_gold);
             if (typeof loadProfile === "function") loadProfile();
         };
 
@@ -190,8 +212,9 @@
     }
 
     function setupPullButtons() {
-        const pull1Btn = contentEl.querySelector("#gacha-pull1-btn");
-        const pull10Btn = contentEl.querySelector("#gacha-pull10-btn");
+        pull1Btn = contentEl.querySelector("#gacha-pull1-btn");
+        pull10Btn = contentEl.querySelector("#gacha-pull10-btn");
+        refreshPullButtons(); // 파셜이 막 로드된 시점엔 currentGold가 아직 null이라 일단 비활성 유지됨(loadPoints가 곧 갱신)
 
         function bannerQuery() {
             return currentBannerId ? `?banner_id=${currentBannerId}` : "";
@@ -207,8 +230,9 @@
             try {
                 await runPullFlow(playFn, fetchAsResult(url));
             } finally {
-                pull1Btn.disabled = false;
-                pull10Btn.disabled = false;
+                // 무조건 재활성화하지 않고, 방금 갱신된(onResult의 setGold) 최신 골드 기준으로
+                // 다시 판정한다 - 10연차 직후 100~999골드만 남았으면 1회는 되고 10회는 계속 막혀야 한다.
+                refreshPullButtons();
             }
         }
 

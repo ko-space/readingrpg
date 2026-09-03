@@ -46,7 +46,7 @@
         el.className = "gc-overlay";
         el.innerHTML = `
             <div class="gc-intro-layer" id="gc-intro-layer">
-                <div class="gc-intro-bg"></div>
+                <div class="gc-intro-bg" id="gc-intro-bg"></div>
                 <div class="gc-char-slot gc-left" id="gc-char2-slot">
                     <img class="gc-char-art gc-on" id="gc-char2-base" src="${GACHA_ASSET_BASE}person1-1.webp" alt="">
                     <img class="gc-char-art" id="gc-char2-point" src="${GACHA_ASSET_BASE}person1-2.webp" alt="">
@@ -206,6 +206,9 @@
     function resetAll(overlay) {
         const introLayer = q(overlay, "gc-intro-layer");
         introLayer.classList.remove("show", "gc-doors-closed", "gc-doors-open");
+        // playDoorOnlyIntro가 gc-intro-bg(가챠 "시작" 배경)를 인라인으로 숨겨두는 경우가 있다 - 다음
+        // 번 실제 가챠 1회/10연차 모집에서는 이 배경이 다시 정상적으로 보여야 하므로 매번 초기화한다.
+        q(overlay, "gc-intro-bg").style.opacity = "";
         q(overlay, "gc-char2-slot").classList.remove("gc-move-in", "show");
         q(overlay, "gc-char1-slot").classList.remove("gc-move-in", "show");
         q(overlay, "gc-char2-base").classList.add("gc-on");
@@ -334,12 +337,24 @@
     }
 
     // ── 퀘스트/도전과제 캐릭터 보상 전용 인트로: 간판인물 접근+빛 폭발 없이, 문이 닫혔다 열리면
-    // 곧장 배경(gc-intro-bg)이 드러나는 것으로 끝난다(확인된 요청 - "손가락 맞대고 터지는" 가챠
-    // 특유의 뽑기 연출은 빼고, 문 열림까지만 재사용). 뒤이어 playRarityGemReveal이 그 배경 위로
-    // 보석을 띄우면서 자연스럽게 이어진다.
+    // 곧장 보석 연출의 배경이 드러나는 것으로 끝난다(확인된 요청 - "손가락 맞대고 터지는" 가챠
+    // 특유의 뽑기 연출은 빼고, 문 열림까지만 재사용).
+    // 문 뒤에 아무것도 미리 준비해두지 않으면, 문이 열리는 순간 gc-intro-bg(가챠 "시작" 배경,
+    // bg-begin.webp)가 그대로 드러나 버린다(확인된 버그 - 문이 열리자마자 가챠 처음 시작할 때
+    // 배경이 잠깐 보였다가 사라짐, 실서버에서 재현 확인됨) - gc-intro-layer.gc-doors-open일 때
+    // gc-intro-bg를 보여주는 CSS 규칙이 있기 때문. 그래서 gc-intro-bg는 인라인으로 계속 숨겨두고,
+    // 대신 곧이어 playRarityGemReveal이 쓸 gc-mid-layer(보석 연출 배경, bg-result.webp)를 문이
+    // 열리기 전부터 미리 보여둔다 - gc-intro-door(z-index:15)가 gc-mid-layer(z-index 없음)보다 항상
+    // 위에 그려지므로, 문이 열리는 순간 자연스럽게 "보석이 나오는 배경"이 드러난다(요청하신 그대로).
+    // 뒤이은 playRarityGemReveal은 이미 보이는 이 배경 위에 보석만 팝업시키면 되므로 이질감이 없다.
     async function playDoorOnlyIntro(overlay, token) {
         const introLayer = q(overlay, "gc-intro-layer");
+        const introBg = q(overlay, "gc-intro-bg");
+        const midLayer = q(overlay, "gc-mid-layer");
         const blackout = q(overlay, "gc-blackout");
+
+        introBg.style.opacity = "0";
+        midLayer.classList.add("show");
 
         introLayer.classList.add("show");
         blackout.classList.add("clear");
@@ -908,10 +923,17 @@
         const multiple = pulls.length > 1;
         const skipBtn = getSkipBtnEl();
         const teasedThisBatch = new Set();
+        // 도전과제/업적을 한꺼번에 여러 개 받아서(claim-all 등) 같은 이름의 캐릭터가 배치 안에 두 번 이상
+        // 섞여 있으면(예: 서로 다른 두 보상이 우연히 같은 캐릭터를 줌), 그 캐릭터의 연출(보석+화면)은
+        // 배치당 한 번만 보여준다 - 가챠 10연차와 달리 "몇 번 받았는지"를 낱개로 보여줄 필요가 없는
+        // 보상 지급 맥락이라, 이미 본 이름은 이후 등장을 통째로 건너뛴다(확인된 요청).
+        const seenNames = new Set();
 
         for (let i = 0; i < pulls.length; i++) {
             if (token !== runToken) break;
             const pull = pulls[i];
+            if (seenNames.has(pull.character.name)) continue;
+            seenNames.add(pull.character.name);
             const isNew = isEffectivelyNew(pull, teasedThisBatch);
             const skipThisOne = multiple && !isNew && skipRequested;
             if (skipThisOne) continue;

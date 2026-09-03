@@ -30,6 +30,21 @@
         return new Date(withZ).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", ...options });
     }
 
+    // 대전 이력 목록 전용 - "n분 전"처럼 상대 시간으로 보여준다(참고 시안과 동일). formatKst와 같은
+    // 이유로 Z를 붙여 UTC임을 명시한 뒤 Date.now()와의 차이를 구한다(타임존은 상관없음 - 두 시각의
+    // 차이는 어느 타임존으로 봐도 동일).
+    function formatRelativeTime(isoString) {
+        const withZ = /[zZ]$|[+-]\d\d:\d\d$/.test(isoString) ? isoString : `${isoString}Z`;
+        const diffSec = Math.floor((Date.now() - new Date(withZ).getTime()) / 1000);
+        if (diffSec < 60) return "방금 전";
+        const diffMin = Math.floor(diffSec / 60);
+        if (diffMin < 60) return `${diffMin}분 전`;
+        const diffHour = Math.floor(diffMin / 60);
+        if (diffHour < 24) return `${diffHour}시간 전`;
+        const diffDay = Math.floor(diffHour / 24);
+        return `${diffDay}일 전`;
+    }
+
     // ── 입장 시 'PVE(토벌전) / PVP(전술대회)' 선택 화면부터 보여줌 ──────────────────
     async function showArenaChoice() {
         if (modalBox) modalBox.classList.remove("arena-expanded");
@@ -107,6 +122,7 @@
         setupRefreshButton();
         setupDefenseSave();
         setupTicketInsufficientOk();
+        setupReportModal();
         await checkRankChangeNotice();
         // 후보 카드의 전투 버튼이 티켓 보유수를 보고 활성화 여부를 정하므로, myArenaTicketCount가
         // 먼저 채워진 뒤에 loadOpponents가 카드를 그려야 한다(Promise.all로 동시에 돌리면 순서가 꼬일 수 있음).
@@ -451,6 +467,20 @@
     }
 
     // ── 대전 이력 ──────────────────────────────────────────
+    // 참고 시안처럼 한 행에 [결과/시간/공수 아이콘/상대 아이콘/레벨+닉네임+칭호/리포트 버튼]을
+    // 압축해서 보여준다(확인된 요청 - 예전엔 텍스트만 넓게 늘어놓은 한 줄이었음).
+    function resultClassFor(result) {
+        return result === "승리" ? "pvp-history-win" : result === "무승부" ? "pvp-history-draw" : "pvp-history-lose";
+    }
+
+    // 칭호 배지 - 히든 업적 칭호면 배지 배경을 어둡게 깔고, 안쪽 텍스트에 이미 있는 title-hidden-shine
+    // (금색 그라디언트 반짝임, achievement-toast.css/home.js와 동일한 효과 재사용)을 입힌다(확인된 요청).
+    function renderTitleBadge(title, isHidden, pillClass) {
+        const cls = isHidden ? `${pillClass} ${pillClass}-hidden` : pillClass;
+        const inner = isHidden ? `<span class="title-hidden-shine">${title || ""}</span>` : (title || "");
+        return `<span class="${cls}">${inner}</span>`;
+    }
+
     async function openHistoryView() {
         showView("pvp-history-view");
         const listEl = document.getElementById("pvp-history-list");
@@ -464,24 +494,158 @@
                 return;
             }
             listEl.innerHTML = logs.map((log) => {
-                const when = formatKst(log.created_at);
-                const resultClass = log.result === "승리" ? "pvp-history-win"
-                    : log.result === "무승부" ? "pvp-history-draw"
-                    : "pvp-history-lose";
+                const when = formatRelativeTime(log.created_at);
                 const roleClass = log.role === "attack" ? "pvp-history-role-attack" : "pvp-history-role-defense";
+                const roleIcon = log.role === "attack" ? "assets/icons/attack.webp" : "assets/icons/defense.webp";
                 const roleLabel = log.role === "attack" ? "공격" : "방어";
+                const iconSrc = log.opponent_outfit ? `${OUTFIT_IMAGE_BASE}${log.opponent_outfit}/idle.webp` : "";
                 return `
                     <div class="pvp-history-item">
-                        <span class="pvp-history-role ${roleClass}">${roleLabel}</span>
-                        <span class="pvp-history-opponent">${log.opponent_nickname}</span>
-                        <span class="${resultClass}">${log.result}</span>
-                        <span class="pvp-history-time">${when}</span>
+                        <span class="pvp-history-result-col">
+                            <span class="pvp-history-result ${resultClassFor(log.result)}">${log.result === "승리" ? "Win" : log.result === "무승부" ? "Draw" : "Lose"}</span>
+                            <span class="pvp-history-time">${when}</span>
+                        </span>
+                        <span class="pvp-history-divider"></span>
+                        <span class="pvp-history-role ${roleClass}">
+                            <img class="pvp-history-role-icon" src="${roleIcon}" alt="">
+                            <span class="pvp-history-role-label">${roleLabel}</span>
+                        </span>
+                        <span class="pvp-history-divider"></span>
+                        <span class="pvp-history-char-icon-frame">
+                            <img class="pvp-history-char-icon" src="${iconSrc}" data-outfit="${log.opponent_outfit || ""}" alt="" onerror="this.style.visibility='hidden'">
+                        </span>
+                        <span class="pvp-history-player">
+                            <span class="pvp-history-player-name">Lv.${log.opponent_level ?? "-"} ${log.opponent_nickname}</span>
+                            ${renderTitleBadge(log.opponent_title, log.opponent_title_hidden, "pvp-history-player-title")}
+                        </span>
+                        <button class="pvp-history-report-btn" type="button" data-log-id="${log.id}">리포트</button>
                     </div>
                 `;
             }).join("");
+
+            listEl.querySelectorAll(".pvp-history-char-icon").forEach((img) => {
+                if (img.dataset.outfit && typeof applyAvatarCrop === "function") {
+                    applyAvatarCrop(img, img.dataset.outfit);
+                }
+            });
         } catch (err) {
             listEl.innerHTML = `<p class="screen-placeholder">이력을 불러오지 못했어요.</p>`;
         }
+    }
+
+    // ── 전투 리포트: 인물별 대미지 막대그래프 (me는 항상 왼쪽 고정, 확인된 요청) ──
+    function setupReportModal() {
+        const overlay = document.getElementById("pvp-report-overlay");
+        if (!overlay) return;
+
+        document.getElementById("pvp-history-list")?.addEventListener("click", (event) => {
+            const btn = event.target.closest(".pvp-history-report-btn");
+            if (!btn) return;
+            openReportModal(btn.dataset.logId);
+        });
+
+        document.getElementById("pvp-report-close-btn")?.addEventListener("click", closeReportModal);
+        overlay.addEventListener("click", (event) => {
+            if (event.target === overlay) closeReportModal();
+        });
+    }
+
+    function closeReportModal() {
+        const overlay = document.getElementById("pvp-report-overlay");
+        if (overlay) overlay.hidden = true;
+    }
+
+    async function openReportModal(logId) {
+        const overlay = document.getElementById("pvp-report-overlay");
+        const bodyEl = document.getElementById("pvp-report-body");
+        if (!overlay || !bodyEl) return;
+
+        bodyEl.innerHTML = `<p class="screen-placeholder">불러오는 중...</p>`;
+        overlay.hidden = false;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/pvp/history/${logId}`, { headers: authHeaders() });
+            const data = await res.json();
+            if (!res.ok) {
+                bodyEl.innerHTML = `<p class="screen-placeholder">${data.detail || "리포트를 불러오지 못했어요."}</p>`;
+                return;
+            }
+            bodyEl.innerHTML = renderReportBody(data);
+            bodyEl.querySelectorAll(".pvp-report-unit-icon, .pvp-report-side-avatar").forEach((img) => {
+                if (img.dataset.outfit && typeof applyAvatarCrop === "function") {
+                    applyAvatarCrop(img, img.dataset.outfit);
+                }
+            });
+        } catch (err) {
+            bodyEl.innerHTML = `<p class="screen-placeholder">서버에 연결할 수 없어요.</p>`;
+        }
+    }
+
+    // 슬롯은 항상 전방→후방→조력자 순서로 그린다(확인된 요청) - 백엔드(/pvp/history/{id})도 이미 이
+    // 순서로 units 배열을 만들어 내려주므로, 여기서는 그 순서를 그대로 따르기만 하면 된다(재정렬 금지).
+    // 참고 시안과 거의 동일하게: [공수 아이콘/Win-Lose 로고/정사각형 프로필/레벨+닉네임+칭호] 헤더 →
+    // 구분선 → 인물별 막대그래프(대미지 숫자는 막대 "꼭대기"에 붙어서 막대 높이를 그대로 따라간다) →
+    // 두 컬럼 사이에 VS 배지(확인된 요청).
+    function renderReportBody(data) {
+        const allUnits = [...data.me.units, ...data.opponent.units];
+        const maxDamage = Math.max(1, ...allUnits.map((u) => u.damage || 0));
+        const meIsWin = data.result === "승리";
+        const meResultClass = resultClassFor(data.result);
+        const oppResultClass = meIsWin ? "pvp-history-lose" : data.result === "무승부" ? "pvp-history-draw" : "pvp-history-win";
+        const meResultLabel = data.result === "승리" ? "Win" : data.result === "무승부" ? "Draw" : "Lose";
+        const oppResultLabel = meIsWin ? "Lose" : data.result === "무승부" ? "Draw" : "Win";
+        const meRole = data.role; // "attack" | "defense" - 요청한 사용자(me) 본인의 역할
+        const oppRole = meRole === "attack" ? "defense" : "attack";
+
+        const renderUnit = (unit) => {
+            const barClass = unit.unit_role === "supporter" ? "pvp-report-unit-bar-supporter" : "pvp-report-unit-bar-striker";
+            const heightPercent = Math.max(4, Math.round(((unit.damage || 0) / maxDamage) * 100));
+            const iconSrc = unit.outfit ? `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.webp` : "";
+            return `
+                <div class="pvp-report-unit">
+                    <div class="pvp-report-unit-bar-track">
+                        <div class="pvp-report-unit-bar ${barClass}" style="height:${heightPercent}%">
+                            <span class="pvp-report-unit-value">${(unit.damage || 0).toLocaleString()}</span>
+                        </div>
+                    </div>
+                    <span class="pvp-report-unit-icon-frame">
+                        <img class="pvp-report-unit-icon" src="${iconSrc}" data-outfit="${unit.outfit || ""}" alt="" onerror="this.style.visibility='hidden'">
+                    </span>
+                    <span class="pvp-report-unit-name">${unit.name}</span>
+                </div>
+            `;
+        };
+
+        const renderSide = (side, sideClass, resultClass, resultLabel, role) => {
+            const roleIconSrc = role === "attack" ? "assets/icons/attack.webp" : "assets/icons/defense.webp";
+            const roleIconClass = role === "attack" ? "pvp-history-role-attack" : "pvp-history-role-defense";
+            const avatarSrc = side.outfit ? `${OUTFIT_IMAGE_BASE}${side.outfit}/idle.webp` : "";
+            return `
+                <div class="pvp-report-side ${sideClass}">
+                    <div class="pvp-report-side-header">
+                        <img class="pvp-report-side-role-icon ${roleIconClass}" src="${roleIconSrc}" alt="">
+                        <span class="pvp-report-side-badge ${resultClass}">${resultLabel}</span>
+                        <span class="pvp-report-side-avatar-frame">
+                            <img class="pvp-report-side-avatar" src="${avatarSrc}" data-outfit="${side.outfit || ""}" alt="" onerror="this.style.visibility='hidden'">
+                        </span>
+                        <div class="pvp-report-side-info">
+                            <div class="pvp-report-side-name">Lv.${side.level ?? "-"} ${side.nickname}</div>
+                            ${renderTitleBadge(side.title, side.title_hidden, "pvp-report-side-title")}
+                        </div>
+                    </div>
+                    <div class="pvp-report-side-divider"></div>
+                    <div class="pvp-report-bars">${side.units.map(renderUnit).join("")}</div>
+                </div>
+            `;
+        };
+
+        return `
+            <div class="pvp-report-sides">
+                ${renderSide(data.me, "pvp-report-side-me", meResultClass, meResultLabel, meRole)}
+                <span class="pvp-report-vs">VS</span>
+                ${renderSide(data.opponent, "pvp-report-side-opponent", oppResultClass, oppResultLabel, oppRole)}
+            </div>
+        `;
     }
 
     // ── 1:1 친선전(실시간) - 방 만들기/입장하기 ──────────────────────
