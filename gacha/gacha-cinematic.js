@@ -354,7 +354,6 @@
         const blackout = q(overlay, "gc-blackout");
 
         introBg.style.opacity = "0";
-        midLayer.classList.add("show");
 
         introLayer.classList.add("show");
         blackout.classList.add("clear");
@@ -362,6 +361,13 @@
         introLayer.classList.add("gc-doors-closed");
         await wait(500);
         if (token !== runToken) return false;
+
+        // 문이 완전히 닫힌 뒤에야(화면이 이미 가려진 상태) 보석 연출 배경을 켠다 - gc-mid-layer는
+        // gc-intro-layer와 z-index 없는 형제 요소라, 닫히기 전(문이 화면 가장자리 밖에 있을 때)에
+        // 미리 켜두면 gc-intro-door의 z-index:15가 아무것도 덮지 못해 화면 전체가 곧장 보석 배경으로
+        // 바뀌어 보였다(확인된 버그 - 문이 닫히기도 전에 배경이 먼저 바뀜). 문이 닫힌 지금은 검정
+        // 문짝이 화면 전부를 덮고 있으므로, 그 뒤에서 바꿔도 전혀 보이지 않는다.
+        midLayer.classList.add("show");
 
         await wait(300); // 짧은 정적(playIntroPreamble과 동일한 타이밍)
         if (token !== runToken) return false;
