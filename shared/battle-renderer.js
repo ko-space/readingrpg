@@ -1835,9 +1835,18 @@ function dispatchEvent(event) {
         // (체력 갱신/오라/상태 아이콘)는 내지 않는다 - _star_periodic_heal_random_striker 참고.
         const healTargetKey = findUnitKey(event.side, event.detail.target);
         if (healTargetKey) {
-            if (!event.detail.missed) battleRendererConfig.units[healTargetKey].hp = event.detail.target_hp_after;
+            if (!event.detail.missed) {
+                // unit.hp는 다른 이벤트와의 순서 보장을 위해 지금 즉시 반영해야 하지만, 화면은 하트가
+                // 착지할 때까지 예전 값을 보여줘야 한다(확인된 버그 - 하트가 날아가는 중에 이 대상을
+                // 겨냥한 다른 이벤트가 renderUnit(healTargetKey)를 부르면 아직 하트가 도착 전인데도
+                // 이미 채워진 체력이 그대로 드러났다). setPendingDisplayHp로 회복 전 값을 표시용으로
+                // 고정해두고, 착지 콜백에서 clearPendingDisplayHp로 풀어야 진짜 unit.hp가 다시 보인다.
+                setPendingDisplayHp(healTargetKey, battleRendererConfig.units[healTargetKey].hp);
+                battleRendererConfig.units[healTargetKey].hp = event.detail.target_hp_after;
+            }
             spawnHealingHeart(healTargetKey, () => {
                 if (event.detail.missed) return;
+                clearPendingDisplayHp(healTargetKey);
                 renderUnit(healTargetKey);
                 flashEffectAura(healTargetKey, "heal");
                 setStatusIcon(healTargetKey, "heal", { source: `${event.actor}:periodic_heal`, durationMs: MOMENT_ICON_MS });
@@ -2478,17 +2487,25 @@ function dispatchEvent(event) {
             // 아군도 항상 heals에 넣어주므로(회복량 0), 만피여도 하트/오라는 똑같이 뜨고 로그에는
             // "0 회복"으로 남는다 - 발동 자체가 항상 눈에 보이게. missed(아직 이동 중이라 하트가
             // 안 맞음)는 이와 달리 하트만 떨어지고 착지 효과(체력 갱신/오라/상태 아이콘) 자체가 없다.
+            // unit.hp는 위 이유로 지금 즉시 반영하지만, 그 사이 이 대상을 겨냥한 다른 이벤트가
+            // renderUnit을 먼저 부르면 하트가 도착하기도 전에 이미 채워진 체력이 드러나 버렸다(확인된
+            // 버그) - setPendingDisplayHp로 회복 전 값을 표시용으로 고정해두고, 하트 착지 콜백에서
+            // clearPendingDisplayHp로 풀어야 그때부터 진짜(회복된) unit.hp가 보인다.
             const heals = event.detail.heals || [];
             heals.forEach((heal) => {
                 if (heal.missed) return;
                 const healTargetKey = findUnitKey(event.side, heal.target);
-                if (healTargetKey) battleRendererConfig.units[healTargetKey].hp = heal.target_hp_after;
+                if (healTargetKey) {
+                    setPendingDisplayHp(healTargetKey, battleRendererConfig.units[healTargetKey].hp);
+                    battleRendererConfig.units[healTargetKey].hp = heal.target_hp_after;
+                }
             });
             heals.forEach((heal) => {
                 const healTargetKey = findUnitKey(event.side, heal.target);
                 if (!healTargetKey) return;
                 spawnHealingHeart(healTargetKey, () => {
                     if (heal.missed) return;
+                    clearPendingDisplayHp(healTargetKey);
                     renderUnit(healTargetKey);
                     flashEffectAura(healTargetKey, "heal");
                     setStatusIcon(healTargetKey, "heal", { source: `${event.actor}:heal`, durationMs: MOMENT_ICON_MS });

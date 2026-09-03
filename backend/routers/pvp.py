@@ -644,15 +644,147 @@ def get_history(db: Session = Depends(get_db), user: User = Depends(get_current_
     for log in logs:
         is_attacker = log.attacker_id == user.id
         opponent = log.defender if is_attacker else log.attacker
+        opponent_title, opponent_title_hidden = get_equipped_title_info(db, opponent)
         result.append({
             "id": log.id,
             "role": "attack" if is_attacker else "defense",
             "opponent_nickname": opponent.nickname,
+            "opponent_level": opponent.level,
+            "opponent_title": opponent_title,
+            "opponent_title_hidden": opponent_title_hidden,  # 히든 업적 칭호면 프론트가 금색 반짝임 효과를 입힘
+            "opponent_outfit": _get_equipped_outfit(opponent),
             "result": "승리" if log.winner_id == user.id else ("무승부" if log.winner_id is None else "패배"),
             "rank_changed": log.rank_changed,
             "created_at": log.created_at,
         })
     return result
+
+
+def _accumulate_unit_damage(events: list) -> dict:
+    """이벤트 목록 전체를 훑어 (side, slot)별 누적 대미지를 계산한다. 이 전투 엔진에서 실제로
+    피해를 입히는 경로는 정확히 두 가지 모양뿐이다(battle_engine.py의 _apply_damage 호출부,
+    skill_handlers.py의 모든 스킬 핸들러 전수 확인됨):
+      1) event_type == "basic_attack": 최상위 "damage" 필드(이종복의 4탄환도 이미 합산된 값).
+      2) 그 외 이벤트(ally_attack_splash_resolve/skill_resolve 등): "detail.hits"에 담긴
+         각 히트의 "damage" 필드(스킬 핸들러가 전부 이 { "hits": [...] } 모양으로 반환함).
+    두 경우 모두 "actor"(가해자)/"actor_slot"/"side"가 실제로 피해를 준 유닛을 가리킨다."""
+    totals: dict[tuple[str, str], float] = {}
+
+    def add(side, slot, amount):
+        if not amount:
+            return
+        key = (side, slot)
+        totals[key] = totals.get(key, 0) + amount
+
+    for event in events:
+        side = event.get("side")
+        slot = event.get("actor_slot")
+        if side is None or slot is None:
+            continue
+        if event.get("event_type") == "basic_attack":
+            add(side, slot, event.get("damage") or 0)
+        else:
+            detail = event.get("detail")
+            hits = detail.get("hits") if isinstance(detail, dict) else None
+            if isinstance(hits, list):
+                add(side, slot, sum((h.get("damage") or 0) for h in hits if isinstance(h, dict)))
+
+    return totals
+
+
+def _extract_roster(events: list) -> dict:
+    """cost_init 이벤트(전투 시작 시 딱 1번, side당 1개)에서 슬롯별 인물 이름을 읽는다 - 대미지를
+    한 번도 주지 못한(예: 조력자) 유닛까지 포함한 "그 전투에 실제로 나갔던 전원"을 알 수 있는
+    유일한 소스라, attacker_front_name 같은 스냅샷 컬럼(전방/후방만 있고 조력자가 없음) 대신 이걸 쓴다."""
+    roster: dict[str, dict[str, str]] = {"attacker": {}, "defender": {}}
+    for event in events:
+        if event.get("event_type") != "cost_init":
+            continue
+        side = event.get("side")
+        if side not in roster:
+            continue
+        for card in event.get("cards", []) or []:
+            name = card.get("name")
+            slot = card.get("slot")
+            if name and slot:
+                roster[side][slot] = name
+    return roster
+
+
+@router.get("/history/{log_id}")
+def get_history_detail(log_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """대전 이력의 특정 전투 하나를 "리포트"로 - 양 팀 로스터와 인물별 누적 대미지를 돌려준다.
+    항상 요청한 사용자 쪽을 "me"로, 상대를 "opponent"로 분리해서 내려준다(프론트가 왼쪽=me로 고정해
+    그리기만 하면 되도록 - 공격/방어 어느 쪽이었든 항상 me가 먼저 오게 하려는 목적)."""
+    log = (
+        db.query(PvpBattleLog)
+        .filter(PvpBattleLog.id == log_id)
+        .filter(or_(PvpBattleLog.attacker_id == user.id, PvpBattleLog.defender_id == user.id))
+        .first()
+    )
+    if not log:
+        raise HTTPException(status_code=404, detail="존재하지 않는 전투 기록입니다.")
+
+    try:
+        events = json.loads(log.battle_log) if log.battle_log else []
+    except (TypeError, ValueError):
+        events = []
+
+    damage_totals = _accumulate_unit_damage(events)
+    roster = _extract_roster(events)
+
+    def build_units(side):
+        units = []
+        for slot in ("front", "back", "supporter"):
+            name = roster[side].get(slot)
+            if not name:
+                continue
+            catalog = get_character_catalog(name) or {}
+            outfits = catalog.get("outfits") or {}
+            units.append({
+                "slot": slot,
+                "name": name,
+                "damage": round(damage_totals.get((side, slot), 0)),
+                "outfit": outfits.get("기본"),
+                "rarity": catalog.get("rarity"),
+                "unit_role": catalog.get("unit_role"),  # "striker"|"supporter" - 리포트 그래프 막대 색(빨강/파랑) 구분용
+            })
+        return units
+
+    is_attacker = log.attacker_id == user.id
+    me_user = log.attacker if is_attacker else log.defender
+    opponent_user = log.defender if is_attacker else log.attacker
+    me_side = "attacker" if is_attacker else "defender"
+    opponent_side = "defender" if is_attacker else "attacker"
+
+    if log.winner_id is None:
+        result = "무승부"
+    else:
+        result = "승리" if log.winner_id == user.id else "패배"
+
+    me_title, me_title_hidden = get_equipped_title_info(db, me_user)
+    opponent_title, opponent_title_hidden = get_equipped_title_info(db, opponent_user)
+
+    return {
+        "result": result,
+        "role": "attack" if is_attacker else "defense",
+        "me": {
+            "nickname": me_user.nickname,
+            "level": me_user.level,
+            "title": me_title,
+            "title_hidden": me_title_hidden,
+            "outfit": _get_equipped_outfit(me_user),
+            "units": build_units(me_side),
+        },
+        "opponent": {
+            "nickname": opponent_user.nickname,
+            "level": opponent_user.level,
+            "title": opponent_title,
+            "title_hidden": opponent_title_hidden,
+            "outfit": _get_equipped_outfit(opponent_user),
+            "units": build_units(opponent_side),
+        },
+    }
 
 
 @router.get("/rank-change-notice")
