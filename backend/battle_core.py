@@ -181,6 +181,20 @@ def _new_status():
         "paint_red": 0,               # 방임석 전용 - 물감(빨강/파랑/노랑) 보유 개수, 다른 캐릭터는 항상 0
         "paint_blue": 0,
         "paint_yellow": 0,
+        "madness": 0,                 # 김지섭 전용 - 광기 보유량, 방임석의 물감과 동일하게 지속시간 기반
+                                       # 상태 효과 만료 판정과는 무관한 별도 카운터(확인된 요청). 다른
+                                       # 캐릭터는 madness_config가 없어 항상 0에 머문다.
+        "move_speed_percent": 0,      # 이동속도 영구 증감 총합 - atk_percent_bonus/haste_percent와 동일한
+                                       # 스칼라 누적 방식(_effective_melee_speed 참고). 지금은 영구 소스가
+                                       # 없어 항상 0이지만 임시 소스(temp_move_speed_mods)와 합산 구조를
+                                       # 통일해두기 위해 미리 둔다.
+        "temp_move_speed_mods": {},   # 임시 이동속도 증가 - temp_atk_mods/temp_haste_mods와 동일한 소스별
+                                       # 독립 합산 방식(김지섭 "격정" 광기 소모 버프 등).
+        "cost_reduction_uses_remaining": 0,  # 안지석 "예산 재배정" 전용 - 김지섭의 광기와 달리 이건
+                                       # "실제 상태 효과"로 취급된다(확인된 요청) - 지속시간이 아니라
+                                       # 남은 사용 횟수 기준이라 stun_until류의 "until" 패턴과는 다르지만,
+                                       # 0보다 크면 코스트 감소가 걸려있다는 뜻으로 상태 아이콘/코스트
+                                       # 카드 UI 판정에 그대로 쓰인다(battle_engine._tick_team_cost 참고).
     }
 
 
@@ -582,6 +596,18 @@ def _effective_interval(unit, time_elapsed):
     return interval
 
 
+def _effective_melee_speed(unit, time_elapsed):
+    """근접 유닛의 초당 이동 속도(melee_speed) 합산 - _effective_atk와 동일한 방식(영구 소스는 아직
+    없어 항상 0, 임시 소스만 소스별로 독립 합산해서 더한다). 원거리 유닛은 melee_speed 자체가 None이라
+    이 함수를 호출하는 _advance_melee_position에 애초에 들어오지 않는다(근접만 걸어서 이동함)."""
+    status = unit["status"]
+    total_percent = status["move_speed_percent"]
+    for mod in status["temp_move_speed_mods"].values():
+        if time_elapsed < mod["until"]:
+            total_percent += mod["percent"]
+    return unit["melee_speed"] * (1 + total_percent / 100)
+
+
 def _refresh_status_until(status, until_key, new_until, time_elapsed):
     """상태의 "켜짐/꺼짐"만 있는(수치가 없는) 지속시간 필드(stun_until/shield_until) 전용 - 무조건
     덮어쓰지 않고 "갱신"한다: 기존 값이 아직 유효한데(time_elapsed < 기존값) 새 값이 더 이르게
@@ -627,8 +653,27 @@ def _apply_damage(target, amount, time_elapsed):
         absorbed = min(target["shield"], amount)
         target["shield"] -= absorbed
         amount -= absorbed
+    hp_before = target["hp"]
     target["hp"] = max(0, target["hp"] - amount)
+    _register_hp_loss(target, hp_before - target["hp"], time_elapsed)
     return amount, raw_amount, invincible_block
+
+
+def _register_hp_loss(unit, lost_amount, time_elapsed):
+    """김지섭(격정): 체력이 실제로 줄어들 때마다(원인 불문 - 적의 공격이든 스킬 자기 비용이든) 잃은
+    양을 최대 체력 대비 %로 환산해 광기(status["madness"])에 그대로 더하고 "마지막으로 광기를 얻은
+    시각"을 갱신한다(4초 무피해 감쇠 판정 기준 - battle_engine._apply_madness_release가 매 틱 확인).
+    같은 % 값을 total_hp_lost_percent에도 함께 누적하는데, 이건 감쇠·소비로 줄어드는 madness와 달리
+    전투 내내 절대 줄지 않는 값이다("핏값"의 "총 잃은 체력 1%당 추가 피해" 배율 계산 전용 - 광기가
+    50에서 소모돼 0으로 리셋돼도 이 스킬의 위력은 그대로 유지돼야 하므로 별도 필드로 둔다).
+    madness_config가 없는(이 패시브가 없는) 유닛에게는 아무 영향도 주지 않는다 - _apply_damage뿐
+    아니라 스킬 자기 비용(_apply_self_skill_hp_cost)에서도 공용으로 호출된다."""
+    if not unit.get("madness_config") or lost_amount <= 0:
+        return
+    gained = lost_amount / unit["max_hp"] * 100
+    unit["status"]["madness"] += gained
+    unit["total_hp_lost_percent"] = unit.get("total_hp_lost_percent", 0) + gained
+    unit["_madness_last_gain_time"] = time_elapsed
 
 
 def _maybe_grant_low_hp_shield(target, target_team, time_elapsed):

@@ -9,9 +9,12 @@ const AVATAR_CROP_OVERRIDES = {
     "mage_2/basic": { xPercent: 47, yPercent: 20, scale: 3.5 },
     "chris/basic": { xPercent: 50, yPercent: 0, scale: 2.5 },
     "back/basic": { xPercent: 50, yPercent: 1, scale: 2.5 },
+    "pitcher/basic": { xPercent: 50, yPercent: 1, scale: 2.5 },
     "soldier/basic": { xPercent: 50, yPercent: 5, scale: 2.3 },
     "parliament/basic": { xPercent: 50, yPercent: 0, scale: 1.5 },
     "god/basic": { xPercent: 50, yPercent: 10, scale: 3.0 },
+    "president/basic": { xPercent: 50, yPercent: 5, scale: 4 },
+    "berserker/basic": { xPercent: 50, yPercent: 5, scale: 4.5 },
     // 서브 스토리(story-sub-engine.js) 대화 기록 초상화 예시 - CHAR_IMG 키를 그대로 override 키로 쓴다.
     // yoon_youngjun.webp는 캔버스 위쪽에 여백이 커서(쪼그려 앉은 자세) 기본값(yPercent:0)으로는
     // 얼굴이 아니라 빈 공간이 잘려서, 얼굴 위치에 맞춰 yPercent를 내렸다.

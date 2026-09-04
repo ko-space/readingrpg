@@ -5,7 +5,7 @@
 """
 import random
 
-from battle_core import CRIT_CHANCE, _alive_units, _effective_gender, _is_unit_moving, _teammate, build_stat_change_dicts
+from battle_core import CRIT_CHANCE, TEAM_COST_MAX, _alive_units, _effective_gender, _is_unit_moving, _teammate, build_stat_change_dicts
 
 # ───────────────────────── 성급별 효과(star_effects) - 전투 시작 시 1회만 판정 ─────────────────────────
 # characters.json의 star_effects는 원래 인벤토리 화면에 보여주기만 하던 문구였는데, 실제 전투에도
@@ -217,6 +217,33 @@ def _star_ally_attack_splash_damage(unit, own_team, enemy_team, params):
     return []
 
 
+def _star_grant_team_cost_head_start(unit, own_team, enemy_team, params):
+    # 안지석(비상금): 전투 시작 시 팀 공유 코스트 풀에 즉시 코스트를 더해준다 - "장전 후 매 틱 감지"가
+    # 아니라 이 호출 시점(전투 시작, time=0) 그 자체에 반영하면 된다. battle_engine._init_battle이
+    # cost_init 이벤트를 특성/성급 효과보다 "뒤"에 만들도록 순서를 바꿔뒀으므로, 여기서 반영한 값이
+    # 프론트 코스트바의 초기값에도 그대로 실린다(별도 이벤트 불필요). 상태 아이콘 대상도 아니라
+    # changes는 빈 목록.
+    own_team["cost"] = min(TEAM_COST_MAX, own_team.get("cost", 0) + params["amount"])
+    return []
+
+
+def _star_arm_madness_on_damage(unit, own_team, enemy_team, params):
+    # 김지섭(격정): "장전"만 해둔다 - 실제 광기 증감/소모는 battle_core._register_hp_loss(피해를 입을
+    # 때마다 자동 호출)와 battle_engine._apply_madness_release(매 틱, 감쇠+임계값 소비)가 처리한다
+    # (_star_gain_paint_on_active_use와 같은 "장전 후 매 틱/매 피해 감지" 패턴). 전투 시작 시점엔
+    # 광기가 항상 0이라 상태 변화가 없으므로 changes는 빈 목록을 돌려준다.
+    unit["madness_config"] = {
+        "threshold": params.get("threshold", 50),
+        "decay_per_second": params.get("decay_per_second", 5),
+        "decay_delay_seconds": params.get("decay_delay_seconds", 4),
+        "buff_seconds": params["buff_seconds"],
+        "atk_percent": params["atk_percent"],
+        "haste_percent": params["haste_percent"],
+        "move_speed_percent": params["move_speed_percent"],
+    }
+    return []
+
+
 def _star_periodic_heal_random_striker(caster, own_team, enemy_team, params, time_elapsed):
     # 신(제 1 권한): 전투 시작 1회가 아니라 "N초마다" 반복되는 완전히 다른 성격의 성급 효과라
     # STAR_EFFECT_HANDLERS(battle_engine._apply_battle_start_star_effects가 t=0에 1회만 호출)가 아닌
@@ -270,6 +297,8 @@ STAR_EFFECT_HANDLERS = {
     "haste_boost_to_rear_striker": _star_haste_boost_to_rear_striker,
     "ally_attack_splash_damage": _star_ally_attack_splash_damage,
     "shield_low_hp_striker_once": _star_shield_low_hp_striker_once,
+    "madness_on_damage": _star_arm_madness_on_damage,
+    "grant_team_cost_head_start": _star_grant_team_cost_head_start,
 }
 
 

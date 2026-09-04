@@ -396,6 +396,99 @@
     animation: ground-fire-shake 420ms ease-out;
 }
 
+/* ── 이도협 스킬 전용("돌직구"): 스트라이크 존 마킹 + 벽까지 왕복하는 투척구 + 이탈자 끌어당김 선. ── */
+.dolljikgu-zone {
+    position: absolute;
+    width: 74px;
+    height: 96px;
+    margin-left: -37px;
+    margin-top: -48px;
+    border: 3px solid rgba(255, 216, 65, 0.95);
+    border-radius: 8px;
+    box-shadow: 0 0 14px rgba(255, 200, 40, 0.8), inset 0 0 14px rgba(255, 210, 60, 0.22);
+    pointer-events: none;
+    z-index: 6;
+    animation: dolljikgu-zone-pulse 0.55s ease-out infinite alternate;
+}
+.dolljikgu-zone-fade {
+    animation: none;
+    opacity: 0;
+    transform: scale(1.4);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+@keyframes dolljikgu-zone-pulse {
+    from { opacity: 0.6; transform: scale(0.96); }
+    to   { opacity: 1; transform: scale(1.04); }
+}
+
+.dolljikgu-ball {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    margin-left: -9px;
+    margin-top: -9px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff 0 34%, #eee 65%, #bbb 100%);
+    border: 1px solid rgba(0, 0, 0, 0.25);
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
+    pointer-events: none;
+    z-index: 20;
+}
+/* 야구공 실밥 무늬(참고 데모의 .ball::before/::after와 동일한 기법 - 타원 테두리 절반만 보이게 잘라서
+   양쪽에 살짝 다른 각도로 겹치면 실밥처럼 보인다) - 공 크기(18px)에 맞춰 데모(25px) 대비 축소했다. */
+.dolljikgu-ball::before,
+.dolljikgu-ball::after {
+    content: "";
+    position: absolute;
+    width: 11px;
+    height: 7px;
+    border: 1.5px solid #c43333;
+    border-color: #c43333 transparent transparent transparent;
+    border-radius: 50%;
+    left: 3px;
+}
+.dolljikgu-ball::before { top: 3px; transform: rotate(24deg); }
+.dolljikgu-ball::after { bottom: 2px; transform: rotate(204deg); }
+
+/* 공이 날아가는 동안 남기는 짧은 잔상(참고 데모의 .trail과 동일) - makeDolljikguTrail이 진행 중 10px
+   이동할 때마다 하나씩 찍고 곧 사라진다. */
+.dolljikgu-trail {
+    position: absolute;
+    height: 5px;
+    transform-origin: 0 50%;
+    border-radius: 999px;
+    pointer-events: none;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 245, 190, 0.9));
+    filter: blur(1px);
+    z-index: 19;
+}
+
+/* 투척 시작 순간 터지는 스피드라인 다발(참고 데모의 .speedline과 동일) - 무작위 각도/투명도로 6개. */
+.dolljikgu-speedline {
+    position: absolute;
+    width: 70px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85));
+    transform-origin: right center;
+    pointer-events: none;
+    z-index: 18;
+}
+
+.dolljikgu-pull-line {
+    position: absolute;
+    height: 4px;
+    transform-origin: 0 50%;
+    background: linear-gradient(90deg, rgba(255, 216, 65, 0.9), rgba(255, 255, 255, 0.1));
+    box-shadow: 0 0 8px rgba(255, 216, 65, 0.7);
+    pointer-events: none;
+    z-index: 15;
+    animation: dolljikgu-pull-line-fade 0.3s ease-out forwards;
+}
+@keyframes dolljikgu-pull-line-fade {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+}
+
 /* ── 서민석 스킬 전용: 하트 모양 투사체(포물선). 대상이 남성이면 분홍, 여성이면 붉은색. ──
    SVG 벡터 하트(shared/attack-effects.js의 HEART_SVG_MARKUP)를 쓴다 - 플랫폼마다 다르게 렌더링되는
    유니코드 이모지(❤) 대신이라 항상 동일하게 보이고, fill="currentColor"라 이 color 값 그대로

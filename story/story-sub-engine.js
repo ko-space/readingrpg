@@ -12,6 +12,71 @@ function wrapInParens(str) {
     return (trimmed.startsWith("(") && trimmed.endsWith(")")) ? str : `(${str})`;
 }
 
+// 효과음(story-engine.js의 SE_BASE/playSe를 그대로 이식 - 이 엔진엔 지금까지 소리 재생 자체가
+// 없었다). 씬 데이터에 se:'파일이름'(assets/story/shared/SE/ 안의 .ogg 파일, 확장자 생략 가능)을
+// 직접 지정해서 어떤 줄에든 자유롭게 붙일 수 있다(renderCurrent 참고). story-engine.js와 달리 SE 맵을
+// 따로 안 두는 이유: 시나리오 파일(예: sub1_kimnamok.js)이 이 엔진 스크립트보다 "먼저" 로드되는
+// 계약이라(파일 맨 위 주석 참고), 시나리오 쪽에서 여기 정의될 SE.키를 참조할 수 없다 - 그래서
+// 파일 이름 문자열을 시나리오가 직접 들고 있는다.
+const SE_BASE = 'assets/story/shared/SE/';
+function playSe(key) {
+    if (!key) return;
+    const audio = new Audio(`${SE_BASE}${key}.ogg`);
+    audio.volume = 0.85;
+    audio.play().catch(() => {});
+}
+
+// BGM(story-engine.js의 playBgm/cancelBgmFade를 그대로 이식 - sub1_kimnamok.js가 이미 bgm:'키'
+// 필드를 갖고 있었지만 이 엔진에 재생 로직 자체가 없어서 조용히 무시되고 있었다). assets/story/shared/bgm/
+// 를 공유하므로 파일 이름 규칙(playSe와 달리 SE 맵 부재 이유와 무관 - bgm은 원래도 문자열 키를 그대로
+// 파일명으로 쓴다)은 story-engine.js와 완전히 동일하다.
+const BGM_BASE = 'assets/story/shared/bgm/';
+const BGM_FADE_MS = 500;
+let currentBgmKey = null;
+let bgmFadeTimer = null;
+
+function cancelBgmFade() {
+    if (bgmFadeTimer !== null) {
+        clearInterval(bgmFadeTimer);
+        bgmFadeTimer = null;
+    }
+    el.bgmPlayer.volume = 1;
+}
+
+function playBgm(key) {
+    if (currentBgmKey === key) {
+        if (key && el.bgmPlayer.paused) el.bgmPlayer.play().catch(() => {});
+        return;
+    }
+    currentBgmKey = key;
+    cancelBgmFade();
+
+    if (!key) {
+        const player = el.bgmPlayer;
+        const startVolume = player.volume;
+        const stepMs = 20;
+        const steps = Math.max(1, Math.round(BGM_FADE_MS / stepMs));
+        let step = 0;
+        bgmFadeTimer = setInterval(() => {
+            step += 1;
+            player.volume = Math.max(0, startVolume * (1 - step / steps));
+            if (step >= steps) {
+                clearInterval(bgmFadeTimer);
+                bgmFadeTimer = null;
+                player.pause();
+                player.removeAttribute('src');
+                player.volume = startVolume;
+            }
+        }, stepMs);
+        return;
+    }
+
+    const file = /\.(mp3|ogg|wav|flac|m4a|aac)$/i.test(key) ? key : `${key}.mp3`;
+    el.bgmPlayer.src = `${BGM_BASE}${file}`;
+    el.bgmPlayer.currentTime = 0;
+    el.bgmPlayer.play().catch(() => {});
+}
+
 let PLAYER_NAME = "플레이어";
 // 대사 원문의 '__PLAYER_NAME__'을 실제 유저 닉네임으로 치환한다(인연 스토리와 동일한 플레이스홀더 -
 // 시나리오 데이터 자체는 이 토큰을 그대로 유지하고, 화면에 표시되는 시점에만 바꿔치기한다).
@@ -29,6 +94,34 @@ function authHeaders(json = false) {
 let ticketBalance = 0;
 let unlockedChapters = new Set();
 let currentChapterIndex = 0;
+
+// 김남옥 서브스토리 해금 조건: "김남옥 보유"(확인된 요청) - 다른 두 서브스토리(이의진/이종복)처럼
+// 아직 콘텐츠 자체가 없어서 무조건 잠긴 "준비 중"과는 다르게, 콘텐츠는 이미 있고 이 캐릭터를
+// 뽑았는지 여부로만 갈리므로 문구도 구분한다("미보유").
+let hasKimnamok = false;
+
+async function fetchKimnamokOwnership() {
+    try {
+        const res = await fetch(`${API_BASE_URL}/characters/`, { headers: authHeaders() });
+        if (!res.ok) return false;
+        const rows = await res.json();
+        return rows.some((c) => c.name === '김남옥');
+    } catch (err) {
+        return false;
+    }
+}
+
+// 흰색 자물쇠 아이콘(확인된 요청) - assets/icons/lock_white.webp를 그대로 쓴다.
+const LOCK_ICON_HTML = '<img class="episode-story-lock-icon" src="assets/icons/lock_white.webp" alt="">';
+
+function applyKimnamokLockState() {
+    const card = document.getElementById('kimnamok-card');
+    const btn = document.getElementById('btn-enter-kimnamok');
+    if (!card || !btn) return;
+    card.classList.toggle('locked', !hasKimnamok);
+    btn.disabled = !hasKimnamok;
+    btn.innerHTML = hasKimnamok ? '입장' : LOCK_ICON_HTML;
+}
 
 async function fetchStoryState() {
     const [meRes, stateRes] = await Promise.all([
@@ -91,6 +184,9 @@ const el = {
     charRightImg: document.getElementById('char-right-img'),
     charCenter: document.getElementById('char-center'),
     charCenterImg: document.getElementById('char-center-img'),
+    itemDisplay: document.getElementById('item-display'),
+    itemDisplayImg: document.getElementById('item-display-img'),
+    bgmPlayer: document.getElementById('bgm-player'),
     phoneLayer: document.getElementById('phone-layer'),
     phoneContacts: document.getElementById('phone-contacts'),
     chatMessages: document.getElementById('chat-messages'),
@@ -122,6 +218,7 @@ const el = {
     ticketInsufficientOk: document.getElementById('vn-ticket-insufficient-ok'),
     chapterEndCinematic: document.getElementById('chapter-end-cinematic'),
     cecTbcText: document.getElementById('cec-tbc-text'),
+    cecStamp: document.getElementById('cec-stamp'),
     cecCurtainTop: document.getElementById('cec-curtain-top'),
     cecCurtainBottom: document.getElementById('cec-curtain-bottom'),
     cecBanner: document.getElementById('cec-banner'),
@@ -164,6 +261,9 @@ function setBg(key) {
 
 function fadeToBackground(nextBgKey, white, onDone) {
     backgroundTransitioning = true;
+    // playTimeCard와 동일한 이유로 전환이 시작되자마자 대사창을 곧바로 숨긴다 - 안 그러면 암전이 걷히는
+    // 동안(다음 줄이 아직 렌더링되기 전) 직전 대사가 새 배경 위에 그대로 남아 보이는 문제가 있었다.
+    el.dialogueWrap.classList.add('hidden');
     if (white) el.sceneFade.classList.add('white');
     el.sceneFade.classList.add('active');
     window.setTimeout(() => {
@@ -207,6 +307,49 @@ function playSilentReveal(line) {
     } else {
         applyAndHold();
     }
+}
+
+// 아이템 등장(story-engine.js의 playItemReveal/playItemHide를 그대로 이식 - 이 엔진엔 효과음 재생
+// 자체가 없어 그 부분만 뺐다) - type:'itemReveal'/'itemHide' 전용. 대사창을 숨긴 채 중앙 캐릭터가
+// 옆으로 비켜서고(#char-center.item-reveal-shift), 그 다음 아이템이 사각형 컨테이너 안에서 떠오르듯
+// 나타난다(#item-display.show). line.item에는 완성된 이미지 URL을 직접 넘긴다.
+const ITEM_SLIDE_MS = 500;   // #char-center.item-reveal-shift의 opacity/transform 트랜지션과 맞춘 값
+const ITEM_FADE_MS = 500;    // #item-display.show의 opacity/transform 트랜지션과 맞춘 값
+const ITEM_REVEAL_HOLD_MS = 300; // 아이템이 다 나타난 뒤 다음 줄로 넘어가기 전 짧게 두는 여백
+let itemRevealHolding = false;
+
+function playItemReveal(line) {
+    itemRevealHolding = true;
+    el.dialogueWrap.classList.add('hidden');
+    el.charCenter.classList.add('item-reveal-shift');
+    window.setTimeout(() => {
+        el.itemDisplayImg.src = line.item || '';
+        void el.itemDisplay.offsetWidth; // 연속 재생에도 트랜지션이 처음부터 다시 재생되도록 강제 리플로우
+        el.itemDisplay.classList.add('show');
+        window.setTimeout(() => {
+            window.setTimeout(() => {
+                itemRevealHolding = false;
+                idx++;
+                renderCurrent();
+            }, ITEM_REVEAL_HOLD_MS);
+        }, ITEM_FADE_MS);
+    }, ITEM_SLIDE_MS);
+}
+
+function playItemHide(line) {
+    itemRevealHolding = true;
+    el.dialogueWrap.classList.add('hidden');
+    el.itemDisplay.classList.remove('show');
+    window.setTimeout(() => {
+        el.charCenter.classList.remove('item-reveal-shift');
+        window.setTimeout(() => {
+            window.setTimeout(() => {
+                itemRevealHolding = false;
+                idx++;
+                renderCurrent();
+            }, ITEM_REVEAL_HOLD_MS);
+        }, ITEM_SLIDE_MS);
+    }, ITEM_FADE_MS);
 }
 
 function applyCharSlotTransform(image, key) {
@@ -326,6 +469,7 @@ function applySpeakingDim(speakerKey) {
 
 /* ---- BugoTalk 채팅 UI ---- */
 function openChat(activeKey) {
+    playSe('SE_MomoTalk_01');
     el.phoneContacts.innerHTML = '';
     CONTACT_LIST.forEach((c) => {
         const row = document.createElement('div');
@@ -422,6 +566,14 @@ function playTimeCard(line) {
     if (timeCardTransitioning) return;
 
     timeCardTransitioning = true;
+    // renderCurrent()는 timecard 타입을 만나면 곧바로 여기로 넘기고 return하기 때문에, 거기 있는
+    // line.stopBgm/line.bgm 처리를 거치지 않는다 - story-engine.js의 playTimeCard와 동일한 이유로
+    // 여기서 따로 처리한다.
+    if (line.stopBgm) {
+        playBgm(null);
+    } else if (line.bgm) {
+        playBgm(line.bgm);
+    }
     if (line.white) {
         el.sceneFade.classList.add('white');
         el.timeCard.classList.add('white');
@@ -475,6 +627,21 @@ function renderCurrent() {
     if (line.type === 'reveal') {
         playSilentReveal(line);
         return;
+    }
+    if (line.type === 'itemReveal') {
+        playItemReveal(line);
+        return;
+    }
+    if (line.type === 'itemHide') {
+        playItemHide(line);
+        return;
+    }
+    if (line.se) { playSe(line.se); }
+
+    if (line.stopBgm) {
+        playBgm(null);
+    } else if (line.bgm) {
+        playBgm(line.bgm);
     }
 
     if (line.clearBg && currentBgKey !== null) {
@@ -560,7 +727,10 @@ function typeText(target, full) {
 }
 
 function advance() {
-    if (chapterEndCinematicActive || timeCardTransitioning || backgroundTransitioning || letterTransitioning || revealHolding) return;
+    // 자동재생 정책으로 이전 play() 시도가 막혔던 bgm이 있다면, 지금 이 클릭(확실한 사용자 제스처)에
+    // 실어서 다시 시도한다(story-engine.js의 advance()와 동일).
+    if (currentBgmKey && el.bgmPlayer.paused) el.bgmPlayer.play().catch(() => {});
+    if (chapterEndCinematicActive || timeCardTransitioning || backgroundTransitioning || letterTransitioning || revealHolding || itemRevealHolding) return;
     if (typing) {
         clearInterval(typeTimer);
         typeTargetEl.textContent = typeFullText;
@@ -689,21 +859,28 @@ function findFirstBg(chapterIndex) {
     return null;
 }
 
-// 순서: ①블러+비네트가 덮인다 -> ②"To Be Continued..."가 슬라이드로 들어와 우하단에 멈춘다 ->
-// ③1.5초 후 화면이 상하로(가챠 도어와 같은 방식이지만 위아래 방향) 닫힌다 -> ④닫힌 순간 다음 화의
-// 첫 배경(블러 상태)을 미리 깔아두고 곧바로 다시 열어 흰 띠 배너("다음화"+제목)를 드러낸다(배너 뒤에는
-// 캐릭터 없이 블러된 다음 배경만 있음) -> ⑤다시 한번 상하로 닫히면서 배너/문구/블러를 걷어내고 그 뒤에
-// Episode 선택 화면 + 화 선택 모달을 미리 띄워둔다 -> ⑥열리면 그 화면이 또렷하게 드러난다.
+// 순서: ①블러+비네트가 덮인다 -> ②"To Be Continued..."가 슬라이드로 들어와 우하단에 멈춘다(마지막
+// 화라면 대신 화면 중앙에 "완결" 도장이 쾅 찍힌다 - 확인된 요청) -> ③1.5초 후 화면이 상하로(가챠
+// 도어와 같은 방식이지만 위아래 방향) 닫힌다 -> ④닫힌 순간 다음 화의 첫 배경(블러 상태)을 미리
+// 깔아두고 곧바로 다시 열어 흰 띠 배너("다음화"+제목)를 드러낸다(배너 뒤에는 캐릭터 없이 블러된
+// 다음 배경만 있음) -> ⑤다시 한번 상하로 닫히면서 배너/문구/블러를 걷어내고 그 뒤에 Episode 선택
+// 화면 + 화 선택 모달을 미리 띄워둔다 -> ⑥열리면 그 화면이 또렷하게 드러난다.
 async function playChapterEndCinematic() {
     if (chapterEndCinematicActive) return;
     chapterEndCinematicActive = true;
     el.dialogueWrap.classList.add('hidden');
     closeChat();
 
+    const isLastChapter = !CHAPTERS[currentChapterIndex + 1];
+
     el.chapterEndCinematic.classList.add('show');
     await wait(CEC_BLUR_MS);
 
-    el.cecTbcText.classList.add('show');
+    if (isLastChapter) {
+        el.cecStamp.classList.add('show');
+    } else {
+        el.cecTbcText.classList.add('show');
+    }
     await wait(CEC_TBC_SLIDE_MS + CEC_HOLD_BEFORE_CLOSE_MS);
 
     el.cecCurtainTop.classList.add('closed');
@@ -735,6 +912,7 @@ async function playChapterEndCinematic() {
     await wait(CEC_CURTAIN_CLOSE_MS);
 
     el.cecTbcText.classList.remove('show');
+    el.cecStamp.classList.remove('show');
     el.cecBanner.classList.remove('show');
     el.chapterEndCinematic.classList.add('no-backdrop');
     returnToLobby();
@@ -755,10 +933,14 @@ async function playChapterEndCinematic() {
 }
 
 function returnToLobby() {
+    playBgm(null);
     closeChat();
     el.letterLayer.classList.remove('show');
     el.letterPaper.classList.remove('rise', 'enlarge');
     el.letterEnvelope.classList.remove('show');
+    el.itemDisplay.classList.remove('show');
+    el.charCenter.classList.remove('item-reveal-shift');
+    itemRevealHolding = false;
     setChars({ left: null, right: null, center: null });
     currentBgKey = null;
     el.lobbyWrap.classList.remove('hide');
@@ -894,6 +1076,7 @@ document.getElementById('btn-exit').addEventListener('click', () => {
     window.location.href = 'home.html';
 });
 document.getElementById('btn-enter-kimnamok').addEventListener('click', () => {
+    if (!hasKimnamok) return; // 버튼이 disabled라 정상 클릭으로는 여기 못 오지만, 방어적으로 한 번 더 막는다.
     openChapterModal();
 });
 el.chapterModalClose.addEventListener('click', closeChapterModal);
@@ -904,4 +1087,6 @@ el.chapterModal.addEventListener('click', (event) => {
 /* ---- 초기화 ---- */
 (async function init() {
     await fetchStoryState();
+    hasKimnamok = await fetchKimnamokOwnership();
+    applyKimnamokLockState();
 })();

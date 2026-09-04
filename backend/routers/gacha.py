@@ -63,6 +63,36 @@ PICKUP_SCHEDULE = [
             {"character_name": "신", "point_cost": 200, "rate_up": 0.6667},
         ],
     },
+    {
+        "start_at": datetime(2026, 9, 4, 21, 20, tzinfo=KST),
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner-new7.webp",
+        "characters": [
+            {"character_name": "안지석", "point_cost": 20, "rate_up": 0.99},
+        ],
+    },
+    {
+        "start_at": datetime(2026, 9, 7, 21, 20, tzinfo=KST),
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner-new8.webp",
+        "characters": [
+            {"character_name": "김지섭", "point_cost": 20, "rate_up": 0.99},
+        ],
+    },
+    {
+        "start_at": datetime(2026, 9, 10, 21, 20, tzinfo=KST),
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner-new9.webp",
+        "characters": [
+            {"character_name": "돌직구 이도협", "point_cost": 30, "rate_up": 0.99},
+        ],
+    },
+    {
+        "start_at": datetime(2026, 9, 13, 21, 20, tzinfo=KST),  # 마지막엔 송주헌 픽업으로 복귀(확인된 요청)
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner.webp",
+        "characters": [{"character_name": "송주헌", "point_cost": 20, "rate_up": 0.99}],
+    },
 ]
 
 

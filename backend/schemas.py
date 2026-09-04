@@ -41,6 +41,7 @@ class LogCreate(BaseModel):
     reading_minutes: int
     session_type: str = "reading"  # "reading" | "subject" | "mock_exam"
     is_auto_complete: bool = False  # mock_exam 전용: 타이머가 끝까지 흘러 자동 제출됐는지("포기하기"로 중도 종료하면 False)
+    client_token: str | None = None  # 세션 시작 시 클라이언트가 1회 발급하는 멱등성 토큰(재시도 중복 적립 방지용)
 
 
 class PurchaseRequest(BaseModel):

@@ -11,8 +11,10 @@
     const PROJECTILE_TRAVEL_MS = 220;
     const MAX_ATTACK_FRAMES = 6;
     const MAX_SKILL_FRAMES = 9; // 스킬 시전 전용 사진은 캐릭터당 총 9장까지 넣기로 확정됨(arena-battle.js와 동일)
+    const MAX_RETURN_FRAMES = 9; // 시전 종료 후 원래 모습으로 복귀하는 전용 사진(return_N.webp), arena-battle.js와 동일
     const MAX_WALK_FRAMES = 6; // 걷기 전용 사진(walk_N.webp), attack_N.webp와 같은 최대 장수(arena-battle.js와 동일)
     const ATTACK_FRAME_DURATION_MS = 60;
+    const RETURN_FRAME_DURATION_MS = 60; // 복귀 프레임은 서버가 시간을 안 주므로 공격 프레임과 같은 고정 속도로 재생(arena-battle.js와 동일)
     const WALK_FRAME_DURATION_MS = 220;
     const EFFECT_LAUNCH_DELAY_MS = ATTACK_FRAME_DURATION_MS * 3; // 원거리 공격: 애니메이션 3프레임쯤 재생된 뒤 이펙트 발사
     // 이동 속도 = 초당 "뷰포트 가로폭의 10%"(arena-battle.js와 동일한 기준 - 화면 크기가 달라져도
@@ -82,6 +84,7 @@
     const meleeHitPending = {};
     const frameCountCache = {};
     const skillFrameCountCache = {};
+    const returnFrameCountCache = {};
     const walkFrameCountCache = {};
     const walkAnimTokens = {};
     const walkAnimActive = {}; // slot -> 지금 playWalkFrames 루프가 이미 돌고 있는지(arena-battle.js와 동일)
@@ -915,6 +918,120 @@
 
             return { text: `폭탄 5발: ${parts.join(", ") || "대상 없음"}` };
         },
+
+        strike_zone_return_throw(casterSlot, params) {
+            // 이도협 "돌직구" - 실제 서버(battle_engine.py의 pending_delayed_skills)와 동일하게
+            // "지금 즉시 판정"이 아니라 표시된 시간(return_delay_seconds) 뒤에야 실제 피해가 반영되는
+            // 지연 판정 스킬이다. "자신보다 전방의 모든 인물"은 적만이 아니라 아군도 포함한다(확인된
+            // 요청) - devtest는 축 위치(position)를 추적하지 않으므로(positional_bomb_line과 같은
+            // 이유), "캐스터 자신보다 앞"은 슬롯으로 근사한다: 캐스터가 "후방"이면 같은 편 "전방"
+            // 아군이 대상에 포함된다(그 반대는 없음 - 전방이 캐스터면 후방 아군은 원래 자리 자체가 더
+            // 뒤이므로 대상이 아니다). "자리를 지켰는지"는 [이동] 버튼이 토글하는 advancedSlot(전진/
+            // 복귀)이 마킹 시점과 판정 시점 사이에 바뀌었는지로 대신 판정한다 - 존을 새긴 뒤 대상을
+            // 클릭해서 [이동] 버튼을 누르면 실제로 이탈 판정이 나오는 걸 눈으로 확인할 수 있다.
+            const caster = units[casterSlot];
+            const casterSide = sideOf(casterSlot);
+            const allyFrontSlot = `${casterSide}-front`;
+            const includeAllyFront = casterSlot.endsWith("back") && units[allyFrontSlot] && units[allyFrontSlot].hp > 0;
+
+            // 귀환 순서 그대로: 벽에서 먼 아군(=캐스터에 가장 가까운 전방 아군)이 항상 맨 마지막 -
+            // 적은 그보다 먼저(벽에 더 가까우므로) 정상 판정된다. "강제타석"은 이 순서상 정확히
+            // 아군 차례에 도달했을 때만 판정한다(귀환하는 공이 그에게 닿는 순간이라는 설정 그대로).
+            const targetSlots = aliveEnemyUnits(casterSlot).filter((s) => s.endsWith("front") || s.endsWith("back"));
+            if (includeAllyFront) targetSlots.push(allyFrontSlot);
+            if (!targetSlots.length) return { text: "대상이 없습니다." };
+
+            const recordedAdvanced = {};
+            const zones = {};
+            targetSlots.forEach((slot) => {
+                recordedAdvanced[slot] = Boolean(advancedSlot[slot]);
+                zones[slot] = spawnStrikeZone(slot);
+            });
+            throwDolljikguBallToWall(casterSlot, sideOf(casterSlot) === "attacker" ? "defender" : "attacker", () => {});
+
+            const returnDelayMs = (params.return_delay_seconds || 1.4) * 1000;
+
+            setTimeout(() => {
+                targetSlots.forEach((slot) => { if (zones[slot]) removeStrikeZone(zones[slot]); });
+
+                const parts = [];
+                for (const slot of targetSlots) {
+                    if (!units[slot] || units[slot].hp <= 0) continue;
+
+                    if (slot === allyFrontSlot && units[slot].name === "불빠따 김어진") {
+                        // 강제타석: 귀환하는 공이 정확히 그에게 "닿는" 순간이라는 설정이므로, 스윙을
+                        // 곧장 재생하는 대신 공이 벽에서부터 그의 위치까지 실제로 날아와 도착하는 연출을
+                        // 먼저 보여준다(shared/battle-renderer.js의 delayed_skill_resolve와 동일한
+                        // 순서 - 예전엔 이 도착 연출 없이 곧장 스윙+공이 다시 날아가는 것처럼 보여서,
+                        // 공이 "돌아오지 않고" 불빠따에게서 갑자기 다시 날아가는 것처럼 보이는 버그가
+                        // 있었다). 도착한 뒤에야(=피격 판정 순간) 그는 맞지 않고 대신 받아쳐 지금 살아있는
+                        // 적 전원에게 광역 피해(스펙 고정값 150%, characters.json의 trait_mechanics.params와
+                        // 동일 - devtest는 트레잇 파라미터를 따로 안 읽으므로 여기 값도 그와 함께 바꿔야
+                        // 함)를 입힌다. 이 순간 이후로는 재생을 멈춘다(백엔드와 동일).
+                        const batterSlot = slot;
+                        const wallFieldRect = attackEffectsConfig.fieldEl?.getBoundingClientRect();
+                        const wallFromXY = wallFieldRect
+                            ? { x: viewportEdgeXRelativeToField(sideOf(casterSlot) === "attacker" ? "defender" : "attacker", wallFieldRect), y: wallFieldRect.height / 2 }
+                            : null;
+
+                        const swingAndRedirect = () => {
+                            playAttackFrames(batterSlot);
+                            setTimeout(() => {
+                                const redirectedParts = [];
+                                aliveEnemyUnits(casterSlot).filter((s) => s.endsWith("front") || s.endsWith("back")).forEach((enemySlot) => {
+                                    const typeMult = getTypeMultiplier(units[batterSlot].attackType, units[enemySlot].defenseType);
+                                    const [atk, isCrit] = rollDamageAtk(batterSlot);
+                                    const dealt = applyDamage(enemySlot, atk * 150 / 100 * typeMult);
+                                    hitVisual(enemySlot, isCrit, typeMult, dealt);
+                                    redirectedParts.push(`${units[enemySlot].name} ${dealt}${isCrit ? "(치명타!)" : ""}`);
+                                });
+                                throwDolljikguBallToWall(batterSlot, sideOf(batterSlot) === "attacker" ? "defender" : "attacker", () => {});
+                                log(`[수동] ${caster.name}의 [Active] 귀환 판정! ${parts.join(", ") || "대상 없음"}`);
+                                log(`[수동] 불빠따 김어진의 [Special] 발동! 강제타석 - ${redirectedParts.join(", ") || "대상 없음"}`);
+                            }, EFFECT_LAUNCH_DELAY_MS);
+                        };
+
+                        if (wallFromXY) {
+                            throwDolljikguBallReturn(wallFromXY, batterSlot, swingAndRedirect);
+                        } else {
+                            swingAndRedirect();
+                        }
+                        return;
+                    }
+
+                    const stayed = Boolean(advancedSlot[slot]) === recordedAdvanced[slot];
+                    const typeMult = getTypeMultiplier(caster.attackType, units[slot].defenseType);
+                    const [atk, isCrit] = rollDamageAtk(casterSlot);
+                    const multiplier = stayed ? params.hold_multiplier : params.moved_multiplier;
+                    const dealt = applyDamage(slot, atk * multiplier / 100 * typeMult);
+                    hitVisual(slot, isCrit, typeMult, dealt);
+                    parts.push(`${units[slot].name} ${stayed ? "자리 유지" : "이탈"} ${dealt}${isCrit ? "(치명타!)" : ""}`);
+
+                    if (!stayed && units[slot].hp > 0) {
+                        setTimeout(() => {
+                            const [atk2, isCrit2] = rollDamageAtk(casterSlot);
+                            const dealt2 = applyDamage(slot, atk2 * params.pulled_multiplier / 100 * typeMult);
+                            hitVisual(slot, isCrit2, typeMult, dealt2);
+                            flashEffectAura(slot, "cc");
+                            setStatusIcon(slot, "stun", { source: `${casterSlot}:strike_zone_pull`, durationMs: (params.pulled_stun_seconds || 1) * 1000 });
+                            log(`[수동] ${caster.name}의 [Active] 추가 적중! ${units[slot].name} 끌려와 ${dealt2} 추가 피해 + 기절`);
+                        }, 260);
+                    }
+                }
+                // 모든 존 판정이 끝난 뒤엔(강제타석으로 중간에 끝나지 않았다면) 공이 이도협 본인에게
+                // 완전히 돌아가며 사라진다(확인된 요청) - devtest는 대상별로 이어붙는 개별 왕복
+                // 애니메이션이 없으므로(위 for가 전원 동시 판정), shared/battle-renderer.js처럼 마지막
+                // 존 위치에서 이어받는 대신 벽 자리에서 곧장 캐스터에게 돌아가는 것으로 단순화한다.
+                const returnFieldRect = attackEffectsConfig.fieldEl?.getBoundingClientRect();
+                if (returnFieldRect) {
+                    const wallX = viewportEdgeXRelativeToField(sideOf(casterSlot) === "attacker" ? "defender" : "attacker", returnFieldRect);
+                    throwDolljikguBallReturn({ x: wallX, y: returnFieldRect.height / 2 }, casterSlot, () => {});
+                }
+                log(`[수동] ${caster.name}의 [Active] 귀환 판정! ${parts.join(", ") || "대상 없음"}`);
+            }, returnDelayMs);
+
+            return { text: `스트라이크 존을 새기고 돌직구를 던짐 (${(params.return_delay_seconds || 1.4)}초 후 판정 - [이동] 버튼으로 이탈 재현 가능)` };
+        },
     };
 
     // ───────────────────────── 공격 프레임(근거리 기본 연출, 원거리 공용 프레임 재생) ─────────────────────────
@@ -954,6 +1071,21 @@
             count = i;
         }
         skillFrameCountCache[cacheKey] = count;
+        return count;
+    }
+
+    // 시전 종료 후 원래 모습으로 복귀하는 전용 프레임(return_N.webp)이 있는지 확인 - skill_N.webp와
+    // 같은 규칙(arena-battle.js와 동일).
+    async function getReturnFrameCount(outfit, variant = "") {
+        const cacheKey = `${outfit}${variant}`;
+        if (returnFrameCountCache[cacheKey] !== undefined) return returnFrameCountCache[cacheKey];
+        let count = 0;
+        for (let i = 1; i <= MAX_RETURN_FRAMES; i += 1) {
+            const exists = await checkImageExists(`${OUTFIT_IMAGE_BASE}${outfit}/return${variant}_${i}.webp`);
+            if (!exists) break;
+            count = i;
+        }
+        returnFrameCountCache[cacheKey] = count;
         return count;
     }
 
@@ -1108,6 +1240,40 @@
         }
     }
 
+    /*
+     * 시전 종료 직후 재생되는 복귀 애니메이션. 전용 프레임(return_N.webp)이 있는 캐릭터만 이 프레임들을
+     * 순서대로(1→N) 한 번 재생한 뒤 battle_idle.webp로 정착한다(arena-battle.js와 동일) - 서버가 이
+     * 동작의 시간을 따로 주지 않으므로 공격 프레임과 같은 고정 속도(RETURN_FRAME_DURATION_MS)로 재생한다.
+     * 전용 프레임이 없는 캐릭터는 프레임 0장으로 판정되어 곧바로 battle_idle.webp로 스냅한다(폴백).
+     */
+    async function playReturnFrames(slot) {
+        const el = document.querySelector(`[data-unit="${slot}"]`);
+        const imgEl = el?.querySelector(".battle-unit-img");
+        const unit = units[slot];
+        if (!el || !imgEl || !unit) return;
+
+        const variant = spriteVariantSuffix(slot);
+        const myToken = (attackAnimTokens[slot] = (attackAnimTokens[slot] || 0) + 1);
+        attackAnimActive[slot] = true;
+
+        const frameCount = await getReturnFrameCount(unit.outfit, variant);
+        if (attackAnimTokens[slot] !== myToken) return;
+
+        for (let i = 1; i <= frameCount; i += 1) {
+            if (attackAnimTokens[slot] !== myToken) return;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/return${variant}_${i}.webp`;
+            await sleep(RETURN_FRAME_DURATION_MS);
+        }
+
+        if (attackAnimTokens[slot] !== myToken) return;
+        imgEl.onerror = () => {
+            imgEl.onerror = null;
+            imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/idle.webp`;
+        };
+        imgEl.src = `${OUTFIT_IMAGE_BASE}${unit.outfit}/battle_idle${variant}.webp`;
+        attackAnimActive[slot] = false;
+    }
+
     // Active 시전 중 기절/넉백 등으로 시전이 취소됐을 때 호출한다(백엔드가 발동 자체를 건너뛰므로
     // skill_resolve 이벤트가 아예 오지 않는다 - arena-battle.js와 동일한 이유).
     function interruptCasting(slot) {
@@ -1203,6 +1369,9 @@
         paint_red: "Combat_Icon_Special_InkRed.webp", paint_blue: "Combat_Icon_Special_InkBlue.webp",
         paint_yellow: "Combat_Icon_Special_InkYellow.webp", damage_reduction: "Combat_Icon_Buff_DamageRatio.webp",
         lifesteal: "Combat_Icon_Special_Lifesteal.webp", // 윤 "선생 고혈" - 공격 대상이 선생 타입인 동안(흡혈)
+        madness: "Combat_Icon_Special_Madness.webp", // 김지섭 "격정" 보유 광기 - weight로 개수 표시(paint_red와 동일)
+        move_speed_up: "Combat_Icon_Buff_MoveSpeed.webp", // 김지섭 "격정" 광기 소모 시 이동속도 증가
+        cost_reduction: "Combat_Icon_Buff_CostChange.webp", // 안지석 "예산 재배정" 코스트 감소 상태 - weight로 남은 사용 횟수 표시
     };
     const MOMENT_ICON_MS = 1200;
     const statusIconState = {}; // slot -> { iconId: { el, sources: Map<sourceKey, {weight, timer}> } }
@@ -1577,9 +1746,10 @@
                 // 되돌리는 스냅은 핸들러 실행 "후"에 해야 새 상태(type2)의 스프라이트로 정확히 돌아간다.
                 const handler = MANUAL_SKILL_HANDLERS[skillMech.effect_type];
                 const result = handler ? handler(actorSlot, params) : { text: "(이 효과 타입은 아직 수동 시뮬레이션이 없습니다)" };
-                if (imgEl && units[actorSlot]) {
-                    imgEl.src = `${OUTFIT_IMAGE_BASE}${units[actorSlot].outfit}/battle_idle${spriteVariantSuffix(actorSlot)}.webp`;
-                }
+                // 복귀 전용 프레임(return_N.webp)이 있으면 그걸 재생하고, 없으면 playReturnFrames
+                // 내부에서 곧바로 battle_idle.webp로 스냅한다(arena-battle.js와 동일 - 예전엔 여기서
+                // 곧장 battle_idle로 스냅해서 수동 시전에서만 복귀 프레임이 재생 안 되는 차이가 있었다).
+                if (units[actorSlot]) playReturnFrames(actorSlot);
 
                 // 강승유(copy_target_skill)가 실제로 복제한 스킬은 result.copiedEffectType에 담겨온다 -
                 // 있으면 그걸 기준으로 카테고리/전용 연출을 분기해서 원본 스킬과 동일하게 재생되게 한다.
@@ -2018,6 +2188,37 @@
                 else clearStatusIconSource(paintSlot, iconId, sourceKey);
             }
             log(`[패시브] ${event.actor} +${event.detail.amount} ${event.detail.color} 물감 (합계 ${event.detail.total}) <- ${event.detail.source_actor}`);
+        } else if (event.event_type === "madness_gain_resolve") {
+            // 김지섭 "격정"(arena-battle.js와 동일) - weight를 "현재 총 보유량"으로 덮어쓰고, 0이면 지운다.
+            const madnessSlot = findSlotByName(actorSide, event.actor);
+            if (madnessSlot) {
+                const sourceKey = `${madnessSlot}:madness`;
+                if (event.detail.total > 0) setStatusIcon(madnessSlot, "madness", { source: sourceKey, weight: event.detail.total });
+                else clearStatusIconSource(madnessSlot, "madness", sourceKey);
+            }
+            log(`[패시브] ${event.actor} 광기 ${event.detail.total}${event.detail.threshold ? `/${event.detail.threshold}` : ""}`);
+        } else if (event.event_type === "madness_release_resolve") {
+            // 김지섭 "격정"(arena-battle.js와 동일) - 광기 소모와 함께 공격속도/공격력/이동속도 임시 버프.
+            const releaseSlot = findSlotByName(actorSide, event.actor);
+            if (releaseSlot) {
+                flashEffectAura(releaseSlot, "buff");
+                const buffMs = (event.detail?.buff_seconds || 0) * 1000 * PLAYBACK_SPEED;
+                setStatusIcon(releaseSlot, "atk_up", { source: `${releaseSlot}:madness_release`, ...(buffMs ? { durationMs: buffMs } : {}) });
+                setStatusIcon(releaseSlot, "atk_speed_up", { source: `${releaseSlot}:madness_release`, ...(buffMs ? { durationMs: buffMs } : {}) });
+                setStatusIcon(releaseSlot, "move_speed_up", { source: `${releaseSlot}:madness_release`, ...(buffMs ? { durationMs: buffMs } : {}) });
+            }
+            log(`[패시브] ${event.actor}의 광기 전부 소모! ${event.detail?.buff_seconds ?? 0}초간 공격속도 ${event.detail?.haste_percent ?? 0}%, 공격력 ${event.detail?.atk_percent ?? 0}%, 이동속도 ${event.detail?.move_speed_percent ?? 0}% 증가`);
+        } else if (event.event_type === "cost_reduction_expire_resolve") {
+            // 안지석 "예산 재배정" 만료(arena-battle.js와 동일한 이유) - devtest는 카드 UI가 없어 상태
+            // 아이콘만 지운다.
+            if (event.actor_slot) {
+                const expireKey = `${actorSide}-${event.actor_slot}`;
+                clearStatusIconSource(expireKey, "cost_reduction", `${expireKey}:cost_reduction`);
+            }
+            log(`[패시브] ${event.actor}의 코스트 감소 효과가 끝나 원래 코스트로 돌아옴`);
+        } else if (event.event_type === "team_cost_gain_resolve") {
+            // 안지석 "학생회 예산"(arena-battle.js와 동일) - devtest는 코스트 풀 UI가 없어 로그만 남긴다.
+            log(`[패시브] ${event.actor} -> ${event.detail?.source_actor}의 [Active] 사용으로 코스트 ${event.detail?.amount} 획득`);
         } else if (event.event_type === "neglect_status_resolve") {
             // 방임석 "방임"(arena-battle.js와 동일) - 지속시간 없이 걸어두고, 꺼질 때 직접 지운다.
             const neglectSlot = findSlotByName(actorSide, event.actor);
@@ -2141,14 +2342,9 @@
                 // 막는다). cast_start 때 이미 같은 체인에 playCastFrames가 매달려 있으므로, 체인 순서
                 // 자체가 "그게 끝나야 idle로 풀림"을 보장한다.
                 if (units[actorSlot]) {
-                    chainActorAnim(actorSlot, () => {
+                    chainActorAnim(actorSlot, async () => {
                         const imgEl = document.querySelector(`[data-unit="${actorSlot}"] .battle-unit-img`);
                         imgEl?.classList.remove("casting", "casting-rainbow");
-                        attackAnimTokens[actorSlot] = (attackAnimTokens[actorSlot] || 0) + 1;
-                        attackAnimActive[actorSlot] = false;
-                        if (imgEl && units[actorSlot]) {
-                            imgEl.src = `${OUTFIT_IMAGE_BASE}${units[actorSlot].outfit}/battle_idle${spriteVariantSuffix(actorSlot)}.webp`;
-                        }
                         // 청년(밀쳐내기): 이 배우 자신의 시전 자세가 "실제로" 끝난 이 시점에야 밀쳐내기를
                         // 실행한다(arena-battle.js와 동일한 이유 - HP는 아래 동기 분기에서 여전히 즉시 반영).
                         if (dispatchEffectType === "bonus_damage_knockback" && event.detail?.hits?.length) {
@@ -2161,6 +2357,11 @@
                                 if (event.detail?.interrupted_cast) interruptCasting(knockSlot);
                             }
                         }
+                        // 복귀 전용 프레임(return_N.webp)이 있으면 그걸 재생하고, 없는 캐릭터는
+                        // playReturnFrames 내부에서 프레임 0장으로 판정되어 곧바로 battle_idle.webp로
+                        // 스냅한다(arena-battle.js와 동일 - 예전엔 여기서 곧장 battle_idle로 스냅해서
+                        // devtest에서만 복귀 프레임이 재생 안 되는 차이가 있었다).
+                        await playReturnFrames(actorSlot);
                     });
                 }
                 // 시전자 몸이 카테고리 색으로 번쩍이던 예전 연출은 제거 - 오라는 효과를 "받은" 대상에게만
@@ -2176,6 +2377,26 @@
                     const shieldMs = event.detail.shield_seconds * 1000 * PLAYBACK_SPEED;
                     flashEffectAura(actorSlot, "special");
                     setStatusIcon(actorSlot, "immune", { source: `${actorSlot}:self_shield_duration`, durationMs: shieldMs });
+                }
+
+                if (dispatchEffectType === "cost_reduction_grant" && event.detail?.granted) {
+                    // 안지석 "예산 재배정"(arena-battle.js와 동일한 이유) - devtest엔 코스트 카드 UI
+                    // 자체가 없어 상태 아이콘만 켠다(남은 사용 횟수를 weight로 표시).
+                    const targetSlot = event.detail.target_slot;
+                    if (targetSlot) {
+                        const targetKey = `${actorSide}-${targetSlot}`;
+                        setStatusIcon(targetKey, "cost_reduction", { source: `${targetKey}:cost_reduction`, weight: event.detail.uses });
+                    }
+                }
+
+                if (dispatchEffectType === "self_cost_scaling_strike" && event.detail?.caster_hp_after != null) {
+                    // 김지섭 "핏값": summon_clone의 caster_hp_after 처리(윤 "호 출격!")와 동일한 패턴.
+                    const selfCostCaster = actorSlot ? units[actorSlot] : null;
+                    if (selfCostCaster) {
+                        selfCostCaster.hp = event.detail.caster_hp_after;
+                        renderUnit(actorSlot);
+                        flashEffectAura(actorSlot, "debuff");
+                    }
                 }
 
                 if (dispatchEffectType === "conditional_target_debuff") {
