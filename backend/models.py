@@ -115,6 +115,10 @@ class ReadingLog(Base):
     earned_gold = Column(Integer, default=0)
     earned_silver = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+    client_token = Column(String, nullable=True, index=True)  # 클라이언트가 세션 시작 시 1회 발급하는 멱등성 토큰.
+    # 응답을 못 받은 클라이언트가 60초가 지난 뒤 재시도해도(logs.py의 시간창 기반 중복 판정을 벗어나도)
+    # 같은 토큰으로 이미 저장된 기록을 찾아 새로 적립하지 않고 그대로 돌려주기 위함. 과거 기록/구버전
+    # 클라이언트는 null - 그런 요청은 기존 시간창 판정으로만 걸러진다.
 
     owner = relationship("User", back_populates="logs")
     region = relationship("Region")

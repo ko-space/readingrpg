@@ -201,11 +201,50 @@ body{
 }
 #char-center.show{ opacity:1; transform:translate(-50%, 0); }
 #char-center.dim{ filter:brightness(0.5) saturate(0.65); }
+/* 아이템 등장(itemReveal) 중에는 중앙 캐릭터가 옆으로 비켜선다(story-relationship.css의 동일 규칙을
+   그대로 이식) - #item-display가 원래 캐릭터가 서 있던 자리(살짝 위쪽)에 뜬다. */
+#char-center.show.item-reveal-shift{ transform: translate(calc(-50% - 26vw), 0); }
 #char-center img{
   height:100%;
   object-fit:contain;
   -webkit-user-drag:none;
   user-select:none;
+}
+
+/* 아이템 등장(story-relationship.css의 동일 규칙을 그대로 이식) - 중앙 캐릭터가 옆으로 비켜서는 동안
+   그 자리(살짝 위쪽)에 부드러운 라인의 사각형 컨테이너 안에서 아이템이 은은하게 떠오르듯 나타난다.
+   story-sub-engine.js의 playItemReveal/playItemHide가 켜고 끈다. */
+#item-display{
+  position:absolute;
+  left:50%; top:42%;
+  transform:translate(-50%,-50%) scale(.82);
+  z-index:6;
+  opacity:0;
+  pointer-events:none;
+  transition: opacity .5s ease, transform .5s ease;
+}
+#item-display.show{
+  opacity:1;
+  transform:translate(-50%,-50%) scale(1);
+}
+#item-display-box{
+  width:min(42vw, 300px);
+  aspect-ratio:1/1;
+  background: rgba(18,16,26,0.55);
+  border:1px solid rgba(255,255,255,0.3);
+  border-radius:28px;
+  box-shadow:0 18px 46px rgba(0,0,0,0.45), inset 0 0 28px rgba(255,255,255,0.06);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-sizing:border-box;
+  padding:22px;
+}
+#item-display-img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  filter:drop-shadow(0 8px 20px rgba(0,0,0,0.4));
 }
 
 #dialogue-wrap{
@@ -323,6 +362,29 @@ body{
 #cec-tbc-text.show{
   opacity:1;
   transform: translateX(0);
+}
+/* 마지막 화 전용 "완결" 도장 - "To Be Continued..." 대신 화면 중앙에 도장이 쾅 찍히는 듯한 연출로
+   등장한다(확인된 요청). complete.webp는 배경이 흰색(투명 없음)이라 mix-blend-mode:multiply로
+   흰 배경을 지워서(흰색×배경=배경 그대로) 붉은 도장 잉크 자국만 뒤 배경(블러+비네트) 위에 겹쳐
+   보이게 한다 - 실제 도장을 종이에 찍은 것과 같은 표현. 확대+회전된 채 투명한 상태로 시작했다가
+   빠르게 제 크기로 "쾅" 눌리며(overshoot가 있는 easing) 살짝 삐뚤어진 각도로 멈춘다. */
+#cec-stamp{
+  position:absolute;
+  top:50%;
+  left:50%;
+  z-index:2;
+  width:clamp(150px, 24vw, 280px);
+  opacity:0;
+  transform: translate(-50%, -50%) scale(2.6) rotate(-20deg);
+  mix-blend-mode: multiply;
+  filter: drop-shadow(0 6px 22px rgba(0,0,0,0.5));
+  transition: none;
+}
+#cec-stamp img{ display:block; width:100%; height:auto; }
+#cec-stamp.show{
+  opacity:1;
+  transform: translate(-50%, -50%) scale(1) rotate(-8deg);
+  transition: opacity .16s ease-out, transform .34s cubic-bezier(.19,1.82,.38,1);
 }
 #cec-curtain-top, #cec-curtain-bottom{
   position:absolute;
@@ -798,6 +860,12 @@ body{
   cursor:not-allowed;
 }
 .episode-story-enter:disabled:hover{ filter:none; }
+.episode-story-lock-icon{
+  width:15px;
+  height:15px;
+  vertical-align:middle;
+  opacity:.9;
+}
 
 /* ===== 화(chapter) 선택 모달 ===== */
 #chapter-modal{

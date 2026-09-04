@@ -1305,6 +1305,20 @@ body {
     z-index: 1;
 }
 
+/* 안지석 "예산 재배정"으로 코스트가 감소된 카드 - 숫자 배지 배경이 빛나는 푸른색으로 바뀐다(확인된
+   요청). 실제 상태 효과 취급이라 지속시간이 아니라 남은 사용 횟수(cost_reduction_uses_remaining)가
+   0이 될 때까지 계속 켜져 있다가, 다 쓰면 원래 배지 색으로 되돌아간다. */
+.cost-card.is-cost-reduced .cost-card-cost {
+    border-color: rgba(90, 190, 255, .95);
+    background: #123a5e;
+    color: #cdeeff;
+    animation: cost-card-reduced-glow 1.4s ease-in-out infinite;
+}
+@keyframes cost-card-reduced-glow {
+    0%, 100% { box-shadow: 0 0 3px 1px rgba(90, 190, 255, .55); }
+    50%      { box-shadow: 0 0 8px 3px rgba(90, 190, 255, .9); }
+}
+
 .cost-card-empty {
     position: absolute;
     inset: 0;

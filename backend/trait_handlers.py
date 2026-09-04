@@ -262,6 +262,23 @@ def _trait_type_attack_lifesteal(caster, team, enemy_team, params):
     return None
 
 
+def _trait_arm_student_council_budget(caster, team, enemy_team, params):
+    # 안지석(학생회 예산): "장전"만 해둔다 - 실제 판정(아군 중 직업이 학생인 인물이 일정 코스트 이상의
+    # [Active]를 쓸 때마다 팀 코스트 획득)은 battle_engine._apply_student_council_budget_gain이 매
+    # skill_resolve마다 확인한다(death_heal_ally와 동일한 "장전 후 이벤트 감지" 패턴).
+    caster["student_council_budget_config"] = {"min_cost": params["min_cost"], "amount": params["amount"]}
+    return None
+
+
+def _trait_arm_reduced_heal_gain_madness(caster, team, enemy_team, params):
+    # 김지섭(통제 불능의 힘): "장전"만 해둔다 - 실제 판정(회복 스킬로 회복받을 때 그 회복량을 깎고,
+    # 깎인 만큼 광기 획득)은 그 회복을 실제로 적용하는 skill_handlers._skill_heal_ally_percent_max_hp가
+    # caster["madness_receive_config"]를 확인해서 처리한다(neglect_config와 동일한 패턴 - 자기
+    # 자신에게 거는 회복(self_type_swap_heal)은 대상이 항상 시전자 자신이라 이 대상이 될 일이 없다).
+    caster["madness_receive_config"] = {"apply_percent": params["apply_percent"]}
+    return None
+
+
 def _trait_periodic_shield_random_non_type_striker(caster, own_team, enemy_team, params, time_elapsed):
     # 신(제 3 권한): star_handlers._star_periodic_heal_random_striker와 같은 이유로(전투 시작 1회가
     # 아니라 "N초마다" 반복) TRAIT_EFFECT_HANDLERS가 아닌 PERIODIC_TRAIT_EFFECT_HANDLERS에 등록한다.
@@ -289,6 +306,19 @@ PERIODIC_TRAIT_EFFECT_HANDLERS = {
 }
 
 
+def _trait_conditional_partner_front_redirect_skill(caster, team, enemy_team, params):
+    # 이도협(강제타석): 아군 불빠따 김어진이 정확히 "전방" 슬롯에 편성돼 있으면(그냥 같은 팀이 아니라
+    # 슬롯 자체가 조건이라 _teammate 대신 team.get("front")를 직접 확인), 돌직구가 귀환할 때의 판정을
+    # 그 파트너가 대신 받아치도록 설정만 심어둔다 - 실제 리다이렉트 로직(모든 적에게 광역 피해로 완전히
+    # 대체)은 delayed resolver(battle_engine._resolve_strike_zone_return_throw)가 이 필드를 읽어 처리한다.
+    partner = team.get("front")
+    if not partner or partner["name"] != caster["trait_partner_name"] or partner["hp"] <= 0:
+        return None
+    caster["skill_redirect_config"] = {"batter_ref": partner, "multiplier": params["multiplier"]}
+    detail = {"partner": partner["name"], "multiplier": params["multiplier"]}
+    return detail, []
+
+
 TRAIT_EFFECT_HANDLERS = {
     "ally_synergy_remove_absorb": _trait_ally_synergy_remove_absorb,
     "ally_synergy_atk_buff": _trait_ally_synergy_atk_buff,
@@ -304,6 +334,9 @@ TRAIT_EFFECT_HANDLERS = {
     "type_attack_lifesteal": _trait_type_attack_lifesteal,
     "teammate_haste_by_name": _trait_teammate_haste_by_name,
     "gendered_ally_haste": _trait_gendered_ally_haste,
+    "conditional_partner_front_redirect_skill": _trait_conditional_partner_front_redirect_skill,
+    "reduced_heal_gain_madness": _trait_arm_reduced_heal_gain_madness,
+    "student_council_budget": _trait_arm_student_council_budget,
 }
 
 

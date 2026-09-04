@@ -963,6 +963,168 @@ const HEART_SVG_MARKUP = `
     </svg>
 `;
 
+// ===== 이도협 전용: "돌직구" - 스트라이크 존 마킹 + 벽까지 왕복하는 투척구 =====
+// 존은 시전 순간 대상의 "지금" 화면 좌표에 그대로 고정되고, 귀환 판정이 올 때까지 그 자리에서
+// 계속 깜빡인다 - 이 좌표 자체가 "대상이 자리를 지켰는지" 비교할 기준점 역할도 겸한다(별도로
+// 좌표를 기억해둘 필요 없이, 반환된 zone 엘리먼트의 style.left/top을 그대로 다시 읽으면 된다).
+function spawnStrikeZone(keyOrEl) {
+    const el = resolveEffectEl(keyOrEl);
+    const layer = attackEffectsConfig.layerEl;
+    if (!layer || !el) return null;
+    const center = fieldRelativeCenter(el);
+    const zone = document.createElement("div");
+    zone.className = "dolljikgu-zone";
+    zone.style.left = `${center.x}px`;
+    zone.style.top = `${center.y}px`;
+    layer.appendChild(zone);
+    return zone;
+}
+
+function removeStrikeZone(zoneEl) {
+    if (!zoneEl || !zoneEl.parentNode) return;
+    zoneEl.classList.add("dolljikgu-zone-fade");
+    setTimeout(() => zoneEl.remove(), speedMs(320));
+}
+
+// 참고 데모(leedohyeop_base_active_effect_v3.html)의 makeTrail/speedLines를 이식 - 곡선 보간
+// (animateArcMotion)이 아니라 데모와 동일한 3차 이징 직선 보간 + 진행 중 잔상(trail) + 시작 시점
+// 스피드라인을 재현한다. 공 자신도 데모처럼 날아가는 내내 계속 회전한다. 착탄(피격) 이펙트는 데모의
+// 링/슬래시를 따로 만들지 않고 이 게임 기존의 flashHit(캐릭터 반짝임+피해 숫자)로 통일한다(확인된
+// 요청 - 다른 캐릭터들과 다른 피격 연출을 새로 만들 필요 없음).
+function makeDolljikguTrail(x1, y1, x2, y2) {
+    const layer = attackEffectsConfig.layerEl;
+    if (!layer) return;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.hypot(dx, dy);
+    const t = document.createElement("div");
+    t.className = "dolljikgu-trail";
+    t.style.left = `${x1}px`;
+    t.style.top = `${y1}px`;
+    t.style.width = `${Math.min(len, 100)}px`;
+    t.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
+    layer.appendChild(t);
+    setTimeout(() => t.remove(), speedMs(140));
+}
+
+function spawnDolljikguSpeedLines(x, y, direction) {
+    const layer = attackEffectsConfig.layerEl;
+    if (!layer) return;
+    for (let i = 0; i < 6; i++) {
+        const l = document.createElement("div");
+        l.className = "dolljikgu-speedline";
+        l.style.left = `${x + (Math.random() * 30 - 15)}px`;
+        l.style.top = `${y + (Math.random() * 50 - 25)}px`;
+        l.style.transform = `scaleX(${direction})`;
+        l.style.opacity = `${0.35 + Math.random() * 0.5}`;
+        layer.appendChild(l);
+        setTimeout(() => l.remove(), speedMs(140 + Math.random() * 90));
+    }
+}
+
+// 3차 이징(1-(1-t)^3) 직선 보간 + 진행 중 잔상 + 회전 - animateArcMotion(포물선, 잔상 없음)과 별개로
+// 돌직구 공 전용으로 둔다(참고 데모의 animateBall과 동일한 계산식).
+function animateDolljikguBallMotion(ball, start, end, durationMs, onArrive) {
+    const scaledDurationMs = speedMs(durationMs);
+    let startTime = null;
+    let prev = { ...start };
+    function frame(now) {
+        if (startTime === null) startTime = now;
+        const t = Math.min(1, (now - startTime) / scaledDurationMs);
+        const ease = 1 - Math.pow(1 - t, 3);
+        const x = start.x + (end.x - start.x) * ease;
+        const y = start.y + (end.y - start.y) * ease;
+        ball.style.left = `${x}px`;
+        ball.style.top = `${y}px`;
+        ball.style.transform = `rotate(${t * 720}deg)`;
+        if (Math.hypot(x - prev.x, y - prev.y) > 10) {
+            makeDolljikguTrail(prev.x, prev.y, x, y);
+            prev = { x, y };
+        }
+        if (t < 1) requestAnimationFrame(frame);
+        else { ball.remove(); onArrive(); }
+    }
+    requestAnimationFrame(frame);
+}
+
+// 초구: 시전자에게서 벽(필드 가장자리)까지 날아가 부딪히고 사라진다 - 아무도 맞지 않는다(귀환할 때만
+// 실제로 판정된다). onArrive에 부딪힌 지점을 넘겨줘서, 귀환 투구가 그 지점을 출발점으로 쓸 수 있게 한다.
+const DOLLJIKGU_THROW_HEIGHT_OFFSET = 26; // 캐릭터 스프라이트 정중앙이 아니라 손 높이쯤에서 던지는 것처럼 살짝 위로 올림(확인된 요청)
+
+function throwDolljikguBallToWall(actorKeyOrEl, side, onArrive) {
+    const actorEl = resolveEffectEl(actorKeyOrEl);
+    const layer = attackEffectsConfig.layerEl;
+    if (!layer || !actorEl) { onArrive(null); return; }
+    const start = fieldRelativeCenter(actorEl);
+    start.y -= DOLLJIKGU_THROW_HEIGHT_OFFSET;
+    const fieldRect = attackEffectsConfig.fieldEl.getBoundingClientRect();
+    const end = { x: viewportEdgeXRelativeToField(side, fieldRect), y: start.y };
+    spawnDolljikguSpeedLines(start.x, start.y, end.x >= start.x ? 1 : -1);
+    const ball = document.createElement("div");
+    ball.className = "dolljikgu-ball";
+    ball.style.left = `${start.x}px`;
+    ball.style.top = `${start.y}px`;
+    layer.appendChild(ball);
+    animateDolljikguBallMotion(ball, start, end, 480, () => {
+        spawnCannonMuzzleFlash(end.x, end.y);
+        onArrive(end);
+    });
+}
+
+// 귀환: fromXY(직전 지점 - 벽 또는 방금 지나온 존)에서 targetKeyOrEl의 "지금" 위치까지 날아간다. 대상이
+// 실제로 이동해서 지금 위치가 기록된 존과 다르면(이탈), 여기가 착탄 지점이 되고 pullUnitAndBall이
+// 뒤이어 존 자리로 끌어당긴다.
+function throwDolljikguBallReturn(fromXY, targetKeyOrEl, onArrive) {
+    const targetEl = resolveEffectEl(targetKeyOrEl);
+    const layer = attackEffectsConfig.layerEl;
+    if (!layer || !targetEl || !fromXY) { onArrive(fromXY); return; }
+    const end = fieldRelativeCenter(targetEl);
+    const ball = document.createElement("div");
+    ball.className = "dolljikgu-ball";
+    ball.style.left = `${fromXY.x}px`;
+    ball.style.top = `${fromXY.y}px`;
+    layer.appendChild(ball);
+    const dist = Math.hypot(end.x - fromXY.x, end.y - fromXY.y);
+    const durationMs = Math.max(150, Math.min(420, dist * 0.55));
+    animateDolljikguBallMotion(ball, fromXY, end, durationMs, () => onArrive(end));
+}
+
+// ===== 이도협 전용: "돌직구" 기본공격(원거리 - RANGED_ATTACK_STYLE["돌직구 이도협"]="baseball") =====
+// 시전자에게서 대상까지 곧장 한 번 던진다 - 스킬(돌직구)과 같은 공/잔상/스피드라인/착탄을 재사용하되
+// 왕복 없이 단발이다(참고 데모의 basicAttack과 동일한 구성).
+function spawnBaseballProjectile(actorKeyOrEl, targetKeyOrEl, onArrive) {
+    const actorEl = resolveEffectEl(actorKeyOrEl);
+    const targetEl = resolveEffectEl(targetKeyOrEl);
+    const layer = attackEffectsConfig.layerEl;
+    if (!layer || !actorEl || !targetEl) { onArrive(); return; }
+    const start = fieldRelativeCenter(actorEl);
+    start.y -= DOLLJIKGU_THROW_HEIGHT_OFFSET;
+    const end = fieldRelativeCenter(targetEl);
+    spawnDolljikguSpeedLines(start.x, start.y, end.x >= start.x ? 1 : -1);
+    const ball = document.createElement("div");
+    ball.className = "dolljikgu-ball";
+    ball.style.left = `${start.x}px`;
+    ball.style.top = `${start.y}px`;
+    layer.appendChild(ball);
+    animateDolljikguBallMotion(ball, start, end, 330, onArrive);
+}
+
+function spawnDolljikguPullLine(fromXY, toXY) {
+    const layer = attackEffectsConfig.layerEl;
+    if (!layer || !fromXY || !toXY) return;
+    const dx = toXY.x - fromXY.x;
+    const dy = toXY.y - fromXY.y;
+    const line = document.createElement("div");
+    line.className = "dolljikgu-pull-line";
+    line.style.left = `${fromXY.x}px`;
+    line.style.top = `${fromXY.y}px`;
+    line.style.width = `${Math.hypot(dx, dy)}px`;
+    line.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
+    line.style.animationDuration = `${speedMs(300)}ms`;
+    layer.appendChild(line);
+    setTimeout(() => line.remove(), speedMs(300));
+}
+
 // ===== 서민석 전용: 하트 모양 투사체 ("고백") - 포물선. 대상 여성이면 heart-red, 아니면 heart-pink =====
 function spawnHeartProjectile(actorKeyOrEl, targetKeyOrEl, colorClass, onArrive) {
     const actorImg = resolveEffectEl(actorKeyOrEl);
@@ -1081,6 +1243,7 @@ const RANGED_ATTACK_STYLE = {
     "이의진": "eye_laser",       // 눈에서 발사되는 레이저 - type1(빨강)/type2(청록) 두 가지, isType2로 분기
     "방임석": "paint_gold",      // 물감 투척 - 직선, 항상 황금빛(기본공격은 물감 색과 무관)
     "국회의사당": "cannon",      // 대포알 - 포신 발사(머즐 플래시) -> 포물선 비행 -> 착탄 폭발
+    "돌직구 이도협": "baseball", // 야구공 직선 투척(회전+잔상+스피드라인+착탄 링) - 스킬(돌직구)과 같은 공 재사용
 };
 
 // style 문자열(RANGED_ATTACK_STYLE의 값) 기준으로 실제 전용 연출 함수를 호출한다. 호출부는
@@ -1101,6 +1264,7 @@ function playRangedAttackByStyle(style, actorKeyOrEl, targetKeyOrEl, onArrive, o
     else if (style === "eye_laser") spawnEyeLaserBeam(actorKeyOrEl, targetKeyOrEl, opts.isType2 ? "type2" : "type1", onArrive);
     else if (style === "paint_gold") spawnPaintProjectile(actorKeyOrEl, targetKeyOrEl, "paint-gold", onArrive);
     else if (style === "cannon") spawnCannonShellProjectile(actorKeyOrEl, targetKeyOrEl, onArrive, undefined, true);
+    else if (style === "baseball") spawnBaseballProjectile(actorKeyOrEl, targetKeyOrEl, onArrive);
     else if (style === "arc") spawnProjectileArc(actorKeyOrEl, targetKeyOrEl, onArrive);
     else spawnProjectile(actorKeyOrEl, targetKeyOrEl, onArrive);
 }

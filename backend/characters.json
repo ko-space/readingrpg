@@ -692,9 +692,9 @@
         "1": null,
         "2": null,
         "3": null,
-        "4": "호 출격!: 자신의 최대 체력 5%를 소모해 최대 체력 15%와 공격력 350%를 지닌 ‘호’ 소환. 호는 남성이며, 가장 가까운 적에게 돌진해 피해를 입힌다.",
-        "5": "호 출격!: 자신의 최대 체력 5%를 소모해 최대 체력 15%와 공격력 350%를 지닌 ‘호’ 소환. 호는 남성이며, 가장 가까운 적에게 돌진해 피해를 입힌다.",
-        "6": "호 출격!: 자신의 최대 체력 15%를 소모해 최대 체력 50%와 공격력 500%를 지닌 ‘호’ 소환. 호는 남성이며, 가장 가까운 적에게 돌진해 피해를 입힌다."
+        "4": "호 출격!: 자신의 최대 체력 5%를 소모해 최대 체력 15%와 공격력 350%를 지닌 ‘호’ 소환. 호는 남성이며, 가장 가까운 적에게 돌진해 피해를 입힌다. (해당 스킬로 윤은 퇴각하지 않는다.)",
+        "5": "호 출격!: 자신의 최대 체력 5%를 소모해 최대 체력 15%와 공격력 350%를 지닌 ‘호’ 소환. 호는 남성이며, 가장 가까운 적에게 돌진해 피해를 입힌다. (해당 스킬로 윤은 퇴각하지 않는다.)",
+        "6": "호 출격!: 자신의 최대 체력 15%를 소모해 최대 체력 50%와 공격력 500%를 지닌 ‘호’ 소환. 호는 남성이며, 가장 가까운 적에게 돌진해 피해를 입힌다. (해당 스킬로 윤은 퇴각하지 않는다.)"
       },
       "trait_effects": {
         "1": null,
@@ -1209,6 +1209,129 @@
       }
     },
     {
+      "name": "돌직구 이도협",
+      "designer_user_id": 2,
+      "job_class": "투수",
+      "gender": "남",
+      "unit_role": "striker",
+      "outfits": {
+        "기본": "pitcher/basic"
+      },
+      "description": "이미 다른 타자가 눈독 들인 베이스에도 거침없이 돌직구를 꽂습니다. 먼저 봤다고 타석이 보장되진 않습니다.",
+      "gacha_quote": "야구 몰라요.",
+      "range": "원거리",
+      "attack_type": "Student",
+      "defense_type": "Teacher",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "exp_subjects": [],
+      "silver_multiplier": {
+        "1": null,
+        "2": 1.8,
+        "3": 1.8,
+        "4": 1.8,
+        "5": 2.4,
+        "6": 12
+      },
+      "silver_subjects": [
+        "국어"
+      ],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "취향 저격: 여성인 적에게 주는 피해 30% 증가",
+        "4": "취향 저격: 여성인 적에게 주는 피해 30% 증가",
+        "5": "취향 저격: 여성인 적에게 주는 피해 30% 증가",
+        "6": "취향 저격: 여성인 적에게 주는 피해 90% 증가"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": "돌직구: 자신보다 전방에 있는 모든 인물의 위치에 「스트라이크 존」 기록 후 돌직구 투척. 귀환 시 기록 위치의 인물에게 공격력의 220% 피해. 위치를 벗어난 인물에게 공격력의 160% 피해 및 기록 위치로 끌어당김. 끌려온 인물의 돌직구 적중 시 공격력의 100% 추가 피해 및 1초 기절",
+        "5": "돌직구: 자신보다 전방에 있는 모든 인물의 위치에 「스트라이크 존」 기록 후 돌직구 투척. 귀환 시 기록 위치의 인물에게 공격력의 220% 피해. 위치를 벗어난 인물에게 공격력의 160% 피해 및 기록 위치로 끌어당김. 끌려온 인물의 돌직구 적중 시 공격력의 100% 추가 피해 및 1초 기절",
+        "6": "돌직구: 자신보다 전방에 있는 모든 인물의 위치에 「스트라이크 존」 기록 후 돌직구 투척. 귀환 시 기록 위치의 인물에게 공격력의 440% 피해. 위치를 벗어난 인물에게 공격력의 300% 피해 및 기록 위치로 끌어당김. 끌려온 인물의 돌직구 적중 시 공격력의 150% 추가 피해 및 2초 기절"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "강제타석: 아군 불빠따 김어진을 전방에 편성 시 귀환하는 돌직구를 불빠따 김어진이 받아쳐 모든 적에게 150% 피해",
+        "6": "강제타석: 아군 불빠따 김어진을 전방에 편성 시 귀환하는 돌직구를 불빠따 김어진이 받아쳐 모든 적에게 300% 피해"
+      },
+      "skill_mechanics": {
+        "effect_type": "strike_zone_return_throw",
+        "cost": 4,
+        "params": {
+          "4": {
+            "hold_multiplier": 220,
+            "moved_multiplier": 160,
+            "pulled_multiplier": 100,
+            "pulled_stun_seconds": 1.0,
+            "return_delay_seconds": 1.4
+          },
+          "5": {
+            "hold_multiplier": 220,
+            "moved_multiplier": 160,
+            "pulled_multiplier": 100,
+            "pulled_stun_seconds": 1.0,
+            "return_delay_seconds": 1.4
+          },
+          "6": {
+            "hold_multiplier": 440,
+            "moved_multiplier": 300,
+            "pulled_multiplier": 150,
+            "pulled_stun_seconds": 2.0,
+            "return_delay_seconds": 1.4
+          }
+        }
+      },
+      "skill_categories": [
+        "yellow",
+        "red"
+      ],
+      "star_mechanics": {
+        "effect_type": "damage_to_gender_bonus",
+        "params": {
+          "3": {
+            "gender": "여",
+            "bonus_percent": 30
+          },
+          "4": {
+            "gender": "여",
+            "bonus_percent": 30
+          },
+          "5": {
+            "gender": "여",
+            "bonus_percent": 30
+          },
+          "6": {
+            "gender": "여",
+            "bonus_percent": 90
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "conditional_partner_front_redirect_skill",
+        "partner_name": "불빠따 김어진",
+        "params": {
+          "5": {
+            "multiplier": 150
+          },
+          "6": {
+            "multiplier": 300
+          }
+        }
+      }
+    },
+    {
       "name": "이영웅",
       "designer_user_id": 4,
       "job_class": "영웅",
@@ -1623,6 +1746,140 @@
       }
     },
     {
+      "name": "김지섭",
+      "designer_user_id": 2,
+      "job_class": "광전사",
+      "gender": "남",
+      "unit_role": "striker",
+      "outfits": {
+        "기본": "berserker/basic"
+      },
+      "description": "보통은 체력이 떨어지면 물러나지만, 그는 그때부터 몸이 풀립니다.",
+      "gacha_quote": "키헤헤헤헤헤헤, 싸움이다아~~",
+      "range": "근거리",
+      "attack_type": "Parent",
+      "defense_type": "Student",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "silver_multiplier": {
+        "1": null,
+        "2": 1.8,
+        "3": 1.8,
+        "4": 1.8,
+        "5": 2.4,
+        "6": 12
+      },
+      "silver_subjects": [
+        "탐구"
+      ],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "격정: 체력 감소 시 감소한 최대 체력 1%당 광기 1 획득. 4초간 체력 감소가 없을 경우 1초마다 광기 5 감소. 광기 50 도달 시 광기 전부 소모 및 5초간 공격속도 40% 증가, 공격력 50% 증가, 이동속도 35% 증가",
+        "4": "격정: 체력 감소 시 감소한 최대 체력 1%당 광기 1 획득. 4초간 체력 감소가 없을 경우 1초마다 광기 5 감소. 광기 50 도달 시 광기 전부 소모 및 5초간 공격속도 40% 증가, 공격력 50% 증가, 이동속도 35% 증가",
+        "5": "격정: 체력 감소 시 감소한 최대 체력 1%당 광기 1 획득. 4초간 체력 감소가 없을 경우 1초마다 광기 5 감소. 광기 50 도달 시 광기 전부 소모 및 5초간 공격속도 40% 증가, 공격력 50% 증가, 이동속도 35% 증가",
+        "6": "격정: 체력 감소 시 감소한 최대 체력 1%당 광기 1 획득. 4초간 체력 감소가 없을 경우 1초마다 광기 5 감소. 광기 50 도달 시 광기 전부 소모 및 7초간 공격속도 70% 증가, 공격력 75% 증가, 이동속도 70% 증가"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": "핏값: 최대 체력의 12% 소모. 대상에게 공격력의 180% 피해 및 총 잃은 체력 1%당 공격력의 4% 추가 피해. (해당 스킬로 김지섭은 퇴각하지 않는다.)",
+        "5": "핏값: 최대 체력의 12% 소모. 대상에게 공격력의 180% 피해 및 총 잃은 체력 1%당 공격력의 4% 추가 피해. (해당 스킬로 김지섭은 퇴각하지 않는다.)",
+        "6": "핏값: 최대 체력의 15% 소모. 대상에게 공격력의 250% 피해 및 총 잃은 체력 1%당 공격력의 6% 추가 피해. (해당 스킬로 김지섭은 퇴각하지 않는다.)"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "통제 불능의 힘: 회복 스킬 보유 인물로 회복 시 회복량의 50%만 적용, 감소한 회복량만큼 광기 획득.",
+        "6": "통제 불능의 힘: 회복 스킬 보유 인물로 회복 시 회복량의 30%만 적용, 감소한 회복량만큼 광기 획득."
+      },
+      "skill_mechanics": {
+        "effect_type": "self_cost_scaling_strike",
+        "cost": 4,
+        "params": {
+          "4": {
+            "hp_cost_percent": 12,
+            "base_percent": 180,
+            "loss_percent_multiplier": 4
+          },
+          "5": {
+            "hp_cost_percent": 12,
+            "base_percent": 180,
+            "loss_percent_multiplier": 4
+          },
+          "6": {
+            "hp_cost_percent": 15,
+            "base_percent": 250,
+            "loss_percent_multiplier": 6
+          }
+        }
+      },
+      "skill_categories": [
+        "red"
+      ],
+      "star_mechanics": {
+        "effect_type": "madness_on_damage",
+        "params": {
+          "3": {
+            "threshold": 50,
+            "decay_per_second": 5,
+            "decay_delay_seconds": 4,
+            "buff_seconds": 5,
+            "atk_percent": 50,
+            "haste_percent": 40,
+            "move_speed_percent": 35
+          },
+          "4": {
+            "threshold": 50,
+            "decay_per_second": 5,
+            "decay_delay_seconds": 4,
+            "buff_seconds": 5,
+            "atk_percent": 50,
+            "haste_percent": 40,
+            "move_speed_percent": 35
+          },
+          "5": {
+            "threshold": 50,
+            "decay_per_second": 5,
+            "decay_delay_seconds": 4,
+            "buff_seconds": 5,
+            "atk_percent": 50,
+            "haste_percent": 40,
+            "move_speed_percent": 35
+          },
+          "6": {
+            "threshold": 50,
+            "decay_per_second": 5,
+            "decay_delay_seconds": 4,
+            "buff_seconds": 7,
+            "atk_percent": 75,
+            "haste_percent": 70,
+            "move_speed_percent": 70
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "reduced_heal_gain_madness",
+        "params": {
+          "5": {
+            "apply_percent": 50
+          },
+          "6": {
+            "apply_percent": 30
+          }
+        }
+      }
+    },
+    {
       "name": "서민석",
       "designer_user_id": 4,
       "job_class": "학생",
@@ -1832,6 +2089,115 @@
           "6": {
             "hp_percent": 225,
             "self_hp_loss_percent": 50
+          }
+        }
+      }
+    },
+    {
+      "name": "안지석",
+      "designer_user_id": 2,
+      "job_class": "학생회장",
+      "gender": "남",
+      "unit_role": "supporter",
+      "outfits": {
+        "기본": "president/basic"
+      },
+      "description": "언제나 합리와 효율을 중시하는 대자습실의 지박령입니다.",
+      "gacha_quote": "……코스트가 부족하다고요? 뭐, 괜찮습니다. 일단 쓰세요. 갚는 건 미래의 당신이 알아서 하겠죠.",
+      "range": "원거리",
+      "attack_type": "Student",
+      "defense_type": "Student",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "silver_multiplier": {
+        "1": null,
+        "2": 1.8,
+        "3": 1.8,
+        "4": 1.8,
+        "5": 2.4,
+        "6": 12
+      },
+      "silver_subjects": [
+        "수학"
+      ],
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "비상금: 전투 시작 시 스킬 코스트 2.4 획득",
+        "4": "비상금: 전투 시작 시 스킬 코스트 2.4 획득",
+        "5": "비상금: 전투 시작 시 스킬 코스트 2.4 획득",
+        "6": "비상금: 전투 시작 시 스킬 코스트 4.8 획득"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": "예산 재배정: 아군 STRIKER 1인의 코스트 최대 50% 감소 (Active 스킬 사용 2회까지)",
+        "5": "예산 재배정: 아군 STRIKER 1인의 코스트 최대 50% 감소 (Active 스킬 사용 2회까지)",
+        "6": "예산 재배정: 아군 STRIKER 1인의 코스트 최대 50% 감소 (Active 스킬 사용 3회까지)"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "학생회 예산: 직업이 학생인 인물이 코스트 4 이상의 [Active] 스킬을 사용하면 스킬 코스트 1 획득",
+        "6": "학생회 예산: 직업이 학생인 인물이 코스트 4 이상의 [Active] 스킬을 사용하면 스킬 코스트 2.5 획득"
+      },
+      "skill_mechanics": {
+        "effect_type": "cost_reduction_grant",
+        "cost": 2,
+        "params": {
+          "4": {
+            "percent": 50,
+            "uses": 2
+          },
+          "5": {
+            "percent": 50,
+            "uses": 2
+          },
+          "6": {
+            "percent": 50,
+            "uses": 3
+          }
+        }
+      },
+      "skill_categories": [
+        "blue"
+      ],
+      "star_mechanics": {
+        "effect_type": "grant_team_cost_head_start",
+        "params": {
+          "3": {
+            "amount": 2.4
+          },
+          "4": {
+            "amount": 2.4
+          },
+          "5": {
+            "amount": 2.4
+          },
+          "6": {
+            "amount": 4.8
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "student_council_budget",
+        "params": {
+          "5": {
+            "min_cost": 4,
+            "amount": 1
+          },
+          "6": {
+            "min_cost": 4,
+            "amount": 2.5
           }
         }
       }

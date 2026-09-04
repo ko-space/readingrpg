@@ -3,6 +3,7 @@
 그 캐릭터의 코스트만큼 차서 스킬카드가 발동될 때(_tick_team_cost) 호출한다.
 명명 규칙(skill=active)은 battle_core.py 상단 참고.
 """
+import math
 import random
 
 from battle_core import (
@@ -10,7 +11,7 @@ from battle_core import (
     CC_PRIORITY_KNOCKBACK, KNOCKBACK_POSITION_DISTANCE,
     _alive_target, _alive_units, _apply_damage, _apply_gendered_damage_bonus, _apply_stun,
     _effective_gender, _interrupt_cast_if_casting, _is_unit_moving, _new_status, _refresh_status_until,
-    _roll_damage_atk, _scale_params, get_type_multiplier,
+    _register_hp_loss, _roll_damage_atk, _scale_params, get_type_multiplier,
 )
 
 # ───────────────────────── 스킬(skill) - 팀 공유 코스트 풀이 차면 발동(코스트제) ─────────────────────────
@@ -35,6 +36,18 @@ def _skill_self_stack_buff(caster, own_team, enemy_team, params, time_elapsed):
     return {"stack_count": status["stack_count"], "percent_bonus": new_bonus, "stat": stat}
 
 
+def _apply_self_skill_hp_cost(caster, cost, time_elapsed):
+    """스킬을 쓰기 위해 자기 자신의 체력을 대가로 치르는 경우(윤 "호 출격!"의 hp_cost_percent, 김지섭
+    "핏값"의 자기 피해) 공용 - 이 비용 자체로는 절대 죽지 않는다(확인된 요청): 체력이 1 밑으로 내려가는
+    대신 1에서 멈춘다. 이미 다른 원인으로 1 이하였다면 더 깎지 않는다(각 호출부가 caster["hp"] <= 0을
+    미리 걸러내 애초에 죽은 채로는 스킬 자체가 발동하지 않게 한다). 실제로 줄어든 만큼은 일반 피해와
+    동일하게 _register_hp_loss로 넘겨(김지섭 "격정"의 광기/총 손실량 집계에도 반영되게) 광기 보유
+    캐릭터가 아니면 조용히 무시된다."""
+    hp_before = caster["hp"]
+    caster["hp"] = max(1, caster["hp"] - cost)
+    _register_hp_loss(caster, hp_before - caster["hp"], time_elapsed)
+
+
 def _skill_summon_clone(caster, own_team, enemy_team, params, time_elapsed):
     # 복제체는 기존 전방/후방 인원을 대체하지 않고, 시전자 본인 전용 자리에 추가로 나타난다 - 시전자가
     # front면 summon_front, back이면 summon_back(own_team["front"] is caster로 판정). 같은 팀에
@@ -49,13 +62,13 @@ def _skill_summon_clone(caster, own_team, enemy_team, params, time_elapsed):
         return {"summoned": False}
 
     # 윤(호 출격!)처럼 소환에 자신의 현재 체력을 대가로 치르는 경우(hp_cost_percent, 선택 파라미터) -
-    # 이 대가로 정말 죽을 수도 있다(0까지 깎임, 하한선 없음). "최소 1은 남긴다" 같은 안전장치는 지금은
-    # 넣지 않는다 - 나중에 별도 매커니즘으로 만들 예정.
+    # 이 대가로는 절대 죽지 않는다(확인된 요청 - 체력 1에서 멈춤. 김지섭 "핏값"과 공용인
+    # _apply_self_skill_hp_cost 참고).
     hp_cost_percent = params.get("hp_cost_percent")
     caster_hp_before = caster["hp"]
     if hp_cost_percent:
         cost = round(caster["max_hp"] * hp_cost_percent / 100)
-        caster["hp"] = max(0, caster["hp"] - cost)
+        _apply_self_skill_hp_cost(caster, cost, time_elapsed)
 
     caster_slot = "front" if own_team.get("front") is caster else "back"
     target_key = f"summon_{caster_slot}"
@@ -192,6 +205,19 @@ def _skill_heal_ally_percent_max_hp(caster, own_team, enemy_team, params, time_e
             })
             continue
         heal = round(ally["max_hp"] * params["percent"] / 100)
+        # 김지섭(통제 불능의 힘): 회복 스킬로 회복받으면 그 회복량의 일부만 실제로 적용되고, 깎인
+        # 만큼은 그대로 광기로 전환된다(확인된 요청 - "감소한 회복량만큼" 그대로 1:1). 이건 광기가
+        # 피해로 쌓이는 방식(_register_hp_loss, 최대 체력 대비 %)과는 다른 별개의 획득 경로라 여기서
+        # 직접 처리한다 - total_hp_lost_percent(핏값의 위력 계산용)는 실제로 체력을 잃은 게 아니므로
+        # 건드리지 않는다.
+        madness_config = ally.get("madness_receive_config")
+        if madness_config and heal > 0:
+            applied = round(heal * madness_config["apply_percent"] / 100)
+            reduced = heal - applied
+            heal = applied
+            if reduced > 0:
+                ally["status"]["madness"] = ally["status"].get("madness", 0) + reduced
+                ally["_madness_last_gain_time"] = time_elapsed
         before = ally["hp"]
         ally["hp"] = min(ally["max_hp"], ally["hp"] + heal)
         heals.append({
@@ -633,10 +659,25 @@ def _has_any_paint(caster, own_team, enemy_team):
     return bool(status.get("paint_red", 0) or status.get("paint_blue", 0) or status.get("paint_yellow", 0))
 
 
+def _cost_reduction_candidates(own_team):
+    # 안지석 "예산 재배정": 대상은 아군 STRIKER(전방/후방)만 - [Active]가 있고(skill_cost 보유),
+    # 이미 코스트 감소 상태가 아닌 인물만 후보. 서포터 자신(안지석 본인)은 own_team["front"]/["back"]에
+    # 없으므로 이 목록에 자연히 포함되지 않는다.
+    return [
+        u for u in (own_team.get("front"), own_team.get("back"))
+        if u and u["hp"] > 0 and u.get("skill_cost") and not u["status"].get("cost_reduction_uses_remaining")
+    ]
+
+
+def _has_cost_reduction_target(caster, own_team, enemy_team):
+    return bool(_cost_reduction_candidates(own_team))
+
+
 SKILL_TARGET_AVAILABILITY_CHECKS = {
     "revive_dead_striker": _has_revivable_striker,
     "consume_paint_multi_effect": _has_any_paint,
     "self_type_swap_heal": _can_cast_type_swap,
+    "cost_reduction_grant": _has_cost_reduction_target,
 }
 
 
@@ -702,6 +743,125 @@ def _skill_consume_paint_multi_effect(caster, own_team, enemy_team, params, time
     return detail
 
 
+def _skill_strike_zone_return_throw(caster, own_team, enemy_team, params, time_elapsed):
+    # 이도협 "돌직구": 시전 즉시(지금) "자신보다 전방에 있는 모든 인물"의 "지금" 위치를 스트라이크
+    # 존으로 기록해두고, 실제 명중 판정은 지금 하지 않는다 - 공이 벽까지 날아갔다가 돌아오는 시간
+    # (return_delay_seconds) 뒤에야 각 대상이 그 기록 위치를 지키고 있었는지를 판정해야 하기 때문이다
+    # (확인된 요청 - "이동 때문에 안 맞을 수 있어야" 하므로 시전 즉시 판정하면 안 됨). 이 스킬은 이
+    # 엔진에서 처음으로 "발동과 판정 시점이 분리된" 액티브라, own_team["pending_delayed_skills"]에
+    # 예약을 남겨두고 battle_engine._tick_pending_delayed_skills가 매 틱 이 시각을 확인해 실제 판정
+    # (_resolve_strike_zone_return_throw)을 대신 실행한다. 여기서 돌려주는 detail은 "초구가 날아가며
+    # 존을 새기는" 연출(스킬 발동 그 자체)에만 쓰이고, 실제 피해/HP 변화는 전혀 없다.
+    #
+    # "전방"은 적/아군을 가리지 않는다(확인된 요청) - 이 엔진의 공유 좌표축(battle_core.py 상단 참고)
+    # 기준으로, 공격자 편 캐스터는 좌표가 더 큰 쪽이, 수비자 편 캐스터는 더 작은 쪽이 "전방"이다. 적은
+    # 항상 반대편 진영이라 이 축 구조상 늘 전방에 걸리지만, 아군도 캐스터보다 더 앞으로 나가 있으면
+    # (예: 근접 아군이 자기보다 먼저 걸어나간 경우, 또는 캐스터 자신이 후방·아군이 전방으로 편성된 경우)
+    # 똑같이 대상에 포함된다 - 즉 아군에게도 피해가 들어갈 수 있는 스킬이다. 다만 불빠따 김어진이 전방에
+    # 편성돼 있으면("강제타석") 그 만큼은 예외로, 피해 대신 그가 귀환하는 공을 받아쳐 적에게 광역
+    # 피해를 준다(_resolve_strike_zone_return_throw 참고).
+    # ">=" / "<="(등호 포함) - 근접 유닛은 _advance_melee_position(battle_engine.py)에서 자기 공격
+    # 대상의 position으로 정확히(비트 단위로) 수렴하며 멈춘다. 등호 없는 순수 부등호를 쓰면, 근접 적이
+    # 캐스터 본인을 향해 완전히 접근해 캐스터와 정확히 같은 좌표가 되는 흔한 경우(특히 다른 아군이 전부
+    # 죽어 캐스터가 유일한 공격 대상이 됐을 때) 그 적이 "전방"에서 제외되어 대상이 0명(marked=False,
+    # 투사체 자체가 안 날아감)이 되는 버그가 있었다(확인된 버그 - 부활 후 유일하게 남은 적이 캐스터에게
+    # 완전히 근접해 있던 상황에서 재현됨).
+    is_forward = (lambda pos: pos >= caster["position"]) if caster["is_attacker_team"] else (lambda pos: pos <= caster["position"])
+    targets = [
+        u for u in _alive_units(own_team) + _alive_units(enemy_team)
+        if u is not caster and is_forward(u["position"])
+    ]
+    if not targets:
+        return {"marked": False}
+    records = [{"target_ref": t, "position": t["position"]} for t in targets]
+    resolve_at = round(time_elapsed + params["return_delay_seconds"], 2)
+    own_team.setdefault("pending_delayed_skills", []).append({
+        "effect_type": "strike_zone_return_throw",
+        "caster_ref": caster,
+        "records": records,
+        "resolve_at": resolve_at,
+        "params": params,
+    })
+    # 키를 "targets"가 아니라 "hits"로 두는 이유: battle_engine.py의 skill_resolve 호출부가 모든
+    # 스킬에 공통으로 _tag_target_sides(detail, ...)를 걸어주는데, 그 함수는 "hits"/"stunned" 키의
+    # 리스트만 훑어 각 원소의 _target_ref(직렬화 불가능한 실제 유닛 dict 참조)를 target_side 문자열로
+    # 바꿔치기한다(battle_core._tag_target_sides 참고) - 다른 키 이름을 쓰면 이 정리가 전혀 안 일어나서
+    # _target_ref가 그대로 JSON 응답에 남아 직렬화가 깨진다(확인된 버그, 배포 전에 잡음).
+    return {
+        "marked": True,
+        "hits": [{"target": r["target_ref"]["name"], "_target_ref": r["target_ref"]} for r in records],
+        "return_delay_seconds": params["return_delay_seconds"],
+    }
+
+
+def _skill_self_cost_scaling_strike(caster, own_team, enemy_team, params, time_elapsed):
+    # 김지섭 "핏값": 자신의 최대 체력 일부를 대가로 치르고(_apply_self_skill_hp_cost - 이 대가 자체로는
+    # 죽지 않고 체력 1에서 멈춘다) 대상에게 공격력 기준 고정 배수 피해를 입힌다. 여기에 "지금까지 잃은
+    # 총 체력 비율"(total_hp_lost_percent - 광기와 달리 감쇠/소비로 줄지 않는 누적값, battle_core.
+    # _register_hp_loss 참고) 1%당 loss_percent_multiplier%만큼 추가 위력이 붙는다. 방금 치른 자기
+    # 비용도 이 누적값에 먼저 반영되므로(순서: 비용 지불 -> 총 손실량 조회 -> 피해 계산), 이번 시전의
+    # 희생분까지 그 즉시 위력에 실린다.
+    target = _alive_target(enemy_team)
+    if target is None:
+        return {"hit": False}
+
+    cost = round(caster["max_hp"] * params["hp_cost_percent"] / 100)
+    caster_hp_before = caster["hp"]
+    _apply_self_skill_hp_cost(caster, cost, time_elapsed)
+
+    total_lost_percent = caster.get("total_hp_lost_percent", 0)
+    total_percent = params["base_percent"] + params["loss_percent_multiplier"] * total_lost_percent
+    type_mult = get_type_multiplier(caster["attack_type"], target["defense_type"])
+    atk, is_crit = _roll_damage_atk(caster, time_elapsed)
+    damage = atk * total_percent / 100 * type_mult
+    damage = _apply_gendered_damage_bonus(caster, target, damage)
+    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
+
+    return {
+        "hit": True,
+        "caster_hp_after": caster["hp"], "caster_max_hp": caster["max_hp"], "hp_cost": caster_hp_before - caster["hp"],
+        "total_hp_lost_percent": round(total_lost_percent, 1),
+        "hits": [{
+            "target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt,
+            "invincible_block": invincible_block,
+            "target_hp_after": target["hp"], "target_max_hp": target["max_hp"],
+            "is_crit": is_crit, "type_multiplier": type_mult,
+        }],
+    }
+
+
+def _skill_cost_reduction_grant(caster, own_team, enemy_team, params, time_elapsed):
+    # 안지석 "예산 재배정": 후보(_cost_reduction_candidates - 이미 감소 상태가 아닌 아군 STRIKER) 중
+    # 코스트가 가장 높은 한 명에게 코스트를 감소시켜준다. 대상이 없으면(전부 이미 감소 상태거나 [Active]가
+    # 없음) SKILL_TARGET_AVAILABILITY_CHECKS(_has_cost_reduction_target)가 battle_engine._tick_team_cost
+    # 단계에서 미리 걸러 코스트를 아예 소모하지 않고 그 턴을 건너뛰므로, 이 핸들러는 항상 최소 한 명은
+    # 대상이 있다고 가정하고 호출된다. "최대 50%"는 소수점이 나오면 올림한다(확인된 요청 - 5코스트 ->
+    # 3코스트). 감소된 코스트는 그 인물이 실제로 [Active]를 params["uses"]번 쓸 때까지 유지되고(사용
+    # 횟수는 battle_engine._tick_team_cost가 실제로 코스트를 소모하는 순간마다 차감), 다 쓰면 원래
+    # 코스트로 자동 복구된다 - 코스트 감소 자체는 지속시간이 아니라 "실제 상태 효과"로 취급되므로
+    # (확인된 요청) status["cost_reduction_uses_remaining"]에 남은 횟수를 그대로 심어둔다.
+    target = max(_cost_reduction_candidates(own_team), key=lambda u: u["skill_cost"], default=None)
+    if target is None:
+        return {"granted": False}
+
+    base_cost = target["skill_cost"]
+    reduced_cost = max(1, math.ceil(base_cost * (1 - params["percent"] / 100)))
+    target["_cost_reduction_base_cost"] = base_cost
+    target["skill_cost"] = reduced_cost
+    target["status"]["cost_reduction_uses_remaining"] = params["uses"]
+
+    # 대상은 항상 시전자(안지석) 자신의 팀 소속(아군 STRIKER)이라, 이영웅의 death_heal_ally와 동일하게
+    # _target_ref/target_side 태깅 없이 target_slot만 실어보낸다(프론트가 event.side와 조합해서
+    # "{event.side}-{target_slot}"으로 직접 특정) - _tag_target_sides는 "hits"/"stunned" 리스트
+    # 키만 정리하므로, 여기서 _target_ref를 그대로 쓰면 직렬화 불가능한 유닛 참조가 JSON에 그대로
+    # 새어나가는 버그가 된다(확인된 실수 패턴 - hits가 아닌 다른 키에 참조를 얹으면 안 됨).
+    return {
+        "granted": True,
+        "target": target["name"], "target_slot": target.get("slot"),
+        "base_cost": base_cost, "reduced_cost": reduced_cost, "uses": params["uses"],
+    }
+
+
 SKILL_EFFECT_HANDLERS = {
     "self_stack_buff": _skill_self_stack_buff,
     "summon_clone": _skill_summon_clone,
@@ -722,4 +882,7 @@ SKILL_EFFECT_HANDLERS = {
     "positional_bomb_line": _skill_positional_bomb_line,
     "revive_dead_striker": _skill_revive_dead_striker,
     "summon_into_ranged_slot": _skill_summon_into_ranged_slot,
+    "strike_zone_return_throw": _skill_strike_zone_return_throw,
+    "self_cost_scaling_strike": _skill_self_cost_scaling_strike,
+    "cost_reduction_grant": _skill_cost_reduction_grant,
 }

@@ -40,6 +40,7 @@ const SHARED_STORY_ASSET_BASE = "assets/story/shared/";
 const IMG_ENVELOPE = SHARED_STORY_ASSET_BASE + "letter/envelope.webp";
 const IMG_LETTERPAPER = SHARED_STORY_ASSET_BASE + "letter/paper.webp";
 const BG_LOBBY_SHELF = ASSET_BASE + "lobby/shelf.webp";
+const IMG_CRAYON_BOX = ASSET_BASE + "items/namok_crayon.webp"; // 부러지지 않는 크레파스 발명 장면 아이템 등장(itemReveal)용
 
 // name은 인연 스토리와 동일하게 '__PLAYER_NAME__' 플레이스홀더로 두고, story-sub-engine.js의
 // fetchStoryState()가 실제 닉네임을 받아오는 즉시 PLAYER.name을 직접 덮어쓴다(PLAYER가 말할 때
@@ -79,13 +80,13 @@ const CONTACT_LIST = [
    ========================================================= */
 const SCENE1 = [
   {type:'narration', bg:'livingroom', text:'TV에서 뉴스가 흘러나온다.'},
-  {type:'line', speaker:ANCHOR, text:'지난 주, 소개했던 통닭집의 비둘기 양식 논란에 이어 시민들과 밀접한 연관이 있는 문구산업의 이슈가 보고되고 있는데요.'},
+  {type:'line', speaker:ANCHOR, text:'지난 주, 소개했던 통닭집의 비둘기 양식 논란에 이어 시민들과 밀접한 연관이 있는 문구산업의 이슈가 보고되고 있는데요.', se:'SE_Radio_01'},
   {type:'line', speaker:ANCHOR, text:"국내 문구업계를 뒤흔든 혁신.\n절대 부러지지 않는 '김남옥 크레파스'를 개발한 (주)남옥크레파스의 김남옥 대표가 올해의 혁신 CEO로 선정되었습니다."},
   {type:'narration', text:'그 후, TV 화면은 현장 캐스팅으로 넘어갔고, 인터뷰를 하는 한 여성의 모습이 비친다.'},
   {type:'narration', text:'깔끔한 정장을 입고 수많은 기자들 앞에서 미소를 짓는 CEO.'},
   {type:'narration', text:'하지만 그 얼굴은 나에게 너무도 익숙했다.'},
   {type:'thought', speaker:PLAYER, text:'...어?'},
-  {type:'thought', speaker:PLAYER, text:'김... 남옥 선생님?'},
+  {type:'thought', speaker:PLAYER, text:'김... 남옥 선생님?', bgm:'14.Fruitful Blossom'},
   {type:'narration', text:'잠시 리모컨을 든 손이 멈춘다.'},
   {type:'narration', text:'뉴스에서는 그녀의 성공담이 계속 흘러나온다.'},
   {type:'line', speaker:ANCHOR, text:'전직 교사 출신으로 알려진 김남옥 대표는... 절대 파괴되지 않는 크레파스를 개발해 세계 시장을 석권...'},
@@ -148,7 +149,7 @@ const SCENE4 = [
    S#5 남옥크레파스 본사 (낮/안)
    ========================================================= */
 const SCENE5 = [
-  {type:'narration', bg:'lobby', chars:{left:'employee1'}, text:'안으로 들어간다. 직원들이 정중히 안내한다.'},
+  {type:'narration', bg:'lobby', chars:{left:'employee1'}, text:'안으로 들어간다. 직원들이 정중히 안내한다.', stopBgm:true},
   {type:'line', speaker:EMPLOYEE1, text:'대표님께서 기다리고 계십니다.'},
   {type:'narration', bg:'office', chars:{left:null}, text:'엘리베이터가 최고층으로 올라간다.'},
   {type:'narration', text:'문이 열리고, 대표실 문 앞. 잠시 숨을 고른 뒤, 노크를 한다.'},
@@ -168,7 +169,7 @@ const SCENE5 = [
    * S#5와 같은 장소(대표실)에서 바로 이어지므로 씬 전환(암전/타임카드) 없이 계속 진행
    ========================================================= */
 const SCENE6 = [
-  {type:'narration', text:'대표실 안. 통유리 너머로 도시의 풍경이 한눈에 내려다보인다.'},
+  {type:'narration', text:'대표실 안. 통유리 너머로 도시의 풍경이 한눈에 내려다보인다.', bgm:'1-08. Daily Routine 247'},
   {type:'narration', text:'한쪽에는 각종 상패와 특허증이 진열되어 있고, 다른 한쪽에는 수십 가지의 크레파스 제품이 전시되어 있다.'},
   {type:'narration', text:'내가 어릴 적에 주로 쓰던 낡아빠진 몽땅 크레파스와는 차원이 다른 느낌의 고고함을 풍기고 있었다.'},
   {type:'narration', text:'선생님은 차를 한 잔 따라 내 앞에 내려놓았다.'},
@@ -204,7 +205,7 @@ const SCENE6 = [
   {type:'narration', text:'선생님은 옅은 미소를 짓지만, 그 미소에는 그리움이 묻어 있었다.'},
   {type:'line', speaker:KIMNAMOK_CEO, text:'공동 개발자이기도 했고...'},
   {type:'line', speaker:KIMNAMOK_CEO, text:'......'},
-  {type:'line', speaker:KIMNAMOK_CEO, text:'...내 첫사랑이었어.'},
+  {type:'line', speaker:KIMNAMOK_CEO, text:'...내 첫사랑이었어.', stopBgm:true},
   {type:'narration', text:'나의 눈이 튀어나올 듯이 커졌다.'},
   {type:'line', speaker:PLAYER, text:'첫사랑...이요?'},
   {type:'narration', text:'선생님은 창밖을 바라보았다. 따뜻한 햇살이 대표실 안으로 비친다. 그녀는 천천히 숨을 내쉰다.'},
@@ -231,7 +232,7 @@ const SCENE7 = [
   {type:'narration', text:'그때. 실험실 문이 열리며 한 남학생이 들어온다.'},
   {type:'narration', chars:{left:'bangimseok_uniform'}, text:'양손 가득 붓을 들고, 어딘가 피곤해 보이는 얼굴. 하지만 눈빛만큼은 누구보다 진지했다.'},
   {type:'narration', text:'그가 바로 방임석이었다. 그는 화학 괴짜이자 4차원 인간으로 소문이 자자했던 학생이었다.'},
-  {type:'line', speaker:CLUBMATE1, text:'임석 왔네.'},
+  {type:'line', speaker:CLUBMATE1, text:'임석 왔네.', bgm:'1-14. Sugar story'},
   {type:'line', speaker:BANGIMSEOK_STUDENT, text:'미안, 조금 늦었어.'},
   {type:'narration', text:'그는 가방을 내려놓자마자 실험대를 정리하기 시작한다. 정확하고 빈틈없는 손놀림. 실험 도구의 위치까지 하나하나 맞춘다.'},
   {type:'narration', text:'김남옥은 그런 모습을 보며 웃는다.'},
@@ -287,15 +288,17 @@ const SCENE9 = [
   {type:'line', speaker:BANGIMSEOK_LAB, text:'칭찬으로 들을게.'},
   {type:'narration', text:'그리고... 어느 늦은 저녁. 노을이 화학실을 붉게 물들인다.'},
   {type:'narration', text:'두 사람은 마지막이라 생각하며 새로운 배합을 만든다. 혼합물을 틀에 붓고, 조심스럽게 굳힌다.'},
+  {type:'itemReveal', item:IMG_CRAYON_BOX},
   {type:'narration', text:'완성된 크레파스 하나. 남옥이 손에 든다. 가볍게 힘을 준다.'},
-  {type:'narration', text:"'딱.' ...부러지지 않는다. 조금 더 세게. 여전히 멀쩡하다."},
-  {type:'narration', text:'임석이 직접 실험대 위에 내려쳐 본다. 탕!'},
+  {type:'narration', text:"'딱.' ...부러지지 않는다. 조금 더 세게. 여전히 멀쩡하다.", se:'SE_Hit_04'},
+  {type:'narration', text:'임석이 직접 실험대 위에 내려쳐 본다. 탕!', se:'SE_Hit_04'},
   {type:'narration', text:'크레파스는 흠집조차 나지 않는다.'},
   {type:'narration', text:'두 사람은 서로를 바라본다. 믿기지 않는 표정.'},
-  {type:'narration', text:'남옥이 다시 한번 바닥에 던진다. 툭. 멀쩡하다.'},
-  {type:'narration', text:'이번에는 망치를 가져온다. 쾅!'},
+  {type:'narration', text:'남옥이 다시 한번 바닥에 던진다. 툭. 멀쩡하다.', se:'SE_Hit_04'},
+  {type:'narration', text:'이번에는 망치를 가져온다. 쾅!', se:'SE_Hit_04'},
   {type:'narration', text:'망치 끝이 튕겨 나간다. 크레파스는 그대로였다.'},
   {type:'narration', text:'잠시 화학실이 조용해진다. 정적을 깬 것은 남옥의 웃음이었다.'},
+  {type:'itemHide'},
   {type:'line', speaker:KIMNAMOK_LAB_FRONT, chars:{right:'kimnamok_labcoat_front'}, text:'뭐야, 이거. 진짜 안 부러지잖아?'},
   {type:'narration', text:'임석은 크레파스를 손바닥 위에 올려놓고 한참 바라본다. 그의 눈빛은 어느 때보다도 진지했다.'},
   {type:'line', speaker:BANGIMSEOK_LAB, text:'...해냈네.'},
@@ -313,7 +316,7 @@ const SCENE9 = [
    * S#9와 같은 날 저녁, 노을이 짙어진 같은 장소 - 배경만 노을 버전으로 교체
    ========================================================= */
 const SCENE10 = [
-  {type:'narration', bg:'labsunset', text:'노을이 화학실을 붉게 물들이고 있었다.'},
+  {type:'narration', bg:'labsunset', text:'노을이 화학실을 붉게 물들이고 있었다.', stopBgm:true},
   {type:'narration', chars:{left:'bangimseok_labcoat', right:'kimnamok_labcoat'}, text:'실험대 위에는 방금 완성된 크레파스 하나.'},
   {type:'narration', text:'이미 여러 차례 확인했음에도 방임석은 그것을 몇 번이고 내려쳐 본다. 망치. 쇠막대. 실험대 모서리. 크레파스에는 흠집 하나 생기지 않는다.'},
   {type:'narration', text:'그는 숨을 크게 들이마신다.'},
@@ -330,7 +333,7 @@ const SCENE10 = [
   {type:'line', speaker:KIMNAMOK_LAB, text:'농담이지?'},
   {type:'line', speaker:BANGIMSEOK_LAB, text:'아니. 난 진심이야.'},
   {type:'narration', text:'김남옥은 웃음을 거둔다.'},
-  {type:'line', speaker:KIMNAMOK_LAB, text:'...우리 학생이야.'},
+  {type:'line', speaker:KIMNAMOK_LAB, text:'...우리 학생이야.', bgm:'03.Interface Hard Arrange'},
   {type:'line', speaker:BANGIMSEOK_LAB, text:'학생도 발명할 수 있어.'},
   {type:'line', speaker:KIMNAMOK_LAB, text:'그걸 누가 도와주는데?'},
   {type:'line', speaker:BANGIMSEOK_LAB, text:'찾으면 돼.'},
@@ -368,7 +371,7 @@ const SCENE10 = [
   {type:'line', speaker:BANGIMSEOK_LAB, text:'...그래. 알겠어.'},
   {type:'narration', text:'그는 노트를 가방에 넣는다. 실험대 위에 놓인 크레파스를 조용히 바라본다.'},
   {type:'narration', text:'그리고 혼잣말처럼 중얼거린다.'},
-  {type:'line', speaker:BANGIMSEOK_LAB, text:'...그럼 내가 끝까지 가 볼게.'},
+  {type:'line', speaker:BANGIMSEOK_LAB, text:'...그럼 내가 끝까지 가 볼게.', stopBgm:true},
   {type:'narration', text:'그렇게 두 사람은 다시 대화하지 않았다. 서로의 방향이 너무도 확실했기에, 어긋난 방향을 억지로 맞추려다가 얼마나 뒤틀릴지도 알고 있었기에, 멀어지는 선택을 했다.'},
   {type:'narration', text:'크레파스 이야기는 더 이상 나오지 않았다.'},
 ];
@@ -398,7 +401,7 @@ const SCENE12 = [
   {type:'narration', text:'집 안. 식탁에 앉아 봉투를 조심스럽게 연다. 안에는 두꺼운 서류철 하나와 편지 한 장.'},
   {type:'narration', text:'편지를 펼치는 순간, 익숙한 글씨체가 눈에 들어온다. 남옥의 손이 미세하게 떨린다.'},
   {type:'line', speaker:KIMNAMOK, text:'...설마.'},
-  {type:'narration', text:'편지의 첫 문장. 남옥에게. 그 한 줄만으로도 누가 보낸 것인지 알 수 있었다. 방임석.'},
+  {type:'narration', text:'편지의 첫 문장. 남옥에게. 그 한 줄만으로도 누가 보낸 것인지 알 수 있었다. 방임석.', bgm:'2.11 Starry Confession'},
   {type:'narration', text:'그녀는 숨을 삼키며 편지를 읽기 시작한다.'},
   {type:'letterOpen', chars:{right:null}},
   {type:'letter', text:'남옥. 오랜만이네. 네가 이 편지를 읽고 있다는 건, 이 자료가 무사히 네 손에 도착했다는 뜻이겠지.'},
@@ -429,7 +432,7 @@ const SCENE12 = [
   {type:'narration', text:'책상 위에 편지를 가지런히 올려놓고, 혼잣말처럼 중얼거린다.'},
   {type:'line', speaker:KIMNAMOK, text:'네가 끝까지 믿었던 발명이잖아. 이번에는...'},
   {type:'narration', text:'잠시 말을 멈춘다. 창밖의 밤하늘을 올려다본다.'},
-  {type:'line', speaker:KIMNAMOK, text:'...내가 이어갈게.'},
+  {type:'line', speaker:KIMNAMOK, text:'...내가 이어갈게.', stopBgm:true},
   {type:'narration', text:'편지 한 장. 그리고 그 옆에 놓인 두꺼운 연구 자료. 한 사람의 10년이, 이제 다른 한 사람의 새로운 인생을 움직이기 시작한다.'},
 ];
 
@@ -441,7 +444,7 @@ const SCENE13 = [
   {type:'narration', bg:'office', chars:{right:'kimnamok_ceo'}, text:'선생님은 천천히 말을 멈췄다. 대표실 안에는 적막이 흘렀고, 나는 한동안 아무 말도 할 수 없을 것 같았다.'},
   {type:'narration', text:'눈앞에 있는 세계적인 CEO가, 사실은 한 사람의 꿈을 대신 이어받아 여기까지 왔다는 사실이 쉽게 믿기지 않았다.'},
   {type:'narration', text:'잠시 후, 나는 조심스럽게 입을 열었다.'},
-  {type:'line', speaker:PLAYER, text:'...그래서 그 연구 자료로 사업을 시작하신 거군요.'},
+  {type:'line', speaker:PLAYER, text:'...그래서 그 연구 자료로 사업을 시작하신 거군요.', bgm:'2-04. Alkaline Tears'},
   {type:'line', speaker:KIMNAMOK_CEO, text:'처음엔 많이 망설였어. 이게 정말 맞는 일인지. 내가 그 사람의 연구를 이어받아도 되는 건지.'},
   {type:'narration', text:'잠시 선생님의 시선이 책상 위에 놓인 오래된 편지로 옮겨 갔다.'},
   {type:'line', speaker:KIMNAMOK_CEO, text:"하지만 편지를 수십 번 읽고 또 읽었어. '세상 밖으로 꺼내 달라.' 그 한 문장이 계속 마음에 남더라."},

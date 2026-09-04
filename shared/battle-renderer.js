@@ -206,6 +206,12 @@ let costDockRunning = false;
 // 써야 하므로 그대로 노출한다.
 const cardCooldownUntil = {};
 
+// 이도협 "돌직구" 전용 - side별로 "지금 화면에 떠 있는 스트라이크 존" DOM 엘리먼트를 hitKey로 담아둔다.
+// skill_resolve(시전, 존을 새김)와 delayed_skill_resolve(귀환, 그 존 자리에서 판정)가 서로 다른 시점에
+// 오는 별개의 이벤트라 이렇게 모듈 스코프에 들고 있어야, 귀환 이벤트가 왔을 때 "그 존이 어디 있었는지"를
+// 다시 계산하지 않고 그대로 재사용할 수 있다.
+const dolljikguActiveZones = {};
+
 // .cost-dock은 화면이 흔들려도 같이 흔들리지 않도록 뷰포트 기준 position:fixed다(HTML상으로도
 // .battle-field 밖에 둠 - transform이 걸리는 조상 안에 있으면 fixed 자손이 그 조상 기준으로
 // 재배치되는 CSS 규칙 때문에 흔들림을 따라간다, 확인된 버그). 세로(bottom)는 CSS 고정값으로
@@ -316,6 +322,19 @@ function anchorCost(side, pool, simTime) {
     st.pool = pool;
     st.anchorSimTime = simTime;
     st.displayed = pool; // 명시적 소모/보정은 여기서 즉시 반영(단조 클램프 기준점도 같이 리셋)
+}
+
+// 안지석 "예산 재배정"/만료 공용 - 카드 숫자 배지의 실제 표시 코스트(card_cost)를 바꾼다. costState의
+// cards 배열(부채꼴 게이지 계산 기준)과 DOM 텍스트를 함께 갱신해야, 이후 renderCostSide가 매 프레임
+// 계산하는 fill(=displayed/card_cost)도 새 코스트 기준으로 정확히 맞는다.
+function setCostCardCost(side, slot, newCost) {
+    const st = costState[side];
+    const card = st?.cards.find((c) => c.slot === slot);
+    if (card) card.card_cost = newCost;
+    if (!battleRendererConfig.costDockSides.includes(side)) return;
+    const dock = document.getElementById(`cost-dock-${side}`);
+    const costEl = dock?.querySelector(`[data-cost-slot="${slot}"] .cost-card-cost`);
+    if (costEl) costEl.textContent = String(newCost);
 }
 
 function flashCostCard(side, slot, cls) {
@@ -679,6 +698,9 @@ const STATUS_ICON_FILES = {
     paint_yellow: "Combat_Icon_Special_InkYellow.webp", // 방임석 보유 물감(노랑)
     damage_reduction: "Combat_Icon_Buff_DamageRatio.webp", // 방임석 "방임" - 받는 피해 감소
     lifesteal: "Combat_Icon_Special_Lifesteal.webp", // 윤 "선생 고혈" - 공격 대상이 선생 타입인 동안(고혈)
+    madness: "Combat_Icon_Special_Madness.webp", // 김지섭 "격정" 보유 광기 - weight로 개수 표시(paint_red와 동일한 방식)
+    move_speed_up: "Combat_Icon_Buff_MoveSpeed.webp", // 김지섭 "격정" 광기 소모 시 이동속도 증가
+    cost_reduction: "Combat_Icon_Buff_CostChange.webp", // 안지석 "예산 재배정" 코스트 감소 상태 - weight로 남은 사용 횟수 표시
 };
 
 const statusIconState = {}; // unitKey -> { iconId: { el, sources: Map<sourceKey, {weight, timer}> } }
@@ -997,6 +1019,26 @@ function applyKnockback(targetKey, options = {}) {
         if (!key.startsWith(casterSidePrefix) || !units[key] || !units[key].isMelee) return;
         meleeArrived[key] = false;
     });
+}
+
+// 이도협 "돌직구" 전용 - applyKnockback과 달리 "상대 진영 방향으로 고정 거리만큼"이 아니라, 화면상의
+// 특정 절대 x좌표(스트라이크 존이 새겨졌던 그 자리)로 되돌아가야 한다. 그래서 endX를 상대 거리가 아니라
+// (지금 화면 중심 x와 목표 x의 차이)만큼의 델타로 계산해서 기존 translateX에 더한다 - 계산 방식만
+// 다를 뿐 실제로 transform을 적용하는 방식(누적 translateX, 트랜지션 종료 후 정리)은 applyKnockback과 동일하다.
+function pullUnitToScreenX(targetKey, targetScreenX, durationMs = 260) {
+    const el = document.querySelector(`[data-unit="${targetKey}"]`);
+    if (!el) return;
+    const currentCenter = fieldRelativeCenter(el);
+    const delta = targetScreenX - currentCenter.x;
+    const startX = getCurrentTranslateX(el);
+    const endX = startX + delta;
+    el.style.transition = `transform ${durationMs}ms ease-out`;
+    requestAnimationFrame(() => {
+        el.style.transform = `translateX(${endX}px)`;
+    });
+    setTimeout(() => {
+        el.style.transition = "";
+    }, durationMs + 20);
 }
 
 // 근접 유닛이 targetKey에 "도착"했을 때의 마무리 처리를 한 곳에 모은다 - tick()이 gap을 재서 정상
@@ -2031,6 +2073,34 @@ function dispatchEvent(event) {
                 });
             }
 
+            if (dispatchEffectType === "cost_reduction_grant" && event.detail?.granted) {
+                // 안지석 "예산 재배정": 대상은 항상 시전자 자신의 팀(own_team) 소속이라 event.side를
+                // 그대로 대상의 side로 쓴다(target_slot으로 슬롯까지 특정되므로 이름 충돌 걱정도 없음).
+                // 코스트 카드 숫자를 즉시 줄이고, 실제 상태 효과 취급이라는 확인된 요청에 따라 카드
+                // 배지에 빛나는 파란 글로우(is-cost-reduced)와 로스터 상태 아이콘을 함께 켠다.
+                const targetSlot = event.detail.target_slot;
+                if (targetSlot) {
+                    setCostCardCost(event.side, targetSlot, event.detail.reduced_cost);
+                    const targetKey = `${event.side}-${targetSlot}`;
+                    const dock = document.getElementById(`cost-dock-${event.side}`);
+                    dock?.querySelector(`[data-cost-slot="${targetSlot}"]`)?.classList.add("is-cost-reduced");
+                    setStatusIcon(targetKey, "cost_reduction", { source: `${targetKey}:cost_reduction`, weight: event.detail.uses });
+                }
+            }
+
+            if (dispatchEffectType === "self_cost_scaling_strike" && event.detail?.caster_hp_after != null) {
+                // 김지섭 "핏값": summon_clone의 caster_hp_after 처리(윤 "호 출격!")와 동일한 패턴 -
+                // 자기 체력을 대가로 치른 걸 파란(debuff) 오라로 보여준다. 대상 쪽 피해는 특별한 처리가
+                // 필요 없는 평범한 단일 타격이라, 아래 큰 분기의 기본(else) 경로가 applySkillHits로
+                // 그대로 처리한다.
+                const selfCostCaster = battleRendererConfig.units[actorKey];
+                if (selfCostCaster) {
+                    selfCostCaster.hp = event.detail.caster_hp_after;
+                    renderUnit(actorKey);
+                    flashEffectAura(actorKey, "debuff");
+                }
+            }
+
             if (dispatchEffectType === "conditional_target_debuff") {
                 // 김남옥: 공격속도 증가는 대상 성별과 무관하게 항상 자신에게 적용되는 버프.
                 // source를 자기 자신 고정으로 두어, 반복 시전은 "갱신"으로만 처리되고 중첩되지 않는다.
@@ -2723,6 +2793,23 @@ function dispatchEvent(event) {
             };
 
             fireConsumePaintVisuals();
+        } else if (dispatchEffectType === "strike_zone_return_throw" && event.detail?.hits?.length) {
+            // 이도협 "돌직구": 시전 순간엔 존만 새기고 피해는 전혀 없다(HP 갱신 없음) - 아래 기본 분기의
+            // applySkillHits를 그대로 쓰면 hit.target_hp_after가 없어 undefined로 체력을 덮어써버리므로
+            // (버그 확인됨) 전용 분기가 필요하다. 존은 side별로 dolljikguActiveZones에 담아뒀다가,
+            // 나중에(최대 return_delay_seconds 뒤) delayed_skill_resolve가 도착하면 그 좌표를 그대로
+            // 다시 읽어 판정 결과를 그 자리에 재생한다.
+            const sideZones = dolljikguActiveZones[event.side] || (dolljikguActiveZones[event.side] = {});
+            event.detail.hits.forEach((hit) => {
+                const hitKey = findHitKey(hit.target, hit.target_side);
+                if (!hitKey) return;
+                if (sideZones[hitKey]) removeStrikeZone(sideZones[hitKey]);
+                sideZones[hitKey] = spawnStrikeZone(hitKey);
+            });
+            if (actorKey) {
+                throwDolljikguBallToWall(actorKey, event.side === "attacker" ? "defender" : "attacker", () => {});
+            }
+            battleRendererConfig.appendLog(`${event.actor}의 [Active] 발동! 스트라이크 존을 새기고 돌직구를 던짐`, event.side);
         } else {
             applySkillHits(event);
             if (dispatchEffectType === "summon_clone" && event.detail?.summoned) {
@@ -2734,6 +2821,20 @@ function dispatchEvent(event) {
                 );
             } else if (dispatchEffectType === "summon_into_ranged_slot" && event.detail?.summoned) {
                 battleRendererConfig.appendLog(`${event.actor}의 [Active] 발동! 국회의사당이 ${event.detail.displaced_ally}의 자리에 소환됨! (${event.detail.duration_seconds}초)`, event.side);
+            } else if (dispatchEffectType === "cost_reduction_grant") {
+                battleRendererConfig.appendLog(
+                    event.detail?.granted
+                        ? `${event.actor}의 [Active] 발동! ${event.detail.target} 코스트 ${event.detail.base_cost} -> ${event.detail.reduced_cost} 감소 (${event.detail.uses}회)`
+                        : `${event.actor}의 [Active] 발동! 대상 없음`,
+                    event.side
+                );
+            } else if (dispatchEffectType === "self_cost_scaling_strike") {
+                // 김지섭 "핏값": 자기 체력을 대가로 치르고 그 누적 손실만큼 위력이 늘어나는 스킬이라,
+                // 로그에도 소모한 체력과 대상 피해를 함께 보여준다.
+                battleRendererConfig.appendLog(
+                    `${event.actor}의 [Active] 발동! 자신의 체력 ${event.detail?.hp_cost ?? 0} 소모 - ${hitsSummaryText(event.detail?.hits || [])}`,
+                    event.side
+                );
             } else if (dispatchEffectType === "self_stack_buff" && event.detail?.stack_count) {
                 // stat에 따라 "공격력"/"공격 속도" 문구를 구분한다(확인된 요청으로 윤대웅은 haste가 기본값).
                 const statLabel = event.detail.stat === "haste" ? "공격 속도" : "공격력";
@@ -2745,6 +2846,131 @@ function dispatchEvent(event) {
             } else {
                 battleRendererConfig.appendLog(`${event.actor}의 [Active] 발동!`, event.side);
             }
+        }
+    } else if (eventType === "delayed_skill_resolve" && event.effect_type === "strike_zone_return_throw") {
+        // 이도협 "돌직구" 귀환 판정 - skill_resolve(시전)로부터 최대 return_delay_seconds 뒤에 오는
+        // 별개의 이벤트다. hits는 공이 귀환하며 실제로 지나가는 순서 그대로(벽에서 가까운 쪽부터) 온다 -
+        // "강제타석"은 더 이상 이벤트 전체를 통째로 대체하는 별도 분기가 아니라, 그 순서상 공이 정확히
+        // 불빠따에게 닿는 바로 그 히트 하나가 redirected=True로 표시되는 형태다(확인된 요청 - 아군도
+        // 포함한 "자신보다 전방의 모든 인물"이 순서대로 맞다가, 그중 불빠따 차례에서만 정상 피해 대신
+        // 그가 대신 받아쳐 적 전원에게 광역 피해를 입히고 그 뒤로는 재생을 멈춘다). HP/보호막은 다른
+        // 이벤트와의 순서 보장을 위해 지금 즉시 반영하고(캡처해서 이미 죽어있었는지도 함께 확인 -
+        // captureAndApplyHp), 화면(공 귀환/피격/끌어당김/기절/강제타석)은 순서대로 재생한다.
+        const actorKey = eventActorKey(event);
+        const hits = event.detail?.hits || [];
+        const sideZones = dolljikguActiveZones[event.side] || {};
+
+        if (hits.length) {
+            // redirected 히트는 자기 자신은 피해를 안 입으므로(target_hp_after가 없음) 최상위
+            // captureAndApplyHp 대상에서 빼고, 대신 그 안에 중첩된 redirected_hits(적 전원)를 각각
+            // 캡처+반영한다.
+            const deadFlags = hits.map((hit) => {
+                if (hit.redirected) return false;
+                const hitKey = findHitKey(hit.target, hit.target_side);
+                return hitKey ? captureAndApplyHp(hitKey, hit.target_hp_after, hit.target_shield_after) : true;
+            });
+            hits.forEach((hit) => {
+                if (!hit.redirected) return;
+                (hit.redirected_hits || []).forEach((rh) => {
+                    const rhKey = findHitKey(rh.target, rh.target_side);
+                    rh.__wasAlreadyDead = rhKey ? captureAndApplyHp(rhKey, rh.target_hp_after, rh.target_shield_after) : true;
+                });
+            });
+
+            // 벽에서 가까운 쪽부터(hits 순서 그대로) 재생한다 - 참고 데모와 동일하게 벽에서 튕겨온
+            // 공이 먼 쪽 존부터 차례로 지나가는 방향.
+            const fieldRect = attackEffectsConfig.fieldEl?.getBoundingClientRect();
+            const wallSide = event.side === "attacker" ? "defender" : "attacker";
+            let chainFromXY = fieldRect
+                ? { x: viewportEdgeXRelativeToField(wallSide, fieldRect), y: fieldRect.height / 2 }
+                : null;
+
+            const playNext = (i) => {
+                if (i >= hits.length) {
+                    // 모든 존을 지난 뒤엔(강제타석으로 중간에 끝나지 않았다면) 공이 이도협 본인에게
+                    // 완전히 돌아가며 사라진다(확인된 요청 - 참고 데모의 마지막 구간과 동일).
+                    if (actorKey && chainFromXY) {
+                        throwDolljikguBallReturn(chainFromXY, actorKey, () => {});
+                    }
+                    return;
+                }
+                const hit = hits[i];
+                const hitKey = findHitKey(hit.target, hit.target_side);
+                const zone = hitKey ? sideZones[hitKey] : null;
+                const zoneXY = zone ? { x: parseFloat(zone.style.left), y: parseFloat(zone.style.top) } : null;
+
+                const onBallArrive = (arrivedXY) => {
+                    chainFromXY = arrivedXY;
+                    if (zone) { removeStrikeZone(zone); delete sideZones[hitKey]; }
+
+                    if (hit.redirected) {
+                        // 강제타석: 공이 정확히 불빠따에게 닿는 순간 - 그는 맞지 않고, 대신 그 자신의
+                        // 일반공격 스윙(attack_N.webp)을 재생한다(확인된 요청. 기본공격 근접 타격과
+                        // 동일한 타이밍 규칙으로, 스윙이 몇 프레임(effectLaunchDelayMs) 재생된 뒤에야
+                        // 실제로 적 전원에게 반영된다).
+                        if (hitKey) playAttackFrames(hitKey);
+                        battleRendererConfig.appendLog(
+                            `${hit.target}의 [Special] 발동! 강제타석 - 귀환하는 돌직구를 받아침`,
+                            event.side
+                        );
+                        setTimeout(() => {
+                            (hit.redirected_hits || []).forEach((rh) => {
+                                const rhKey = findHitKey(rh.target, rh.target_side);
+                                if (!rhKey || rh.__wasAlreadyDead) return;
+                                renderUnit(rhKey);
+                                flashHit(rhKey, rh.is_crit, rh.type_multiplier, rh.shown_damage ?? rh.damage, rh.invincible_block);
+                            });
+                            battleRendererConfig.appendLog(
+                                `${hit.target}의 [Special] 적중! ${hitsSummaryText(hit.redirected_hits || [])}`,
+                                event.side
+                            );
+                            // 불빠따에게 되돌아오던 공은 그가 받아치는 순간 이도협에게 돌아가지 않고,
+                            // 원래 오던 방향과 반대로(=이도협 본인이 처음 던졌을 때와 같은 방향, 적진
+                            // 쪽 벽으로) 다시 한번 날아가다가 맵 끝(벽)에 닿는 순간 사라진다(확인된
+                            // 요청) - 이후 남은 재생은 여기서 멈춘다(백엔드도 이 히트 이후로는 판정을
+                            // 진행하지 않음).
+                            if (hitKey) {
+                                throwDolljikguBallToWall(hitKey, event.side === "attacker" ? "defender" : "attacker", () => {});
+                            }
+                        }, battleRendererConfig.effectLaunchDelayMs);
+                        return;
+                    }
+
+                    if (hitKey && !deadFlags[i]) {
+                        renderUnit(hitKey);
+                        flashHit(hitKey, hit.is_crit, hit.type_multiplier, hit.shown_damage ?? hit.damage, hit.invincible_block);
+                    }
+                    battleRendererConfig.appendLog(
+                        `${event.actor}의 [Active] 적중! ${hit.target} ${hit.stayed ? "자리를 지킴" : "자리를 이탈함"} - ${hit.shown_damage ?? hit.damage} 피해`,
+                        event.side
+                    );
+
+                    if (hit.pulled && hitKey && !deadFlags[i] && zoneXY) {
+                        spawnDolljikguPullLine(arrivedXY, zoneXY);
+                        pullUnitToScreenX(hitKey, zoneXY.x, 260);
+                        setTimeout(() => {
+                            renderUnit(hitKey);
+                            flashHit(hitKey, hit.pulled_is_crit, hit.type_multiplier, hit.pulled_shown_damage ?? hit.pulled_damage, hit.pulled_invincible_block);
+                            flashEffectAura(hitKey, "cc");
+                            setStatusIcon(hitKey, "stun", {
+                                source: `${event.actor}:strike_zone_pull`,
+                                untilSimTime: battleRendererConfig.currentSimTime() + (hit.pulled_stun_seconds || 0),
+                            });
+                            if (hit.pulled_interrupted_cast) interruptCasting(hitKey, hit.target_side);
+                            setTimeout(() => playNext(i + 1), 260);
+                        }, 260);
+                        return;
+                    }
+                    setTimeout(() => playNext(i + 1), 220);
+                };
+
+                if (hitKey) {
+                    throwDolljikguBallReturn(chainFromXY, hitKey, onBallArrive);
+                } else {
+                    onBallArrive(chainFromXY);
+                }
+            };
+            playNext(0);
         }
     } else if (eventType === "death_trigger_resolve") {
         // 이영웅 "히포크라테스 선서": 자신이 죽는 순간 아군에게 보호막을 부여한다(확인된 요청 - 원래는
@@ -2773,6 +2999,59 @@ function dispatchEvent(event) {
                 clearStatusIconSource(paintKey, iconId, sourceKey);
             }
         }
+    } else if (eventType === "madness_gain_resolve") {
+        // 김지섭 "격정": 광기 보유량이 바뀔 때마다(획득/감쇠/소모) 그 즉시 상태 아이콘의 weight를
+        // "현재 총 보유량"으로 덮어쓴다(paint_gain_resolve와 완전히 동일한 방식) - 0이 되면(소모 직후,
+        // 또는 감쇠로 다 닳으면) 아이콘을 지운다. 광기 자체는 방임석의 물감과 동일하게 지속시간
+        // 기반 상태 효과와 무관한 별도 카운터라, 다른 아이콘들과 달리 durationMs/untilSimTime을 아예
+        // 쓰지 않는다(확인된 요청).
+        const madnessKey = findUnitKey(event.side, event.actor);
+        if (madnessKey) {
+            const sourceKey = `${madnessKey}:madness`;
+            if (event.detail.total > 0) {
+                setStatusIcon(madnessKey, "madness", { source: sourceKey, weight: event.detail.total });
+            } else {
+                clearStatusIconSource(madnessKey, "madness", sourceKey);
+            }
+        }
+    } else if (eventType === "madness_release_resolve") {
+        // 김지섭 "격정": 광기가 50에 도달해 전부 소모되며 5초(6성은 7초)간 공격속도/공격력/이동속도가
+        // 함께 오르는 순간 - 버프 오라를 한 번 반짝이고, 세 스탯 각각의 상태 아이콘을 백엔드가 실제로
+        // 건 임시 버프의 만료 시각(event.time + buff_seconds)에 맞춰 띄운다(conditional_target_debuff의
+        // atk_speed_up 처리와 동일한 untilSimTime 패턴). 광기 아이콘 자체는 뒤이어 오는
+        // madness_gain_resolve(total:0)가 알아서 지운다.
+        const releaseKey = findUnitKey(event.side, event.actor);
+        if (releaseKey) {
+            flashEffectAura(releaseKey, "buff");
+            const until = event.time + (event.detail?.buff_seconds || 0);
+            setStatusIcon(releaseKey, "atk_up", { source: `${releaseKey}:madness_release`, untilSimTime: until });
+            setStatusIcon(releaseKey, "atk_speed_up", { source: `${releaseKey}:madness_release`, untilSimTime: until });
+            setStatusIcon(releaseKey, "move_speed_up", { source: `${releaseKey}:madness_release`, untilSimTime: until });
+            battleRendererConfig.appendLog(
+                `${event.actor}의 [Passive] 발동! 광기 전부 소모 - ${event.detail?.buff_seconds ?? 0}초간 공격속도 ${event.detail?.haste_percent ?? 0}%, 공격력 ${event.detail?.atk_percent ?? 0}%, 이동속도 ${event.detail?.move_speed_percent ?? 0}% 증가`,
+                event.side
+            );
+        }
+    } else if (eventType === "cost_reduction_expire_resolve") {
+        // 안지석 "예산 재배정" 만료: 부여받은 사용 횟수를 다 써서 원래 코스트로 되돌아간다 - 카드
+        // 숫자/글로우/상태 아이콘을 전부 원상복구한다.
+        const expireSlot = event.actor_slot;
+        if (expireSlot && event.detail?.restored_cost != null) {
+            const expireKey = `${event.side}-${expireSlot}`;
+            setCostCardCost(event.side, expireSlot, event.detail.restored_cost);
+            const dock = document.getElementById(`cost-dock-${event.side}`);
+            dock?.querySelector(`[data-cost-slot="${expireSlot}"]`)?.classList.remove("is-cost-reduced");
+            clearStatusIconSource(expireKey, "cost_reduction", `${expireKey}:cost_reduction`);
+        }
+        battleRendererConfig.appendLog(`${event.actor}의 코스트 감소 효과가 끝나 원래 코스트로 돌아옴`, event.side);
+    } else if (eventType === "team_cost_gain_resolve") {
+        // 안지석 "학생회 예산": 학생 직업 아군이 고비용 [Active]를 쓸 때마다 팀 코스트를 즉시 불려준다 -
+        // anchorCost로 코스트바 표시값도 그 즉시 갱신한다(명시적 소모/획득은 항상 즉시 반영).
+        anchorCost(event.side, event.detail.cost_pool, event.time);
+        battleRendererConfig.appendLog(
+            `${event.actor}의 [Special] 발동! ${event.detail.source_actor}의 [Active] 사용으로 코스트 ${event.detail.amount} 획득`,
+            event.side
+        );
     } else if (eventType === "neglect_status_resolve") {
         // 방임석 "방임": 학생 타입 아군이 있는 동안 지속 기절 + 받는 피해 감소. 고정 지속시간이 아니라
         // 그 아군이 죽는 순간 조건이 풀려서 해제되는 조건부 상태라 durationMs 없이 걸어두고("영구"가

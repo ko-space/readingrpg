@@ -214,6 +214,37 @@ def add_reading_log(
         )
     reading_minutes = min(reading_minutes, remaining_daily_cap)
 
+    # client_token(세션 시작 시 클라이언트가 1회 발급해 끝까지 들고 있는 멱등성 토큰)이 실려 왔고, 이미
+    # 그 토큰으로 저장된 기록이 있다면 시간 제한 없이 그 결과를 그대로 돌려준다. 아래의 60초 시간창
+    # 판정은 "응답을 못 받은 클라이언트가 곧바로 재시도"하는 흔한 경우만 막을 뿐, 응답이 늦게라도 왔거나
+    # 사용자가 한참 뒤에(예: 다른 탭에서 이어서, 혹은 페이지를 새로고침한 뒤) 재시도하면 60초를 넘겨
+    # 그물을 빠져나가 중복 적립될 수 있었다(실제 신고 사례 - reading.js가 세션을 정리하지 않고 그대로
+    # 재시도 가능한 상태로 남겨두는 네트워크 실패 경로에서 발생). client_token은 서버가 발급 시점을
+    # 추측할 필요 없이 "같은 세션의 재시도인가"를 직접 판별하게 해주므로 이 시간 제한 자체가 필요 없다.
+    # split(탐구 2회분)로 여러 행에 나뉘어 저장된 경우도 같은 토큰을 공유하므로 전부 더해서 돌려준다.
+    if log_data.client_token:
+        existing_rows = db.query(ReadingLog).filter(
+            ReadingLog.user_id == user.id,
+            ReadingLog.client_token == log_data.client_token,
+        ).all()
+        if existing_rows:
+            return {
+                "message": "같은 학습 기록이 이미 저장됐어요. 이전 결과를 그대로 보여드려요.",
+                "gained_exp": sum(row.earned_exp or 0 for row in existing_rows),
+                "gained_gold": sum(row.earned_gold or 0 for row in existing_rows),
+                "gained_silver": sum(row.earned_silver or 0 for row in existing_rows),
+                "start_level": user.level,
+                "start_exp": user.total_exp,
+                "current_level": user.level,
+                "current_exp": user.total_exp,
+                "lifetime_exp": user.lifetime_exp,
+                "daily_reading_minutes": user.daily_reading_minutes,
+                "level_up": False,
+                "levels_gained": 0,
+                "new_achievements": [],
+                "new_characters": [],
+            }
+
     # 같은 사용자가 방금 전(수십 초 이내)과 같은 조건(던전/과목/유형)으로 다시 제출하면 같은 세션의
     # 재시도로 보고, 새로 기록·보상하지 않고 그때 이미 저장된 결과를 그대로 다시 돌려준다(신고받아
     # 추가/수정). 프론트가 응답을 못 받고 시간초과로 실패 처리해 버튼이 다시 눌리게 되는 경우
@@ -225,6 +256,7 @@ def add_reading_log(
     # 현실적으로 없다시피 하므로(세션당 최소 1분 이상 걸림) 오탐 위험은 낮다.
     # 200으로 응답해야 프론트가 성공 경로(ReadingSession.clear() 포함)를 그대로 타서 세션이 확실히
     # 종료된다 - 409로 응답해 실패 취급하면 handledEnd가 다시 풀려 그 재시도 루프가 반복될 수 있다.
+    # client_token이 없는 요청(구버전 캐시된 프론트 등)에 대한 최후의 안전망으로만 남겨둔다.
     DUPLICATE_SUBMIT_WINDOW_SECONDS = 60
     duplicate_cutoff = datetime.utcnow() - timedelta(seconds=DUPLICATE_SUBMIT_WINDOW_SECONDS)
     duplicate_log = db.query(ReadingLog).filter(
@@ -305,6 +337,7 @@ def add_reading_log(
                 earned_gold=base_gold + (extra_gold if is_last else 0),
                 earned_silver=base_silver + (extra_silver if is_last else 0),
                 is_auto_complete=log_data.is_auto_complete,
+                client_token=log_data.client_token,
             ))
     else:
         db.add(ReadingLog(
@@ -319,6 +352,7 @@ def add_reading_log(
             earned_gold=gained_gold,
             earned_silver=gained_silver,
             is_auto_complete=log_data.is_auto_complete and log_data.session_type == "mock_exam",
+            client_token=log_data.client_token,
         ))
 
     start_level = user.level   # 이번 독서로 exp가 반영되기 '전' 상태 - 프론트 레벨업 바 애니메이션의 시작점

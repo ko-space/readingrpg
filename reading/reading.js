@@ -238,6 +238,13 @@
     let hiddenSincePerfMs = null; // 같은 순간의 performance.now() - 벽시계와 비교해서 "실제로 모자란 만큼"만 계산하는 데 씀
     let lastTickWallMs = null; // 마지막 tick() 실행 시각(Date.now()) - correctSuspendedGap 참고
     let lastTickPerfMs = null; // 같은 순간의 performance.now()
+    let sessionClientToken = null; // 세션 시작 시 1회 발급해 끝까지 들고 가는 멱등성 토큰(아래 startSessionClock 참고).
+    // 서버 응답을 못 받아 재시도하더라도 항상 같은 값을 실어 보내, backend/routers/logs.py가 "같은
+    // 세션의 재시도"임을 시간 제한 없이 판별해서 중복 적립을 막을 수 있게 한다.
+
+    function generateClientToken() {
+        return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}-${Math.random()}`;
+    }
 
     // segmentStartMs/accumulatedMs는 Date.now()가 아니라 performance.now()(모노토닉 시계) 기준이다 -
     // Date.now()는 기기의 날짜/시간 설정을 그대로 반영하므로, 세션 도중 사용자가 시스템 시간을 미래로
@@ -394,6 +401,7 @@
             duration: sessionType === "mock_exam" ? Math.round(durationMs / 60000) : undefined,
             accumulatedMs: getElapsedMs(),
             cutoffWallMs,
+            clientToken: sessionClientToken,
             // isPaused/savedAtWallMs: 탭이 완전히 종료됐다가(아이패드가 백그라운드 탭을 메모리 확보용으로
             // 강제 종료하는 경우) 다시 로드됐을 때만 쓰이는 값 - startSessionClock의 복구 분기 참고.
             isPaused,
@@ -500,6 +508,8 @@
 
         segmentStartMs = performance.now();
         cutoffPerfMs = segmentStartMs + (cutoffWallMs - Date.now());
+        sessionClientToken = (restoredSession && typeof restoredSession.clientToken === "string" && restoredSession.clientToken)
+            || generateClientToken();
         sessionStarted = true;
         isPaused = restoredIsPaused;
         document.getElementById("reading-pause-btn").hidden = false;
@@ -570,6 +580,7 @@
                     reading_minutes: elapsedMinutes,
                     session_type: session.sessionType,
                     is_auto_complete: true,
+                    client_token: session.clientToken,
                 }),
                 // "잘못된 접근" 경로에서는 이 요청을 보낸 직후 곧장 home.html로 리다이렉트하므로,
                 // keepalive 없이는 페이지 전환에 요청 자체가 취소될 수 있다(session-guard.js의
@@ -661,7 +672,8 @@
                     difficulty: label,
                     reading_minutes: elapsedMinutes,
                     session_type: sessionType,
-                    is_auto_complete: !!isAuto
+                    is_auto_complete: !!isAuto,
+                    client_token: sessionClientToken,
                 })
             });
             const data = await res.json();

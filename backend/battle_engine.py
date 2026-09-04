@@ -17,10 +17,10 @@ import random
 
 from battle_core import (
     ARRIVAL_EPSILON, AXIS_ATTACKER_BACK, AXIS_ATTACKER_FRONT, AXIS_DEFENDER_BACK, AXIS_DEFENDER_FRONT,
-    COST_ROTATION_SLOTS, COST_SECONDS_PER_POINT_BY_ALIVE, MAX_BATTLE_DURATION,
+    COST_ROTATION_SLOTS, COST_SECONDS_PER_POINT_BY_ALIVE, KNOCKBACK_POSITION_DISTANCE, MAX_BATTLE_DURATION,
     SKILL_CAST_INTERVAL_MULTIPLIER, SKILL_TYPE_CATEGORY, TEAM_COST_MAX, TEAM_COST_START,
     TICK, _alive_target, _alive_units, _all_slots, _apply_damage, _apply_gendered_damage_bonus,
-    _apply_stun, _effective_gender, _effective_interval, _init_team_cost, _interrupt_cast_if_casting,
+    _apply_stun, _effective_gender, _effective_interval, _effective_melee_speed, _init_team_cost, _interrupt_cast_if_casting,
     _is_action_blocked, _maybe_grant_low_hp_shield, _refresh_status_until, _resolve_basic_attack_target, _roll_damage_atk,
     _select_basic_attack_target, _tag_target_sides, _team_alive, build_stat_change_dicts, build_team,
     compute_unit_stats, get_type_multiplier,
@@ -400,6 +400,78 @@ def _apply_low_hp_shield_grant(team, side, events, time_elapsed):
             break
 
 
+def _apply_student_council_budget_gain(caster, team, side_name, events, time_elapsed):
+    """안지석(학생회 예산): "직업이 학생인" 아군이 일정 코스트 이상의 [Active]를 쓸 때마다 팀 공유
+    코스트 풀에 고정량을 더해준다 - _apply_paint_gain(방임석)과 같은 "관찰형" 반응이지만, 상대 팀까지
+    보는 물감과 달리 이건 자기 팀 코스트만 불려주는 능력이라 caster의 팀(own_team)만 확인한다.
+    student_council_budget_config는 안지석의 특성 핸들러가 전투 시작 시 "장전"만 해둔 값(neglect_config와
+    동일한 패턴) - 안지석이 이 팀에 없으면(장전된 유닛이 없으면) 아무 일도 안 한다. caster["skill_cost"]는
+    지금 이 순간의 실제 값이라, 안지석 본인의 "예산 재배정"으로 코스트가 이미 줄어든 채 시전됐다면
+    그 줄어든 값 기준으로(4 미만이면 발동 안 함) 판정된다 - 자연스러운 상호작용."""
+    if caster.get("job_class") != "학생":
+        return
+    cost = caster.get("skill_cost") or 0
+    # _alive_units는 front/back/summon_*만 훑고 supporter는 보지 않는다(_apply_supporter_stat_donation과
+    # 동일한 이유로 별도 처리 필요) - 안지석 본인이 바로 이 능력을 가진 서포터라 반드시 포함해야 한다.
+    supporter = team.get("supporter")
+    observers = _alive_units(team) + ([supporter] if supporter and supporter["hp"] > 0 else [])
+    for observer in observers:
+        config = observer.get("student_council_budget_config")
+        if not config or cost < config["min_cost"]:
+            continue
+        gain = config["amount"]
+        team["cost"] = min(TEAM_COST_MAX, team["cost"] + gain)
+        events.append({
+            "time": time_elapsed, "event_type": "team_cost_gain_resolve", "side": side_name,
+            "actor": observer["name"], "actor_slot": observer.get("slot"),
+            "detail": {"amount": gain, "source_actor": caster["name"], "cost_pool": round(team["cost"], 3)},
+        })
+
+
+def _apply_madness_release(team, side, events, time_elapsed):
+    """김지섭(격정): madness_config가 있는(=이 패시브를 가진) 유닛만 대상으로 매 틱 확인한다.
+    1) 마지막으로 광기를 얻은 지 decay_delay_seconds(4초)가 지났으면 초당 decay_per_second(5)만큼
+    감쇠시킨다(_register_hp_loss가 매번 _madness_last_gain_time을 갱신하므로, 최근에 또 피해를
+    입었으면 이 감쇠는 자연히 미뤄진다). 2) 광기가 threshold(50)에 도달했으면 그 즉시 전부 소모하고
+    자기 자신에게 공격속도/공격력/이동속도 임시 버프를 건다(_apply_neglect_status/_apply_low_hp_shield_grant와
+    같은 "장전 후 매 틱 감지" 패턴). 3) 정수로 반올림한 값이 마지막으로 알린 값과 달라졌으면
+    madness_gain_resolve 이벤트로 알려 프론트 상태 아이콘(수치 표시)을 갱신하게 한다 - 값 자체는
+    방임석의 물감(paint_red 등)과 동일하게 지속시간 기반 상태 효과 만료 판정과는 완전히 무관한 별도
+    카운터로 다룬다(확인된 요청)."""
+    for unit in _alive_units(team):
+        config = unit.get("madness_config")
+        if not config:
+            continue
+        status = unit["status"]
+        last_gain = unit.get("_madness_last_gain_time", -1e9)
+        if status["madness"] > 0 and time_elapsed - last_gain >= config["decay_delay_seconds"]:
+            status["madness"] = max(0.0, status["madness"] - config["decay_per_second"] * TICK)
+
+        if status["madness"] >= config["threshold"]:
+            status["madness"] = 0.0
+            until = time_elapsed + config["buff_seconds"]
+            status["temp_atk_mods"]["madness_release"] = {"percent": config["atk_percent"], "until": until}
+            status["temp_haste_mods"]["madness_release"] = {"percent": config["haste_percent"], "until": until}
+            status["temp_move_speed_mods"]["madness_release"] = {"percent": config["move_speed_percent"], "until": until}
+            events.append({
+                "time": time_elapsed, "event_type": "madness_release_resolve", "side": side,
+                "actor": unit["name"], "actor_slot": unit.get("slot"),
+                "detail": {
+                    "buff_seconds": config["buff_seconds"], "atk_percent": config["atk_percent"],
+                    "haste_percent": config["haste_percent"], "move_speed_percent": config["move_speed_percent"],
+                },
+            })
+
+        rounded = round(status["madness"])
+        if rounded != unit.get("_madness_last_synced", 0):
+            unit["_madness_last_synced"] = rounded
+            events.append({
+                "time": time_elapsed, "event_type": "madness_gain_resolve", "side": side,
+                "actor": unit["name"], "actor_slot": unit.get("slot"),
+                "detail": {"total": rounded, "threshold": config["threshold"]},
+            })
+
+
 def _update_lifesteal_status(unit, resolved_target, side, events, time_elapsed):
     """윤(선생 고혈): "지금 확정된 공격 대상"(resolved_target - simulate_battle 메인 루프가 매 틱
     _resolve_basic_attack_target로 갱신한 직후 바로 이 함수를 부른다)이 선생 타입이면(공격/방어
@@ -451,6 +523,126 @@ def _apply_paint_gain(caster, effect_type, attacker_team, defender_team, side_na
                 })
 
 
+# 이도협 "돌직구"처럼 발동(skill_resolve)과 실제 판정 시점이 분리된 [Active] 전용 - 다른 모든 스킬은
+# 발동 즉시 결과가 확정되지만, 이 스킬은 "기록해둔 위치를 대상이 그동안 지키고 있었는지"를 실제로
+# 시간이 지난 뒤에야 판정해야 한다(확인된 요청 - 시전 즉시 판정하면 "이동해서 피함"이 성립할 수 없음).
+# own_team["pending_delayed_skills"]에 쌓인 예약을 매 틱 확인해 시간이 된 것만 여기서 실제로 실행한다.
+STRIKE_ZONE_POSITION_TOLERANCE = KNOCKBACK_POSITION_DISTANCE * 0.25  # 이만큼 이내면 "그 자리를 지켰다"로 판정
+
+
+def _resolve_strike_zone_return_throw(entry, own_team, enemy_team, side_name, time_elapsed, events):
+    caster = entry["caster_ref"]
+    params = entry["params"]
+    redirect = caster.get("skill_redirect_config")
+    batter_ref = redirect["batter_ref"] if redirect and redirect["batter_ref"]["hp"] > 0 else None
+
+    # 공이 귀환하는 순서 그대로(벽에서 가까운 쪽부터) 판정해야 "불빠따에게 닿는 순간"이 정확히
+    # 성립한다 - 좌표축은 캐스터 진영과 무관하게 공유되므로(battle_core.py 상단 참고), 공격자 편
+    # 캐스터는 좌표가 큰 쪽(=벽에 더 가까움)부터, 수비자 편은 작은 쪽부터가 벽에서 가까운 순서다.
+    records = sorted(entry["records"], key=lambda r: r["position"], reverse=caster["is_attacker_team"])
+
+    hits = []
+    redirected = False
+    for record in records:
+        target = record["target_ref"]
+        if target["hp"] <= 0:
+            continue
+
+        if batter_ref is not None and target is batter_ref:
+            # 이도협(강제타석): 귀환하는 공이 정확히 "불빠따 김어진에게 닿는 그 순간" 발동한다(확인된
+            # 요청) - 그는 이 공에 맞지 않고(피해 없음), 대신 받아쳐서 지금 살아있는 적 전원에게 그
+            # 자신의 공격력/속성 기준으로 광역 피해를 입힌다. 이 순간 이후로 남은 존(있다면, 예: 그보다
+            # 캐스터에 더 가까운 다른 아군)은 더 이상 개별 판정하지 않는다 - "귀환하는 돌직구를 받아쳐"
+            # 자체가 남은 귀환 과정을 통째로 대체한다는 뜻이므로.
+            redirected_hits = []
+            for enemy in _alive_units(enemy_team):
+                type_mult = get_type_multiplier(batter_ref["attack_type"], enemy["defense_type"])
+                atk, is_crit = _roll_damage_atk(batter_ref, time_elapsed)
+                damage = atk * redirect["multiplier"] / 100 * type_mult
+                damage = _apply_gendered_damage_bonus(batter_ref, enemy, damage)
+                dealt, raw_dealt, invincible_block = _apply_damage(enemy, damage, time_elapsed)
+                redirected_hits.append({
+                    "target": enemy["name"], "_target_ref": enemy, "damage": dealt, "shown_damage": raw_dealt,
+                    "invincible_block": invincible_block, "target_hp_after": enemy["hp"], "target_max_hp": enemy["max_hp"],
+                    "is_crit": is_crit, "type_multiplier": type_mult,
+                })
+            hits.append({
+                "target": batter_ref["name"], "_target_ref": batter_ref,
+                "redirected": True, "redirected_hits": redirected_hits,
+            })
+            redirected = True
+            break
+
+        stayed = abs(target["position"] - record["position"]) <= STRIKE_ZONE_POSITION_TOLERANCE
+        type_mult = get_type_multiplier(caster["attack_type"], target["defense_type"])
+        multiplier = params["hold_multiplier"] if stayed else params["moved_multiplier"]
+        atk, is_crit = _roll_damage_atk(caster, time_elapsed)
+        damage = atk * multiplier / 100 * type_mult
+        damage = _apply_gendered_damage_bonus(caster, target, damage)
+        dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
+        hit = {
+            "target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt,
+            "invincible_block": invincible_block, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"],
+            "is_crit": is_crit, "type_multiplier": type_mult, "stayed": stayed,
+        }
+        if not stayed and target["hp"] > 0:
+            # 기록 위치를 벗어났으면 그 자리로 끌어당긴 뒤, 그 자리에서 다시 한 번 적중해 추가 피해 +
+            # 기절을 준다("끌려온 인물의 돌직구 적중 시" - 확인된 요청). 이 끌어당김으로 이미 죽었으면
+            # (드묾 - 첫 타격만으로 사망) 추가 적중을 생략한다.
+            target["position"] = record["position"]
+            target["position_settled_at"] = time_elapsed
+            atk2, is_crit2 = _roll_damage_atk(caster, time_elapsed)
+            bonus_damage = atk2 * params["pulled_multiplier"] / 100 * type_mult
+            bonus_damage = _apply_gendered_damage_bonus(caster, target, bonus_damage)
+            bonus_dealt, bonus_raw, bonus_invincible = _apply_damage(target, bonus_damage, time_elapsed)
+            interrupted_cast = _apply_stun(target, time_elapsed + params["pulled_stun_seconds"], time_elapsed)
+            hit["pulled"] = True
+            hit["pulled_damage"] = bonus_dealt
+            hit["pulled_shown_damage"] = bonus_raw
+            hit["pulled_invincible_block"] = bonus_invincible
+            hit["pulled_is_crit"] = is_crit2
+            hit["pulled_stun_seconds"] = params["pulled_stun_seconds"]
+            hit["pulled_interrupted_cast"] = interrupted_cast
+            hit["target_hp_after"] = target["hp"]
+        hits.append(hit)
+
+    detail = _tag_target_sides({"hits": hits}, side_name, own_team, enemy_team)
+    if redirected:
+        # _tag_target_sides는 최상위 "hits" 리스트만 훑으므로, 강제타석 히트 안에 중첩된
+        # redirected_hits(전부 적 전용)는 여기서 따로 태깅한다.
+        enemy_side = "defender" if side_name == "attacker" else "attacker"
+        for hit in detail["hits"]:
+            for rh in hit.get("redirected_hits", []):
+                ref = rh.pop("_target_ref", None)
+                if ref is not None:
+                    rh["target_side"] = enemy_side
+                    rh["target_shield_after"] = ref.get("shield", 0)
+    events.append({
+        "time": time_elapsed, "event_type": "delayed_skill_resolve", "side": side_name,
+        "actor": caster["name"], "actor_slot": caster.get("slot"),
+        "effect_type": "strike_zone_return_throw", "detail": detail,
+    })
+
+
+DELAYED_SKILL_RESOLVERS = {
+    "strike_zone_return_throw": _resolve_strike_zone_return_throw,
+}
+
+
+def _tick_pending_delayed_skills(own_team, enemy_team, side_name, time_elapsed, events):
+    pending = own_team.get("pending_delayed_skills")
+    if not pending:
+        return
+    ready = [entry for entry in pending if entry["resolve_at"] <= time_elapsed]
+    if not ready:
+        return
+    own_team["pending_delayed_skills"] = [entry for entry in pending if entry["resolve_at"] > time_elapsed]
+    for entry in ready:
+        resolver = DELAYED_SKILL_RESOLVERS.get(entry["effect_type"])
+        if resolver:
+            resolver(entry, own_team, enemy_team, side_name, time_elapsed, events)
+
+
 def _home_position(is_attacker, slot):
     if is_attacker:
         return AXIS_ATTACKER_FRONT if slot == "front" else AXIS_ATTACKER_BACK
@@ -488,7 +680,7 @@ def _advance_melee_position(unit, target_position, tick, time_elapsed):
             unit["position"] = target_position
             unit["position_settled_at"] = time_elapsed
         return
-    step = unit["melee_speed"] * tick
+    step = _effective_melee_speed(unit, time_elapsed) * tick
     if abs(delta) <= step:
         unit["position"] = target_position
     else:
@@ -627,6 +819,23 @@ def _tick_team_cost(team, enemy_team, side_name, time_elapsed, events, manual_co
     team["cost"] -= cost
     team["_last_cast_time"] = time_elapsed
     _advance_cost_turn(team, current_i)
+
+    # 안지석 "예산 재배정"으로 코스트가 감소된 상태였다면, 지금 이 실제 발동(코스트를 실제로 소모하는
+    # 순간)이 그 "사용 횟수"를 하나 깎는다 - CC/쿨다운/대상없음으로 스킵되는 경로(위의 이른 return들)는
+    # 여기까지 오지 않으므로 자연히 "진짜로 쓴 횟수"만 센다. 다 쓰면 원래 코스트로 복구하고, 그 복구를
+    # 프론트가 카드 UI(숫자/파란 빛)에 반영할 수 있도록 별도 이벤트를 남긴다.
+    if unit["status"].get("cost_reduction_uses_remaining"):
+        unit["status"]["cost_reduction_uses_remaining"] -= 1
+        if unit["status"]["cost_reduction_uses_remaining"] <= 0:
+            unit["status"]["cost_reduction_uses_remaining"] = 0
+            restored_cost = unit.pop("_cost_reduction_base_cost", None)
+            if restored_cost is not None:
+                unit["skill_cost"] = restored_cost
+            events.append({
+                "time": time_elapsed, "event_type": "cost_reduction_expire_resolve", "side": side_name,
+                "actor": unit["name"], "actor_slot": unit.get("slot"),
+                "detail": {"restored_cost": restored_cost},
+            })
 
     interval = _effective_interval(unit, time_elapsed)
     unit["is_casting"] = True
@@ -776,6 +985,8 @@ def _simulate_tick(attacker_team, defender_team, tick_index, time_elapsed, event
     _apply_neglect_status(defender_team, attacker_team, "defender", events, time_elapsed)
     _apply_low_hp_shield_grant(attacker_team, "attacker", events, time_elapsed)
     _apply_low_hp_shield_grant(defender_team, "defender", events, time_elapsed)
+    _apply_madness_release(attacker_team, "attacker", events, time_elapsed)
+    _apply_madness_release(defender_team, "defender", events, time_elapsed)
     _expire_timed_summons(attacker_team, "attacker", time_elapsed, events)
     _expire_timed_summons(defender_team, "defender", time_elapsed, events)
 
@@ -793,6 +1004,7 @@ def _simulate_tick(attacker_team, defender_team, tick_index, time_elapsed, event
     for side_name, own_team, enemy_team in team_order:
         _tick_team_cost(own_team, enemy_team, side_name, time_elapsed, events, manual_cost_gate)
         _tick_periodic_effects(own_team, enemy_team, side_name, time_elapsed, events)
+        _tick_pending_delayed_skills(own_team, enemy_team, side_name, time_elapsed, events)
 
         # 서포터(김크장/김룡환류)의 [Active] 시전 완료 판정 - _tick_team_cost가 COST_ROTATION_SLOTS에
         # "supporter"를 포함하므로 cast_start는 정상적으로 발생하는데, 정작 그 시전을 완료(skill_resolve)
@@ -812,6 +1024,7 @@ def _simulate_tick(attacker_team, defender_team, tick_index, time_elapsed, event
             })
             used_effect_type = detail.get("copied_effect_type") or supporter["skill_effect_type"]
             _apply_paint_gain(supporter, used_effect_type, attacker_team, defender_team, side_name, events, time_elapsed)
+            _apply_student_council_budget_gain(supporter, own_team, side_name, events, time_elapsed)
             supporter["is_casting"] = False
             supporter["cast_end_time"] = None
             supporter["_last_cast_time"] = time_elapsed
@@ -852,6 +1065,7 @@ def _simulate_tick(attacker_team, defender_team, tick_index, time_elapsed, event
                     # 분류해야, 방임석이 "강승유가 뭘 복제했는지"까지 정확히 반영해서 물감을 받는다.
                     used_effect_type = detail.get("copied_effect_type") or unit["skill_effect_type"]
                     _apply_paint_gain(unit, used_effect_type, attacker_team, defender_team, side_name, events, time_elapsed)
+                    _apply_student_council_budget_gain(unit, own_team, side_name, events, time_elapsed)
                     unit["is_casting"] = False
                     unit["cast_end_time"] = None
                     unit["_last_cast_time"] = time_elapsed
@@ -952,10 +1166,22 @@ def _init_battle(attacker_team, defender_team, events):
 
     _init_team_cost(attacker_team)
     _init_team_cost(defender_team)
+
+    # cost_init 이벤트는 특성/성급 효과가 전부 끝난 "뒤"에 만들어야 한다 - 안지석(비상금)처럼 전투
+    # 시작 시 팀 코스트 풀에 바로 더해주는 성급 효과가 있어서, 그 전에 cost_pool을 TEAM_COST_START로
+    # 고정해서 내보내면 프론트 코스트바가 실제 백엔드 시뮬레이션(이미 head-start가 반영된 값)보다
+    # 낮은 값에서 시작하는 것처럼 보이는 불일치가 생긴다. 이벤트 자체는 여전히 이 시점(cost_init을
+    # 만들기 직전)에는 순서상 traits/star_effects의 이벤트들보다 뒤에 추가되지만, 전부 같은 time=0.0
+    # 시각이라 재생 화면에서는 사실상 동시에(코스트바가 이미 채워진 채로) 나타난다 - 카드 UI(cost-dock)
+    # 자체는 오직 cost_init만 만드므로, 그 전에 처리되는 특성/성급 이벤트들이 카드 DOM에 의존할 일도 없다.
+    _apply_battle_start_traits(attacker_team, defender_team, events, "attacker")
+    _apply_battle_start_traits(defender_team, attacker_team, events, "defender")
+    _apply_battle_start_star_effects(attacker_team, defender_team, events)
+
     for cost_side, cost_team in (("attacker", attacker_team), ("defender", defender_team)):
         events.append({
             "time": 0.0, "event_type": "cost_init", "side": cost_side,
-            "cost_pool": TEAM_COST_START, "cost_max": TEAM_COST_MAX,
+            "cost_pool": round(cost_team["cost"], 3), "cost_max": TEAM_COST_MAX,
             "cards": [
                 {
                     "slot": slot,
@@ -969,9 +1195,6 @@ def _init_battle(attacker_team, defender_team, events):
             ],
         })
 
-    _apply_battle_start_traits(attacker_team, defender_team, events, "attacker")
-    _apply_battle_start_traits(defender_team, attacker_team, events, "defender")
-    _apply_battle_start_star_effects(attacker_team, defender_team, events)
     _apply_supporter_stat_donation(attacker_team, "attacker", events)
     _apply_supporter_stat_donation(defender_team, "defender", events)
 

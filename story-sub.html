@@ -7,7 +7,7 @@
 <link rel="icon" href="logoicon.webp">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="story/story-sub.css?v=20260903">
+<link rel="stylesheet" href="story/story-sub.css?v=20260904">
 </head>
 <body>
 
@@ -30,7 +30,7 @@
         <span class="lobby-header-title">Episode 선택</span>
       </div>
       <div class="lobby-episode-list">
-        <div class="episode-story-card">
+        <div class="episode-story-card" id="kimnamok-card">
           <div class="episode-story-thumb"><img src="" id="kimnamok-thumb" alt=""></div>
           <div class="episode-story-info">
             <div class="episode-story-name">김남옥</div>
@@ -77,6 +77,7 @@
   <div id="time-card-overlay" aria-hidden="true">
     <div id="time-card-text"></div>
   </div>
+  <audio id="bgm-player" loop preload="none"></audio>
   <div id="bg-mood"></div>
   <div id="bg-vignette"></div>
 
@@ -89,6 +90,12 @@
   <div id="char-left"><img id="char-left-img" src="" alt=""></div>
   <div id="char-right"><img id="char-right-img" src="" alt=""></div>
   <div id="char-center"><img id="char-center-img" src="" alt=""></div>
+
+  <!-- 아이템 등장(귀환의 돌 등, story-relationship.html과 동일한 구조) - 중앙 캐릭터가 옆으로
+       비켜서는 동안 그 자리(살짝 위쪽)에 부드러운 사각형 컨테이너 안에서 아이템이 나타난다 -->
+  <div id="item-display">
+    <div id="item-display-box"><img id="item-display-img" src="" alt=""></div>
+  </div>
 
   <div id="phone-layer">
     <div id="phone-window">
@@ -131,6 +138,7 @@
        바꾼 버전) 닫힘/열림 -> 흰 띠 다음화 배너 -> 페이드아웃 -> Episode 선택(화선택 모달까지) 복귀 -->
   <div id="chapter-end-cinematic">
     <div id="cec-tbc-text">To Be Continued...</div>
+    <div id="cec-stamp"><img id="cec-stamp-img" src="assets/story/shared/images/complete.webp?v=20260904" alt=""></div>
     <div id="cec-curtain-top"></div>
     <div id="cec-curtain-bottom"></div>
     <div id="cec-banner">
@@ -182,11 +190,11 @@
   </div>
 </div>
 
-<script src="shared/api-config.js?v=20260903"></script>
-<script src="shared/session-guard.js?v=20260903"></script>
-<script src="shared/nav-lock.js?v=20260903"></script>
-<script src="shared/avatar-crop.js?v=20260903"></script>
-<script src="story/scenario/sub1_kimnamok.js?v=20260903"></script>
-<script src="story/story-sub-engine.js?v=20260903"></script>
+<script src="shared/api-config.js?v=20260904"></script>
+<script src="shared/session-guard.js?v=20260904"></script>
+<script src="shared/nav-lock.js?v=20260904"></script>
+<script src="shared/avatar-crop.js?v=20260904"></script>
+<script src="story/scenario/sub1_kimnamok.js?v=20260904"></script>
+<script src="story/story-sub-engine.js?v=20260904"></script>
 </body>
 </html>
