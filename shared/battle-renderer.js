@@ -2860,6 +2860,20 @@ function dispatchEvent(event) {
         const hits = event.detail?.hits || [];
         const sideZones = dolljikguActiveZones[event.side] || {};
 
+        // 판정 시점에 이미 죽어있던 대상은 백엔드가 hits에서 통째로 빼버린다(_resolve_strike_zone_
+        // return_throw의 "if target["hp"] <= 0: continue" 참고) - 그런 대상은 아래 개별 히트 처리
+        // (onBallArrive)를 아예 못 받으므로, 그 존만 화면에 영원히 남는 버그가 있었다(확인된 신고 -
+        // 상대 불빠따가 공이 돌아오기 전에 다른 공격으로 죽으면 그 존만 안 사라짐). hits에 없는(=죽어서
+        // 빠진) 존은 여기서 먼저 정리한다 - 실제로 판정되는 존은 곧이어 onBallArrive가 다시 지워도
+        // 무해하다(removeStrikeZone은 이미 지워진 엘리먼트에 대해서도 안전).
+        const hitKeysThisResolve = new Set(hits.map((hit) => findHitKey(hit.target, hit.target_side)).filter(Boolean));
+        Object.keys(sideZones).forEach((key) => {
+            if (!hitKeysThisResolve.has(key)) {
+                removeStrikeZone(sideZones[key]);
+                delete sideZones[key];
+            }
+        });
+
         if (hits.length) {
             // redirected 히트는 자기 자신은 피해를 안 입으므로(target_hp_after가 없음) 최상위
             // captureAndApplyHp 대상에서 빼고, 대신 그 안에 중첩된 redirected_hits(적 전원)를 각각
@@ -2901,7 +2915,17 @@ function dispatchEvent(event) {
 
                 const onBallArrive = (arrivedXY) => {
                     chainFromXY = arrivedXY;
-                    if (zone) { removeStrikeZone(zone); delete sideZones[hitKey]; }
+                    // zone은 이 콜백이 예약된 시점(위 const zone = ...)에 캡처된 스냅샷이다 - 공이 날아가는
+                    // 동안(수백ms) 같은 hitKey로 다음 시전이 먼저 들어와 sideZones[hitKey]를 새 존으로
+                    // 덮어쓸 수 있다(확인된 버그 - 같은 대상을 빠르게 연속 시전하거나, 같은 편에 이름이
+                    // 같은 유닛이 둘 있어 findHitKey가 둘을 같은 키로 뭉뚱그리는 경우 특히 잦음). 그 상태로
+                    // 여기서 무조건 delete하면 방금 새로 생긴(아직 자기 차례를 못 받은) 존이 sideZones에서
+                    // 통째로 빠져버려, 그 존은 이후 아무 코드도 참조를 못 해 화면에 영원히 남는다 - 지금
+                    // sideZones[hitKey]가 여전히 "나"(zone)를 가리킬 때만 지운다.
+                    if (zone) {
+                        removeStrikeZone(zone);
+                        if (sideZones[hitKey] === zone) delete sideZones[hitKey];
+                    }
 
                     if (hit.redirected) {
                         // 강제타석: 공이 정확히 불빠따에게 닿는 순간 - 그는 맞지 않고, 대신 그 자신의

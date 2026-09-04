@@ -478,6 +478,11 @@
         forceIdleAllUnits();
         if (rosterOrderTimer) { clearInterval(rosterOrderTimer); rosterOrderTimer = null; }
 
+        // 돌직구 이도협의 공이 귀환하는 도중(return_delay_seconds 이내)에 대전이 끝나버리면 그 판정
+        // 이벤트가 영영 안 와서 스트라이크 존이 화면에 남는다(arena-battle.js의 showResult와 동일한
+        // 이유) - 전투가 끝나는 시점에 남은 존을 전부 정리한다.
+        document.querySelectorAll(".dolljikgu-zone").forEach((zoneEl) => zoneEl.remove());
+
         const reason = matchEndPayload?.reason || "finished";
         const resultEl = document.getElementById("battle-result");
         const textEl = document.getElementById("battle-result-text");

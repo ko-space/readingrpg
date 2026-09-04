@@ -651,6 +651,12 @@
         forceIdleAllUnits();
         if (rosterOrderTimer) { clearInterval(rosterOrderTimer); rosterOrderTimer = null; }
 
+        // 돌직구 이도협의 공이 아직 귀환하는 도중(return_delay_seconds 이내)에 전투 자체가 끝나버리면
+        // 그 판정 이벤트가 영영 안 와서 스트라이크 존이 화면에 남는다 - #battle-result가 작은 팝업일
+        // 뿐 필드를 전부 가리지 않으므로(arena-battle.css 참고) 뒤에 남은 존이 그대로 보인다. 전투가
+        // 끝나는 시점에 남은 존을 전부 정리한다(진행 중인 개별 존 제거 애니메이션과는 무관하게 안전).
+        document.querySelectorAll(".dolljikgu-zone").forEach((zoneEl) => zoneEl.remove());
+
         // attacker_won: true(승리)/false(패배)/null(무승부, 양팀 동시 전멸 시).
         const outcome = data.attacker_won === true ? "win" : data.attacker_won === false ? "lose" : "draw";
         const outcomeText = outcome === "win" ? "승리!" : outcome === "lose" ? "패배..." : "무승부";
