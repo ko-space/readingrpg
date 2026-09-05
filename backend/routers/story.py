@@ -109,19 +109,26 @@ def unlock_cg(
         )
         .first()
     )
+    new_achievements, new_characters = [], []
     if not existing:
         db.add(UserCgUnlock(user_id=user.id, story_id=req.story_id, cg_id=req.cg_id))
         db.commit()
         # CG 수집 업적("스토리 수집가"/"이야기꾼"/"노벨 문학상")과 히든 엔딩 관련 업적 판정.
-        # 보상(골드/캐릭터)은 이 시점에 서버에서 바로 지급된다.
-        check_and_grant_achievements(db, user)
+        # 보상(골드/캐릭터)은 이 시점에 서버에서 바로 지급된다. 프론트가 퀘스트/가챠와 동일한
+        # 캐릭터 획득 연출을 보여줄 수 있도록 결과를 그대로 응답에 실어보낸다(확인된 요청 -
+        # 예전엔 여기서 그냥 버려서 히든 엔딩 보상 캐릭터가 아무 연출 없이 조용히 지급됐었음).
+        new_achievements, new_characters = check_and_grant_achievements(db, user)
 
     # 도전과제("스토리모드 앤딩 N회 보기") 판정용 - 처음 보든 재방문이든(위 if와 무관하게) 매번 남긴다.
     # UserCgUnlock은 "이 엔딩을 최초로 봤는가"(존재 여부, 최대 엔딩 종류 수까지만 셀 수 있음)만 표시하고,
     # 이건 "몇 번을 봤는가"(재방문 포함 누적 횟수)를 센다.
     db.add(ActivityLog(user_id=user.id, activity_type="ep1_ending_reached"))
     db.commit()
-    return {"message": "CG가 해금되었습니다."}
+    return {
+        "message": "CG가 해금되었습니다.",
+        "new_achievements": new_achievements,
+        "new_characters": new_characters,
+    }
 
 
 @router.post("/unlock-chapter")

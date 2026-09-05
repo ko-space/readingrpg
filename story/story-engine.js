@@ -184,11 +184,27 @@ async function consumeTicketOnServer() {
 async function serverUnlockCG(id) {
     unlockedCgSet.add(id);
     try {
-        await fetch(`${API_BASE_URL}/story/unlock-cg`, {
+        const res = await fetch(`${API_BASE_URL}/story/unlock-cg`, {
             method: "POST",
             headers: authHeaders(true),
             body: JSON.stringify({ story_id: STORY_ID, cg_id: id }),
         });
+        const data = await res.json();
+        // quests.js/gacha.js와 동일한 패턴 - 이 CG(주로 히든 엔딩) 해금으로 새로 달성한 업적이
+        // 캐릭터를 보상으로 줬으면, 퀘스트/가챠와 똑같은 등장 연출부터 보여주고 업적 알림은 그
+        // 연출이 닫힌 뒤에 띄운다(확인된 요청 - 예전엔 아무 연출 없이 조용히 지급됐음).
+        const notifyAchievements = () => {
+            if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
+                showAchievementToast(data.new_achievements);
+            }
+        };
+        if (typeof playQuestRewardCinematic === "function" && data.new_characters?.length) {
+            playQuestRewardCinematic(data.new_characters, notifyAchievements);
+        } else if (typeof showCharacterReveal === "function" && data.new_characters?.length) {
+            showCharacterReveal(data.new_characters, notifyAchievements);
+        } else {
+            notifyAchievements();
+        }
     } catch (error) { /* 갤러리는 다음 /story/state 조회 시 다시 맞춰짐 */ }
 }
 

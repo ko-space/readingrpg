@@ -714,7 +714,9 @@
                     }
                     pendingAchievements = [];
                 };
-                if (typeof showCharacterReveal === "function" && pendingCharacters.length) {
+                if (typeof playQuestRewardCinematic === "function" && pendingCharacters.length) {
+                    playQuestRewardCinematic(pendingCharacters, notifyAchievements);
+                } else if (typeof showCharacterReveal === "function" && pendingCharacters.length) {
                     showCharacterReveal(pendingCharacters, notifyAchievements);
                 } else {
                     notifyAchievements();
