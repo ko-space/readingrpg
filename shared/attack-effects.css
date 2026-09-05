@@ -17,6 +17,14 @@
     pointer-events: none;
 }
 
+/* 반사(damage_reduction_config의 reflect=True) 전용 - 원래 공격자에게 고유 연출(RANGED_ATTACK_STYLE)이
+   없어 기본 투사체를 그대로 쓰는 경우에만 붙는 변형. 완전한 검은색(확인된 요청)이라 배경 그라데이션/
+   빛나는 그림자를 전부 무채색으로 덮어써서 다른 원거리 탄환과 확실히 구분되게 한다. */
+.projectile-dot.reflect-bullet {
+    background: #000;
+    box-shadow: 0 0 6px 2px rgba(0, 0, 0, 0.9);
+}
+
 /* ── 방임석 전용: 물감 방울 투척. 기본공격은 항상 황금빛(paint-gold), 스킬(포물선)은 소모한 물감
    색깔에 따라 흰색(물감 없음)/빨강/파랑/노랑 중 하나로 바뀐다. ── */
 .paint-projectile {

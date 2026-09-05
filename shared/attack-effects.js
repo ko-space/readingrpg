@@ -132,8 +132,10 @@ function animateArcMotion(el, start, end, durationMs, arcHeight, onArrive) {
     requestAnimationFrame(frame);
 }
 
-// ===== 원거리 투사체(범용) =====
-function spawnProjectile(actorKeyOrEl, targetKeyOrEl, onArrive) {
+// ===== 원거리 투사체(범용) - extraClass(선택)를 주면 projectile-dot에 이어붙여 색/모양만 다르게
+// 꾸밀 수 있다(예: 반사 탄환 전용 "reflect-bullet" - attack-effects.css 참고). 기존 호출부는
+// extraClass를 안 넘기므로 동작이 전혀 바뀌지 않는다. =====
+function spawnProjectile(actorKeyOrEl, targetKeyOrEl, onArrive, extraClass) {
     const actorImg = resolveEffectEl(actorKeyOrEl);
     const targetImg = resolveEffectEl(targetKeyOrEl);
     const layer = attackEffectsConfig.layerEl;
@@ -143,7 +145,7 @@ function spawnProjectile(actorKeyOrEl, targetKeyOrEl, onArrive) {
     const end = fieldRelativeCenter(targetImg);
 
     const dot = document.createElement("div");
-    dot.className = "projectile-dot";
+    dot.className = extraClass ? `projectile-dot ${extraClass}` : "projectile-dot";
     dot.style.left = `${start.x}px`;
     dot.style.top = `${start.y}px`;
     layer.appendChild(dot);
@@ -1252,6 +1254,22 @@ const RANGED_ATTACK_STYLE = {
 // style 문자열(RANGED_ATTACK_STYLE의 값) 기준으로 실제 전용 연출 함수를 호출한다. 호출부는
 // "이 배우의 style이 뭔지"(자기 units 레지스트리 조회)만 알아서 넘기면 된다 - opts.isType2는
 // 이의진 전용(염색체 변환 상태에 따라 eye_laser의 type1/type2가 갈림).
+// 범용 반사(damage_reduction_config의 reflect=True) 탄환 연출 - 원래 공격자(attackerName)에게
+// 전용 원거리 스타일(RANGED_ATTACK_STYLE)이 있으면 그 모양을 그대로(방향만 반대로 - 반사한 쪽에서
+// 원래 공격자 쪽으로) 재사용하고, 없으면(범용 spawnProjectile 폴백 캐릭터) 완전한 검은색 전용
+// 탄환(reflect-bullet, attack-effects.css)으로 대체한다(확인된 요청). RANGED_ATTACK_STYLE/
+// playRangedAttackByStyle/spawnProjectile을 여기 한 함수 안에서만 쓰는 이유 - 셋 다 이 파일의
+// const/함수라 battle-renderer.js(다른 <script> 파일)의 최상위 const/let과 달리 그 스코프 안에서만
+// 보이므로, battle-renderer.js는 유닛 키 문자열만 넘기고 어떤 모양을 쓸지는 여기서 전부 결정한다.
+function playReflectBulletVisual(attackerName, reflectorKeyOrEl, attackerKeyOrEl, onArrive) {
+    const style = RANGED_ATTACK_STYLE[attackerName];
+    if (style) {
+        playRangedAttackByStyle(style, reflectorKeyOrEl, attackerKeyOrEl, onArrive);
+    } else {
+        spawnProjectile(reflectorKeyOrEl, attackerKeyOrEl, onArrive, "reflect-bullet");
+    }
+}
+
 function playRangedAttackByStyle(style, actorKeyOrEl, targetKeyOrEl, onArrive, opts = {}) {
     if (style === "instant_flash") playInstantFlash(actorKeyOrEl, targetKeyOrEl, onArrive);
     else if (style === "text_particles") playTextParticles(actorKeyOrEl, targetKeyOrEl, onArrive, opts.onLetterArrive);

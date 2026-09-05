@@ -1274,6 +1274,12 @@ function stopWalkFrames(key) {
 // 공격/스킬/복귀 프레임 재생 시 초당 재생 속도(고정 - 배속과 무관).
 const ATTACK_FRAME_DURATION_MS = 60;
 const RETURN_FRAME_DURATION_MS = 60; // 복귀 프레임은 서버가 시간을 안 주므로(시전 시간과 무관) 공격 프레임과 같은 고정 속도로 재생
+// damage_reflect_resolve 전용 - 원래 공격(대개 원거리 기본공격)이 발사 대기(EFFECT_LAUNCH_DELAY_MS,
+// 각 화면의 arena-battle.js/arena-live.js 참고, ~180ms) + 비행(PROJECTILE_TRAVEL_MS, ~220~260ms)을
+// 거쳐 실제로 "명중"하기까지 걸리는 대략적인 총 시간 - 반사 탄환은 이 시간만큼 기다렸다가 발사해야
+// "원래 공격이 명중하는 순간 반사돼 튕겨나간다"는 느낌이 나고, 안 그러면 원래 공격의 발사와 반사
+// 탄환이 동시에 나가는 것처럼 보인다(확인된 버그).
+const REFLECT_HIT_DELAY_MS = 420;
 
 // 안전장치: cast_start/skill_resolve/"마지막 이벤트" 대기 게이트가 아직 원인을 다 못 찾은 어떤
 // 이유로든 절대 안 풀리면, 재생 전체가 그 자리에서 영원히 멈춘다(가장 나쁜 결과) - 같은 대상으로
@@ -3242,13 +3248,20 @@ function dispatchEvent(event) {
         // 범용 반사(damage_reduction_config의 reflect=True - 지금은 김현재 "방향 전환"/"폭주"/
         // "지키고 싶은 마음"만 해당) - 실제 피해는 원래 공격이 처리된 시점에 이미 백엔드에서
         // 반영됐지만, 그동안 이를 알리는 이벤트가 없어 반사당한 쪽 체력이 화면에 전혀 반영되지
-        // 않는 버그가 있었다(확인된 버그 - "반사했는데 상대 체력이 안 줄어든다"). suppress_bounce가
-        // 없으면(대부분의 경우) 반사한 쪽(actor)에서 반사당한 쪽(target)으로 튕겨나가는 탄환이
-        // 날아가 "도착하는 순간" 피격판정을 반영한다(확인된 요청 - 왔던 방향의 반대로 그대로
-        // 돌아가서, 닿았을 때 피격판정). 이미 자기만의 왕복 연출이 있는 이도협 "돌직구" 귀환
-        // 판정에서 반사가 일어나면(suppress_bounce=true) 튕겨나가는 연출 없이 그 자리에서 곧바로
-        // 반영한다 - spawnProjectile은 캐릭터 전용 스타일이 없는 기본 원거리 폴백(shared/
-        // attack-effects.js)을 그대로 재사용한 것이라 어떤 반사 조합에도 자연스럽게 맞는다.
+        // 않는 버그가 있었다(확인된 버그 - "반사했는데 상대 체력이 안 줄어든다").
+        //
+        // 이 이벤트는 원래 공격 이벤트와 같은 시뮬레이션 시각에 실려오므로(같은 틱), playNext의
+        // 절대 시각 스케줄만 따르면 원래 공격의 투사체가 화면에 나가는 것과 동시에 반사 탄환도
+        // 튀어나가 버린다(확인된 버그 - "상대의 발사와 동시에 나온다") - 원래 공격이 실제로
+        // "명중하는" 순간에야 반사가 발생하는 게 자연스러우므로, REFLECT_HIT_DELAY_MS만큼
+        // (원거리 기본공격의 대략적인 발사 대기+비행 시간) 일부러 늦춰서 발사한다.
+        //
+        // suppress_bounce가 있으면(이도협 "돌직구" 귀환 판정처럼 이미 자기만의 왕복 연출이 있는
+        // 경우) 튕겨나가는 연출 없이 그 자리에서 곧바로 반영한다. 원래 공격자가 근접 유닛이었으면
+        // (isMelee) 애초에 "날아온 탄환"이 없었으므로 반사 탄환도 보이지 않게 한다(확인된 요청).
+        // 그 외에는 원래 공격자에게 전용 원거리 연출(RANGED_ATTACK_STYLE)이 있으면 그 모양을
+        // 그대로(방향만 반대로) 재사용하고, 없으면 완전한 검은색 기본 탄환으로 대체한다(확인된
+        // 요청 - playReflectBulletVisual, shared/attack-effects.js).
         const reflectorKey = findUnitKey(event.side, event.actor);
         const reflectedKey = findUnitKey(event.target_side, event.target);
         if (reflectedKey && battleRendererConfig.units[reflectedKey]) {
@@ -3258,14 +3271,18 @@ function dispatchEvent(event) {
                 renderUnit(reflectedKey);
                 flashHit(reflectedKey, false, 1, event.detail.amount, false);
             };
-            if (
-                !event.detail.suppress_bounce && reflectorKey && battleRendererConfig.units[reflectorKey]
-                && typeof spawnProjectile === "function"
-            ) {
-                spawnProjectile(reflectorKey, reflectedKey, applyReflectHit);
-            } else {
-                applyReflectHit();
-            }
+            setTimeout(() => {
+                const attackerWasMelee = !!battleRendererConfig.units[reflectedKey]?.isMelee;
+                if (
+                    event.detail.suppress_bounce || attackerWasMelee
+                    || !reflectorKey || !battleRendererConfig.units[reflectorKey]
+                    || typeof playReflectBulletVisual !== "function"
+                ) {
+                    applyReflectHit();
+                } else {
+                    playReflectBulletVisual(event.target, reflectorKey, reflectedKey, applyReflectHit);
+                }
+            }, speedMs(REFLECT_HIT_DELAY_MS));
         }
     } else if (eventType === "cost_reduction_expire_resolve") {
         // 안지석 "예산 재배정" 만료: 부여받은 사용 횟수를 다 써서 원래 코스트로 되돌아간다 - 카드
