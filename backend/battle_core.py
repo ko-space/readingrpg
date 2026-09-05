@@ -195,6 +195,9 @@ def _new_status():
                                        # 남은 사용 횟수 기준이라 stun_until류의 "until" 패턴과는 다르지만,
                                        # 0보다 크면 코스트 감소가 걸려있다는 뜻으로 상태 아이콘/코스트
                                        # 카드 UI 판정에 그대로 쓰인다(battle_engine._tick_team_cost 참고).
+        "cc_immune_until": None,      # 김현재 "폭주"/"지키고 싶은 마음" 전용 - 이 시간까지는 기절/넉백 등
+                                       # CC를 아예 받지 않는다(_apply_stun/_apply_knockback_position 참고).
+                                       # 다른 캐릭터는 이 값이 걸릴 일이 없어 항상 None.
     }
 
 
@@ -623,12 +626,17 @@ def _refresh_status_until(status, until_key, new_until, time_elapsed):
     return True
 
 
-def _apply_damage(target, amount, time_elapsed):
+def _apply_damage(target, amount, time_elapsed, attacker=None):
     """실드(shield_until)가 떠 있으면 피해를 0으로 만든다(=무적). 방임석의 "방임" 상태가 활성이면
     (neglect_active) 대신 받는 피해를 dr_percent만큼 줄인다 - 실드와 동시에 걸릴 일은 없다(둘 다 self
-    전용 상태라 서로 다른 캐릭터에게만 각각 있음). 그 다음, 수치형 보호막(target["shield"] - 김크장류
-    지원가가 부여하는 최대 체력 비례 보호막)이 남아있으면 먼저 거기서 깎고, 다 깎고도 남은 만큼만
-    체력에서 깎는다.
+    전용 상태라 서로 다른 캐릭터에게만 각각 있음). 김현재(damage_reduction_config - "방향 전환"/
+    "지키고 싶은 마음")도 동일한 방식으로 받는 피해를 dr_percent만큼 줄이는데, "방향 전환"은 추가로
+    그 줄어든 만큼을 공격자에게 그대로 반사한다(reflect=True) - attacker가 주어지고 아직 살아있을
+    때만 실제로 반사한다(스킬 핸들러는 caster를, 기본공격은 unit을 그대로 넘겨준다 - 넘기지 않는
+    극소수 호출부는 그냥 반사가 안 걸릴 뿐 나머지 계산은 정상 동작한다). 반사 피해는 무한 재귀를
+    막기 위해 attacker=None으로(반사받은 쪽이 또 반사하지 않도록) 재귀 호출한다. 그 다음, 수치형
+    보호막(target["shield"] - 김크장류 지원가가 부여하는 최대 체력 비례 보호막)이 남아있으면 먼저
+    거기서 깎고, 다 깎고도 남은 만큼만 체력에서 깎는다.
 
     반환값은 (dealt, raw_amount, invincible_block) 튜플. dealt는 실제로 체력에서 깎인 순수 피해 -
     흡혈/처치 판정/로그의 "피해량" 등 게임 로직에는 항상 이 값을 써야 한다(보호막으로 막은 양은 안
@@ -637,9 +645,9 @@ def _apply_damage(target, amount, time_elapsed):
     씹힌 것처럼 안 보인다) - 그 외 로직은 절대 이 값을 쓰면 안 된다(막힌 피해로 흡혈/처치 판정이 나면
     안 되므로). 단, 무적(shield_until)일 때만은 예외로 raw_amount가 감쇄 적용 전 원래 위력 그대로다
     (확인된 요청 - 무적일 때만 프론트가 피해 숫자 대신 MISS를 보여준다, 보호막으로 막힌 건 그대로
-    숫자 표시) - 방임 감쇄는 무적과 달리 실제로 피해가 들어가는 상황이라, 화면에 뜨는 숫자도 감쇄가
-    반영된(실제로 깎일) 값으로 보여준다(확인된 요청). invincible_block은 이 히트가 "무적"(shield_until)
-    때문에 막혔는지."""
+    숫자 표시) - 방임/김현재 감쇄는 무적과 달리 실제로 피해가 들어가는 상황이라, 화면에 뜨는 숫자도
+    감쇄가 반영된(실제로 깎일) 값으로 보여준다(확인된 요청). invincible_block은 이 히트가 "무적"
+    (shield_until) 때문에 막혔는지."""
     invincible_block = target["status"]["shield_until"] is not None and time_elapsed < target["status"]["shield_until"]
     if invincible_block:
         raw_amount = max(0, round(amount))
@@ -647,6 +655,12 @@ def _apply_damage(target, amount, time_elapsed):
     else:
         if target.get("neglect_active") and target.get("neglect_config"):
             amount *= (1 - target["neglect_config"]["dr_percent"] / 100)
+        dr_config = target.get("damage_reduction_config")
+        if dr_config and time_elapsed < dr_config["until"]:
+            reduced = amount * dr_config["dr_percent"] / 100
+            amount -= reduced
+            if dr_config.get("reflect") and attacker is not None and attacker["hp"] > 0 and reduced > 0:
+                _apply_damage(attacker, reduced, time_elapsed)
         raw_amount = max(0, round(amount))
     amount = max(0, round(amount))
     if target.get("shield"):
@@ -763,13 +777,25 @@ def _interrupt_cast_if_casting(target, time_elapsed, priority=CC_PRIORITY_DEFAUL
     return interrupted
 
 
+def _is_cc_immune(unit, time_elapsed):
+    """김현재 "폭주"/"지키고 싶은 마음" 전용 CC 면역 판정 - 기절(_apply_stun)뿐 아니라 밀쳐내기/넉백류
+    (position을 강제로 옮기는 CC)에도 동일하게 써서, 면역 중엔 그 어떤 강제 이동/행동불능도 전혀 안
+    먹게 한다."""
+    until = unit["status"]["cc_immune_until"]
+    return until is not None and time_elapsed < until
+
+
 def _apply_stun(target, stun_until, time_elapsed, priority=CC_PRIORITY_STUN):
     """대상에게 기절을 건다(+ 시전 중이었다면 취소). 기절 지속시간은 무조건 덮어쓰지 않고 "갱신"한다
     (_refresh_status_until) - 이미 더 늦게까지 기절 중이면 그 값을 유지해서, 나중에 걸린 더 짧은 기절이
     기존 기절을 오히려 단축시키지 않는다. 시전 취소 여부는 기절 지속시간 갱신 여부와 무관하게 항상
     우선순위대로 판정한다(약한 CC라도 아직 발동 전인 시전은 그대로 끊을 수 있어야 하므로). 반환값은
     시전 취소 여부. priority 기본값은 "기절류" 등급(CC_PRIORITY_STUN) - 이 함수를 쓰는 스킬은 전부
-    기절 계열이라 호출부에서 따로 넘길 필요가 없다."""
+    기절 계열이라 호출부에서 따로 넘길 필요가 없다.
+    김현재의 CC 면역(status["cc_immune_until"])이 걸려있으면 기절 자체를 아예 걸지 않고(시전 취소도
+    없이) 즉시 False를 돌려준다 - "면역"이니 이 CC가 대상에게 아무 흔적도 남기면 안 된다."""
+    if _is_cc_immune(target, time_elapsed):
+        return False
     _refresh_status_until(target["status"], "stun_until", stun_until, time_elapsed)
     return _interrupt_cast_if_casting(target, time_elapsed, priority)
 

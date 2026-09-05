@@ -353,6 +353,16 @@
     //   기준으로 눈금을 맞췄다(공격 프레임 3번째 즈음에 발사되므로 attack_3 기준으로 다시 맞춰도 된다).
 
     function playRangedAttack(actorKey, targetKey, onArrive, onLetterArrive) {
+        // 김현재: 평상시엔 style 기반(RANGED_ATTACK_STYLE에 없으니 기본 "straight"=권총 직선 탄환)
+        // 그대로 쓰지만, 폭주/지키고 싶은 마음 상태(kimhyeonjaeMode - battle-renderer.js의
+        // kimhyeonjae_mode_resolve/direction_shift 처리가 매 상태 전이마다 갱신함)에서는 링 소용돌이
+        // 촉수(spawnKimHyeonjaeVortexAttack)로 대신한다 - style은 캐릭터별 고정값이라 전투 중 바뀌는
+        // 이런 상태 의존 연출은 style 표로 표현할 수 없어서 여기서 직접 분기해야 한다.
+        const khMode = units[actorKey]?.kimhyeonjaeMode;
+        if (khMode === "frenzy" || khMode === "special") {
+            spawnKimHyeonjaeVortexAttack(actorKey, targetKey, khMode, onArrive);
+            return;
+        }
         const style = units[actorKey]?.style || "straight";
         playRangedAttackByStyle(style, actorKey, targetKey, onArrive, { isType2: units[actorKey]?.isType2, onLetterArrive });
     }
@@ -656,6 +666,7 @@
         // 뿐 필드를 전부 가리지 않으므로(arena-battle.css 참고) 뒤에 남은 존이 그대로 보인다. 전투가
         // 끝나는 시점에 남은 존을 전부 정리한다(진행 중인 개별 존 제거 애니메이션과는 무관하게 안전).
         document.querySelectorAll(".dolljikgu-zone").forEach((zoneEl) => zoneEl.remove());
+        clearAllKimHyeonjaeWingAuras();
 
         // attacker_won: true(승리)/false(패배)/null(무승부, 양팀 동시 전멸 시).
         const outcome = data.attacker_won === true ? "win" : data.attacker_won === false ? "lose" : "draw";
