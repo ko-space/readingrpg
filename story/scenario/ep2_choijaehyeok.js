@@ -481,7 +481,7 @@ const EP2_S2_LETTER_CHOICE = {
   options: [
     { label:'① 펜던트를 챙긴다.', key:'1' },
     { label:'② 편지만 읽고 그냥 나간다.', key:'2' },
-    { label:'③ 상자의 비밀번호를 입력해본다.', key:'3' },
+    { label:'③ 상자의 비밀문자를 입력해본다.', key:'3' },
   ],
 };
 
@@ -511,8 +511,8 @@ const EP2_S2_BOX_INTRO = [
   { type:'narration', text:'나는 책상 위의 작은 상자를 집어 들었다.' },
   { type:'narration', text:'손바닥만 한 크기였다.' },
   { type:'narration', text:'겉보기에는 평범했지만, 자세히 보니 한쪽에 글귀가 적혀 있었고, 무언가를 입력할 수 있는 작은 장치가 있었다.' },
-  { type:'line', speaker:EP2_PLAYER, text:'비밀번호같은 건가?' },
-  { type:'thought', text:'편지에는 비밀번호에 대한 힌트가 없었다.' },
+  { type:'line', speaker:EP2_PLAYER, text:'비밀문자같은 건가?' },
+  { type:'thought', text:'편지에는 비밀문자에 대한 힌트가 없었다.' },
 ];
 
 const EP2_S2_BOX_HOME = [

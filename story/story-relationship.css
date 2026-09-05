@@ -899,7 +899,7 @@ html,body{
    (tryPlaySlotShift 참고) - 세로 fade+rise와 트랜지션 시간(.5s)은 그대로 공유하고, transform의
    숨은 목표 지점만 옆(오프셋)으로 바꾼다. left/center는 같은 left-anchor 계열(translate(-50%, 0)
    기준)이라 공식이 같고, right는 anchor가 반대(translate(50%, 0) 기준)라 부호가 다르다. ID+class
-   조합이라 평범한 #char-*/.show보다 명시도가 높아, 이 클래스가 붙어있는 동안은 항상 우선한다. */
+   조합이라 평범한 #char-*.show보다 명시도가 높아, 이 클래스가 붙어있는 동안은 항상 우선한다. */
 #char-left.shift-offset-right, #char-center.shift-offset-right{
   opacity:0; transform: translate(calc(-50% + 80px), 0);
 }
