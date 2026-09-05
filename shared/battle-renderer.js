@@ -2840,7 +2840,15 @@ function dispatchEvent(event) {
             khSetMeleeActive(actorKey, true);
             if (actorKey) {
                 const unitInfo = battleRendererConfig.units[actorKey];
-                if (unitInfo) { unitInfo.spriteVariant = "_active"; unitInfo.kimhyeonjaeMode = "active"; }
+                // meleeSpeedRatio는 startMeleeWalker의 tick()이 픽셀 이동량에 그대로 곱하는 값이라
+                // (khSetMeleeActive는 isMelee만 켤 뿐 이 값은 안 건드림), 백엔드가 이동속도 버프까지
+                // 미리 곱해 보내주는 melee_speed_ratio로 여기서 갱신해야 실제로 더 빨리 걷는다(확인된
+                // 버그 - 아이콘만 뜨고 실제 속도는 그대로였음).
+                if (unitInfo) {
+                    unitInfo.spriteVariant = "_active";
+                    unitInfo.kimhyeonjaeMode = "active";
+                    if (event.detail.melee_speed_ratio) unitInfo.meleeSpeedRatio = event.detail.melee_speed_ratio;
+                }
                 const until = event.time + event.detail.duration_seconds;
                 const activeSource = `${actorKey}:kimhyeonjae_active`;
                 flashEffectAura(actorKey, "buff");
@@ -3331,6 +3339,16 @@ function dispatchEvent(event) {
                     if (event.interrupted_cast) {
                         interruptCasting(targetKey, event.side === "attacker" ? "defender" : "attacker");
                     }
+                }
+                // 김현재 "지키고 싶은 마음": 기본공격 명중 시 넉백(battle_engine._do_basic_attack의
+                // knockback_on_attack_until 훅) - 백엔드는 이미 target["position"]을 축 끝으로
+                // 옮겨뒀지만(시뮬레이션용), 화면상 실제로 밀려나는 연출은 여기서 청년의 넉백과 동일한
+                // applyKnockback(distance:9999 = 맵 끝까지)을 직접 불러야 한다(확인된 버그 - 이 플래그를
+                // 프론트가 그동안 아예 읽지 않아서 넉백이 안 보였음). 청년의 bonus_damage_knockback과
+                // 동일하게 넉백 상태 아이콘도 잠깐 함께 띄운다(확인된 요청).
+                if (event.target_knocked_back) {
+                    setStatusIcon(targetKey, "knockback", { source: `${event.actor}:knockback`, durationMs: MOMENT_ICON_MS });
+                    applyKnockback(targetKey, { distance: 9999, suspendSelfWalker: true });
                 }
             }
             // 윤(영혼 흡수/선생 고혈): 시전자 자가 회복 연출 - 데이터는 이미 위에서 즉시 반영됐고,

@@ -151,7 +151,7 @@
         // style 표(캐릭터별 고정값)로 표현 못 하는 전투 중 상태 의존 연출이라 여기서 직접 분기한다.
         const khMode = units[actorKey]?.kimhyeonjaeMode;
         if (khMode === "frenzy" || khMode === "special") {
-            spawnKimHyeonjaeVortexAttack(actorKey, targetKey, khMode, onArrive);
+            khTriggerWingAttack(actorKey, targetKey, khMode, onArrive);
             return;
         }
         const style = units[actorKey]?.style || "straight";
