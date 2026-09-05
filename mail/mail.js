@@ -114,8 +114,19 @@
             if (!res.ok) throw new Error(data.detail || "보상을 받지 못했습니다.");
             await refreshData();
             if (typeof loadProfile === "function") await loadProfile();
-            if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
-                showAchievementToast(data.new_achievements);
+            // quests.js와 동일한 패턴 - 이번 수령으로 새로 달성한 업적이 캐릭터를 보상으로 줬으면
+            // 퀘스트/가챠와 똑같은 등장 연출부터 보여주고, 업적 알림은 그 연출이 닫힌 뒤에 띄운다.
+            const notifyAchievements = () => {
+                if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
+                    showAchievementToast(data.new_achievements);
+                }
+            };
+            if (typeof playQuestRewardCinematic === "function" && data.new_characters?.length) {
+                playQuestRewardCinematic(data.new_characters, notifyAchievements);
+            } else if (typeof showCharacterReveal === "function" && data.new_characters?.length) {
+                showCharacterReveal(data.new_characters, notifyAchievements);
+            } else {
+                notifyAchievements();
             }
         } catch (error) {
             alert(error.message);
@@ -137,8 +148,17 @@
             if (!res.ok) throw new Error(data.detail || "보상을 받지 못했습니다.");
             await refreshData();
             if (typeof loadProfile === "function") await loadProfile();
-            if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
-                showAchievementToast(data.new_achievements);
+            const notifyAchievements = () => {
+                if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
+                    showAchievementToast(data.new_achievements);
+                }
+            };
+            if (typeof playQuestRewardCinematic === "function" && data.new_characters?.length) {
+                playQuestRewardCinematic(data.new_characters, notifyAchievements);
+            } else if (typeof showCharacterReveal === "function" && data.new_characters?.length) {
+                showCharacterReveal(data.new_characters, notifyAchievements);
+            } else {
+                notifyAchievements();
             }
         } catch (error) {
             alert(error.message);
