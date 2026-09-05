@@ -1560,6 +1560,44 @@ async function playReturnFrames(key) {
     }
 }
 
+// 김현재 "방향 전환" 자연 종료(정상 상태로 복귀) 전용 - skill_active_1~9.webp를 1→N 순서로 한 번
+// 재생해 "변신이 풀리는" 연출을 보여준 뒤 battle_idle.webp로 정착한다(확인된 요청). getSkillFrameCount는
+// skill${variant}_N.webp 규칙을 그대로 따르므로 "_active"를 주면 이 전용 프레임을 찾는다 - playReturnFrames와
+// 동일한 게이트(attackAnimActive)/토큰 방식이라 걷기·다른 프레임 재생과 안전하게 공존한다. 전용
+// 프레임이 아직 없으면(frameCount=0) 곧바로 battle_idle.webp로 스냅한다(폴백).
+async function playKimHyeonjaeActiveExitFrames(key) {
+    const units = battleRendererConfig.units;
+    const attackAnimTokens = battleRendererConfig.attackAnimTokens;
+    const attackAnimActive = battleRendererConfig.attackAnimActive;
+    const el = document.querySelector(`[data-unit="${key}"]`);
+    const imgEl = el?.querySelector(".battle-unit-img");
+    if (!el || !imgEl || !units[key]) return;
+
+    const outfit = units[key].outfit;
+    const myToken = (attackAnimTokens[key] = (attackAnimTokens[key] || 0) + 1);
+    attackAnimActive[key] = true;
+
+    const frameCount = await getSkillFrameCount(outfit, "_active");
+
+    if (attackAnimTokens[key] !== myToken) return;
+
+    for (let i = 1; i <= frameCount; i += 1) {
+        if (attackAnimTokens[key] !== myToken) return;
+
+        imgEl.src = `${battleRendererConfig.outfitImageBase}${outfit}/skill_active_${i}.webp`;
+        await sleep(RETURN_FRAME_DURATION_MS);
+    }
+
+    if (attackAnimTokens[key] === myToken) {
+        imgEl.onerror = () => {
+            imgEl.onerror = null;
+            imgEl.src = `${battleRendererConfig.outfitImageBase}${outfit}/idle.webp`;
+        };
+        imgEl.src = `${battleRendererConfig.outfitImageBase}${outfit}/battle_idle.webp`;
+        attackAnimActive[key] = false;
+    }
+}
+
 // ===== 이벤트 디스패치 시스템(playNext의 event_type 분기 이전) =====
 // rangedResolvePending/meleeHitPending: attackAnimActive 등과 동일한 이유로 여전히
 // arena-battle.js가 소유(anyActorStillFinishing이 거기서도 읽음) - config로 참조만 받는다.
@@ -3178,6 +3216,11 @@ function dispatchEvent(event) {
                 setKimHyeonjaeWingAura(khKey, null);
                 clearStatusIconSource(khKey, "damage_reduction", activeSource);
                 clearStatusIconSource(khKey, "move_speed_up", activeSource);
+                // 방향 전환이 풀리는 순간 skill_active_1~9.webp를 한 번 재생해 "변신이 풀리는" 연출을
+                // 보여준 뒤 battle_idle.webp로 정착한다(확인된 요청) - attackAnimActive를 이 함수가
+                // 즉시(await 이전에) 켜두므로, 바로 아래 공용 renderUnit(khKey) 호출이 스탠딩을
+                // 곧바로 덮어쓰지 않는다(playReturnFrames와 동일한 게이트 방식).
+                playKimHyeonjaeActiveExitFrames(khKey);
                 battleRendererConfig.appendLog(`${event.actor}의 [Active] 종료! 사거리 원거리 복구`, event.side);
             } else if (mode === "death") {
                 if (unitInfo) { unitInfo.spriteVariant = ""; unitInfo.kimhyeonjaeMode = null; unitInfo.hp = 0; }
