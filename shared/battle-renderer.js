@@ -3262,8 +3262,16 @@ function dispatchEvent(event) {
         // 그 외에는 원래 공격자에게 전용 원거리 연출(RANGED_ATTACK_STYLE)이 있으면 그 모양을
         // 그대로(방향만 반대로) 재사용하고, 없으면 완전한 검은색 기본 탄환으로 대체한다(확인된
         // 요청 - playReflectBulletVisual, shared/attack-effects.js).
-        const reflectorKey = findUnitKey(event.side, event.actor);
-        const reflectedKey = findUnitKey(event.target_side, event.target);
+        // findUnitKey는 이름만으로 front/back/summon 슬롯만 찾고 서포터는 못 찾는다(eventActorKey의
+        // 주석 참고 - 김국회 등 서포터는 전장 스프라이트가 없어 이름 기반 조회 대상이 아님). 김국회
+        // "일당 독재"의 스플래시는 서포터 자신의 공격력 기준이라 attacker=supporter로 반사가 걸릴 수
+        // 있으므로(위 battle_engine._apply_pending_reflect_events 참고), actor_slot/target_slot이
+        // 있으면 eventActorKey와 동일하게 그 슬롯 키를 먼저 직접 확인한다.
+        const reflectorKey = eventActorKey(event);
+        const targetSlotKey = event.target_slot && `${event.target_side}-${event.target_slot.replace(/_/g, "-")}`;
+        const reflectedKey = (targetSlotKey && battleRendererConfig.units[targetSlotKey])
+            ? targetSlotKey
+            : findUnitKey(event.target_side, event.target);
         if (reflectedKey && battleRendererConfig.units[reflectedKey]) {
             const applyReflectHit = () => {
                 if (!battleRendererConfig.units[reflectedKey]) return;
