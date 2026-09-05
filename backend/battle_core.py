@@ -665,7 +665,14 @@ def _apply_damage(target, amount, time_elapsed, attacker=None, suppress_reflect_
         if dr_config and time_elapsed < dr_config["until"]:
             reduced = amount * dr_config["dr_percent"] / 100
             amount -= reduced
-            if dr_config.get("reflect") and attacker is not None and attacker["hp"] > 0 and reduced > 0:
+            if (
+                dr_config.get("reflect") and attacker is not None and attacker["hp"] > 0 and reduced > 0
+                and attacker.get("slot") != "supporter"
+            ):
+                # 서포터(김국회 "일당 독재"처럼 자기 자신을 attacker로 넘기는 공격)에게는 반사하지
+                # 않는다(확인된 요청) - 피해량 감소(위 amount -= reduced)는 그대로 적용되지만, 그
+                # 감소분을 서포터에게 되돌려주지는 않는다. 서포터는 애초에 전장에 나서지 않는
+                # 캐릭터라(_all_slots에도 없음) 반사 대상이 되는 것 자체가 어색하다는 판단.
                 reflect_dealt, _, _ = _apply_damage(attacker, reduced, time_elapsed)
                 # 반사 피해는 여기서 attacker["hp"]를 실제로 깎지만(백엔드 상태는 항상 정확했음),
                 # 그 사실을 알리는 이벤트가 하나도 없어서 프론트에 전혀 반영되지 않는 버그가 있었다
