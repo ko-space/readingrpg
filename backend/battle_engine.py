@@ -658,8 +658,17 @@ def _apply_pending_reflect_events(attacker_team, defender_team, events):
     남겨둔 기록을 걷어서 실제 이벤트로 바꾼다. _apply_damage는 events 리스트에 접근할 수 없는
     위치(skill_handlers.py의 스킬 효과 함수들)에서도 호출되므로 이렇게 한 틱 늦게(그러나 같은 틱
     안에서) 모아 처리한다 - 실시간(1v1 친선전)이든 일괄 시뮬레이션이든 매 틱 이 함수가 불리므로
-    한 틱도 누락되지 않는다."""
-    for unit in (u for u in _all_slots(attacker_team) + _all_slots(defender_team) if u):
+    한 틱도 누락되지 않는다.
+    _all_slots는 서포터를 포함하지 않지만(전장에 나서지 않아 보통은 공격/피격 대상이 아님),
+    김국회 "일당 독재"(_apply_ally_attack_splash)의 스플래시는 "서포터 자신의" 공격력 기준이라
+    attacker=supporter로 걸려 반사가 서포터 본인에게도 일어날 수 있다(확인된 시나리오) - 서포터를
+    빼먹으면 그의 실제 체력은 정상적으로 줄어드는데(_apply_damage가 unit dict를 직접 깎으므로)
+    이를 알리는 이벤트가 전혀 안 나가 화면에 반영되지 않고, 다음 반사 때마다 기록만 계속 쌓이는
+    버그가 된다 - 그래서 양팀의 supporter도 명시적으로 함께 훑는다."""
+    all_units = list(_all_slots(attacker_team)) + list(_all_slots(defender_team))
+    all_units.append(attacker_team.get("supporter"))
+    all_units.append(defender_team.get("supporter"))
+    for unit in (u for u in all_units if u):
         pending = unit.pop("_pending_reflect_hits", None)
         if not pending:
             continue
