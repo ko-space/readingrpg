@@ -900,12 +900,16 @@ def _skill_direction_shift(caster, own_team, enemy_team, params, time_elapsed):
     caster["status"]["temp_move_speed_mods"]["kimhyeonjae_active"] = {
         "percent": params["move_speed_percent"], "until": ends_at,
     }
+    caster["status"]["temp_atk_mods"]["kimhyeonjae_active"] = {
+        "percent": params["atk_percent"], "until": ends_at,
+    }
     caster["damage_reduction_config"] = {
         "until": ends_at, "dr_percent": params["damage_reduction_percent"], "reflect": True,
     }
     return {
         "activated": True, "duration_seconds": duration,
         "hp_drain_percent_per_second": params["hp_drain_percent_per_second"],
+        "atk_percent": params["atk_percent"],
         "damage_reduction_percent": params["damage_reduction_percent"],
         "move_speed_percent": params["move_speed_percent"],
         "melee_speed_ratio": caster["melee_speed_ratio"],

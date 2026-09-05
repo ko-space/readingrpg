@@ -626,7 +626,7 @@ def _refresh_status_until(status, until_key, new_until, time_elapsed):
     return True
 
 
-def _apply_damage(target, amount, time_elapsed, attacker=None):
+def _apply_damage(target, amount, time_elapsed, attacker=None, suppress_reflect_bounce=False):
     """실드(shield_until)가 떠 있으면 피해를 0으로 만든다(=무적). 방임석의 "방임" 상태가 활성이면
     (neglect_active) 대신 받는 피해를 dr_percent만큼 줄인다 - 실드와 동시에 걸릴 일은 없다(둘 다 self
     전용 상태라 서로 다른 캐릭터에게만 각각 있음). 김현재(damage_reduction_config - "방향 전환"/
@@ -634,7 +634,13 @@ def _apply_damage(target, amount, time_elapsed, attacker=None):
     그 줄어든 만큼을 공격자에게 그대로 반사한다(reflect=True) - attacker가 주어지고 아직 살아있을
     때만 실제로 반사한다(스킬 핸들러는 caster를, 기본공격은 unit을 그대로 넘겨준다 - 넘기지 않는
     극소수 호출부는 그냥 반사가 안 걸릴 뿐 나머지 계산은 정상 동작한다). 반사 피해는 무한 재귀를
-    막기 위해 attacker=None으로(반사받은 쪽이 또 반사하지 않도록) 재귀 호출한다. 그 다음, 수치형
+    막기 위해 attacker=None으로(반사받은 쪽이 또 반사하지 않도록) 재귀 호출하고, 실제로 반사가
+    일어나면 attacker["_pending_reflect_hits"]에 기록을 남겨 battle_engine._simulate_tick이 매 틱
+    끝에서 이벤트로 변환한다(프론트에 반사 피해를 알리기 위함 - 확인된 버그: 그동안 attacker의 hp는
+    실제로 줄었지만 그 사실을 알리는 이벤트가 없어 화면에는 전혀 반영되지 않았음). suppress_reflect_bounce는
+    이도협 "돌직구"의 귀환 판정처럼 이미 자기만의 왕복 연출/타이밍이 있는 호출부가 True로 넘겨서,
+    프론트가 "튕겨나가는 탄환" 연출 대신 그 자리에서 곧바로 반영하게 하는 힌트다(이 값 자체는
+    battle_core 로직에 영향을 주지 않고 그대로 이벤트에 실려나갈 뿐이다). 그 다음, 수치형
     보호막(target["shield"] - 김크장류 지원가가 부여하는 최대 체력 비례 보호막)이 남아있으면 먼저
     거기서 깎고, 다 깎고도 남은 만큼만 체력에서 깎는다.
 
@@ -660,7 +666,20 @@ def _apply_damage(target, amount, time_elapsed, attacker=None):
             reduced = amount * dr_config["dr_percent"] / 100
             amount -= reduced
             if dr_config.get("reflect") and attacker is not None and attacker["hp"] > 0 and reduced > 0:
-                _apply_damage(attacker, reduced, time_elapsed)
+                reflect_dealt, _, _ = _apply_damage(attacker, reduced, time_elapsed)
+                # 반사 피해는 여기서 attacker["hp"]를 실제로 깎지만(백엔드 상태는 항상 정확했음),
+                # 그 사실을 알리는 이벤트가 하나도 없어서 프론트에 전혀 반영되지 않는 버그가 있었다
+                # (확인된 버그 - "반사했는데 상대 체력이 안 준다"). _apply_damage는 target/attacker
+                # 유닛만 알 뿐 이 반사를 이벤트로 남길 events 리스트에 접근할 수 없는 위치에서도
+                # 호출되므로(스킬 효과 함수들은 events를 안 받음), 반사당한 유닛(attacker) 자신에게
+                # "나 방금 반사로 이만큼 맞았다"는 기록만 잠깐 얹어두고, battle_engine._simulate_tick이
+                # 매 틱 끝에서 전 유닛을 훑어 이벤트로 변환한다(unit dict는 배틀마다 새로 만들어지므로
+                # 모듈 전역 상태와 달리 동시 진행 중인 다른 배틀과 섞일 위험이 없다).
+                if reflect_dealt > 0:
+                    attacker.setdefault("_pending_reflect_hits", []).append({
+                        "time": time_elapsed, "reflector": target, "amount": reflect_dealt,
+                        "suppress_bounce": suppress_reflect_bounce,
+                    })
         raw_amount = max(0, round(amount))
     amount = max(0, round(amount))
     if target.get("shield"):
