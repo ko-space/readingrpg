@@ -890,7 +890,13 @@ def _skill_direction_shift(caster, own_team, enemy_team, params, time_elapsed):
     caster["kimhyeonjae_drain_percent_per_second"] = params["hp_drain_percent_per_second"]
     caster["is_melee"] = True
     caster["melee_speed"] = MELEE_SPEED_BACK if caster.get("slot") == "back" else MELEE_SPEED_FRONT
-    caster["melee_speed_ratio"] = caster["melee_speed"] / MELEE_SPEED_FRONT
+    # melee_speed_ratio는 프론트 걷기 루프(startMeleeWalker의 tick)가 픽셀 이동량에 그대로 곱하는
+    # 값이라(battle_core.compute_unit_stats 주석 참고), move_speed_percent를 여기서 미리 곱해 넣지
+    # 않으면 백엔드 상태(temp_move_speed_mods)와 무관하게 항상 슬롯 기본 속도로만 걷는 버그가 된다
+    # (확인된 버그 - 이동속도 아이콘은 뜨는데 실제로는 빨라지지 않음). _effective_melee_speed와
+    # 동일한 식(기본 속도 x (1 + %/100))을 그대로 반영한다.
+    base_speed_ratio = caster["melee_speed"] / MELEE_SPEED_FRONT
+    caster["melee_speed_ratio"] = base_speed_ratio * (1 + params["move_speed_percent"] / 100)
     caster["status"]["temp_move_speed_mods"]["kimhyeonjae_active"] = {
         "percent": params["move_speed_percent"], "until": ends_at,
     }
@@ -902,6 +908,7 @@ def _skill_direction_shift(caster, own_team, enemy_team, params, time_elapsed):
         "hp_drain_percent_per_second": params["hp_drain_percent_per_second"],
         "damage_reduction_percent": params["damage_reduction_percent"],
         "move_speed_percent": params["move_speed_percent"],
+        "melee_speed_ratio": caster["melee_speed_ratio"],
     }
 
 

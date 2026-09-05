@@ -355,12 +355,13 @@
     function playRangedAttack(actorKey, targetKey, onArrive, onLetterArrive) {
         // 김현재: 평상시엔 style 기반(RANGED_ATTACK_STYLE에 없으니 기본 "straight"=권총 직선 탄환)
         // 그대로 쓰지만, 폭주/지키고 싶은 마음 상태(kimhyeonjaeMode - battle-renderer.js의
-        // kimhyeonjae_mode_resolve/direction_shift 처리가 매 상태 전이마다 갱신함)에서는 링 소용돌이
-        // 촉수(spawnKimHyeonjaeVortexAttack)로 대신한다 - style은 캐릭터별 고정값이라 전투 중 바뀌는
-        // 이런 상태 의존 연출은 style 표로 표현할 수 없어서 여기서 직접 분기해야 한다.
+        // kimhyeonjae_mode_resolve/direction_shift 처리가 매 상태 전이마다 갱신함)에서는 새 이펙트를
+        // 스폰하지 않고 이미 떠 있는 대기 날개를 대상 쪽으로 휘게 한다(khTriggerWingAttack) - style은
+        // 캐릭터별 고정값이라 전투 중 바뀌는 이런 상태 의존 연출은 style 표로 표현할 수 없어서 여기서
+        // 직접 분기해야 한다.
         const khMode = units[actorKey]?.kimhyeonjaeMode;
         if (khMode === "frenzy" || khMode === "special") {
-            spawnKimHyeonjaeVortexAttack(actorKey, targetKey, khMode, onArrive);
+            khTriggerWingAttack(actorKey, targetKey, khMode, onArrive);
             return;
         }
         const style = units[actorKey]?.style || "straight";

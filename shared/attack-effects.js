@@ -2820,9 +2820,14 @@ function khWingCurve(anchor, target, branch, reach) {
 }
 
 // 곡선을 따라 여러 개의(계속 회전하는) 타원형 링을 촘촘히 그려서 "소용돌이 촉수"처럼 보이게 한다
-// (데모의 drawVortex - 링 여러 개를 겹쳐 그려 매우 화려해 보이게 하는 것이 핵심이었다).
-function khDrawVortexTendril(ctx, curve, mode, now, intensity) {
-    const pts = khSampleCurve(curve[0], curve[1], curve[2], curve[3], 20);
+// (데모의 drawVortex - 링 여러 개를 겹쳐 그려 매우 화려해 보이게 하는 것이 핵심이었다). 샘플 개수를
+// 늘릴수록 같은 곡선 길이에 더 많은 링이 더 촘촘한 간격으로 들어간다(확인된 요청 - "매우 빽빽하게").
+const KH_VORTEX_RING_SEGMENTS = 50;
+
+// 이미 샘플링된 점 배열(pts)을 따라 링을 그린다 - khDrawVortexTendril(단일 곡선)과 khWingAuraStep의
+// "휘어짐" 블렌드(khWingBendPoints로 두 곡선의 대응 점끼리 미리 섞어 만든 점 배열) 둘 다 이 함수를
+// 공유한다.
+function khDrawVortexRings(ctx, pts, mode, now, intensity) {
     for (let i = 1; i < pts.length; i++) {
         const p = pts[i];
         const u = i / (pts.length - 1);
@@ -2854,6 +2859,11 @@ function khDrawVortexTendril(ctx, curve, mode, now, intensity) {
     ctx.restore();
 }
 
+function khDrawVortexTendril(ctx, curve, mode, now, intensity) {
+    const pts = khSampleCurve(curve[0], curve[1], curve[2], curve[3], KH_VORTEX_RING_SEGMENTS);
+    khDrawVortexRings(ctx, pts, mode, now, intensity);
+}
+
 // 불빠따 김어진의 "불빠따"(spawnGroundFireCanvas)가 필드 전체에 거는 충격 흔들림과 동일한 CSS
 // 키프레임(ground-fire-shake, attack-effects.css)을 그대로 재사용한다(확인된 요청 - "불빠따처럼").
 // remove -> 강제 리플로우(offsetWidth) -> re-add 패턴이 있어야 이미 재생 중인(또는 방금 끝난)
@@ -2867,76 +2877,11 @@ function khTriggerFieldShake() {
     fieldEl.classList.add("ground-fire-shake");
 }
 
+// out(뻗어나감)/hold(적중 유지)/return(되감기) 3단계 타이밍 - 대기 날개가 공격 순간 상대 쪽으로
+// 휘어졌다가 되돌아오는 khTriggerWingAttack(아래 khWingAuraStep 근처)이 사용한다.
 const KH_VORTEX_OUT_MS = 260;
 const KH_VORTEX_HOLD_MS = 90;
 const KH_VORTEX_RETURN_MS = 320;
-
-// 김현재의 폭주/지키고 싶은 마음 상태 기본공격 전용 투사체 - shared/attack-effects.js의 다른
-// spawnXxxProjectile들과 동일하게 "자기 완결형 캔버스"(끝나면 스스로 remove)로 구현한다. mode는
-// "frenzy"|"special" - 팔레트만 갈린다. onArrive는 촉수가 대상에 실제로 닿는 순간(out 단계 종료)
-// 정확히 한 번 불러서, 다른 투사체들과 동일하게 "명중 판정을 그 순간에" 걸 수 있게 한다.
-function spawnKimHyeonjaeVortexAttack(actorKeyOrEl, targetKeyOrEl, mode, onArrive) {
-    const actorEl = resolveEffectEl(actorKeyOrEl);
-    const targetEl = resolveEffectEl(targetKeyOrEl);
-    const layer = attackEffectsConfig.layerEl;
-    const fieldEl = attackEffectsConfig.fieldEl;
-    if (!layer || !fieldEl || !actorEl || !targetEl) { if (onArrive) onArrive(); return; }
-
-    const dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
-    const fieldRect = fieldEl.getBoundingClientRect();
-    const canvas = document.createElement("canvas");
-    canvas.className = "kh-vortex-canvas";
-    // khWingAuraStep과 동일한 이유(로스터 패널 쪽으로 넘어가는 부분이 캔버스 경계에서 잘리지 않게)로
-    // 필드보다 KH_WING_CANVAS_PAD만큼 사방으로 더 크게 만들고, setTransform으로 그 패딩만큼 평행이동해서
-    // 기존 필드-상대 좌표 계산(khWingCurve 등)은 그대로 재사용한다.
-    const w = fieldRect.width + KH_WING_CANVAS_PAD * 2, h = fieldRect.height + KH_WING_CANVAS_PAD * 2;
-    canvas.style.cssText = `position:absolute;left:${-KH_WING_CANVAS_PAD}px;top:${-KH_WING_CANVAS_PAD}px;width:${w}px;height:${h}px;pointer-events:none;`;
-    canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round(h * dpr);
-    const ctx = canvas.getContext("2d");
-    ctx.setTransform(dpr, 0, 0, dpr, KH_WING_CANVAS_PAD * dpr, KH_WING_CANVAS_PAD * dpr);
-    layer.appendChild(canvas);
-
-    const outMs = speedMs(KH_VORTEX_OUT_MS);
-    const holdMs = speedMs(KH_VORTEX_HOLD_MS);
-    const returnMs = speedMs(KH_VORTEX_RETURN_MS);
-    const totalMs = outMs + holdMs + returnMs;
-    const startMs = performance.now();
-    let arrived = false;
-
-    function frame(now) {
-        const age = now - startMs;
-        if (age >= totalMs || !actorEl.isConnected || !targetEl.isConnected) {
-            canvas.remove();
-            if (!arrived && onArrive) onArrive();
-            return;
-        }
-        const actorNow = fieldRelativeCenter(actorEl);
-        const targetNow = fieldRelativeCenter(targetEl);
-
-        let reach, intensity;
-        if (age < outMs) {
-            const k = age / outMs;
-            reach = 1 - Math.pow(1 - k, 3);
-            intensity = reach;
-        } else if (age < outMs + holdMs) {
-            reach = 1;
-            intensity = 1;
-            if (!arrived) { arrived = true; khTriggerFieldShake(); if (onArrive) onArrive(); }
-        } else {
-            const k = (age - outMs - holdMs) / returnMs;
-            const eased = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-            reach = 1 - eased;
-            intensity = reach;
-        }
-
-        ctx.clearRect(-KH_WING_CANVAS_PAD, -KH_WING_CANVAS_PAD, fieldRect.width + KH_WING_CANVAS_PAD * 2, fieldRect.height + KH_WING_CANVAS_PAD * 2);
-        khDrawVortexTendril(ctx, khWingCurve(actorNow, targetNow, 0, reach), mode, now, Math.max(0.15, intensity));
-        khDrawVortexTendril(ctx, khWingCurve(actorNow, targetNow, 1, reach), mode, now, Math.max(0.15, intensity));
-        requestAnimationFrame(frame);
-    }
-    requestAnimationFrame(frame);
-}
 
 // ===== 김현재 전용: 평상시(원거리) 기본공격 - 권총. 참고 데모(preview(1).html)의 drawBullets를
 // 그대로 이식했다: 총구에서 살짝 위(캐릭터 손/총 높이) 지점에서 흰색 섬광이 한 번 반짝이고, 그
@@ -3042,6 +2987,10 @@ function lerpNum(a, b, t) { return a + (b - a) * t; }
 const khWingAuraActive = {}; // unitKey -> "frenzy"|"special"
 let khWingAuraCanvas = null;
 let khWingAuraLoopRunning = false;
+// unitKey -> 진행 중인 "공격 휘어짐"(khTriggerWingAttack) 상태. 기본공격 때마다 새 이펙트를 따로
+// 만드는 대신, 이미 떠 있는 대기 날개 자체의 끝부분을 대상 쪽으로 휘게 만든다(확인된 요청 - "기존에
+// 정지상태에 있을 때의 날개 끝부분이 휘어서 상대에게 가도록").
+const khWingAttackFx = {};
 
 // anchor(유닛 중심)의 등 뒤에서 완만하게 흔들리는 곡선 - facingDir(1=오른쪽을 봄, -1=왼쪽을 봄)의
 // 반대쪽에 자리잡는다. sway는 시간에 따라 좌우로 살랑거리는 유기적인 움직임(데모의 아이들 애니메이션과
@@ -3060,6 +3009,41 @@ function khIdleWingCurve(anchor, branch, now, edgeX) {
         { x: anchor.x + dx * 0.64, y: riseY - 26 + side * 18 },
         { x: edgeX, y: riseY - 46 + side * 26 },
     ];
+}
+
+// 뿌리(u=0, anchor에 붙은 부분)일수록 먼저/빨리 휘고 끝(u=1, 날개 끝)일수록 늦게 뒤따라와서, 전체가
+// 한 번에 뚝 꺾이지 않고 "막대기가 뿌리부터 순차적으로 휘어 끝까지 도달하는" 채찍 같은 움직임이
+// 되도록 한다(확인된 요청). lag가 클수록 뿌리-끝 사이의 시간차(지연)가 커진다 - bendK(0~1, 전체
+// 진행도)가 아직 u*lag를 못 넘은 점은 0(원래 대기 곡선 그대로), bendK가 1에 가까워지면(hold 진입)
+// 모든 점이 결국 1(완전히 공격 곡선)에 도달한다.
+const KH_WING_BEND_LAG = 0.65;
+
+function khWingBendPoints(idlePts, attackPts, bendK, lag) {
+    const denom = 1 - lag;
+    return idlePts.map((p, i) => {
+        const u = i / (idlePts.length - 1);
+        const pointT = Math.max(0, Math.min(1, (bendK - u * lag) / denom));
+        return {
+            x: p.x + (attackPts[i].x - p.x) * pointT,
+            y: p.y + (attackPts[i].y - p.y) * pointT,
+        };
+    });
+}
+
+// 김현재의 폭주/지키고 싶은 마음 상태 기본공격 - 새 이펙트를 스폰하지 않고, 이미 떠 있는 대기 날개
+// (khWingAuraStep이 매 프레임 그리는 것)를 out(대상 쪽으로 휘어감)/hold(적중 유지)/return(다시
+// 맵 끝으로 펴짐) 3단계로 잠깐 휘게 만든다. onArrive는 hold 진입 순간(예전 spawnKimHyeonjaeVortexAttack과
+// 동일한 타이밍) 정확히 한 번 불러 명중 판정을 그 순간에 걸 수 있게 한다. 대기 날개가 꺼져 있는
+// 상태(예: 아직 kimhyeonjaeMode 갱신 전)에서 호출되면 안전하게 즉시 onArrive만 부르고 끝낸다.
+function khTriggerWingAttack(actorKeyOrEl, targetKeyOrEl, mode, onArrive) {
+    const actorKey = typeof actorKeyOrEl === "string" ? actorKeyOrEl : null;
+    if (!actorKey || !khWingAuraActive[actorKey]) { if (onArrive) onArrive(); return; }
+    khWingAttackFx[actorKey] = {
+        targetKeyOrEl, mode,
+        startMs: performance.now(),
+        outMs: speedMs(KH_VORTEX_OUT_MS), holdMs: speedMs(KH_VORTEX_HOLD_MS), returnMs: speedMs(KH_VORTEX_RETURN_MS),
+        arrived: false, onArrive,
+    };
 }
 
 function khWingAuraStep(nowMs) {
@@ -3104,8 +3088,46 @@ function khWingAuraStep(nowMs) {
         // 이도협 "돌직구"가 반대 방향(적진 쪽 벽)으로 쓰던 것과 같은 헬퍼, side만 자기 팀으로 준다.
         const ownSide = key.startsWith("attacker") ? "attacker" : "defender";
         const edgeX = viewportEdgeXRelativeToField(ownSide, fieldRect);
-        khDrawVortexTendril(ctx, khIdleWingCurve(anchor, 0, nowMs, edgeX), mode, nowMs, 0.65);
-        khDrawVortexTendril(ctx, khIdleWingCurve(anchor, 1, nowMs, edgeX), mode, nowMs, 0.65);
+
+        // 기본공격 중이면(khTriggerWingAttack) 대기 날개 끝을 대상 쪽으로 휘게 한다 - k=0(대기,
+        // 맵 끝)에서 out 단계 동안 k=1(공격, 대상)까지 휘었다가, hold 후 return 단계에서 다시 k=0으로
+        // 펴진다. 대상이 이미 사라졌거나(사망 등) 시간이 다 됐으면 조용히 대기 상태로 복귀한다.
+        const fx = khWingAttackFx[key];
+        let bendK = 0, targetNow = null;
+        if (fx) {
+            const targetEl = resolveEffectEl(fx.targetKeyOrEl);
+            const age = nowMs - fx.startMs;
+            const total = fx.outMs + fx.holdMs + fx.returnMs;
+            if (age >= total || !targetEl || !targetEl.isConnected) {
+                delete khWingAttackFx[key];
+            } else {
+                targetNow = fieldRelativeCenter(targetEl);
+                if (age < fx.outMs) {
+                    const k = age / fx.outMs;
+                    bendK = 1 - Math.pow(1 - k, 3);
+                } else if (age < fx.outMs + fx.holdMs) {
+                    bendK = 1;
+                    if (!fx.arrived) { fx.arrived = true; khTriggerFieldShake(); if (fx.onArrive) fx.onArrive(); }
+                } else {
+                    const k = (age - fx.outMs - fx.holdMs) / fx.returnMs;
+                    const eased = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+                    bendK = 1 - eased;
+                }
+            }
+        }
+        const intensity = 0.65 + 0.35 * bendK;
+
+        [0, 1].forEach((branch) => {
+            const idleCurve = khIdleWingCurve(anchor, branch, nowMs, edgeX);
+            if (targetNow && bendK > 0) {
+                const idlePts = khSampleCurve(idleCurve[0], idleCurve[1], idleCurve[2], idleCurve[3], KH_VORTEX_RING_SEGMENTS);
+                const attackCurve = khWingCurve(anchor, targetNow, branch, 1);
+                const attackPts = khSampleCurve(attackCurve[0], attackCurve[1], attackCurve[2], attackCurve[3], KH_VORTEX_RING_SEGMENTS);
+                khDrawVortexRings(ctx, khWingBendPoints(idlePts, attackPts, bendK, KH_WING_BEND_LAG), mode, nowMs, intensity);
+            } else {
+                khDrawVortexTendril(ctx, idleCurve, mode, nowMs, intensity);
+            }
+        });
     }
     requestAnimationFrame(khWingAuraStep);
 }
@@ -3122,6 +3144,7 @@ function setKimHyeonjaeWingAura(unitKey, mode) {
         }
     } else {
         delete khWingAuraActive[unitKey];
+        delete khWingAttackFx[unitKey]; // 날개 자체가 꺼지면 진행 중이던 공격 휘어짐도 의미가 없다
     }
 }
 
@@ -3129,4 +3152,5 @@ function setKimHyeonjaeWingAura(unitKey, mode) {
 // arena-battle.js/arena-live.js의 showResult에서 돌직구 존 정리와 동일한 이유로 호출한다.
 function clearAllKimHyeonjaeWingAuras() {
     Object.keys(khWingAuraActive).forEach((key) => delete khWingAuraActive[key]);
+    Object.keys(khWingAttackFx).forEach((key) => delete khWingAttackFx[key]);
 }
