@@ -279,6 +279,23 @@ def _trait_arm_reduced_heal_gain_madness(caster, team, enemy_team, params):
     return None
 
 
+def _trait_arm_special_on_partner_death(caster, team, enemy_team, params):
+    # 김현재(지키고 싶은 마음): "장전"만 해둔다 - 실제 판정("폭주" 상태 중 caster["trait_partner_name"]
+    # (청년)이 죽는 순간을 감지해 [Passive]를 해제하고 이 [Special]로 즉시 전환)은 battle_engine.
+    # _apply_kimhyeonjae_state_tick(매 틱)이 처리한다(student_council_budget_config와 동일한
+    # "장전 후 이벤트/상태 감지" 패턴). partner_name 자체는 compute_unit_stats가 이미
+    # caster["trait_partner_name"]에 심어뒀으므로(이도협의 trait_partner_name="불빠따 김어진"과 동일한
+    # 방식) 여기 config에 따로 담지 않는다.
+    caster["special_config"] = {
+        "heal_percent": params["heal_percent"],
+        "duration_seconds": params["duration_seconds"],
+        "atk_percent": params["atk_percent"],
+        "haste_percent": params["haste_percent"],
+        "damage_reduction_percent": params["damage_reduction_percent"],
+    }
+    return None
+
+
 def _trait_periodic_shield_random_non_type_striker(caster, own_team, enemy_team, params, time_elapsed):
     # 신(제 3 권한): star_handlers._star_periodic_heal_random_striker와 같은 이유로(전투 시작 1회가
     # 아니라 "N초마다" 반복) TRAIT_EFFECT_HANDLERS가 아닌 PERIODIC_TRAIT_EFFECT_HANDLERS에 등록한다.
@@ -337,6 +354,7 @@ TRAIT_EFFECT_HANDLERS = {
     "conditional_partner_front_redirect_skill": _trait_conditional_partner_front_redirect_skill,
     "reduced_heal_gain_madness": _trait_arm_reduced_heal_gain_madness,
     "student_council_budget": _trait_arm_student_council_budget,
+    "special_on_partner_death_during_frenzy": _trait_arm_special_on_partner_death,
 }
 
 

@@ -402,7 +402,11 @@ function renderCostSide(side, simNow) {
         // (백엔드 _can_cast_type_swap과 동일한 판정) - isType2는 skill_resolve 디스패치 시점에 이미
         // units[unitKey]에 갱신해두는 값을 그대로 재사용한다(신/방임석과 같은 패턴).
         const isType2Locked = card.name === "이의진" && Boolean(units[unitKey]?.isType2);
-        const blocked = !dead && (onCooldown || Boolean(statusIconState[unitKey]?.stun?.sources?.size) || noRevivableTarget || noPaintAvailable || isType2Locked);
+        // 김현재: 방향 전환/폭주/지키고 싶은 마음 중 무엇이든 진행 중이면(kimhyeonjaeMode가 null이
+        // 아니면) [Active] 카드를 방임석의 "방임"과 동일하게 회색(막힘)으로 보여준다(확인된 요청 -
+        // 백엔드 _can_cast_direction_shift도 이 상태들 동안엔 재시전 자체를 이미 막아뒀다).
+        const kimhyeonjaeLocked = card.name === "김현재" && Boolean(units[unitKey]?.kimhyeonjaeMode);
+        const blocked = !dead && (onCooldown || Boolean(statusIconState[unitKey]?.stun?.sources?.size) || noRevivableTarget || noPaintAvailable || isType2Locked || kimhyeonjaeLocked);
         el.classList.toggle("is-dead", dead);
         el.classList.toggle("is-blocked", blocked);
         const fill = dead ? 0 : Math.min(1, st.displayed / card.card_cost);
@@ -627,6 +631,16 @@ function renderUnit(key, hpOverride) {
             deathHandled[key] = true;
             playDeathSequence(key);
             clearAllStatusIcons(key);
+            // 김현재: 폭주/지키고 싶은 마음 자연 종료로 인한 "즉시 사망"(kimhyeonjae_mode_resolve의
+            // death 분기)은 이미 거기서 직접 대기 날개를 끄지만, 그 상태에서 그냥 평범한 적 공격으로
+            // 죽는 경우(더 흔함)는 그 이벤트를 안 거치므로 여기서 대신 꺼야 한다 - 그래야 사망 후에도
+            // 날개가 화면에 계속 남아있는 버그가 안 생긴다(확인된 버그). 이 캐릭터가 아니면(kimhyeonjaeMode
+            // 필드 자체가 없음) 아무 일도 안 한다.
+            if (battleRendererConfig.units[key]?.kimhyeonjaeMode) {
+                battleRendererConfig.units[key].kimhyeonjaeMode = null;
+                setKimHyeonjaeWingAura(key, null);
+                khSetMeleeActive(key, false);
+            }
         }
     } else {
         deathHandled[key] = false; // 복제체 재소환 등으로 슬롯이 재사용될 때를 대비해 리셋
@@ -1064,6 +1078,32 @@ function markMeleeArrived(key, targetKey) {
     if (targetKey) faceToward(key, targetKey); // 도착하면 대상 쪽을 확실히 바라본다(등 뒤 대상 포함)
     (pendingArrivalResolvers[key] || []).forEach((resolve) => resolve());
     pendingArrivalResolvers[key] = [];
+}
+
+// 김현재 "방향 전환": 원거리 캐릭터인데 이 스킬을 쓰는 동안만 실제로 근접(is_melee=true)이 되어
+// 적 쪽으로 걸어간다(백엔드 battle_core.compute_unit_stats/skill_handlers._skill_direction_shift와
+// 동일한 전환). units[key].isMelee는 battle build 시점에 딱 한 번 정해지는 값이라 그것만 바꿔서는
+// 이미 도는 중인 startMeleeWalker의 tick() 루프가 이 유닛을 새로 챙기지 못한다(meleeTargetKey에
+// 아예 등록된 적이 없어 "목표 없음"으로 매번 건너뜀) - 그래서 근접으로 바뀌는 순간 tick()이 원래
+// 전투 시작 시 근접 유닛에게 해주는 초기화(meleeTargetKey 배정 + meleeArrived=false)를 여기서
+// 대신 해준다. 해제될 때는 반대로 걷기 애니메이션/등록을 전부 정리해서 tick()이 다시는 건드리지
+// 않게 한다(위치 자체는 되돌리지 않는다 - 백엔드도 근접으로 이동한 위치를 그대로 유지함).
+function khSetMeleeActive(key, active) {
+    const units = battleRendererConfig.units;
+    const unitInfo = units[key];
+    if (!unitInfo) return;
+    unitInfo.isMelee = active;
+    if (active) {
+        meleeTargetKey[key] = initialMeleeTargetKey(key);
+        meleeArrived[key] = false;
+    } else {
+        delete meleeTargetKey[key];
+        meleeArrived[key] = false;
+        walkerSuspended[key] = false;
+        stopWalkFrames(key);
+        const el = document.querySelector(`[data-unit="${key}"]`);
+        el?.querySelector(".battle-unit-img")?.classList.remove("walking");
+    }
 }
 
 // 준비시간이 끝나면 호출됨. 모든 근거리 유닛의 최초 목표(적 전방)를 정해두고,
@@ -2793,6 +2833,25 @@ function dispatchEvent(event) {
             };
 
             fireConsumePaintVisuals();
+        } else if (dispatchEffectType === "direction_shift" && event.detail?.activated) {
+            // 김현재 "방향 전환" 시전 - kimhyeonjae_mode_resolve(폭주/지키고 싶은 마음/종료/사망)와
+            // 동일한 스탠딩/아이콘 처리를 여기서도 그대로 한다(이 발동 자체는 매 틱 스윕이 아니라
+            // 일반 [Active] 시전 파이프라인을 그대로 타므로 별도 처리가 필요하다).
+            khSetMeleeActive(actorKey, true);
+            if (actorKey) {
+                const unitInfo = battleRendererConfig.units[actorKey];
+                if (unitInfo) { unitInfo.spriteVariant = "_active"; unitInfo.kimhyeonjaeMode = "active"; }
+                const until = event.time + event.detail.duration_seconds;
+                const activeSource = `${actorKey}:kimhyeonjae_active`;
+                flashEffectAura(actorKey, "buff");
+                setStatusIcon(actorKey, "damage_reduction", { source: activeSource, untilSimTime: until });
+                setStatusIcon(actorKey, "move_speed_up", { source: activeSource, untilSimTime: until });
+                renderUnit(actorKey);
+            }
+            battleRendererConfig.appendLog(
+                `${event.actor}의 [Active] 발동! ${event.detail.duration_seconds}초간 사거리 근거리 전환 - 매초 체력 ${event.detail.hp_drain_percent_per_second}% 감소, 받는 피해 ${event.detail.damage_reduction_percent}% 감소+반사, 이동속도 ${event.detail.move_speed_percent}% 증가`,
+                event.side
+            );
         } else if (dispatchEffectType === "strike_zone_return_throw" && event.detail?.hits?.length) {
             // 이도협 "돌직구": 시전 순간엔 존만 새기고 피해는 전혀 없다(HP 갱신 없음) - 아래 기본 분기의
             // applySkillHits를 그대로 쓰면 hit.target_hp_after가 없어 undefined로 체력을 덮어써버리므로
@@ -3055,6 +3114,74 @@ function dispatchEvent(event) {
                 `${event.actor}의 [Passive] 발동! 광기 전부 소모 - ${event.detail?.buff_seconds ?? 0}초간 공격속도 ${event.detail?.haste_percent ?? 0}%, 공격력 ${event.detail?.atk_percent ?? 0}%, 이동속도 ${event.detail?.move_speed_percent ?? 0}% 증가`,
                 event.side
             );
+        }
+    } else if (eventType === "kimhyeonjae_mode_resolve") {
+        // 김현재: "방향 전환"(active) -> "폭주"(frenzy) -> "지키고 싶은 마음"(special) -> 사망(death)
+        // 상태 전이 - 한 이벤트 타입에 detail.mode로 어느 상태로 바뀌었는지만 실어보낸다. 상태별 전용
+        // 아이콘 아트가 아직 없어서 기존 아이콘(공격력/공격속도/이동속도/피해감소)을 재사용한다.
+        // 스탠딩도 present/basic의 battle_idle_active/_passive/_special.webp로 갈아입는다 -
+        // spriteVariant는 renderUnit이 그대로 battle_idle${variant}.webp로 읽는 범용 필드다.
+        const khKey = findUnitKey(event.side, event.actor);
+        if (khKey) {
+            const mode = event.detail?.mode;
+            const unitInfo = battleRendererConfig.units[khKey];
+            const until = event.time + (event.detail?.duration_seconds || 0);
+            const activeSource = `${khKey}:kimhyeonjae_active`;
+            const modeSource = `${khKey}:kimhyeonjae_mode`;
+
+            if (mode === "active") {
+                if (unitInfo) unitInfo.spriteVariant = "_active";
+                flashEffectAura(khKey, "buff");
+                setStatusIcon(khKey, "damage_reduction", { source: activeSource, untilSimTime: until });
+                setStatusIcon(khKey, "move_speed_up", { source: activeSource, untilSimTime: until });
+                battleRendererConfig.appendLog(
+                    `${event.actor}의 [Active] 발동! ${event.detail.duration_seconds}초간 사거리 근거리 전환 - 매초 체력 ${event.detail.hp_drain_percent_per_second}% 감소, 받는 피해 ${event.detail.damage_reduction_percent}% 감소+반사, 이동속도 ${event.detail.move_speed_percent}% 증가`,
+                    event.side
+                );
+            } else if (mode === "frenzy") {
+                if (unitInfo) { unitInfo.spriteVariant = "_passive"; unitInfo.kimhyeonjaeMode = "frenzy"; }
+                khSetMeleeActive(khKey, false); // "사용 중인 방향 전환 즉시 해제" - 근접 걷기도 함께 취소
+                setKimHyeonjaeWingAura(khKey, "frenzy");
+                khTriggerFieldShake();
+                clearStatusIconSource(khKey, "damage_reduction", activeSource);
+                clearStatusIconSource(khKey, "move_speed_up", activeSource);
+                flashEffectAura(khKey, "cc");
+                setStatusIcon(khKey, "atk_up", { source: modeSource, untilSimTime: until });
+                setStatusIcon(khKey, "atk_speed_up", { source: modeSource, untilSimTime: until });
+                battleRendererConfig.appendLog(
+                    `${event.actor}의 [Passive] 발동! 폭주 - 방향 전환 해제, ${event.detail.duration_seconds}초간 공격력 ${event.detail.atk_percent}%/공격속도 ${event.detail.haste_percent}% 증가 + CC 면역`,
+                    event.side
+                );
+            } else if (mode === "special") {
+                if (unitInfo) { unitInfo.spriteVariant = "_special"; unitInfo.kimhyeonjaeMode = "special"; unitInfo.hp = event.detail.hp_after; }
+                setKimHyeonjaeWingAura(khKey, "special");
+                khTriggerFieldShake();
+                flashEffectAura(khKey, "buff");
+                setStatusIcon(khKey, "atk_up", { source: modeSource, untilSimTime: until });
+                setStatusIcon(khKey, "atk_speed_up", { source: modeSource, untilSimTime: until });
+                setStatusIcon(khKey, "damage_reduction", { source: modeSource, untilSimTime: until });
+                battleRendererConfig.appendLog(
+                    `${event.actor}의 [Special] 발동! 지키고 싶은 마음 - 체력 ${event.detail.heal_amount} 회복, ${event.detail.duration_seconds}초간 공격력 ${event.detail.atk_percent}%/공격속도 ${event.detail.haste_percent}% 증가 + 받는 피해 ${event.detail.damage_reduction_percent}% 감소 + 기본공격 넉백`,
+                    event.side
+                );
+            } else if (mode === "normal") {
+                if (unitInfo) { unitInfo.spriteVariant = ""; unitInfo.kimhyeonjaeMode = null; }
+                khSetMeleeActive(khKey, false); // 10초 자연 종료 - 근접 걷기를 멈추고 원거리 idle로 복귀
+                setKimHyeonjaeWingAura(khKey, null);
+                clearStatusIconSource(khKey, "damage_reduction", activeSource);
+                clearStatusIconSource(khKey, "move_speed_up", activeSource);
+                battleRendererConfig.appendLog(`${event.actor}의 [Active] 종료! 사거리 원거리 복구`, event.side);
+            } else if (mode === "death") {
+                if (unitInfo) { unitInfo.spriteVariant = ""; unitInfo.kimhyeonjaeMode = null; unitInfo.hp = 0; }
+                khSetMeleeActive(khKey, false);
+                setKimHyeonjaeWingAura(khKey, null);
+                clearAllStatusIcons(khKey);
+                battleRendererConfig.appendLog(
+                    `${event.actor}의 [${event.detail.from === "special" ? "Special" : "Passive"}] 지속시간 종료 - 즉시 사망`,
+                    event.side
+                );
+            }
+            renderUnit(khKey);
         }
     } else if (eventType === "cost_reduction_expire_resolve") {
         // 안지석 "예산 재배정" 만료: 부여받은 사용 횟수를 다 써서 원래 코스트로 되돌아간다 - 카드

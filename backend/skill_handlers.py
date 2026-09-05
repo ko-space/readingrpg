@@ -8,10 +8,10 @@ import random
 
 from battle_core import (
     AXIS_ATTACKER_BACK, AXIS_ATTACKER_FRONT, AXIS_DEFENDER_BACK, AXIS_DEFENDER_FRONT,
-    CC_PRIORITY_KNOCKBACK, KNOCKBACK_POSITION_DISTANCE,
+    CC_PRIORITY_KNOCKBACK, KNOCKBACK_POSITION_DISTANCE, MELEE_SPEED_BACK, MELEE_SPEED_FRONT,
     _alive_target, _alive_units, _apply_damage, _apply_gendered_damage_bonus, _apply_stun,
-    _effective_gender, _interrupt_cast_if_casting, _is_unit_moving, _new_status, _refresh_status_until,
-    _register_hp_loss, _roll_damage_atk, _scale_params, get_type_multiplier,
+    _effective_gender, _interrupt_cast_if_casting, _is_cc_immune, _is_unit_moving, _new_status,
+    _refresh_status_until, _register_hp_loss, _roll_damage_atk, _scale_params, get_type_multiplier,
 )
 
 # ───────────────────────── 스킬(skill) - 팀 공유 코스트 풀이 차면 발동(코스트제) ─────────────────────────
@@ -273,28 +273,33 @@ def _skill_bonus_damage_knockback(caster, own_team, enemy_team, params, time_ela
     atk, is_crit = _roll_damage_atk(caster, time_elapsed)
     damage = atk * params["multiplier"] / 100 * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
-    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
+    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed, attacker=caster)
     target["next_attack_time"] = max(target["next_attack_time"], time_elapsed) + 1.0  # 밀쳐내기 = 다음 행동 1초 지연
     # 넉백도 CC기라 대상이 시전 중이었다면 취소한다 - CC 중 최우선순위(CC_PRIORITY_KNOCKBACK)라
     # "이번 틱 발동 예정" 보호(_interrupt_cast_if_casting 참고)를 뚫고 스턴/그 외 스킬은 확실히 끊되,
-    # 넉백끼리 정확히 같은 틱에 맞부딪히면(동급) 서로 못 끊고 둘 다 정상 발동한다.
-    interrupted_cast = _interrupt_cast_if_casting(target, time_elapsed, CC_PRIORITY_KNOCKBACK)
-
-    # 넉백은 대상을 실제로 자기 진영 뒤쪽(공유 좌표축 기준)으로 KNOCKBACK_POSITION_DISTANCE만큼 밀어낸다
-    # - 자기 팀 홈 back 좌표를 넘어서까지는 안 밀린다(클램프). 근접/원거리 구분 없이 적용한다(원거리도
-    # 전방 슬롯이면 넉백으로 노출도가 줄 수 있어야 일관적이다). 전방이 밀려나 후방보다 덜 노출된 상태가
-    # 되면, _alive_units의 노출도 정렬이 다음 순간부터 바로 그걸 반영해서 우리 팀의 다음 타겟 선정이
-    # 자동으로 최신 위치를 따라간다(전/후방이 뒤바뀌면 타겟도 같이 바뀜).
-    # own_team 근접 유닛 전원을 수동으로 지연시키던 예전 로직은 제거했다 - 대상이 실제로 더 멀어졌으니,
-    # 그 대상을 쫓아가던 근접 유닛은 위치 기반 도착 게이트가 늘어난 거리만큼 자연히 더 오래 걸리게
-    # 만든다(가짜 지연을 얹지 않아도 정확하고, 이 대상과 무관한 다른 아군까지 덩달아 지연되지 않는다).
-    if target["is_attacker_team"]:
-        target["position"] = max(AXIS_ATTACKER_BACK, target["position"] - KNOCKBACK_POSITION_DISTANCE)
+    # 넉백끼리 정확히 같은 틱에 맞부딪히면(동급) 서로 못 끊고 둘 다 정상 발동한다. 단, 김현재처럼 CC
+    # 면역이 걸려있으면(_is_cc_immune) 시전 취소도, 아래 위치 이동도 전부 건너뛴다 - "면역"은 이 CC가
+    # 아무 흔적도 못 남긴다는 뜻이므로.
+    if _is_cc_immune(target, time_elapsed):
+        interrupted_cast = False
     else:
-        target["position"] = min(AXIS_DEFENDER_BACK, target["position"] + KNOCKBACK_POSITION_DISTANCE)
-    # target도 지금 막 이 위치로 밀려났다 - battle_core._exposure_sort_key의 동률 타이브레이커용
-    # (밀려난 뒤 다시 걸어와 노출도가 누군가와 같아지는 순간, 더 늦게 도착한 쪽이 후방으로 판정되게 함).
-    target["position_settled_at"] = time_elapsed
+        interrupted_cast = _interrupt_cast_if_casting(target, time_elapsed, CC_PRIORITY_KNOCKBACK)
+
+        # 넉백은 대상을 실제로 자기 진영 뒤쪽(공유 좌표축 기준)으로 KNOCKBACK_POSITION_DISTANCE만큼 밀어낸다
+        # - 자기 팀 홈 back 좌표를 넘어서까지는 안 밀린다(클램프). 근접/원거리 구분 없이 적용한다(원거리도
+        # 전방 슬롯이면 넉백으로 노출도가 줄 수 있어야 일관적이다). 전방이 밀려나 후방보다 덜 노출된 상태가
+        # 되면, _alive_units의 노출도 정렬이 다음 순간부터 바로 그걸 반영해서 우리 팀의 다음 타겟 선정이
+        # 자동으로 최신 위치를 따라간다(전/후방이 뒤바뀌면 타겟도 같이 바뀜).
+        # own_team 근접 유닛 전원을 수동으로 지연시키던 예전 로직은 제거했다 - 대상이 실제로 더 멀어졌으니,
+        # 그 대상을 쫓아가던 근접 유닛은 위치 기반 도착 게이트가 늘어난 거리만큼 자연히 더 오래 걸리게
+        # 만든다(가짜 지연을 얹지 않아도 정확하고, 이 대상과 무관한 다른 아군까지 덩달아 지연되지 않는다).
+        if target["is_attacker_team"]:
+            target["position"] = max(AXIS_ATTACKER_BACK, target["position"] - KNOCKBACK_POSITION_DISTANCE)
+        else:
+            target["position"] = min(AXIS_DEFENDER_BACK, target["position"] + KNOCKBACK_POSITION_DISTANCE)
+        # target도 지금 막 이 위치로 밀려났다 - battle_core._exposure_sort_key의 동률 타이브레이커용
+        # (밀려난 뒤 다시 걸어와 노출도가 누군가와 같아지는 순간, 더 늦게 도착한 쪽이 후방으로 판정되게 함).
+        target["position_settled_at"] = time_elapsed
 
     return {
         "hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
@@ -311,7 +316,7 @@ def _skill_aoe_gendered_damage(caster, own_team, enemy_team, params, time_elapse
         atk, is_crit = _roll_damage_atk(caster, time_elapsed)
         damage = atk * mult / 100 * type_mult
         damage = _apply_gendered_damage_bonus(caster, t, damage)
-        dealt, raw_dealt, invincible_block = _apply_damage(t, damage, time_elapsed)
+        dealt, raw_dealt, invincible_block = _apply_damage(t, damage, time_elapsed, attacker=caster)
         hits.append({"target": t["name"], "_target_ref": t, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": t["hp"], "target_max_hp": t["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
     return {"hits": hits}
 
@@ -357,7 +362,7 @@ def _skill_copy_target_skill(caster, own_team, enemy_team, params, time_elapsed)
     atk, is_crit = _roll_damage_atk(caster, time_elapsed)
     damage = atk * params["fallback_multiplier"] / 100 * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
-    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
+    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed, attacker=caster)
     return {"hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}]}
 
 
@@ -383,7 +388,7 @@ def _skill_stun_target(caster, own_team, enemy_team, params, time_elapsed):
             atk, is_crit = _roll_damage_atk(caster, time_elapsed)
             damage = (atk / bullet_count) * multiplier / 100 * type_mult
             damage = _apply_gendered_damage_bonus(caster, target, damage)
-            dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
+            dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed, attacker=caster)
             hits.append({
                 "target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt,
                 "invincible_block": invincible_block,
@@ -408,7 +413,7 @@ def _skill_stun_rear_target(caster, own_team, enemy_team, params, time_elapsed):
     atk, is_crit = _roll_damage_atk(caster, time_elapsed)
     damage = atk * params["multiplier"] / 100 * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
-    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
+    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed, attacker=caster)
     interrupted_cast = _apply_stun(target, time_elapsed + params["seconds"], time_elapsed)
     return {
         "hit": True, "target": target["name"], "_target_ref": target, "stun_seconds": params["seconds"],
@@ -424,7 +429,7 @@ def _skill_aoe_enemy_damage(caster, own_team, enemy_team, params, time_elapsed):
         atk, is_crit = _roll_damage_atk(caster, time_elapsed)
         damage = atk * params["multiplier"] / 100 * type_mult
         damage = _apply_gendered_damage_bonus(caster, t, damage)
-        dealt, raw_dealt, invincible_block = _apply_damage(t, damage, time_elapsed)
+        dealt, raw_dealt, invincible_block = _apply_damage(t, damage, time_elapsed, attacker=caster)
         hits.append({"target": t["name"], "_target_ref": t, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": t["hp"], "target_max_hp": t["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
     return {"hits": hits}
 
@@ -437,7 +442,7 @@ def _skill_damage_hp_percent_plus_atk(caster, own_team, enemy_team, params, time
     atk, is_crit = _roll_damage_atk(caster, time_elapsed)
     damage = (target["hp"] * params["hp_percent"] / 100 + atk * params["atk_percent"] / 100) * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
-    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
+    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed, attacker=caster)
     return {"hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}]}
 
 
@@ -457,7 +462,7 @@ def _skill_debuff_atk_and_damage(caster, own_team, enemy_team, params, time_elap
     atk, is_crit = _roll_damage_atk(caster, time_elapsed)
     damage = atk * params["multiplier"] / 100 * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
-    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
+    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed, attacker=caster)
     return {
         "hits": [{"target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult}],
         "debuff_seconds": params["debuff_seconds"],  # 프론트 상태 아이콘(공격력 감소)의 지속시간 표시용
@@ -471,14 +476,14 @@ def _skill_aoe_all_others_damage(caster, own_team, enemy_team, params, time_elap
         if u is caster:
             continue
         atk, is_crit = _roll_damage_atk(caster, time_elapsed)
-        dealt, raw_dealt, invincible_block = _apply_damage(u, atk * params["multiplier"] / 100, time_elapsed)
+        dealt, raw_dealt, invincible_block = _apply_damage(u, atk * params["multiplier"] / 100, time_elapsed, attacker=caster)
         hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": 1.0})
     for u in _alive_units(enemy_team):
         type_mult = get_type_multiplier(caster["attack_type"], u["defense_type"])
         atk, is_crit = _roll_damage_atk(caster, time_elapsed)
         damage = atk * params["multiplier"] / 100 * type_mult
         damage = _apply_gendered_damage_bonus(caster, u, damage)
-        dealt, raw_dealt, invincible_block = _apply_damage(u, damage, time_elapsed)
+        dealt, raw_dealt, invincible_block = _apply_damage(u, damage, time_elapsed, attacker=caster)
         hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult})
     return {"hits": hits}
 
@@ -520,7 +525,7 @@ def _skill_positional_bomb_line(caster, own_team, enemy_team, params, time_elaps
             if abs(u["position"] - impact) > hit_range:
                 continue
             atk, is_crit = _roll_damage_atk(caster, time_elapsed)
-            dealt, raw_dealt, invincible_block = _apply_damage(u, atk * params["multiplier"] / 100, time_elapsed)
+            dealt, raw_dealt, invincible_block = _apply_damage(u, atk * params["multiplier"] / 100, time_elapsed, attacker=caster)
             hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": 1.0, "bomb_index": bomb_index})
         for u in _alive_units(enemy_team):
             if abs(u["position"] - impact) > hit_range:
@@ -529,7 +534,7 @@ def _skill_positional_bomb_line(caster, own_team, enemy_team, params, time_elaps
             atk, is_crit = _roll_damage_atk(caster, time_elapsed)
             damage = atk * params["multiplier"] / 100 * type_mult
             damage = _apply_gendered_damage_bonus(caster, u, damage)
-            dealt, raw_dealt, invincible_block = _apply_damage(u, damage, time_elapsed)
+            dealt, raw_dealt, invincible_block = _apply_damage(u, damage, time_elapsed, attacker=caster)
             hits.append({"target": u["name"], "_target_ref": u, "damage": dealt, "shown_damage": raw_dealt, "invincible_block": invincible_block, "target_hp_after": u["hp"], "target_max_hp": u["max_hp"], "is_crit": is_crit, "type_multiplier": type_mult, "bomb_index": bomb_index})
     return {"hits": hits, "impact_fractions": impact_fractions}
 
@@ -673,11 +678,20 @@ def _has_cost_reduction_target(caster, own_team, enemy_team):
     return bool(_cost_reduction_candidates(own_team))
 
 
+def _can_cast_direction_shift(caster, own_team, enemy_team):
+    # 김현재 "방향 전환": kimhyeonjae_mode가 "active"/"frenzy"/"special" 중 무엇이든(즉 None이 아니면)
+    # 이 스킬 자체가 후보에서 빠져 코스트를 소모하지 않는다(신의 부활 대상 없음과 동일한 패턴) -
+    # 확인된 요청: 방향 전환/폭주/지키고 싶은 마음 중 어느 하나라도 진행 중이면 재시전 자체가 아예
+    # 안 돼야 한다(연장/갱신 없음) - 평상시(None)로 완전히 돌아온 뒤에만 다시 쓸 수 있다.
+    return caster.get("kimhyeonjae_mode") is None
+
+
 SKILL_TARGET_AVAILABILITY_CHECKS = {
     "revive_dead_striker": _has_revivable_striker,
     "consume_paint_multi_effect": _has_any_paint,
     "self_type_swap_heal": _can_cast_type_swap,
     "cost_reduction_grant": _has_cost_reduction_target,
+    "direction_shift": _can_cast_direction_shift,
 }
 
 
@@ -706,7 +720,7 @@ def _skill_consume_paint_multi_effect(caster, own_team, enemy_team, params, time
             atk, is_crit = _roll_damage_atk(caster, time_elapsed)
             damage = atk * (params["red_percent_per_paint"] * red) / 100 * type_mult
             damage = _apply_gendered_damage_bonus(caster, target, damage)
-            dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
+            dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed, attacker=caster)
             detail["hits"] = [{
                 "target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt,
                 "invincible_block": invincible_block,
@@ -815,7 +829,7 @@ def _skill_self_cost_scaling_strike(caster, own_team, enemy_team, params, time_e
     atk, is_crit = _roll_damage_atk(caster, time_elapsed)
     damage = atk * total_percent / 100 * type_mult
     damage = _apply_gendered_damage_bonus(caster, target, damage)
-    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed)
+    dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed, attacker=caster)
 
     return {
         "hit": True,
@@ -862,6 +876,35 @@ def _skill_cost_reduction_grant(caster, own_team, enemy_team, params, time_elaps
     }
 
 
+def _skill_direction_shift(caster, own_team, enemy_team, params, time_elapsed):
+    # 김현재 "방향 전환": 사거리를 근거리로 강제 전환하고(원거리 캐릭터가 실제로 걸어서 근접하게 만듦),
+    # duration_seconds 동안 매초 최대 체력 hp_drain_percent_per_second%를 잃으며, 받는 피해를
+    # damage_reduction_percent%만큼 줄이고 그 줄어든 만큼을 공격자에게 반사한다(reflect=True -
+    # battle_core._apply_damage 참고). 이동속도도 대폭 올려(move_speed_percent) 근접 전환의 실익을
+    # 보장한다. 실제 매초 체력 감소/기간 종료 감지/폭주 전이는 전부 battle_engine.
+    # _apply_kimhyeonjae_state_tick(매 틱 스윕)이 처리한다 - 여기서는 상태 진입만 담당.
+    duration = params["duration_seconds"]
+    ends_at = time_elapsed + duration
+    caster["kimhyeonjae_mode"] = "active"
+    caster["kimhyeonjae_mode_ends_at"] = ends_at
+    caster["kimhyeonjae_drain_percent_per_second"] = params["hp_drain_percent_per_second"]
+    caster["is_melee"] = True
+    caster["melee_speed"] = MELEE_SPEED_BACK if caster.get("slot") == "back" else MELEE_SPEED_FRONT
+    caster["melee_speed_ratio"] = caster["melee_speed"] / MELEE_SPEED_FRONT
+    caster["status"]["temp_move_speed_mods"]["kimhyeonjae_active"] = {
+        "percent": params["move_speed_percent"], "until": ends_at,
+    }
+    caster["damage_reduction_config"] = {
+        "until": ends_at, "dr_percent": params["damage_reduction_percent"], "reflect": True,
+    }
+    return {
+        "activated": True, "duration_seconds": duration,
+        "hp_drain_percent_per_second": params["hp_drain_percent_per_second"],
+        "damage_reduction_percent": params["damage_reduction_percent"],
+        "move_speed_percent": params["move_speed_percent"],
+    }
+
+
 SKILL_EFFECT_HANDLERS = {
     "self_stack_buff": _skill_self_stack_buff,
     "summon_clone": _skill_summon_clone,
@@ -885,4 +928,5 @@ SKILL_EFFECT_HANDLERS = {
     "strike_zone_return_throw": _skill_strike_zone_return_throw,
     "self_cost_scaling_strike": _skill_self_cost_scaling_strike,
     "cost_reduction_grant": _skill_cost_reduction_grant,
+    "direction_shift": _skill_direction_shift,
 }

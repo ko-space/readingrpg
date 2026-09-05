@@ -429,6 +429,148 @@
           }
         }
       }
+    },
+    {
+      "name": "김현재",
+      "designer_user_id": 2,
+      "job_class": "마법사",
+      "gender": "남",
+      "unit_role": "striker",
+      "is_hidden": true,
+      "outfits": {
+        "기본": "present/basic"
+      },
+      "description": "마력이 바닥나, 일정 시간 동안만 마법을 쓸 수 있는 최강의 대마법사입니다.",
+      "gacha_quote": "설령 내 몸이 산산조각 나더라도, 그 애의 미소만큼은 절대로 부수게 놔두지 않아!",
+      "range": "원거리",
+      "attack_type": "Student",
+      "defense_type": "Student",
+      "exp_multiplier": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "exp_subjects": [],
+      "silver_multiplier": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": null,
+        "6": null
+      },
+      "silver_subjects": [],
+      "gold_multiplier": {
+        "1": null,
+        "2": null,
+        "3": 0,
+        "4": 0,
+        "5": 5,
+        "6": 25
+      },
+      "star_effects": {
+        "1": "해당 성급의 별도 효과가 없습니다.",
+        "2": "해당 성급의 별도 효과가 없습니다.",
+        "3": "폭주: [Active] 스킬 발동 중 체력 40% 이하 도달 시 사용 중인 방향 전환 즉시 해제 및 7초간 공격력 80% 증가, 공격속도 50% 증가, CC기 면역 및 사거리 원거리 변경. 종료 시 즉시 사망",
+        "4": "폭주: [Active] 스킬 발동 중 체력 40% 이하 도달 시 사용 중인 방향 전환 즉시 해제 및 7초간 공격력 80% 증가, 공격속도 50% 증가, CC기 면역 및 사거리 원거리 변경. 종료 시 즉시 사망",
+        "5": "폭주: [Active] 스킬 발동 중 체력 40% 이하 도달 시 사용 중인 방향 전환 즉시 해제 및 7초간 공격력 80% 증가, 공격속도 50% 증가, CC기 면역 및 사거리 원거리 변경. 종료 시 즉시 사망",
+        "6": "폭주: [Active] 스킬 발동 중 체력 60% 이하 도달 시 사용 중인 방향 전환 즉시 해제 및 7초간 공격력 80% 증가, 공격속도 75% 증가, CC기 면역 및 사거리 원거리 변경. 종료 시 즉시 사망"
+      },
+      "skill_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": "방향 전환: 10초간 사거리 근거리 변경 및 매초 최대 체력의 4% 감소, 받는 피해량 50% 감소 및 감소한 피해량 반사. 이동속도 150% 증가, 종료 시 사거리 원거리 복구",
+        "5": "방향 전환: 10초간 사거리 근거리 변경 및 매초 최대 체력의 4% 감소, 받는 피해량 50% 감소 및 감소한 피해량 반사. 이동속도 150% 증가, 종료 시 사거리 원거리 복구",
+        "6": "방향 전환: 10초간 사거리 근거리 변경 및 매초 최대 체력의 6% 감소, 받는 피해량 75% 감소 및 감소한 피해량 반사. 이동속도 300% 증가, 종료 시 사거리 원거리 복구"
+      },
+      "trait_effects": {
+        "1": null,
+        "2": null,
+        "3": null,
+        "4": null,
+        "5": "지키고 싶은 마음: [Passive] 발동 중 아군 청년 사망 시 [Passive] 발동 즉시 해제, 최대 체력의 30% 회복 및 6초간 공격력 120% 증가, 공격속도 80% 증가, 받는 피해량 50% 감소, CC기 면역 및 기본 공격 시 적 넉백. 종료 시 즉시 사망",
+        "6": "지키고 싶은 마음: [Passive] 발동 중 아군 청년 사망 시 [Passive] 발동 즉시 해제, 최대 체력의 50% 회복 및 8초간 공격력 200% 증가, 공격속도 150% 증가, 받는 피해량 75% 감소, CC기 면역 및 기본 공격 시 적 넉백. 종료 시 즉시 사망"
+      },
+      "skill_mechanics": {
+        "effect_type": "direction_shift",
+        "cost": 3,
+        "params": {
+          "4": {
+            "duration_seconds": 10,
+            "hp_drain_percent_per_second": 4,
+            "damage_reduction_percent": 50,
+            "move_speed_percent": 150
+          },
+          "5": {
+            "duration_seconds": 10,
+            "hp_drain_percent_per_second": 4,
+            "damage_reduction_percent": 50,
+            "move_speed_percent": 150
+          },
+          "6": {
+            "duration_seconds": 10,
+            "hp_drain_percent_per_second": 6,
+            "damage_reduction_percent": 75,
+            "move_speed_percent": 300
+          }
+        }
+      },
+      "skill_categories": [
+        "blue"
+      ],
+      "star_mechanics": {
+        "effect_type": "frenzy_on_low_hp_during_active",
+        "params": {
+          "3": {
+            "hp_threshold_percent": 40,
+            "duration_seconds": 7,
+            "atk_percent": 80,
+            "haste_percent": 50
+          },
+          "4": {
+            "hp_threshold_percent": 40,
+            "duration_seconds": 7,
+            "atk_percent": 80,
+            "haste_percent": 50
+          },
+          "5": {
+            "hp_threshold_percent": 40,
+            "duration_seconds": 7,
+            "atk_percent": 80,
+            "haste_percent": 50
+          },
+          "6": {
+            "hp_threshold_percent": 60,
+            "duration_seconds": 7,
+            "atk_percent": 80,
+            "haste_percent": 75
+          }
+        }
+      },
+      "trait_mechanics": {
+        "effect_type": "special_on_partner_death_during_frenzy",
+        "partner_name": "청년",
+        "params": {
+          "5": {
+            "heal_percent": 30,
+            "duration_seconds": 6,
+            "atk_percent": 120,
+            "haste_percent": 80,
+            "damage_reduction_percent": 50
+          },
+          "6": {
+            "heal_percent": 50,
+            "duration_seconds": 8,
+            "atk_percent": 200,
+            "haste_percent": 150,
+            "damage_reduction_percent": 75
+          }
+        }
+      }
     }
   ],
   "전설": [

@@ -1244,6 +1244,9 @@ const RANGED_ATTACK_STYLE = {
     "방임석": "paint_gold",      // 물감 투척 - 직선, 항상 황금빛(기본공격은 물감 색과 무관)
     "국회의사당": "cannon",      // 대포알 - 포신 발사(머즐 플래시) -> 포물선 비행 -> 착탄 폭발
     "돌직구 이도협": "baseball", // 야구공 직선 투척(회전+잔상+스피드라인+착탄 링) - 스킬(돌직구)과 같은 공 재사용
+    "김현재": "kimhyeonjae_pistol", // 권총 - 총구 섬광 + 흰 궤적 탄환(참고 데모 이식). 폭주/지키고 싶은
+    // 마음 상태의 소용돌이 촉수 공격은 이 static style 표로는 못 나타내는 "전투 중 상태 의존" 연출이라
+    // arena-battle.js/arena-live.js의 playRangedAttack이 별도로 kimhyeonjaeMode를 직접 확인해 분기한다.
 };
 
 // style 문자열(RANGED_ATTACK_STYLE의 값) 기준으로 실제 전용 연출 함수를 호출한다. 호출부는
@@ -1265,6 +1268,7 @@ function playRangedAttackByStyle(style, actorKeyOrEl, targetKeyOrEl, onArrive, o
     else if (style === "paint_gold") spawnPaintProjectile(actorKeyOrEl, targetKeyOrEl, "paint-gold", onArrive);
     else if (style === "cannon") spawnCannonShellProjectile(actorKeyOrEl, targetKeyOrEl, onArrive, undefined, true);
     else if (style === "baseball") spawnBaseballProjectile(actorKeyOrEl, targetKeyOrEl, onArrive);
+    else if (style === "kimhyeonjae_pistol") spawnKimHyeonjaePistolShot(actorKeyOrEl, targetKeyOrEl, onArrive);
     else if (style === "arc") spawnProjectileArc(actorKeyOrEl, targetKeyOrEl, onArrive);
     else spawnProjectile(actorKeyOrEl, targetKeyOrEl, onArrive);
 }
@@ -2746,4 +2750,383 @@ function playPositionalBombLine(impactFractions, onArrive, onBombLand) {
         requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
+}
+
+// ===== 김현재 전용: "폭주"/"지키고 싶은 마음" 상태의 기본공격 - 두 갈래 링 소용돌이 촉수가 곡선을
+// 그리며 대상까지 날아가 적중한 뒤 다시 되감겨 돌아온다. 사용자가 준 참고 데모(캔버스 기반, 고정
+// 카메라 좌우 배치 전제)의 sampleCurve/tangent/drawVortex/drawRingBurst 아이디어를 이 게임의 실제
+// 필드 좌표계(임의의 시전자-대상 위치/거리)에 맞게 일반화해서 이식했다 - 데모는 흑익(폭주)/백익
+// (지키고 싶은 마음)을 검정↔흰색 블렌드로 표현했지만, 실제로 받은 스탠딩 아트(battle_idle_passive는
+// 보라색 오라, battle_idle_special은 흰/금빛 오라)에 맞춰 팔레트를 그 색으로 바꿨다.
+// 필드 경계(로스터 패널 쪽)를 넘어가는 부분이 캔버스 자체의 가장자리에서 잘리지 않도록, 김현재
+// 전용 캔버스(대기 날개/공격 투사체 둘 다)는 전부 필드보다 이만큼 사방으로 더 크게 만든다.
+// 대기 날개가 이제 "맵(뷰포트) 끝까지" 뻗어나가므로(khIdleWingCurve 참고), 로스터 패널 폭(약
+// 292px + 간격)을 넉넉히 덮을 만큼 커야 캔버스 자체 경계에서 잘리지 않는다.
+const KH_WING_CANVAS_PAD = 420;
+
+const KH_VORTEX_PALETTE = {
+    frenzy: { core: [168, 92, 247], glow: [124, 58, 237] },
+    special: { core: [255, 255, 255], glow: [255, 225, 150] },
+};
+
+function khVortexColor(mode, alpha) {
+    const [r, g, b] = KH_VORTEX_PALETTE[mode] ? KH_VORTEX_PALETTE[mode].core : KH_VORTEX_PALETTE.frenzy.core;
+    return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function khVortexShadow(mode, alpha) {
+    const [r, g, b] = KH_VORTEX_PALETTE[mode] ? KH_VORTEX_PALETTE[mode].glow : KH_VORTEX_PALETTE.frenzy.glow;
+    return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function khCurvePoint(p0, p1, p2, p3, t) {
+    const u = 1 - t, uu = u * u, tt = t * t;
+    return {
+        x: uu * u * p0.x + 3 * uu * t * p1.x + 3 * u * tt * p2.x + tt * t * p3.x,
+        y: uu * u * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + tt * t * p3.y,
+    };
+}
+
+function khSampleCurve(p0, p1, p2, p3, n) {
+    const pts = [];
+    for (let i = 0; i <= n; i++) pts.push(khCurvePoint(p0, p1, p2, p3, i / n));
+    return pts;
+}
+
+function khTangent(points, i) {
+    const p0 = points[Math.max(0, i - 1)], p1 = points[Math.min(points.length - 1, i + 1)];
+    const dx = p1.x - p0.x, dy = p1.y - p0.y;
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: dx / len, y: dy / len };
+}
+
+// anchor(시전자)->target 사이를 branch(0/1)마다 서로 반대 방향(수직 법선)으로 부풀린 3차 베지어로
+// 잇는다. reach(0~1)는 "지금 얼마나 뻗어나갔는지" - 1이면 대상까지 완전히 도달, 되감기(return)
+// 단계에선 거꾸로 줄어든다(데모의 wingAttackCurve out/hold/return 3단계를 reach 하나로 단순화).
+function khWingCurve(anchor, target, branch, reach) {
+    const dx = target.x - anchor.x, dy = target.y - anchor.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const nx = -dy / dist, ny = dx / dist;
+    const bulge = (branch === 0 ? 1 : -1) * dist * 0.30;
+    const midBaseX = anchor.x + dx * 0.5, midBaseY = anchor.y + dy * 0.5;
+    const ctrl1X = anchor.x + nx * bulge * 0.55, ctrl1Y = anchor.y + ny * bulge * 0.55;
+    const ctrl2X = midBaseX + nx * bulge, ctrl2Y = midBaseY + ny * bulge;
+    return [
+        { x: anchor.x, y: anchor.y },
+        { x: ctrl1X, y: ctrl1Y },
+        { x: anchor.x + (ctrl2X - anchor.x) * reach, y: anchor.y + (ctrl2Y - anchor.y) * reach },
+        { x: anchor.x + dx * reach, y: anchor.y + dy * reach },
+    ];
+}
+
+// 곡선을 따라 여러 개의(계속 회전하는) 타원형 링을 촘촘히 그려서 "소용돌이 촉수"처럼 보이게 한다
+// (데모의 drawVortex - 링 여러 개를 겹쳐 그려 매우 화려해 보이게 하는 것이 핵심이었다).
+function khDrawVortexTendril(ctx, curve, mode, now, intensity) {
+    const pts = khSampleCurve(curve[0], curve[1], curve[2], curve[3], 20);
+    for (let i = 1; i < pts.length; i++) {
+        const p = pts[i];
+        const u = i / (pts.length - 1);
+        const t = khTangent(pts, i);
+        const angle = Math.atan2(t.y, t.x) + now * 0.004 * (i % 2 ? 1 : -1);
+        const rx = (10 + u * 26) * intensity;
+        const ry = rx * 0.42;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(angle);
+        ctx.strokeStyle = khVortexColor(mode, 0.85 * intensity);
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = khVortexShadow(mode, 0.6);
+        ctx.lineWidth = Math.max(1.2, 4 - u * 2.4);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 1.7);
+        ctx.stroke();
+        ctx.restore();
+    }
+    const root = pts[0];
+    ctx.save();
+    const rg = ctx.createRadialGradient(root.x, root.y, 2, root.x, root.y, 44);
+    rg.addColorStop(0, khVortexColor(mode, 0.4 * intensity));
+    rg.addColorStop(1, khVortexColor(mode, 0));
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    ctx.arc(root.x, root.y, 44, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+
+// 불빠따 김어진의 "불빠따"(spawnGroundFireCanvas)가 필드 전체에 거는 충격 흔들림과 동일한 CSS
+// 키프레임(ground-fire-shake, attack-effects.css)을 그대로 재사용한다(확인된 요청 - "불빠따처럼").
+// remove -> 강제 리플로우(offsetWidth) -> re-add 패턴이 있어야 이미 재생 중인(또는 방금 끝난)
+// 애니메이션도 매번 처음부터 다시 시작한다(흑익/백익 전환 직후 곧바로 기본공격이 적중해도 흔들림이
+// 끊기지 않고 새로 갱신됨).
+function khTriggerFieldShake() {
+    const fieldEl = attackEffectsConfig.fieldEl;
+    if (!fieldEl) return;
+    fieldEl.classList.remove("ground-fire-shake");
+    void fieldEl.offsetWidth;
+    fieldEl.classList.add("ground-fire-shake");
+}
+
+const KH_VORTEX_OUT_MS = 260;
+const KH_VORTEX_HOLD_MS = 90;
+const KH_VORTEX_RETURN_MS = 320;
+
+// 김현재의 폭주/지키고 싶은 마음 상태 기본공격 전용 투사체 - shared/attack-effects.js의 다른
+// spawnXxxProjectile들과 동일하게 "자기 완결형 캔버스"(끝나면 스스로 remove)로 구현한다. mode는
+// "frenzy"|"special" - 팔레트만 갈린다. onArrive는 촉수가 대상에 실제로 닿는 순간(out 단계 종료)
+// 정확히 한 번 불러서, 다른 투사체들과 동일하게 "명중 판정을 그 순간에" 걸 수 있게 한다.
+function spawnKimHyeonjaeVortexAttack(actorKeyOrEl, targetKeyOrEl, mode, onArrive) {
+    const actorEl = resolveEffectEl(actorKeyOrEl);
+    const targetEl = resolveEffectEl(targetKeyOrEl);
+    const layer = attackEffectsConfig.layerEl;
+    const fieldEl = attackEffectsConfig.fieldEl;
+    if (!layer || !fieldEl || !actorEl || !targetEl) { if (onArrive) onArrive(); return; }
+
+    const dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+    const fieldRect = fieldEl.getBoundingClientRect();
+    const canvas = document.createElement("canvas");
+    canvas.className = "kh-vortex-canvas";
+    // khWingAuraStep과 동일한 이유(로스터 패널 쪽으로 넘어가는 부분이 캔버스 경계에서 잘리지 않게)로
+    // 필드보다 KH_WING_CANVAS_PAD만큼 사방으로 더 크게 만들고, setTransform으로 그 패딩만큼 평행이동해서
+    // 기존 필드-상대 좌표 계산(khWingCurve 등)은 그대로 재사용한다.
+    const w = fieldRect.width + KH_WING_CANVAS_PAD * 2, h = fieldRect.height + KH_WING_CANVAS_PAD * 2;
+    canvas.style.cssText = `position:absolute;left:${-KH_WING_CANVAS_PAD}px;top:${-KH_WING_CANVAS_PAD}px;width:${w}px;height:${h}px;pointer-events:none;`;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, KH_WING_CANVAS_PAD * dpr, KH_WING_CANVAS_PAD * dpr);
+    layer.appendChild(canvas);
+
+    const outMs = speedMs(KH_VORTEX_OUT_MS);
+    const holdMs = speedMs(KH_VORTEX_HOLD_MS);
+    const returnMs = speedMs(KH_VORTEX_RETURN_MS);
+    const totalMs = outMs + holdMs + returnMs;
+    const startMs = performance.now();
+    let arrived = false;
+
+    function frame(now) {
+        const age = now - startMs;
+        if (age >= totalMs || !actorEl.isConnected || !targetEl.isConnected) {
+            canvas.remove();
+            if (!arrived && onArrive) onArrive();
+            return;
+        }
+        const actorNow = fieldRelativeCenter(actorEl);
+        const targetNow = fieldRelativeCenter(targetEl);
+
+        let reach, intensity;
+        if (age < outMs) {
+            const k = age / outMs;
+            reach = 1 - Math.pow(1 - k, 3);
+            intensity = reach;
+        } else if (age < outMs + holdMs) {
+            reach = 1;
+            intensity = 1;
+            if (!arrived) { arrived = true; khTriggerFieldShake(); if (onArrive) onArrive(); }
+        } else {
+            const k = (age - outMs - holdMs) / returnMs;
+            const eased = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+            reach = 1 - eased;
+            intensity = reach;
+        }
+
+        ctx.clearRect(-KH_WING_CANVAS_PAD, -KH_WING_CANVAS_PAD, fieldRect.width + KH_WING_CANVAS_PAD * 2, fieldRect.height + KH_WING_CANVAS_PAD * 2);
+        khDrawVortexTendril(ctx, khWingCurve(actorNow, targetNow, 0, reach), mode, now, Math.max(0.15, intensity));
+        khDrawVortexTendril(ctx, khWingCurve(actorNow, targetNow, 1, reach), mode, now, Math.max(0.15, intensity));
+        requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+}
+
+// ===== 김현재 전용: 평상시(원거리) 기본공격 - 권총. 참고 데모(preview(1).html)의 drawBullets를
+// 그대로 이식했다: 총구에서 살짝 위(캐릭터 손/총 높이) 지점에서 흰색 섬광이 한 번 반짝이고, 그
+// 지점에서 대상까지 짧게 빛나는 흰 궤적(꼬리) + 끝의 작은 어두운 탄두가 easeOutCubic으로 날아간다.
+// 실제 스탠딩(present/basic)이 이미 총을 들고 있는 그림이라, 데모처럼 총 자체를 따로 그리지는
+// 않고 총구 섬광 + 탄환 궤적만 재현한다. =====
+const KH_PISTOL_TRAVEL_MS = 300;
+const KH_PISTOL_MUZZLE_FLASH_MS = 120;
+
+// 총구 위치 - 캐릭터 중심에서 바라보는 방향으로 살짝, 그리고 "살짝만 올려달라"는 요청대로 중심보다
+// 확실히 위쪽(가슴~손 높이 근처)으로 잡는다.
+function khPistolMuzzlePoint(actorEl, facingDir) {
+    const center = fieldRelativeCenter(actorEl);
+    const rect = actorEl.getBoundingClientRect();
+    return {
+        x: center.x + facingDir * rect.width * 0.16,
+        y: center.y - rect.height * 0.28,
+    };
+}
+
+function spawnKimHyeonjaePistolShot(actorKeyOrEl, targetKeyOrEl, onArrive) {
+    const actorEl = resolveEffectEl(actorKeyOrEl);
+    const targetEl = resolveEffectEl(targetKeyOrEl);
+    const layer = attackEffectsConfig.layerEl;
+    const fieldEl = attackEffectsConfig.fieldEl;
+    if (!layer || !fieldEl || !actorEl || !targetEl) { if (onArrive) onArrive(); return; }
+
+    const dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+    const fieldRect = fieldEl.getBoundingClientRect();
+    const canvas = document.createElement("canvas");
+    canvas.className = "kh-pistol-canvas";
+    const w = fieldRect.width + KH_WING_CANVAS_PAD * 2, h = fieldRect.height + KH_WING_CANVAS_PAD * 2;
+    canvas.style.cssText = `position:absolute;left:${-KH_WING_CANVAS_PAD}px;top:${-KH_WING_CANVAS_PAD}px;width:${w}px;height:${h}px;pointer-events:none;`;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, KH_WING_CANVAS_PAD * dpr, KH_WING_CANVAS_PAD * dpr);
+    layer.appendChild(canvas);
+
+    const facingDir = (typeof isFacingFlipped === "function" && isFacingFlipped(actorKeyOrEl)) ? -1 : 1;
+    const muzzle = khPistolMuzzlePoint(actorEl, facingDir);
+
+    const travelMs = speedMs(KH_PISTOL_TRAVEL_MS);
+    const flashMs = speedMs(KH_PISTOL_MUZZLE_FLASH_MS);
+    const startMs = performance.now();
+    let arrived = false;
+
+    function frame(now) {
+        const age = now - startMs;
+        if (age >= travelMs || !actorEl.isConnected || !targetEl.isConnected) {
+            canvas.remove();
+            if (!arrived && onArrive) onArrive();
+            return;
+        }
+        const target = fieldRelativeCenter(targetEl);
+        ctx.clearRect(-KH_WING_CANVAS_PAD, -KH_WING_CANVAS_PAD, fieldRect.width + KH_WING_CANVAS_PAD * 2, fieldRect.height + KH_WING_CANVAS_PAD * 2);
+
+        if (age < flashMs) {
+            ctx.save();
+            ctx.globalAlpha = 1 - age / flashMs;
+            ctx.shadowBlur = 14;
+            ctx.shadowColor = "#fff";
+            ctx.fillStyle = "#fff";
+            ctx.beginPath();
+            ctx.arc(muzzle.x, muzzle.y, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        const t = Math.min(1, age / travelMs);
+        const tt = 1 - Math.pow(1 - t, 3); // easeOutCubic
+        const x = lerpNum(muzzle.x, target.x, tt), y = lerpNum(muzzle.y, target.y, tt);
+        const tailT = Math.max(0, tt - 0.14);
+        ctx.save();
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = "#fff";
+        ctx.strokeStyle = "rgba(255,255,255,.95)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(lerpNum(muzzle.x, target.x, tailT), lerpNum(muzzle.y, target.y, tailT));
+        ctx.lineTo(x, y);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#111";
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        if (!arrived && t >= 1) { arrived = true; onArrive(); }
+        requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+}
+
+function lerpNum(a, b, t) { return a + (b - a) * t; }
+
+// ===== 김현재 전용: 폭주/지키고 싶은 마음 상태일 때 공격하지 않고 "가만히 있어도" 등 뒤에 계속
+// 떠 있는 대기 날개(데모의 drawIdleWings) - shield-aura와 동일한 "공용 캔버스 1장 + 활성 유닛
+// 목록" 패턴(setShieldAura/shieldAuraStep 참고)으로 구현한다. 유닛마다 개별 캔버스/rAF를 새로
+// 만들지 않고, 이 루프 하나가 활성 유닛 전원을 매 프레임 다시 그린다 - 근접 이동 중에도(예: 다른
+// 캐릭터의 화면) 항상 그 유닛의 "지금" 위치를 따라가도록 매 프레임 fieldRelativeCenter를 다시 잰다.
+const khWingAuraActive = {}; // unitKey -> "frenzy"|"special"
+let khWingAuraCanvas = null;
+let khWingAuraLoopRunning = false;
+
+// anchor(유닛 중심)의 등 뒤에서 완만하게 흔들리는 곡선 - facingDir(1=오른쪽을 봄, -1=왼쪽을 봄)의
+// 반대쪽에 자리잡는다. sway는 시간에 따라 좌우로 살랑거리는 유기적인 움직임(데모의 아이들 애니메이션과
+// 동일한 목적 - 완전히 고정돼 있으면 생기가 없어 보인다).
+// edgeX(field-relative) - 캐스터 "자기 진영" 쪽 뷰포트 끝까지(확인된 요청: "맵 끝까지 뻗어나가게") -
+// viewportEdgeXRelativeToField(caster의 own side, fieldRect)를 그대로 쓴다(이도협 "돌직구"가 반대
+// 방향인 "적진 쪽 벽"까지 쓰는 것과 동일한 헬퍼, 방향만 반대).
+function khIdleWingCurve(anchor, branch, now, edgeX) {
+    const sway = Math.sin(now * 0.0018 + branch * Math.PI) * 14;
+    const side = branch === 0 ? 1 : -1;
+    const dx = edgeX - anchor.x;
+    const riseY = anchor.y - 60 + sway;
+    return [
+        { x: anchor.x, y: anchor.y },
+        { x: anchor.x + dx * 0.28, y: anchor.y - 44 + sway * 0.6 },
+        { x: anchor.x + dx * 0.64, y: riseY - 26 + side * 18 },
+        { x: edgeX, y: riseY - 46 + side * 26 },
+    ];
+}
+
+function khWingAuraStep(nowMs) {
+    if (Object.keys(khWingAuraActive).length === 0) {
+        khWingAuraLoopRunning = false;
+        if (khWingAuraCanvas) { khWingAuraCanvas.remove(); khWingAuraCanvas = null; }
+        return;
+    }
+    const fieldEl = attackEffectsConfig.fieldEl;
+    const layer = attackEffectsConfig.layerEl;
+    if (!fieldEl || !layer) { khWingAuraLoopRunning = false; return; }
+
+    const fieldRect = fieldEl.getBoundingClientRect();
+    const dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
+    if (!khWingAuraCanvas || !khWingAuraCanvas.isConnected) {
+        // .battle-field 정확히 그 크기로만 캔버스를 만들면, 등 뒤로 뻗는 날개가 로스터 패널 쪽으로
+        // 필드 경계를 넘어가는 순간 캔버스 자체의 가장자리에서 잘려버린다(확인된 버그 - 캔버스는
+        // CSS overflow와 별개로 항상 자기 픽셀 크기 밖은 그리지 않음). 필드보다 KH_WING_CANVAS_PAD
+        // 만큼 사방으로 더 큰 캔버스를 만들고 그만큼 왼쪽/위로 당겨 배치해서, 로스터 패널 쪽으로
+        // 넉넉히 더 뻗어도 안 잘리게 한다.
+        khWingAuraCanvas = document.createElement("canvas");
+        khWingAuraCanvas.className = "kh-wing-aura-canvas";
+        const w = fieldRect.width + KH_WING_CANVAS_PAD * 2, h = fieldRect.height + KH_WING_CANVAS_PAD * 2;
+        khWingAuraCanvas.style.cssText = `position:absolute;left:${-KH_WING_CANVAS_PAD}px;top:${-KH_WING_CANVAS_PAD}px;width:${w}px;height:${h}px;pointer-events:none;`;
+        khWingAuraCanvas.width = Math.round(w * dpr);
+        khWingAuraCanvas.height = Math.round(h * dpr);
+        layer.appendChild(khWingAuraCanvas);
+    }
+    const ctx = khWingAuraCanvas.getContext("2d");
+    // setTransform은 매번 절대값으로 행렬을 통째로 다시 지정하므로(누적 아님) 매 프레임 안전하게
+    // 다시 불러도 된다 - dpr 배율 + "필드 원점 기준 좌표를 그대로 써도 패딩만큼 밀려 그려지도록" 하는
+    // 평행이동을 한 번에 적용한다. 그래서 khDrawVortexTendril 등 기존 좌표 계산은 전혀 안 건드려도 된다.
+    ctx.setTransform(dpr, 0, 0, dpr, KH_WING_CANVAS_PAD * dpr, KH_WING_CANVAS_PAD * dpr);
+    ctx.clearRect(-KH_WING_CANVAS_PAD, -KH_WING_CANVAS_PAD, fieldRect.width + KH_WING_CANVAS_PAD * 2, fieldRect.height + KH_WING_CANVAS_PAD * 2);
+
+    for (const key of Object.keys(khWingAuraActive)) {
+        const mode = khWingAuraActive[key];
+        const el = resolveEffectEl(key);
+        if (!el || !el.isConnected) continue;
+        const anchor = fieldRelativeCenter(el);
+        // 캐스터 "자기 진영" 쪽 뷰포트 끝까지(확인된 요청) - viewportEdgeXRelativeToField는 이미
+        // 이도협 "돌직구"가 반대 방향(적진 쪽 벽)으로 쓰던 것과 같은 헬퍼, side만 자기 팀으로 준다.
+        const ownSide = key.startsWith("attacker") ? "attacker" : "defender";
+        const edgeX = viewportEdgeXRelativeToField(ownSide, fieldRect);
+        khDrawVortexTendril(ctx, khIdleWingCurve(anchor, 0, nowMs, edgeX), mode, nowMs, 0.65);
+        khDrawVortexTendril(ctx, khIdleWingCurve(anchor, 1, nowMs, edgeX), mode, nowMs, 0.65);
+    }
+    requestAnimationFrame(khWingAuraStep);
+}
+
+// unitKey의 대기 날개를 켜거나 끈다(mode: "frenzy"|"special", 끌 땐 null/undefined) - 이미 같은
+// 상태로 켜져 있거나 이미 꺼져 있어도 안전하게 재호출 가능하다.
+function setKimHyeonjaeWingAura(unitKey, mode) {
+    if (!unitKey) return;
+    if (mode) {
+        khWingAuraActive[unitKey] = mode;
+        if (!khWingAuraLoopRunning) {
+            khWingAuraLoopRunning = true;
+            requestAnimationFrame(khWingAuraStep);
+        }
+    } else {
+        delete khWingAuraActive[unitKey];
+    }
+}
+
+// 전투가 끝나는 시점에(사망을 거치지 않고 승패로 그냥 끝나도) 남은 대기 날개를 전부 정리한다 -
+// arena-battle.js/arena-live.js의 showResult에서 돌직구 존 정리와 동일한 이유로 호출한다.
+function clearAllKimHyeonjaeWingAuras() {
+    Object.keys(khWingAuraActive).forEach((key) => delete khWingAuraActive[key]);
 }

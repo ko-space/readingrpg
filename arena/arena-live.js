@@ -147,6 +147,13 @@
     }
 
     function playRangedAttack(actorKey, targetKey, onArrive, onLetterArrive) {
+        // arena-battle.js의 playRangedAttack과 동일한 이유 - 김현재의 폭주/지키고 싶은 마음 상태는
+        // style 표(캐릭터별 고정값)로 표현 못 하는 전투 중 상태 의존 연출이라 여기서 직접 분기한다.
+        const khMode = units[actorKey]?.kimhyeonjaeMode;
+        if (khMode === "frenzy" || khMode === "special") {
+            spawnKimHyeonjaeVortexAttack(actorKey, targetKey, khMode, onArrive);
+            return;
+        }
         const style = units[actorKey]?.style || "straight";
         playRangedAttackByStyle(style, actorKey, targetKey, onArrive, { isType2: units[actorKey]?.isType2, onLetterArrive });
     }
@@ -482,6 +489,7 @@
         // 이벤트가 영영 안 와서 스트라이크 존이 화면에 남는다(arena-battle.js의 showResult와 동일한
         // 이유) - 전투가 끝나는 시점에 남은 존을 전부 정리한다.
         document.querySelectorAll(".dolljikgu-zone").forEach((zoneEl) => zoneEl.remove());
+        clearAllKimHyeonjaeWingAuras();
 
         const reason = matchEndPayload?.reason || "finished";
         const resultEl = document.getElementById("battle-result");
