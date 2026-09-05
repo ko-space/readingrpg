@@ -2803,19 +2803,36 @@ function khTangent(points, i) {
 // anchor(시전자)->target 사이를 branch(0/1)마다 서로 반대 방향(수직 법선)으로 부풀린 3차 베지어로
 // 잇는다. reach(0~1)는 "지금 얼마나 뻗어나갔는지" - 1이면 대상까지 완전히 도달, 되감기(return)
 // 단계에선 거꾸로 줄어든다(데모의 wingAttackCurve out/hold/return 3단계를 reach 하나로 단순화).
+// 대상 "위쪽"(머리 위)에 떨어지는 착지 y오프셋 - 값을 늘리면 더 높은 지점(머리보다 위)에 떨어진다.
+// ▶ 착지 높이를 고치려면 이 값만 바꾸면 된다.
+const KH_WING_LANDING_TOP_OFFSET = 70;
+// 포물선이 가장 높이 치솟는 정점의 추가 높이 - 값을 늘리면 더 크게 호를 그리며 솟았다 떨어진다.
+// ▶ 호가 그리는 크기(더 크게/작게 휘어지게)를 고치려면 이 값만 바꾸면 된다.
+const KH_WING_ARC_HEIGHT = 160;
+// 두 날개(branch 0/1)의 착지 지점을 좌우로 얼마나 벌릴지 - 완전히 겹치지 않고 대상 머리 위에
+// 나란히 떨어지는 것처럼 보이게 한다. ▶ 두 날개 간격을 고치려면 이 값만 바꾸면 된다.
+const KH_WING_BRANCH_SPREAD = 16;
+
+// anchor(시전자)에서 target "머리 위"로 떨어지는, 대칭축이 y축과 평행한 포물선(확인된 요청) - x는
+// 제어점을 등간격(anchor.x, +1/3, +2/3, target.x)으로 둬서 t에 대해 정확히 선형이 되게 하고
+// (=곡선의 대칭축이 정확히 세로), y만 두 중간 제어점을 위로 끌어올려(peakY) 치솟았다 내려오는
+// 호를 만든다. branch(0/1)는 착지 x를 좌우로 살짝 벌리고 정점 높이를 아주 조금 다르게 해서 두
+// 날개가 겹쳐 보이지 않게 한다.
 function khWingCurve(anchor, target, branch, reach) {
-    const dx = target.x - anchor.x, dy = target.y - anchor.y;
-    const dist = Math.hypot(dx, dy) || 1;
-    const nx = -dy / dist, ny = dx / dist;
-    const bulge = (branch === 0 ? 1 : -1) * dist * 0.30;
-    const midBaseX = anchor.x + dx * 0.5, midBaseY = anchor.y + dy * 0.5;
-    const ctrl1X = anchor.x + nx * bulge * 0.55, ctrl1Y = anchor.y + ny * bulge * 0.55;
-    const ctrl2X = midBaseX + nx * bulge, ctrl2Y = midBaseY + ny * bulge;
+    const landX = target.x + (branch === 0 ? -1 : 1) * KH_WING_BRANCH_SPREAD;
+    const landY = target.y - KH_WING_LANDING_TOP_OFFSET;
+    const endX = anchor.x + (landX - anchor.x) * reach;
+    const endY = anchor.y + (landY - anchor.y) * reach;
+
+    const peakY = Math.min(anchor.y, endY) - KH_WING_ARC_HEIGHT - (branch === 0 ? 0 : 14);
+    const ctrl1X = anchor.x + (endX - anchor.x) / 3;
+    const ctrl2X = anchor.x + (endX - anchor.x) * 2 / 3;
+
     return [
         { x: anchor.x, y: anchor.y },
-        { x: ctrl1X, y: ctrl1Y },
-        { x: anchor.x + (ctrl2X - anchor.x) * reach, y: anchor.y + (ctrl2Y - anchor.y) * reach },
-        { x: anchor.x + dx * reach, y: anchor.y + dy * reach },
+        { x: ctrl1X, y: peakY },
+        { x: ctrl2X, y: peakY },
+        { x: endX, y: endY },
     ];
 }
 
@@ -2891,14 +2908,19 @@ const KH_VORTEX_RETURN_MS = 320;
 const KH_PISTOL_TRAVEL_MS = 300;
 const KH_PISTOL_MUZZLE_FLASH_MS = 120;
 
-// 총구 위치 - 캐릭터 중심에서 바라보는 방향으로 살짝, 그리고 "살짝만 올려달라"는 요청대로 중심보다
-// 확실히 위쪽(가슴~손 높이 근처)으로 잡는다.
+// 총구 위치 - 캐릭터 중심에서 바라보는 방향(facingDir)으로 몸 너비의 이 비율만큼, 위로는 키의
+// 이 비율만큼 올린 지점. 값을 늘리면(0에서 멀어지면) 그만큼 더 앞/더 위로 나간다.
+// ▶ 총구가 앞뒤로 나가는 정도를 고치려면 여기(가로).
+const KH_PISTOL_MUZZLE_FORWARD_RATIO = 0.24;
+// ▶ 총구가 위아래로 올라가는 정도를 고치려면 여기(세로) - 값이 클수록 더 위.
+const KH_PISTOL_MUZZLE_UP_RATIO = 0.32;
+
 function khPistolMuzzlePoint(actorEl, facingDir) {
     const center = fieldRelativeCenter(actorEl);
     const rect = actorEl.getBoundingClientRect();
     return {
-        x: center.x + facingDir * rect.width * 0.16,
-        y: center.y - rect.height * 0.28,
+        x: center.x + facingDir * rect.width * KH_PISTOL_MUZZLE_FORWARD_RATIO,
+        y: center.y - rect.height * KH_PISTOL_MUZZLE_UP_RATIO,
     };
 }
 
