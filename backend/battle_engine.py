@@ -608,6 +608,18 @@ def _apply_kimhyeonjae_state_tick(team, side, events, time_elapsed):
             hp_percent = unit["hp"] / unit["max_hp"] * 100
             if frenzy_config and hp_percent <= frenzy_config["hp_threshold_percent"]:
                 _kimhyeonjae_enter_frenzy(unit, side, events, time_elapsed, frenzy_config)
+                # 스페셜 발동 조건은 "폭주 발동 중에" 청년이 사망하는 것이지, 이미 죽어있는 채로
+                # 폭주가 발동되는 것이 아니다(확인된 요청) - 폭주 진입 시점에 청년이 이미 사망한
+                # 상태였다면, 아래 "frenzy" 분기의 매 틱 감지가 그 즉시(진입 첫 틱) 조건을 충족한
+                # 것으로 오판해 스페셜이 곧바로 터지던 버그가 있었다. 진입 시점에 이미 죽어있으면
+                # 트리거 플래그를 미리 막아, 그 이후 "실제로" 사망하는 순간만 스페셜을 허용한다.
+                partner_name = unit.get("trait_partner_name")
+                partner = next(
+                    (u for u in (team.get("front"), team.get("back"), team.get("supporter")) if u and u["name"] == partner_name),
+                    None,
+                )
+                if partner is None or partner["hp"] <= 0:
+                    unit["_kimhyeonjae_special_triggered"] = True
             elif time_elapsed >= ends_at:
                 _kimhyeonjae_exit_active(unit, side, events, time_elapsed)
             continue
