@@ -3106,10 +3106,15 @@ function khWingAuraStep(nowMs) {
         const el = resolveEffectEl(key);
         if (!el || !el.isConnected) continue;
         const anchor = fieldRelativeCenter(el);
-        // 캐스터 "자기 진영" 쪽 뷰포트 끝까지(확인된 요청) - viewportEdgeXRelativeToField는 이미
-        // 이도협 "돌직구"가 반대 방향(적진 쪽 벽)으로 쓰던 것과 같은 헬퍼, side만 자기 팀으로 준다.
-        const ownSide = key.startsWith("attacker") ? "attacker" : "defender";
-        const edgeX = viewportEdgeXRelativeToField(ownSide, fieldRect);
+        // 지금 보고 있는 방향의 반대쪽 뷰포트 끝까지(확인된 요청) - 팀 소속(자기 진영)이 아니라
+        // 실제 "지금 바라보는 방향"(isFacingFlipped, battle-renderer.js) 기준이라, 넉백/재배치 등으로
+        // 평소와 반대를 보고 있어도 항상 등 뒤(보는 방향의 반대)로 뻗어나간다.
+        // viewportEdgeXRelativeToField는 이도협 "돌직구"가 반대 방향(적진 쪽 벽)으로 쓰던 것과 같은
+        // 헬퍼 - side 자리에 "왼쪽을 보고 있으면 오른쪽 끝, 오른쪽을 보고 있으면 왼쪽 끝"이 나오도록
+        // flipped 여부를 defender/attacker 자리에 그대로 대입한다(그 두 값이 각각 오른쪽/왼쪽 끝을
+        // 뜻하는 헬퍼라 팀 이름과 무관하게 재사용 가능).
+        const facingLeft = typeof isFacingFlipped === "function" ? isFacingFlipped(key) : key.startsWith("defender");
+        const edgeX = viewportEdgeXRelativeToField(facingLeft ? "defender" : "attacker", fieldRect);
 
         // 기본공격 중이면(khTriggerWingAttack) 대기 날개 끝을 대상 쪽으로 휘게 한다 - k=0(대기,
         // 맵 끝)에서 out 단계 동안 k=1(공격, 대상)까지 휘었다가, hold 후 return 단계에서 다시 k=0으로

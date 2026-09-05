@@ -497,6 +497,7 @@ def _kimhyeonjae_clear_active_effects(unit):
     unit["melee_speed"] = None
     unit["melee_speed_ratio"] = None
     unit["status"]["temp_move_speed_mods"].pop("kimhyeonjae_active", None)
+    unit["status"]["temp_atk_mods"].pop("kimhyeonjae_active", None)
     unit["damage_reduction_config"] = None
     unit["kimhyeonjae_drain_percent_per_second"] = 0
 
@@ -515,7 +516,8 @@ def _kimhyeonjae_exit_active(unit, side, events, time_elapsed):
 
 def _kimhyeonjae_enter_frenzy(unit, side, events, time_elapsed, config):
     """폭주(Passive) 발동 - "방향 전환" 중 체력이 hp_threshold_percent% 이하로 떨어진 순간. 사용 중인
-    방향 전환을 즉시 해제하고(사거리 원거리로 강제 복귀), 7초간 공격력/공격속도 버프 + CC 면역을 건다."""
+    방향 전환을 즉시 해제하고(사거리 원거리로 강제 복귀), 7초간 공격력/공격속도 버프 + CC 면역 +
+    받는 피해 감소 및 반사(방향 전환과 동일한 damage_reduction_config, reflect=True)를 건다."""
     _kimhyeonjae_clear_active_effects(unit)
     duration = config["duration_seconds"]
     until = time_elapsed + duration
@@ -524,12 +526,16 @@ def _kimhyeonjae_enter_frenzy(unit, side, events, time_elapsed, config):
     unit["status"]["temp_atk_mods"]["kimhyeonjae_mode"] = {"percent": config["atk_percent"], "until": until}
     unit["status"]["temp_haste_mods"]["kimhyeonjae_mode"] = {"percent": config["haste_percent"], "until": until}
     unit["status"]["cc_immune_until"] = until
+    unit["damage_reduction_config"] = {
+        "until": until, "dr_percent": config["damage_reduction_percent"], "reflect": True,
+    }
     events.append({
         "time": time_elapsed, "event_type": "kimhyeonjae_mode_resolve", "side": side,
         "actor": unit["name"], "actor_slot": unit.get("slot"),
         "detail": {
             "mode": "frenzy", "duration_seconds": duration,
             "atk_percent": config["atk_percent"], "haste_percent": config["haste_percent"],
+            "damage_reduction_percent": config["damage_reduction_percent"],
         },
     })
 
@@ -537,7 +543,8 @@ def _kimhyeonjae_enter_frenzy(unit, side, events, time_elapsed, config):
 def _kimhyeonjae_enter_special(unit, side, events, time_elapsed, config):
     """지키고 싶은 마음(Special) 발동 - 폭주 중 아군 청년이 죽는 순간. 폭주를 대체하며(같은
     temp_atk_mods/temp_haste_mods 소스 키를 그대로 덮어씀) 체력을 회복하고, 더 강한 버프 +
-    피해감소(반사는 없음, damage_reduction_config의 reflect=False) + 기본공격 시 적 넉백을 건다."""
+    피해감소 및 반사(damage_reduction_config, reflect=True - 확인된 요청: 폭주와 동일하게 반사도
+    걸리도록 변경) + 기본공격 시 적 넉백을 건다."""
     duration = config["duration_seconds"]
     until = time_elapsed + duration
     heal = round(unit["max_hp"] * config["heal_percent"] / 100)
@@ -548,7 +555,7 @@ def _kimhyeonjae_enter_special(unit, side, events, time_elapsed, config):
     unit["status"]["temp_haste_mods"]["kimhyeonjae_mode"] = {"percent": config["haste_percent"], "until": until}
     unit["status"]["cc_immune_until"] = until
     unit["damage_reduction_config"] = {
-        "until": until, "dr_percent": config["damage_reduction_percent"], "reflect": False,
+        "until": until, "dr_percent": config["damage_reduction_percent"], "reflect": True,
     }
     unit["knockback_on_attack_until"] = until
     events.append({
@@ -645,6 +652,32 @@ def _apply_kimhyeonjae_state_tick(team, side, events, time_elapsed):
             _kimhyeonjae_die(unit, side, events, time_elapsed, "special")
 
 
+def _apply_pending_reflect_events(attacker_team, defender_team, events):
+    """battle_core._apply_damage가 반사(damage_reduction_config의 reflect=True - 지금은 김현재
+    "방향 전환"만 해당)가 일어날 때마다 반사당한 유닛(attacker) 자신의 _pending_reflect_hits에
+    남겨둔 기록을 걷어서 실제 이벤트로 바꾼다. _apply_damage는 events 리스트에 접근할 수 없는
+    위치(skill_handlers.py의 스킬 효과 함수들)에서도 호출되므로 이렇게 한 틱 늦게(그러나 같은 틱
+    안에서) 모아 처리한다 - 실시간(1v1 친선전)이든 일괄 시뮬레이션이든 매 틱 이 함수가 불리므로
+    한 틱도 누락되지 않는다."""
+    for unit in (u for u in _all_slots(attacker_team) + _all_slots(defender_team) if u):
+        pending = unit.pop("_pending_reflect_hits", None)
+        if not pending:
+            continue
+        for hit in pending:
+            reflector = hit["reflector"]
+            events.append({
+                "time": hit["time"], "event_type": "damage_reflect_resolve",
+                "side": "attacker" if reflector["is_attacker_team"] else "defender",
+                "actor": reflector["name"], "actor_slot": reflector.get("slot"),
+                "target": unit["name"], "target_side": "attacker" if unit["is_attacker_team"] else "defender",
+                "target_slot": unit.get("slot"),
+                "detail": {
+                    "amount": hit["amount"], "target_hp_after": unit["hp"], "target_max_hp": unit["max_hp"],
+                    "suppress_bounce": hit["suppress_bounce"],
+                },
+            })
+
+
 def _update_lifesteal_status(unit, resolved_target, side, events, time_elapsed):
     """윤(선생 고혈): "지금 확정된 공격 대상"(resolved_target - simulate_battle 메인 루프가 매 틱
     _resolve_basic_attack_target로 갱신한 직후 바로 이 함수를 부른다)이 선생 타입이면(공격/방어
@@ -733,7 +766,9 @@ def _resolve_strike_zone_return_throw(entry, own_team, enemy_team, side_name, ti
                 atk, is_crit = _roll_damage_atk(batter_ref, time_elapsed)
                 damage = atk * redirect["multiplier"] / 100 * type_mult
                 damage = _apply_gendered_damage_bonus(batter_ref, enemy, damage)
-                dealt, raw_dealt, invincible_block = _apply_damage(enemy, damage, time_elapsed, attacker=batter_ref)
+                dealt, raw_dealt, invincible_block = _apply_damage(
+                    enemy, damage, time_elapsed, attacker=batter_ref, suppress_reflect_bounce=True
+                )
                 redirected_hits.append({
                     "target": enemy["name"], "_target_ref": enemy, "damage": dealt, "shown_damage": raw_dealt,
                     "invincible_block": invincible_block, "target_hp_after": enemy["hp"], "target_max_hp": enemy["max_hp"],
@@ -752,7 +787,9 @@ def _resolve_strike_zone_return_throw(entry, own_team, enemy_team, side_name, ti
         atk, is_crit = _roll_damage_atk(caster, time_elapsed)
         damage = atk * multiplier / 100 * type_mult
         damage = _apply_gendered_damage_bonus(caster, target, damage)
-        dealt, raw_dealt, invincible_block = _apply_damage(target, damage, time_elapsed, attacker=caster)
+        dealt, raw_dealt, invincible_block = _apply_damage(
+            target, damage, time_elapsed, attacker=caster, suppress_reflect_bounce=True
+        )
         hit = {
             "target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt,
             "invincible_block": invincible_block, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"],
@@ -767,7 +804,9 @@ def _resolve_strike_zone_return_throw(entry, own_team, enemy_team, side_name, ti
             atk2, is_crit2 = _roll_damage_atk(caster, time_elapsed)
             bonus_damage = atk2 * params["pulled_multiplier"] / 100 * type_mult
             bonus_damage = _apply_gendered_damage_bonus(caster, target, bonus_damage)
-            bonus_dealt, bonus_raw, bonus_invincible = _apply_damage(target, bonus_damage, time_elapsed, attacker=caster)
+            bonus_dealt, bonus_raw, bonus_invincible = _apply_damage(
+                target, bonus_damage, time_elapsed, attacker=caster, suppress_reflect_bounce=True
+            )
             interrupted_cast = _apply_stun(target, time_elapsed + params["pulled_stun_seconds"], time_elapsed)
             hit["pulled"] = True
             hit["pulled_damage"] = bonus_dealt
@@ -1297,6 +1336,8 @@ def _simulate_tick(attacker_team, defender_team, tick_index, time_elapsed, event
             # (_tick_team_cost), 여기서는 그냥 무조건 다음 공격 쿨다운을 재장전한다.
             _do_basic_attack(unit, side_name, own_team, enemy_team, time_elapsed, events, resolved_target=resolved_target)
             unit["next_attack_time"] = time_elapsed + _effective_interval(unit, time_elapsed)
+
+    _apply_pending_reflect_events(attacker_team, defender_team, events)
 
     return time_elapsed
 

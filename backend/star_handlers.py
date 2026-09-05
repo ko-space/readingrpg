@@ -254,6 +254,7 @@ def _star_arm_frenzy_on_low_hp_during_active(unit, own_team, enemy_team, params)
         "duration_seconds": params["duration_seconds"],
         "atk_percent": params["atk_percent"],
         "haste_percent": params["haste_percent"],
+        "damage_reduction_percent": params["damage_reduction_percent"],
     }
     return []
 

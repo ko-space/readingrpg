@@ -2890,12 +2890,13 @@ function dispatchEvent(event) {
                 const until = event.time + event.detail.duration_seconds;
                 const activeSource = `${actorKey}:kimhyeonjae_active`;
                 flashEffectAura(actorKey, "buff");
+                setStatusIcon(actorKey, "atk_up", { source: activeSource, untilSimTime: until });
                 setStatusIcon(actorKey, "damage_reduction", { source: activeSource, untilSimTime: until });
                 setStatusIcon(actorKey, "move_speed_up", { source: activeSource, untilSimTime: until });
                 renderUnit(actorKey);
             }
             battleRendererConfig.appendLog(
-                `${event.actor}의 [Active] 발동! ${event.detail.duration_seconds}초간 사거리 근거리 전환 - 매초 체력 ${event.detail.hp_drain_percent_per_second}% 감소, 받는 피해 ${event.detail.damage_reduction_percent}% 감소+반사, 이동속도 ${event.detail.move_speed_percent}% 증가`,
+                `${event.actor}의 [Active] 발동! ${event.detail.duration_seconds}초간 사거리 근거리 전환 - 매초 체력 ${event.detail.hp_drain_percent_per_second}% 감소, 공격력 ${event.detail.atk_percent}% 증가, 받는 피해 ${event.detail.damage_reduction_percent}% 감소+반사, 이동속도 ${event.detail.move_speed_percent}% 증가`,
                 event.side
             );
         } else if (dispatchEffectType === "strike_zone_return_throw" && event.detail?.hits?.length) {
@@ -3189,13 +3190,15 @@ function dispatchEvent(event) {
                 khSetMeleeActive(khKey, false); // "사용 중인 방향 전환 즉시 해제" - 근접 걷기도 함께 취소
                 setKimHyeonjaeWingAura(khKey, "frenzy");
                 khTriggerFieldShake();
+                clearStatusIconSource(khKey, "atk_up", activeSource);
                 clearStatusIconSource(khKey, "damage_reduction", activeSource);
                 clearStatusIconSource(khKey, "move_speed_up", activeSource);
                 flashEffectAura(khKey, "cc");
                 setStatusIcon(khKey, "atk_up", { source: modeSource, untilSimTime: until });
                 setStatusIcon(khKey, "atk_speed_up", { source: modeSource, untilSimTime: until });
+                setStatusIcon(khKey, "damage_reduction", { source: modeSource, untilSimTime: until });
                 battleRendererConfig.appendLog(
-                    `${event.actor}의 [Passive] 발동! 폭주 - 방향 전환 해제, ${event.detail.duration_seconds}초간 공격력 ${event.detail.atk_percent}%/공격속도 ${event.detail.haste_percent}% 증가 + CC 면역`,
+                    `${event.actor}의 [Passive] 발동! 폭주 - 방향 전환 해제, ${event.detail.duration_seconds}초간 공격력 ${event.detail.atk_percent}%/공격속도 ${event.detail.haste_percent}% 증가, 받는 피해 ${event.detail.damage_reduction_percent}% 감소+반사 + CC 면역`,
                     event.side
                 );
             } else if (mode === "special") {
@@ -3207,13 +3210,14 @@ function dispatchEvent(event) {
                 setStatusIcon(khKey, "atk_speed_up", { source: modeSource, untilSimTime: until });
                 setStatusIcon(khKey, "damage_reduction", { source: modeSource, untilSimTime: until });
                 battleRendererConfig.appendLog(
-                    `${event.actor}의 [Special] 발동! 지키고 싶은 마음 - 체력 ${event.detail.heal_amount} 회복, ${event.detail.duration_seconds}초간 공격력 ${event.detail.atk_percent}%/공격속도 ${event.detail.haste_percent}% 증가 + 받는 피해 ${event.detail.damage_reduction_percent}% 감소 + 기본공격 넉백`,
+                    `${event.actor}의 [Special] 발동! 지키고 싶은 마음 - 체력 ${event.detail.heal_amount} 회복, ${event.detail.duration_seconds}초간 공격력 ${event.detail.atk_percent}%/공격속도 ${event.detail.haste_percent}% 증가, 받는 피해 ${event.detail.damage_reduction_percent}% 감소+반사 + 기본공격 넉백`,
                     event.side
                 );
             } else if (mode === "normal") {
                 if (unitInfo) { unitInfo.spriteVariant = ""; unitInfo.kimhyeonjaeMode = null; }
                 khSetMeleeActive(khKey, false); // 10초 자연 종료 - 근접 걷기를 멈추고 원거리 idle로 복귀
                 setKimHyeonjaeWingAura(khKey, null);
+                clearStatusIconSource(khKey, "atk_up", activeSource);
                 clearStatusIconSource(khKey, "damage_reduction", activeSource);
                 clearStatusIconSource(khKey, "move_speed_up", activeSource);
                 // 방향 전환이 풀리는 순간 skill_active_1~9.webp를 한 번 재생해 "변신이 풀리는" 연출을
@@ -3233,6 +3237,35 @@ function dispatchEvent(event) {
                 );
             }
             renderUnit(khKey);
+        }
+    } else if (eventType === "damage_reflect_resolve") {
+        // 범용 반사(damage_reduction_config의 reflect=True - 지금은 김현재 "방향 전환"/"폭주"/
+        // "지키고 싶은 마음"만 해당) - 실제 피해는 원래 공격이 처리된 시점에 이미 백엔드에서
+        // 반영됐지만, 그동안 이를 알리는 이벤트가 없어 반사당한 쪽 체력이 화면에 전혀 반영되지
+        // 않는 버그가 있었다(확인된 버그 - "반사했는데 상대 체력이 안 줄어든다"). suppress_bounce가
+        // 없으면(대부분의 경우) 반사한 쪽(actor)에서 반사당한 쪽(target)으로 튕겨나가는 탄환이
+        // 날아가 "도착하는 순간" 피격판정을 반영한다(확인된 요청 - 왔던 방향의 반대로 그대로
+        // 돌아가서, 닿았을 때 피격판정). 이미 자기만의 왕복 연출이 있는 이도협 "돌직구" 귀환
+        // 판정에서 반사가 일어나면(suppress_bounce=true) 튕겨나가는 연출 없이 그 자리에서 곧바로
+        // 반영한다 - spawnProjectile은 캐릭터 전용 스타일이 없는 기본 원거리 폴백(shared/
+        // attack-effects.js)을 그대로 재사용한 것이라 어떤 반사 조합에도 자연스럽게 맞는다.
+        const reflectorKey = findUnitKey(event.side, event.actor);
+        const reflectedKey = findUnitKey(event.target_side, event.target);
+        if (reflectedKey && battleRendererConfig.units[reflectedKey]) {
+            const applyReflectHit = () => {
+                if (!battleRendererConfig.units[reflectedKey]) return;
+                battleRendererConfig.units[reflectedKey].hp = event.detail.target_hp_after;
+                renderUnit(reflectedKey);
+                flashHit(reflectedKey, false, 1, event.detail.amount, false);
+            };
+            if (
+                !event.detail.suppress_bounce && reflectorKey && battleRendererConfig.units[reflectorKey]
+                && typeof spawnProjectile === "function"
+            ) {
+                spawnProjectile(reflectorKey, reflectedKey, applyReflectHit);
+            } else {
+                applyReflectHit();
+            }
         }
     } else if (eventType === "cost_reduction_expire_resolve") {
         // 안지석 "예산 재배정" 만료: 부여받은 사용 횟수를 다 써서 원래 코스트로 되돌아간다 - 카드
