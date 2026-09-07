@@ -124,6 +124,33 @@ class ReadingLog(Base):
     region = relationship("Region")
 
 
+class ReadingSessionState(Base):
+    """진행 중인 독서/과목/모의고사 세션의 "실제로 흐른 시간"을 서버가 직접 추적한다(확인된 요청 -
+    근본 수정). 예전엔 클라이언트(reading.js)가 자체 타이머로 잰 reading_minutes를 그대로 믿었는데,
+    기기 시스템 시간을 조작하면(Date.now() 기반 보정 로직이 그 조작을 그대로 반영) 실제로 흐르지
+    않은 시간을 통째로 보상받을 수 있었다(실제 신고 사례). 이제는 클라이언트가 "얼마나 지났다"고
+    보고하는 값을 아예 신뢰하지 않고, 서버 자신의 시계(datetime.utcnow())로 하트비트 간 간격을 직접
+    재서 누적한다 - 클라이언트가 무엇을 보내든(또는 아무것도 안 보내든) 영향을 받지 않는다.
+    라우터(routers/logs.py)의 _flush_session_seconds/HEARTBEAT_MAX_CREDIT_SECONDS 참고."""
+    __tablename__ = "reading_session_states"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    region_id = Column(Integer, ForeignKey("regions.id"), nullable=False)
+    dungeon_name = Column(String, nullable=False)
+    session_type = Column(String, nullable=False)  # "reading" | "subject" | "mock_exam"
+    difficulty = Column(String, nullable=False)
+    started_at = Column(DateTime, default=datetime.utcnow)
+    last_heartbeat_at = Column(DateTime, default=datetime.utcnow)  # 마지막으로 서버가 "확인한" 시각 - 여기서부터의
+    # 경과만(그것도 한 번에 최대 HEARTBEAT_MAX_CREDIT_SECONDS까지만) 다음 확인 때 누적된다.
+    accumulated_seconds = Column(Float, default=0.0)  # 서버가 직접 확인해서 인정한 누적 경과 시간(초) - 오직 이
+    # 컬럼만 실제 시간이 흐를 때 조금씩 늘어나며, 클라이언트가 보낸 어떤 숫자도 여기 직접 대입되지 않는다.
+    is_paused = Column(Boolean, default=False)  # 일시정지 중엔 하트비트가 와도 누적하지 않는다.
+    client_token = Column(String, nullable=False, index=True)  # 이 세션의 멱등성 토큰(ReadingLog.client_token과 동일한 값을 씀).
+
+    owner = relationship("User")
+
+
 class Item(Base):
     __tablename__ = "items"
 
