@@ -35,13 +35,23 @@ class HeartbeatRequest(BaseModel):
     load_id: str  # 페이지 로드 1회마다 새로 발급되는 식별자(탭 안에서 페이지 이동해도 새로 발급) - release-tab의 낡은 요청 판별용.
 
 
-class LogCreate(BaseModel):
+class ReadingSessionStartRequest(BaseModel):
     dungeon_name: str
     difficulty: str  # session_type="reading"이면 장르(문학/비문학), 아니면 과목명
-    reading_minutes: int
     session_type: str = "reading"  # "reading" | "subject" | "mock_exam"
+    client_token: str  # 이 세션 전체를 식별하는 멱등성 토큰(클라이언트가 1회 발급) - 새로고침 복구도 이 값으로 판별한다.
+
+
+class ReadingSessionTokenRequest(BaseModel):
+    client_token: str  # 하트비트/일시정지/재개가 지금 어느 세션에 대한 것인지 확인하기 위한 토큰(불일치 시 거부).
+
+
+class LogCreate(BaseModel):
+    # dungeon_name/difficulty/session_type/reading_minutes는 더 이상 클라이언트에게서 받지 않는다
+    # (확인된 요청 - 근본 수정). 전부 서버가 직접 추적한 ReadingSessionState(client_token으로 식별)에서
+    # 가져오므로, 클라이언트가 시간이나 던전/과목을 무엇으로 보고하든 보상 계산에 전혀 영향을 못 준다.
     is_auto_complete: bool = False  # mock_exam 전용: 타이머가 끝까지 흘러 자동 제출됐는지("포기하기"로 중도 종료하면 False)
-    client_token: str | None = None  # 세션 시작 시 클라이언트가 1회 발급하는 멱등성 토큰(재시도 중복 적립 방지용)
+    client_token: str  # 세션 시작 시 발급된 토큰 - 이 세션 상태를 찾는 유일한 열쇠(필수).
 
 
 class PurchaseRequest(BaseModel):

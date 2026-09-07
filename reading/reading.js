@@ -241,9 +241,49 @@
     let sessionClientToken = null; // 세션 시작 시 1회 발급해 끝까지 들고 가는 멱등성 토큰(아래 startSessionClock 참고).
     // 서버 응답을 못 받아 재시도하더라도 항상 같은 값을 실어 보내, backend/routers/logs.py가 "같은
     // 세션의 재시도"임을 시간 제한 없이 판별해서 중복 적립을 막을 수 있게 한다.
+    let heartbeatIntervalId = null; // 서버에 "아직 읽고 있다"고 짧은 주기로 알리는 타이머(아래 참고).
 
     function generateClientToken() {
         return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}-${Math.random()}`;
+    }
+
+    // ── 서버 하트비트(근본 수정) ──────────────────────────────────────────────────
+    // 예전엔 이 파일이 자체적으로 잰 경과 시간(reading_minutes)을 그대로 서버에 보고했는데, 그 계산
+    // 안에는 "화면이 꺼져있던 공백"을 Date.now()(기기 시스템 시계 - 설정에서 바로 바꿀 수 있음) 기준으로
+    // 보정하는 로직이 있어서, 세션 도중 기기 시간을 몇 시간 앞으로 돌리기만 해도 그 차이 전체가 상한
+    // 없이 "읽은 시간"으로 둔갑했다(실제 신고 사례). 이제는 그 계산 결과를 보상에 전혀 쓰지 않는다 -
+    // 아래의 화면 표시용 타이머(getElapsedMs 등)는 그대로 두되(부드러운 실시간 표시 목적일 뿐), 실제
+    // 보상의 근거가 되는 시간은 오직 서버가 이 하트비트 요청이 "실제로 도착한 간격"을 자기 시계로
+    // 직접 재서 누적한 값(backend/routers/logs.py의 ReadingSessionState)뿐이다 - 클라이언트가 무엇을
+    // 보내든(또는 아무것도 안 보내든, 기기 시간을 조작하든) 그 값에 영향을 줄 방법이 없다.
+    const HEARTBEAT_INTERVAL_MS = 20000;
+
+    async function postSessionAction(path, extra = {}) {
+        try {
+            const res = await fetch(`${API_BASE_URL}/logs/session/${path}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", ...authHeaders() },
+                body: JSON.stringify({ client_token: sessionClientToken, ...extra }),
+                keepalive: path === "pause",
+            });
+            if (!res.ok) return null;
+            return await res.json();
+        } catch (err) {
+            return null; // 네트워크 실패는 조용히 무시 - 다음 하트비트가 실패한 구간까지 이어서 확인해준다.
+        }
+    }
+
+    function startHeartbeatLoop() {
+        stopHeartbeatLoop();
+        heartbeatIntervalId = setInterval(() => {
+            if (!sessionStarted || isPaused || handledEnd) return;
+            postSessionAction("heartbeat");
+        }, HEARTBEAT_INTERVAL_MS);
+    }
+
+    function stopHeartbeatLoop() {
+        if (heartbeatIntervalId) clearInterval(heartbeatIntervalId);
+        heartbeatIntervalId = null;
     }
 
     // segmentStartMs/accumulatedMs는 Date.now()가 아니라 performance.now()(모노토닉 시계) 기준이다 -
@@ -317,10 +357,14 @@
         if (isPaused) {
             segmentStartMs = performance.now();
             isPaused = false;
+            postSessionAction("resume");
+            startHeartbeatLoop();
         } else {
             const cappedNow = Math.min(performance.now(), cutoffPerfMs);
             accumulatedMs += Math.max(0, cappedNow - segmentStartMs);
             isPaused = true;
+            stopHeartbeatLoop();
+            postSessionAction("pause"); // 일시정지를 누르는 순간까지는 서버에도 정상적으로 인정시킨다.
         }
         // correctSuspendedGap이 "마지막 tick 이후 실제로 흐른 시간"을 보고 판단하는데, 일시정지 중에는
         // 그 자체가 정상적으로 긴 간격일 수 있다(사용자가 몇 분씩 일시정지해둘 수 있음) - 이걸 기기가
@@ -517,6 +561,25 @@
         if (sessionType !== "mock_exam") {
             document.getElementById("reading-pause-btn").textContent = isPaused ? "재개" : "일시정지";
         }
+
+        // 서버에 이 세션을 등록(또는 같은 토큰이면 이어서 확인)한다 - 같은 토큰으로 다시 불러도
+        // 서버는 그동안 쌓인 시간을 그대로 두고 확인 시각만 갱신하므로(새로고침 복구), 새로 시작이든
+        // 복구든 항상 이 한 호출로 충분하다. 화면 표시는 이미 로컬 값으로 즉시 진행하므로 응답을
+        // 기다리지 않는다.
+        (async () => {
+            const startResult = await postSessionAction("start", {
+                dungeon_name: regionName, difficulty: label, session_type: sessionType,
+            });
+            if (startResult?.banked_previous) {
+                const bp = startResult.banked_previous;
+                alert(
+                    `끝맺지 않은 이전 학습이 자동으로 저장됐어요.\n` +
+                    `${bp.dungeon_name} · ${bp.difficulty} · ${bp.reading_minutes}분 ` +
+                    `(+${bp.gained_exp} EXP, +${bp.gained_silver} 실버, +${bp.gained_gold} 골드)`
+                );
+            }
+            if (!isPaused) startHeartbeatLoop();
+        })();
         tick();
         tickIntervalId = setInterval(tick, 1000);
 
@@ -565,8 +628,10 @@
     // 이어서 하려는) 세션과는 완전히 별개로 동작하며, 그 흐름을 막지 않는다. 실패하면(네트워크 오류 등)
     // localStorage에서 지우지 않고 그대로 남겨둬 다음 접속 때 다시 시도할 수 있게 한다.
     async function bankExpiredSession(session) {
-        const elapsedMinutes = Math.floor((Number(session.accumulatedMs) || 0) / 60000);
-        if (elapsedMinutes < 1) {
+        // 실제로 인정할 시간은 이제 클라이언트가 계산하지 않는다 - client_token만 보내면 서버가 자기
+        // 기록(ReadingSessionState)에서 하트비트로 확인된 시간을 직접 찾아 정산한다. 로컬에 남은
+        // accumulatedMs는 더 이상 쓰지 않는다(근본 수정 - 애초에 이 값이 조작 가능했던 값이었다).
+        if (!session.clientToken) {
             window.ReadingSession?.clear();
             return;
         }
@@ -575,10 +640,6 @@
                 method: "POST",
                 headers: { "Content-Type": "application/json", ...authHeaders() },
                 body: JSON.stringify({
-                    dungeon_name: session.region,
-                    difficulty: session.difficulty,
-                    reading_minutes: elapsedMinutes,
-                    session_type: session.sessionType,
                     is_auto_complete: true,
                     client_token: session.clientToken,
                 }),
@@ -587,12 +648,18 @@
                 // releaseTabOnUnload와 동일한 이유).
                 keepalive: true,
             });
-            if (!res.ok) return;
+            // 서버에 이 토큰에 대응하는 세션이 이미 없으면(예: 배포 전에 시작된 옛 세션이라 애초에
+            // /session/start를 호출한 적이 없는 경우) 더 이상 복구할 방법이 없다 - 조용히 정리한다.
+            if (!res.ok) {
+                if (res.status === 400) window.ReadingSession?.clear();
+                return;
+            }
             const data = await res.json();
             window.ReadingSession?.clear();
+            if ((data.reading_minutes || 0) < 1) return;
             alert(
                 `새벽 1시가 지나면서 이전 학습이 자동으로 종료·저장됐어요.\n` +
-                `${session.difficulty} · ${elapsedMinutes}분 (+${data.gained_exp} EXP, +${data.gained_silver} 실버, +${data.gained_gold} 골드)`
+                `${session.difficulty} · ${data.reading_minutes}분 (+${data.gained_exp} EXP, +${data.gained_silver} 실버, +${data.gained_gold} 골드)`
             );
         } catch (err) {
             console.error("만료된 세션 자동 저장 실패:", err);
@@ -636,12 +703,7 @@
         handledEnd = true;
 
         if (tickIntervalId) clearInterval(tickIntervalId);
-
-        let elapsedMinutes = getElapsedMinutes();
-        if (sessionType === "mock_exam") {
-            elapsedMinutes = Math.min(elapsedMinutes, Math.round(durationMs / 60000));
-        }
-        const elapsedSeconds = Math.floor(getElapsedMs() / 1000);
+        stopHeartbeatLoop();
 
         const endBtn = document.getElementById("reading-end-btn");
         endBtn.disabled = true;
@@ -664,14 +726,13 @@
         }, 400);
 
         try {
+            // dungeon_name/difficulty/session_type/reading_minutes는 더 이상 보내지 않는다(근본 수정) -
+            // 서버가 client_token으로 자신이 직접 추적해온 세션(하트비트로 확인된 시간)을 찾아 그
+            // 값으로만 정산한다. 클라이언트가 무엇을 보내든 보상 계산에 영향을 줄 수 없다.
             const res = await fetchWithTimeout(`${API_BASE_URL}/logs/`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", ...authHeaders() },
                 body: JSON.stringify({
-                    dungeon_name: regionName,
-                    difficulty: label,
-                    reading_minutes: elapsedMinutes,
-                    session_type: sessionType,
                     is_auto_complete: !!isAuto,
                     client_token: sessionClientToken,
                 })
@@ -695,7 +756,9 @@
 
             releaseWakeLock();
             document.getElementById("reading-complete-title").textContent = "독서 완료!";
-            showCompleteModal(data, elapsedSeconds).then(() => {
+            // 완료 화면의 "시간" 표시는 이제 클라이언트 자체 타이머가 아니라 서버가 실제로 인정한
+            // reading_minutes를 기준으로 한다 - 화면이 표시하는 시간과 실제 보상의 근거가 항상 일치하게 한다.
+            showCompleteModal(data, (data.reading_minutes || 0) * 60).then(() => {
                 const notifyAchievements = () => {
                     if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
                         showAchievementToast(data.new_achievements);

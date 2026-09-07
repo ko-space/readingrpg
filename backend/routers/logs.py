@@ -2,8 +2,8 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
 from database import get_db
-from models import User, ReadingLog, Region, UserRegionUnlock
-from schemas import LogCreate
+from models import User, ReadingLog, Region, UserRegionUnlock, ReadingSessionState
+from schemas import LogCreate, ReadingSessionStartRequest, ReadingSessionTokenRequest
 from security import get_current_user
 from leveling import apply_exp
 from achievements import check_and_grant_achievements, get_character_catalog
@@ -18,9 +18,29 @@ MOCK_EXAM_MINUTES = {
     "국어": 80, "수학": 100, "수학(하프)": 50, "영어": 70, "영어(하프)": 40,
     "한국사": 30, "탐구": 30, "탐구(2회분)": 62, "한문/제2외국어": 40,
 }
-DAILY_READING_MINUTES_CAP = 18 * 60  # 하루 최대 인정 독서시간(1080분) - 기기 시스템 시간을 조작해서
-# 한 번에 비정상적으로 긴 시간을 보고하는 부정행위를 막기 위한 상한. session_type과 무관하게 그날(KST)
-# 누적된 daily_reading_minutes 전체에 적용된다.
+DAILY_READING_MINUTES_CAP = 18 * 60  # 하루 최대 인정 독서시간(1080분) - session_type과 무관하게
+# 그날(KST) 누적된 daily_reading_minutes 전체에 적용된다. 시간 자체는 이제 아래 하트비트 메커니즘이
+# 이미 "실제로 흐른 만큼만" 보장하므로, 이 상한은 순수하게 "하루 최대 인정 시간" 게임 규칙일 뿐
+# 부정행위 방지용은 아니다(그 역할은 HEARTBEAT_MAX_CREDIT_SECONDS가 담당).
+
+# ── 세션 시간 조작 방지(근본 수정) ──────────────────────────────────────────────
+# 예전엔 클라이언트(reading.js)가 자체 타이머로 계산한 reading_minutes를 그대로 믿었다. 그런데
+# 타이머 안에는 "화면이 꺼져있던 동안(백그라운드 탭 등)의 공백을 보정"하는 correctSuspendedGap이
+# 있었는데, 이 보정이 Date.now()(기기 시스템 시계 - 사용자가 설정에서 바로 바꿀 수 있음)와
+# performance.now()(조작 불가능한 엔진 내부 시계)의 차이로 "공백"을 판단했다. 즉 세션 도중 기기
+# 시간을 몇 시간 앞으로 돌리기만 하면, 실제로는 몇 초도 안 지났는데 그 차이 전체가 상한 없이
+# "경과 시간"으로 인정돼버렸다(실제 신고 사례 - 664분짜리 세션이 71분 만에 기록됨).
+# 근본 수정: 클라이언트가 "얼마나 지났다"고 보고하는 값을 아예 신뢰하지 않는다. 대신 서버가
+# ReadingSessionState 행에 세션 상태를 직접 들고 있다가, 클라이언트가 짧은 주기(HEARTBEAT_INTERVAL_
+# SECONDS)로 보내는 "확인" 요청이 도착할 때마다 서버 자신의 시계(datetime.utcnow() - 클라이언트가
+# 절대 건드릴 수 없음)로 "지난번 확인 이후 실제로 얼마나 지났는지"를 직접 재서 누적한다. 이때 한 번의
+# 확인이 인정할 수 있는 최대치를 HEARTBEAT_MAX_CREDIT_SECONDS로 제한해두면, 확인 요청 사이에 아무리
+# 긴 공백이 있었어도(탭 방치, 네트워크 단절, 심지어 기기 시간 조작까지) 그 공백 전체가 아니라 최대
+# 이만큼만 인정된다 - 결과적으로 누적치는 절대로 "실제로 흐른 벽시계 시간"을 넘어설 수 없다.
+HEARTBEAT_INTERVAL_SECONDS = 20  # 클라이언트가 하트비트를 보내는 주기(참고용 - 서버는 실제 간격을 그때그때 잰다)
+HEARTBEAT_MAX_CREDIT_SECONDS = 30  # 확인 한 번당 인정하는 최대 시간 - 핵심 방어선. 정상 주기(20초)보다
+# 살짝 여유를 둬서 사소한 네트워크 지연은 그대로 인정하되, 그 이상의 공백(방치/단절/시간 조작)은
+# 얼마나 길든 이 값까지만 잘려서 인정된다.
 # 모의고사의 "하프" 변형은 배수 판정에서 원래 과목과 같은 것으로 취급한다(수학과 영어만 하프가 있음).
 # 한국사/한문·제2외국어는 독립 과목이 아니라 "기타" 공부시간으로 합산된다(탐구 앞뒤에 끼워 넣은
 # 모의고사 전용 과목 - 과목(subject) 탭에는 없음). 탐구(2회분)는 실제 탐구와 같은 과목이라 그대로 매핑.
@@ -98,12 +118,172 @@ def _today_kst():
     return datetime.now(KST).date()
 
 
-def _next_1am_kst_at_or_after(moment_kst: datetime) -> datetime:
-    """moment_kst(KST 기준 datetime) 이후(그 시각 포함) 가장 가까운 한국시간 오전 1시를 구한다."""
-    candidate = moment_kst.replace(hour=1, minute=0, second=0, microsecond=0)
-    if candidate < moment_kst:
-        candidate += timedelta(days=1)
-    return candidate
+def _resolve_difficulty_multiplier(session_type: str, difficulty: str) -> float:
+    """session_type/difficulty 조합이 유효한지 확인하고 그 배율(문학/비문학 등)을 돌려준다 - 유효하지
+    않으면 400을 던진다. /session/start(세션을 열 때)와 _apply_reading_reward(최종 정산 때) 양쪽에서
+    똑같이 쓴다 - 제출 시점엔 세션 시작 때 이미 검증된 값이라 사실상 항상 통과하지만, 방어적으로 한 번
+    더 확인한다."""
+    if session_type == "reading":
+        if difficulty not in DIFFICULTY_MULTIPLIER:
+            raise HTTPException(status_code=400, detail=f"존재하지 않는 장르입니다: {difficulty}")
+        return DIFFICULTY_MULTIPLIER[difficulty]
+    if session_type == "subject":
+        if difficulty not in SUBJECT_SET:
+            raise HTTPException(status_code=400, detail=f"존재하지 않는 과목입니다: {difficulty}")
+        return 1.0
+    if session_type == "mock_exam":
+        if difficulty not in MOCK_EXAM_MINUTES:
+            raise HTTPException(status_code=400, detail=f"존재하지 않는 모의고사 과목입니다: {difficulty}")
+        return 1.0
+    raise HTTPException(status_code=400, detail=f"존재하지 않는 학습 유형입니다: {session_type}")
+
+
+def _validate_region_access(db: Session, user: User, dungeon_name: str) -> Region:
+    region = db.query(Region).filter(Region.name == dungeon_name).first()
+    if not region:
+        raise HTTPException(status_code=400, detail=f"존재하지 않는 던전(지역)입니다: {dungeon_name}")
+    if not region.always_open and user.level < region.required_level:
+        raise HTTPException(
+            status_code=403,
+            detail=f"'{region.name}'은(는) 레벨 {region.required_level} 이상부터 입장할 수 있습니다."
+        )
+    if region.name == GOLD_MINE_REGION_NAME:
+        unlocked = db.query(UserRegionUnlock).filter(
+            UserRegionUnlock.user_id == user.id, UserRegionUnlock.region_id == region.id,
+        ).first()
+        if not unlocked:
+            raise HTTPException(status_code=403, detail=f"'{region.name}'은(는) 먼저 구매해야 입장할 수 있습니다.")
+    return region
+
+
+def _get_active_session_state(db: Session, user_id: int):
+    return db.query(ReadingSessionState).filter(ReadingSessionState.user_id == user_id).first()
+
+
+def _flush_session_seconds(state: ReadingSessionState, now: datetime | None = None):
+    """지난번 확인(last_heartbeat_at) 이후 실제로 흐른 시간을, 한 번에 최대
+    HEARTBEAT_MAX_CREDIT_SECONDS까지만 인정해서 누적한다 - 하트비트/일시정지/최종 제출 어디서
+    불러도 항상 같은 규칙. 서버 자신의 시계(now)만 쓰므로 클라이언트가 무엇을 보내든(또는 기기
+    시간을 조작하든) 전혀 영향을 못 준다. 일시정지 중이면 누적하지 않고 확인 시각만 갱신한다."""
+    now = now or datetime.utcnow()
+    if not state.is_paused:
+        delta = (now - state.last_heartbeat_at).total_seconds()
+        state.accumulated_seconds += max(0.0, min(delta, HEARTBEAT_MAX_CREDIT_SECONDS))
+    state.last_heartbeat_at = now
+
+
+def _apply_reading_reward(
+    db: Session, user: User, region: Region, session_type: str, difficulty: str,
+    reading_minutes: int, is_auto_complete: bool, client_token: str,
+) -> dict:
+    """실제 보상 계산 + 저장 - 기존 add_reading_log의 핵심 로직을 그대로 옮긴 것. reading_minutes는
+    이제 호출부(제출 엔드포인트, 또는 세션 갈아타기로 인한 자동 정산)가 서버 하트비트 누적치로부터
+    이미 계산해 넘겨주는 값이라, 여기서는 예전처럼 클라이언트 원본값을 다루지 않는다."""
+    difficulty_multiplier = _resolve_difficulty_multiplier(session_type, difficulty)
+    if session_type == "mock_exam":
+        # 모의고사는 정해진 시간만큼만 흐르는 세션이라, 서버가 확인한 값이라도 표에 정의된 시간을
+        # 넘지 않게 자른다(제출을 미루고 계속 하트비트를 보낸 경우 등에 대한 방어적 상한).
+        reading_minutes = min(reading_minutes, MOCK_EXAM_MINUTES[difficulty])
+    reading_minutes = max(0, reading_minutes)
+
+    # 하루 누적 상한(18시간) 적용 - 오늘(KST) 자정이 지났으면 먼저 리셋하고, 남은 여유만큼만 인정한다.
+    today = _today_kst()
+    if user.daily_reading_date != today:
+        user.daily_reading_minutes = 0
+        user.daily_reading_date = today
+    remaining_daily_cap = max(0, DAILY_READING_MINUTES_CAP - user.daily_reading_minutes)
+    reading_minutes = min(reading_minutes, remaining_daily_cap)
+
+    equipped = _get_equipped_character(user)
+    matched_subject = _resolve_matched_subject(session_type, difficulty)
+    character_exp_multiplier = _equipped_character_exp_multiplier(equipped, matched_subject)
+    character_silver_multiplier = _equipped_character_silver_multiplier(equipped, matched_subject)
+    character_gold_multiplier = _equipped_character_gold_multiplier(equipped)
+
+    # 지역별 과목 보너스(예: 지혜의 신전의 국어/영어) - exp에만 적용되고 실버에는 적용되지 않는다.
+    region_subject_multiplier = 1.0
+    for subject_key, multiplier in (region.subject_bonus_rules or {}).items():
+        if difficulty and difficulty.startswith(subject_key):
+            region_subject_multiplier = multiplier
+            break
+
+    gained_exp = int(
+        reading_minutes * region.exp_rate * difficulty_multiplier
+        * character_exp_multiplier * region_subject_multiplier
+    )
+    gained_gold = int(reading_minutes * region.gold_rate * character_gold_multiplier)
+    gained_silver = int(reading_minutes * region.silver_rate * character_silver_multiplier)
+
+    user.gold += gained_gold
+    user.lifetime_gold += gained_gold
+    user.silver += gained_silver
+    user.daily_reading_minutes += reading_minutes
+    user.lifetime_reading_minutes += reading_minutes
+    user.current_region_id = region.id
+
+    split = MOCK_EXAM_SPLIT.get(difficulty) if session_type == "mock_exam" else None
+    if split:
+        split_difficulty, split_count = split
+        base_minutes, extra_minutes = divmod(reading_minutes, split_count)
+        base_exp, extra_exp = divmod(gained_exp, split_count)
+        base_gold, extra_gold = divmod(gained_gold, split_count)
+        base_silver, extra_silver = divmod(gained_silver, split_count)
+        for i in range(split_count):
+            is_last = i == split_count - 1  # 나눠떨어지지 않는 나머지는 마지막 회차에 몰아준다(합계는 항상 보존됨)
+            db.add(ReadingLog(
+                user_id=user.id, region_id=region.id, dungeon_name=region.name,
+                difficulty=split_difficulty, session_type=session_type,
+                reading_minutes=base_minutes + (extra_minutes if is_last else 0),
+                equipped_character_name=equipped.name if equipped else None,
+                earned_exp=base_exp + (extra_exp if is_last else 0),
+                earned_gold=base_gold + (extra_gold if is_last else 0),
+                earned_silver=base_silver + (extra_silver if is_last else 0),
+                is_auto_complete=is_auto_complete,
+                client_token=client_token,
+            ))
+    else:
+        db.add(ReadingLog(
+            user_id=user.id,
+            region_id=region.id,
+            dungeon_name=region.name,
+            difficulty=difficulty,
+            session_type=session_type,
+            reading_minutes=reading_minutes,
+            equipped_character_name=equipped.name if equipped else None,
+            earned_exp=gained_exp,
+            earned_gold=gained_gold,
+            earned_silver=gained_silver,
+            is_auto_complete=is_auto_complete and session_type == "mock_exam",
+            client_token=client_token,
+        ))
+
+    start_level = user.level   # 이번 독서로 exp가 반영되기 '전' 상태 - 프론트 레벨업 바 애니메이션의 시작점
+    start_exp = user.total_exp
+
+    level_result = apply_exp(user, gained_exp)
+
+    db.commit()
+    db.refresh(user)
+
+    new_achievements, new_characters = check_and_grant_achievements(db, user)
+
+    return {
+        "message": "독서 기록이 성공적으로 저장되었습니다!",
+        "gained_exp": gained_exp,
+        "gained_gold": gained_gold,
+        "gained_silver": gained_silver,
+        "reading_minutes": reading_minutes,  # 서버가 실제로 인정한 시간 - 프론트가 결과 화면의 "시간" 표시에 이 값을 써야 한다.
+        "start_level": start_level,
+        "start_exp": start_exp,
+        "current_level": user.level,
+        "current_exp": user.total_exp,
+        "lifetime_exp": user.lifetime_exp,
+        "daily_reading_minutes": user.daily_reading_minutes,
+        "level_up": level_result["level_up"],
+        "levels_gained": level_result["levels_gained"],
+        "new_achievements": new_achievements,
+        "new_characters": new_characters,
+    }
 
 
 READING_GENRES = ["비문학", "문학"]
@@ -143,135 +323,125 @@ def get_daily_summary(db: Session = Depends(get_db), user: User = Depends(get_cu
     return {"reading": reading, "subject": subject}
 
 
+@router.post("/session/start")
+def start_reading_session(
+    req: ReadingSessionStartRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """새 독서/과목/모의고사 세션을 서버에 등록한다(근본 수정 - 시간은 이제부터 서버가 직접 잰다).
+    같은 client_token으로 다시 부르면(새로고침 등으로 인한 복구) 기존 누적치를 그대로 두고 확인
+    시각만 지금으로 당긴다. 다른 세션이 이미 진행 중이었다면(예: 끝맺지 않고 다른 던전/과목으로
+    이동) 유실 없이 먼저 정산해서 보상을 지급한 뒤 새 세션을 연다."""
+    region = _validate_region_access(db, user, req.dungeon_name)
+    _resolve_difficulty_multiplier(req.session_type, req.difficulty)  # 유효성만 확인(값은 여기서 안 씀)
+
+    now = datetime.utcnow()
+    existing = _get_active_session_state(db, user.id)
+    banked_previous = None
+    if existing:
+        if existing.client_token == req.client_token:
+            # 새로고침/재접속으로 인한 복구 - _flush_session_seconds와 동일한 상한 규칙으로 그 사이
+            # 공백만큼(최대 HEARTBEAT_MAX_CREDIT_SECONDS) 얹어준 뒤 이어서 잰다.
+            _flush_session_seconds(existing, now)
+            db.commit()
+            return {"accumulated_minutes": int(existing.accumulated_seconds // 60), "banked_previous": None}
+
+        _flush_session_seconds(existing, now)
+        old_region = db.query(Region).filter(Region.id == existing.region_id).first()
+        old_minutes = int(existing.accumulated_seconds // 60)
+        old_session_type, old_difficulty, old_token = existing.session_type, existing.difficulty, existing.client_token
+        db.delete(existing)
+        db.commit()
+        if old_region and old_minutes >= 1:
+            result = _apply_reading_reward(
+                db, user, old_region, old_session_type, old_difficulty, old_minutes, True, old_token,
+            )
+            banked_previous = {
+                "dungeon_name": old_region.name, "difficulty": old_difficulty,
+                "reading_minutes": result["reading_minutes"], "gained_exp": result["gained_exp"],
+                "gained_gold": result["gained_gold"], "gained_silver": result["gained_silver"],
+            }
+
+    db.add(ReadingSessionState(
+        user_id=user.id, region_id=region.id, dungeon_name=region.name,
+        session_type=req.session_type, difficulty=req.difficulty,
+        started_at=now, last_heartbeat_at=now, accumulated_seconds=0.0, is_paused=False,
+        client_token=req.client_token,
+    ))
+    db.commit()
+    return {"accumulated_minutes": 0, "banked_previous": banked_previous}
+
+
+@router.post("/session/heartbeat")
+def reading_session_heartbeat(
+    req: ReadingSessionTokenRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """클라이언트가 짧은 주기(HEARTBEAT_INTERVAL_SECONDS)로 "아직 읽고 있다"고 알려올 때마다 호출.
+    서버 자신의 시계로 지난 확인 이후 실제로 흐른 시간만(최대 HEARTBEAT_MAX_CREDIT_SECONDS까지) 누적한다."""
+    state = _get_active_session_state(db, user.id)
+    if not state or state.client_token != req.client_token:
+        raise HTTPException(status_code=404, detail="진행 중인 세션을 찾을 수 없습니다. 페이지를 새로고침해주세요.")
+    _flush_session_seconds(state)
+    db.commit()
+    return {"accumulated_minutes": int(state.accumulated_seconds // 60), "is_paused": state.is_paused}
+
+
+@router.post("/session/pause")
+def pause_reading_session(
+    req: ReadingSessionTokenRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    state = _get_active_session_state(db, user.id)
+    if not state or state.client_token != req.client_token:
+        raise HTTPException(status_code=404, detail="진행 중인 세션을 찾을 수 없습니다.")
+    _flush_session_seconds(state)  # 일시정지를 누르는 그 순간까지는 정상적으로 인정한다.
+    state.is_paused = True
+    db.commit()
+    return {"accumulated_minutes": int(state.accumulated_seconds // 60)}
+
+
+@router.post("/session/resume")
+def resume_reading_session(
+    req: ReadingSessionTokenRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    state = _get_active_session_state(db, user.id)
+    if not state or state.client_token != req.client_token:
+        raise HTTPException(status_code=404, detail="진행 중인 세션을 찾을 수 없습니다.")
+    state.is_paused = False
+    state.last_heartbeat_at = datetime.utcnow()  # 일시정지 동안의 공백은 인정하지 않는다(재개 시점부터 새로 시작).
+    db.commit()
+    return {"accumulated_minutes": int(state.accumulated_seconds // 60)}
+
+
 @router.post("/")
 def add_reading_log(
     log_data: LogCreate,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    region = db.query(Region).filter(Region.name == log_data.dungeon_name).first()
-    if not region:
-        raise HTTPException(status_code=400, detail=f"존재하지 않는 던전(지역)입니다: {log_data.dungeon_name}")
-
-    if not region.always_open and user.level < region.required_level:
-        raise HTTPException(
-            status_code=403,
-            detail=f"'{region.name}'은(는) 레벨 {region.required_level} 이상부터 입장할 수 있습니다."
-        )
-
-    if region.name == GOLD_MINE_REGION_NAME:
-        unlocked = db.query(UserRegionUnlock).filter(
-            UserRegionUnlock.user_id == user.id, UserRegionUnlock.region_id == region.id,
-        ).first()
-        if not unlocked:
-            raise HTTPException(status_code=403, detail=f"'{region.name}'은(는) 먼저 구매해야 입장할 수 있습니다.")
-
-    if log_data.session_type == "reading":
-        if log_data.difficulty not in DIFFICULTY_MULTIPLIER:
-            raise HTTPException(status_code=400, detail=f"존재하지 않는 장르입니다: {log_data.difficulty}")
-        difficulty_multiplier = DIFFICULTY_MULTIPLIER[log_data.difficulty]
-        reading_minutes = log_data.reading_minutes
-    elif log_data.session_type == "subject":
-        if log_data.difficulty not in SUBJECT_SET:
-            raise HTTPException(status_code=400, detail=f"존재하지 않는 과목입니다: {log_data.difficulty}")
-        difficulty_multiplier = 1.0
-        reading_minutes = log_data.reading_minutes
-    elif log_data.session_type == "mock_exam":
-        if log_data.difficulty not in MOCK_EXAM_MINUTES:
-            raise HTTPException(status_code=400, detail=f"존재하지 않는 모의고사 과목입니다: {log_data.difficulty}")
-        difficulty_multiplier = 1.0
-        # 모의고사는 정해진 시간만큼만 자동으로 흐르는 세션이라, 클라이언트 값을 그대로 믿지 않고 상한을 건다.
-        reading_minutes = min(log_data.reading_minutes, MOCK_EXAM_MINUTES[log_data.difficulty])
-    else:
-        raise HTTPException(status_code=400, detail=f"존재하지 않는 학습 유형입니다: {log_data.session_type}")
-
-    if reading_minutes < 0:
-        raise HTTPException(status_code=400, detail="독서 시간은 0 이상이어야 합니다.")
-
-    # 지역입장(세션)을 다음날 새벽까지 켜놓고 방치하는 것을 막는 컷오프 - 서버는 실제 세션 시작 시각을
-    # 모르니, "지금 - 신고된 경과분"을 시작 시각으로 역산해서 그 이후 가장 가까운 한국시간 오전 1시를
-    # 구한다. 그 컷오프를 넘겨서까지 신고된 시간이 있다면 초과분은 잘라낸다(프론트 타이머도 1시가
-    # 지나면 더 이상 누적하지 않게 되어 있는 것과 같은 규칙 - 여기서는 그걸 서버에서도 강제한다).
-    now_kst = datetime.now(KST)
-    inferred_start_kst = now_kst - timedelta(minutes=reading_minutes)
-    session_cutoff_kst = _next_1am_kst_at_or_after(inferred_start_kst)
-    if now_kst > session_cutoff_kst:
-        allowed_minutes = max(0, int((session_cutoff_kst - inferred_start_kst).total_seconds() // 60))
-        reading_minutes = min(reading_minutes, allowed_minutes)
-
-    # 하루 누적 상한(18시간) 적용 - 오늘(KST) 자정이 지났으면 먼저 리셋하고, 남은 여유만큼만 인정한다.
-    # 보상(exp/gold)도 이 잘라낸 reading_minutes를 기준으로 계산되므로, 기기 시간을 조작해 한 번에
-    # 몰아서 보고해도 상한을 넘는 만큼은 보상이 발생하지 않는다.
-    today = _today_kst()
-    if user.daily_reading_date != today:
-        user.daily_reading_minutes = 0
-        user.daily_reading_date = today
-    remaining_daily_cap = max(0, DAILY_READING_MINUTES_CAP - user.daily_reading_minutes)
-    if remaining_daily_cap <= 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"하루 최대 독서 시간({DAILY_READING_MINUTES_CAP // 60}시간)을 이미 채웠습니다.",
-        )
-    reading_minutes = min(reading_minutes, remaining_daily_cap)
-
-    # client_token(세션 시작 시 클라이언트가 1회 발급해 끝까지 들고 있는 멱등성 토큰)이 실려 왔고, 이미
-    # 그 토큰으로 저장된 기록이 있다면 시간 제한 없이 그 결과를 그대로 돌려준다. 아래의 60초 시간창
-    # 판정은 "응답을 못 받은 클라이언트가 곧바로 재시도"하는 흔한 경우만 막을 뿐, 응답이 늦게라도 왔거나
-    # 사용자가 한참 뒤에(예: 다른 탭에서 이어서, 혹은 페이지를 새로고침한 뒤) 재시도하면 60초를 넘겨
-    # 그물을 빠져나가 중복 적립될 수 있었다(실제 신고 사례 - reading.js가 세션을 정리하지 않고 그대로
-    # 재시도 가능한 상태로 남겨두는 네트워크 실패 경로에서 발생). client_token은 서버가 발급 시점을
-    # 추측할 필요 없이 "같은 세션의 재시도인가"를 직접 판별하게 해주므로 이 시간 제한 자체가 필요 없다.
-    # split(탐구 2회분)로 여러 행에 나뉘어 저장된 경우도 같은 토큰을 공유하므로 전부 더해서 돌려준다.
-    if log_data.client_token:
-        existing_rows = db.query(ReadingLog).filter(
-            ReadingLog.user_id == user.id,
-            ReadingLog.client_token == log_data.client_token,
-        ).all()
-        if existing_rows:
-            return {
-                "message": "같은 학습 기록이 이미 저장됐어요. 이전 결과를 그대로 보여드려요.",
-                "gained_exp": sum(row.earned_exp or 0 for row in existing_rows),
-                "gained_gold": sum(row.earned_gold or 0 for row in existing_rows),
-                "gained_silver": sum(row.earned_silver or 0 for row in existing_rows),
-                "start_level": user.level,
-                "start_exp": user.total_exp,
-                "current_level": user.level,
-                "current_exp": user.total_exp,
-                "lifetime_exp": user.lifetime_exp,
-                "daily_reading_minutes": user.daily_reading_minutes,
-                "level_up": False,
-                "levels_gained": 0,
-                "new_achievements": [],
-                "new_characters": [],
-            }
-
-    # 같은 사용자가 방금 전(수십 초 이내)과 같은 조건(던전/과목/유형)으로 다시 제출하면 같은 세션의
-    # 재시도로 보고, 새로 기록·보상하지 않고 그때 이미 저장된 결과를 그대로 다시 돌려준다(신고받아
-    # 추가/수정). 프론트가 응답을 못 받고 시간초과로 실패 처리해 버튼이 다시 눌리게 되는 경우
-    # (reading.js handleEndReading의 handledEnd 리셋, 또는 탭 2개/재시도 등)에도, 클라이언트 쪽
-    # 타이머는 그사이 계속 흘러 재시도마다 reading_minutes가 조금씩 달라진다(신고 사례: 71→72→73분,
-    # 1분 간격 3연속 기록) - 그래서 reading_minutes까지 정확히 같아야 한다는 조건은 이 상황을 전혀
-    # 걸러내지 못했다(같은 세션인데도 매번 "새로운" 기록으로 통과됨). reading_minutes 조건을 빼고
-    # 사용자+던전+과목+유형만으로 매칭한다. 정상적으로 같은 조합을 1분 안에 두 번 학습하는 경우는
-    # 현실적으로 없다시피 하므로(세션당 최소 1분 이상 걸림) 오탐 위험은 낮다.
-    # 200으로 응답해야 프론트가 성공 경로(ReadingSession.clear() 포함)를 그대로 타서 세션이 확실히
-    # 종료된다 - 409로 응답해 실패 취급하면 handledEnd가 다시 풀려 그 재시도 루프가 반복될 수 있다.
-    # client_token이 없는 요청(구버전 캐시된 프론트 등)에 대한 최후의 안전망으로만 남겨둔다.
-    DUPLICATE_SUBMIT_WINDOW_SECONDS = 60
-    duplicate_cutoff = datetime.utcnow() - timedelta(seconds=DUPLICATE_SUBMIT_WINDOW_SECONDS)
-    duplicate_log = db.query(ReadingLog).filter(
+    """세션을 마무리하고 보상을 지급한다. dungeon_name/difficulty/session_type/reading_minutes는
+    더 이상 클라이언트에게서 받지 않는다(근본 수정) - client_token으로 서버에 등록된
+    ReadingSessionState를 찾아, 그 세션 동안 하트비트로 확인된 시간만큼만 정산한다."""
+    # client_token으로 이미 저장된 기록이 있으면(응답을 못 받은 재시도 등) 새로 처리하지 않고 그대로
+    # 돌려준다 - 세션 상태(ReadingSessionState)는 첫 시도가 성공하며 이미 지워졌을 수 있어도, 저장된
+    # 결과만으로 충분히 같은 응답을 재현할 수 있다.
+    existing_rows = db.query(ReadingLog).filter(
         ReadingLog.user_id == user.id,
-        ReadingLog.dungeon_name == log_data.dungeon_name,
-        ReadingLog.difficulty == log_data.difficulty,
-        ReadingLog.session_type == log_data.session_type,
-        ReadingLog.created_at >= duplicate_cutoff,
-    ).order_by(ReadingLog.created_at.desc()).first()
-    if duplicate_log:
+        ReadingLog.client_token == log_data.client_token,
+    ).all()
+    if existing_rows:
         return {
-            "message": "같은 학습 기록이 방금 이미 저장됐어요. 이전 결과를 그대로 보여드려요.",
-            "gained_exp": duplicate_log.earned_exp,
-            "gained_gold": duplicate_log.earned_gold,
-            "gained_silver": duplicate_log.earned_silver,
+            "message": "같은 학습 기록이 이미 저장됐어요. 이전 결과를 그대로 보여드려요.",
+            "gained_exp": sum(row.earned_exp or 0 for row in existing_rows),
+            "gained_gold": sum(row.earned_gold or 0 for row in existing_rows),
+            "gained_silver": sum(row.earned_silver or 0 for row in existing_rows),
+            "reading_minutes": sum(row.reading_minutes or 0 for row in existing_rows),
             "start_level": user.level,
             "start_exp": user.total_exp,
             "current_level": user.level,
@@ -284,100 +454,25 @@ def add_reading_log(
             "new_characters": [],
         }
 
-    equipped = _get_equipped_character(user)
-    matched_subject = _resolve_matched_subject(log_data.session_type, log_data.difficulty)
-    character_exp_multiplier = _equipped_character_exp_multiplier(equipped, matched_subject)
-    character_silver_multiplier = _equipped_character_silver_multiplier(equipped, matched_subject)
-    character_gold_multiplier = _equipped_character_gold_multiplier(equipped)
+    state = _get_active_session_state(db, user.id)
+    if not state or state.client_token != log_data.client_token:
+        raise HTTPException(
+            status_code=400,
+            detail="진행 중인 세션을 찾을 수 없습니다. 페이지를 새로고침한 뒤 다시 시도해주세요.",
+        )
 
-    # 지역별 과목 보너스(예: 지혜의 신전의 국어/영어) - exp에만 적용되고 실버에는 적용되지 않는다.
-    # 캐릭터별 과목 보너스(character_exp_multiplier)와는 별개로 곱연산으로 함께 적용된다.
-    region_subject_multiplier = 1.0
-    for subject_key, multiplier in (region.subject_bonus_rules or {}).items():
-        if log_data.difficulty and log_data.difficulty.startswith(subject_key):
-            region_subject_multiplier = multiplier
-            break
+    region = db.query(Region).filter(Region.id == state.region_id).first()
+    if not region:
+        db.delete(state)
+        db.commit()
+        raise HTTPException(status_code=400, detail="세션이 시작된 지역을 더 이상 찾을 수 없습니다.")
 
-    gained_exp = int(
-        reading_minutes * region.exp_rate * difficulty_multiplier
-        * character_exp_multiplier * region_subject_multiplier
-    )
-    gained_gold = int(reading_minutes * region.gold_rate * character_gold_multiplier)
-    gained_silver = int(reading_minutes * region.silver_rate * character_silver_multiplier)
-
-    user.gold += gained_gold
-    user.lifetime_gold += gained_gold
-    user.silver += gained_silver
-
-    # 일일 독서시간 누적 (리셋은 위 상한 계산 때 이미 처리됨)
-    user.daily_reading_minutes += reading_minutes
-    user.lifetime_reading_minutes += reading_minutes
-
-    # 로비의 "현재 지역" 표시(region_info)가 가리키는 값 - /regions/advance(순차 진행)는 프론트에서
-    # 아무도 호출하지 않아 사실상 죽은 경로라, 대신 "가장 최근에 입장해 학습을 완료한 지역"으로
-    # 갱신한다. 이 함수는 던전 화면에서 지역을 자유롭게 골라 들어온 뒤 세션을 마칠 때마다 호출되므로,
-    # 여기서 갱신하는 게 곧 "최근 입장 지역"과 같은 의미가 된다.
-    user.current_region_id = region.id
-
-    split = MOCK_EXAM_SPLIT.get(log_data.difficulty) if log_data.session_type == "mock_exam" else None
-    if split:
-        split_difficulty, split_count = split
-        base_minutes, extra_minutes = divmod(reading_minutes, split_count)
-        base_exp, extra_exp = divmod(gained_exp, split_count)
-        base_gold, extra_gold = divmod(gained_gold, split_count)
-        base_silver, extra_silver = divmod(gained_silver, split_count)
-        for i in range(split_count):
-            is_last = i == split_count - 1  # 나눠떨어지지 않는 나머지는 마지막 회차에 몰아준다(합계는 항상 보존됨)
-            db.add(ReadingLog(
-                user_id=user.id, region_id=region.id, dungeon_name=region.name,
-                difficulty=split_difficulty, session_type=log_data.session_type,
-                reading_minutes=base_minutes + (extra_minutes if is_last else 0),
-                equipped_character_name=equipped.name if equipped else None,
-                earned_exp=base_exp + (extra_exp if is_last else 0),
-                earned_gold=base_gold + (extra_gold if is_last else 0),
-                earned_silver=base_silver + (extra_silver if is_last else 0),
-                is_auto_complete=log_data.is_auto_complete,
-                client_token=log_data.client_token,
-            ))
-    else:
-        db.add(ReadingLog(
-            user_id=user.id,
-            region_id=region.id,
-            dungeon_name=region.name,
-            difficulty=log_data.difficulty,
-            session_type=log_data.session_type,
-            reading_minutes=reading_minutes,
-            equipped_character_name=equipped.name if equipped else None,
-            earned_exp=gained_exp,
-            earned_gold=gained_gold,
-            earned_silver=gained_silver,
-            is_auto_complete=log_data.is_auto_complete and log_data.session_type == "mock_exam",
-            client_token=log_data.client_token,
-        ))
-
-    start_level = user.level   # 이번 독서로 exp가 반영되기 '전' 상태 - 프론트 레벨업 바 애니메이션의 시작점
-    start_exp = user.total_exp
-
-    level_result = apply_exp(user, gained_exp)
-
+    _flush_session_seconds(state)
+    reading_minutes = int(state.accumulated_seconds // 60)
+    session_type, difficulty, client_token = state.session_type, state.difficulty, state.client_token
+    db.delete(state)
     db.commit()
-    db.refresh(user)
 
-    new_achievements, new_characters = check_and_grant_achievements(db, user)
-
-    return {
-        "message": "독서 기록이 성공적으로 저장되었습니다!",
-        "gained_exp": gained_exp,
-        "gained_gold": gained_gold,
-        "gained_silver": gained_silver,
-        "start_level": start_level,
-        "start_exp": start_exp,
-        "current_level": user.level,
-        "current_exp": user.total_exp,
-        "lifetime_exp": user.lifetime_exp,
-        "daily_reading_minutes": user.daily_reading_minutes,
-        "level_up": level_result["level_up"],
-        "levels_gained": level_result["levels_gained"],
-        "new_achievements": new_achievements,
-        "new_characters": new_characters
-    }
+    return _apply_reading_reward(
+        db, user, region, session_type, difficulty, reading_minutes, log_data.is_auto_complete, client_token,
+    )
