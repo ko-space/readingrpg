@@ -19,9 +19,8 @@ MOCK_EXAM_MINUTES = {
     "한국사": 30, "탐구": 30, "탐구(2회분)": 62, "한문/제2외국어": 40,
 }
 DAILY_READING_MINUTES_CAP = 18 * 60  # 하루 최대 인정 독서시간(1080분) - session_type과 무관하게
-# 그날(KST) 누적된 daily_reading_minutes 전체에 적용된다. 시간 자체는 이제 아래 하트비트 메커니즘이
-# 이미 "실제로 흐른 만큼만" 보장하므로, 이 상한은 순수하게 "하루 최대 인정 시간" 게임 규칙일 뿐
-# 부정행위 방지용은 아니다(그 역할은 HEARTBEAT_MAX_CREDIT_SECONDS가 담당).
+# 그날(KST) 누적된 daily_reading_minutes 전체에 적용된다. 순수하게 "하루 최대 인정 시간" 게임
+# 규칙이다.
 
 # ── 세션 시간 조작 방지(근본 수정) ──────────────────────────────────────────────
 # 예전엔 클라이언트(reading.js)가 자체 타이머로 계산한 reading_minutes를 그대로 믿었다. 그런데
@@ -33,21 +32,17 @@ DAILY_READING_MINUTES_CAP = 18 * 60  # 하루 최대 인정 독서시간(1080분
 # 근본 수정: 클라이언트가 "얼마나 지났다"고 보고하는 값을 아예 신뢰하지 않는다. 대신 서버가
 # ReadingSessionState 행에 세션 상태를 직접 들고 있다가, 클라이언트가 짧은 주기(HEARTBEAT_INTERVAL_
 # SECONDS)로 보내는 "확인" 요청이 도착할 때마다 서버 자신의 시계(datetime.utcnow() - 클라이언트가
-# 절대 건드릴 수 없음)로 "지난번 확인 이후 실제로 얼마나 지났는지"를 직접 재서 누적한다. 이때 한 번의
-# 확인이 인정할 수 있는 최대치를 HEARTBEAT_MAX_CREDIT_SECONDS로 제한해두면, 확인 요청 사이에 아무리
-# 긴 공백이 있었어도(탭 방치, 네트워크 단절, 심지어 기기 시간 조작까지) 그 공백 전체가 아니라 최대
-# 이만큼만 인정된다 - 결과적으로 누적치는 절대로 "실제로 흐른 벽시계 시간"을 넘어설 수 없다.
-HEARTBEAT_INTERVAL_SECONDS = 15  # 클라이언트가 하트비트를 보내는 주기(참고용 - 서버는 실제 간격을 그때그때 잰다)
-HEARTBEAT_MAX_CREDIT_SECONDS = 300  # 확인 한 번당 인정하는 최대 시간 - 핵심 방어선. 5분까지 넉넉하게
-# 잡아서, 엘리베이터/지하철/비행기 이착륙처럼 몇 분씩 이어지는 긴 통신 장애까지도 사실상 전부 이
-# 상한 안에서 그대로 흡수돼 화면 표시 시간과 실제 인정 시간이 벌어지는 일이 거의 없게 했다(사용자
-# 확인 및 요청으로 45초 -> 120초 -> 300초로 단계적으로 상향). 프론트(reading.js의 heartbeat 재시도
-# 로직)도 장애 중엔 훨씬 짧은 주기(5초)로 계속 재시도해서, 연결이 복구되는 즉시 하트비트가 성공하도록
-# 되어 있다 - 즉 이 상한에 실제로 걸리려면 "5분 넘게 이어지는" 아주 드문 장애여야 한다. 그런 드문
-# 경우에도, 탭을 통째로 방치하거나(수십 분~시간 단위) 기기 시간을 조작하는 것과 비교하면 여전히
-# 압도적으로 작은 상한이라 방어 효과 자체는 유지된다 - 이 상한을 없애버리면(무제한 인정) 탭을 열어만
-# 두고 네트워크 요청만 의도적으로 차단한 채 방치했다가 나중에 한 번에 몰아서 인정받는 것을 막을
-# 방법이 없어진다.
+# 절대 건드릴 수 없음)로 "지난번 확인 이후 실제로 얼마나 지났는지"를 직접 재서 그대로(상한 없이)
+# 누적한다 - 그 값이 얼마나 크든, 그건 "서버가 직접 측정한 실제 벽시계 경과 시간"이므로 클라이언트가
+# 조작할 방법이 없다(예전 취약점은 클라이언트가 보고하는 값을 믿었다는 게 문제였지, 확인 간격이
+# 길다는 것 자체는 문제가 아니다). 탭을 다른 앱 뒤로 보내두고 몇 시간이 지나도(다른 곳에서 읽고
+# 있는 동안 이 탭은 그냥 시간만 재는 용도로 백그라운드에 있는 경우 등, 확인된 의도된 사용법) 일시
+# 정지만 누르지 않았다면 그 시간 전부가 정상적으로 인정된다 - 확인 간격에 상한을 두면 이 정상적인
+# 사용까지 함께 깎여나가므로(실제로 문제가 됐던 부분) 상한을 두지 않는다.
+HEARTBEAT_INTERVAL_SECONDS = 15  # 클라이언트가 하트비트를 보내는 주기(참고용 - 서버는 실제 간격을 그때그때 잰다).
+# 이 주기 자체는 순전히 "화면 표시를 서버 값에 자주 맞춰 보여주기 위한" 용도일 뿐, 보안이나 상한과는
+# 무관하다 - 하트비트가 어쩌다 한 번도 안 와도(탭 방치, 네트워크 단절 등) 다음 확인 때 그 사이 실제로
+# 흐른 시간 전부가(상한 없이) 그대로 인정된다.
 # 모의고사의 "하프" 변형은 배수 판정에서 원래 과목과 같은 것으로 취급한다(수학과 영어만 하프가 있음).
 # 한국사/한문·제2외국어는 독립 과목이 아니라 "기타" 공부시간으로 합산된다(탐구 앞뒤에 끼워 넣은
 # 모의고사 전용 과목 - 과목(subject) 탭에는 없음). 탐구(2회분)는 실제 탐구와 같은 과목이라 그대로 매핑.
@@ -168,14 +163,16 @@ def _get_active_session_state(db: Session, user_id: int):
 
 
 def _flush_session_seconds(state: ReadingSessionState, now: datetime | None = None):
-    """지난번 확인(last_heartbeat_at) 이후 실제로 흐른 시간을, 한 번에 최대
-    HEARTBEAT_MAX_CREDIT_SECONDS까지만 인정해서 누적한다 - 하트비트/일시정지/최종 제출 어디서
-    불러도 항상 같은 규칙. 서버 자신의 시계(now)만 쓰므로 클라이언트가 무엇을 보내든(또는 기기
-    시간을 조작하든) 전혀 영향을 못 준다. 일시정지 중이면 누적하지 않고 확인 시각만 갱신한다."""
+    """지난번 확인(last_heartbeat_at) 이후 실제로 흐른 시간 전부를(상한 없이) 누적한다 - 하트비트/
+    일시정지/최종 제출 어디서 불러도 항상 같은 규칙. 서버 자신의 시계(now)만 쓰므로 클라이언트가
+    무엇을 보내든(또는 기기 시간을 조작하든) 전혀 영향을 못 준다 - 확인 간격이 아무리 길어도(탭을
+    다른 앱 뒤로 보내둔 채 몇 시간이 지난 경우 등, 의도된 사용법) 그 전체가 "서버가 직접 잰 실제
+    벽시계 경과 시간"이므로 그대로 인정해도 안전하다. 일시정지 중이면 누적하지 않고 확인 시각만
+    갱신한다."""
     now = now or datetime.utcnow()
     if not state.is_paused:
         delta = (now - state.last_heartbeat_at).total_seconds()
-        state.accumulated_seconds += max(0.0, min(delta, HEARTBEAT_MAX_CREDIT_SECONDS))
+        state.accumulated_seconds += max(0.0, delta)
     state.last_heartbeat_at = now
 
 
@@ -348,8 +345,8 @@ def start_reading_session(
     banked_previous = None
     if existing:
         if existing.client_token == req.client_token:
-            # 새로고침/재접속으로 인한 복구 - _flush_session_seconds와 동일한 상한 규칙으로 그 사이
-            # 공백만큼(최대 HEARTBEAT_MAX_CREDIT_SECONDS) 얹어준 뒤 이어서 잰다.
+            # 새로고침/재접속으로 인한 복구 - _flush_session_seconds와 동일한 규칙으로 그 사이 공백
+            # 전부를(상한 없이) 얹어준 뒤 이어서 잰다.
             _flush_session_seconds(existing, now)
             db.commit()
             return {
@@ -391,7 +388,7 @@ def reading_session_heartbeat(
     user: User = Depends(get_current_user),
 ):
     """클라이언트가 짧은 주기(HEARTBEAT_INTERVAL_SECONDS)로 "아직 읽고 있다"고 알려올 때마다 호출.
-    서버 자신의 시계로 지난 확인 이후 실제로 흐른 시간만(최대 HEARTBEAT_MAX_CREDIT_SECONDS까지) 누적한다."""
+    서버 자신의 시계로 지난 확인 이후 실제로 흐른 시간 전부를(상한 없이) 누적한다."""
     state = _get_active_session_state(db, user.id)
     if not state or state.client_token != req.client_token:
         raise HTTPException(status_code=404, detail="진행 중인 세션을 찾을 수 없습니다. 페이지를 새로고침해주세요.")

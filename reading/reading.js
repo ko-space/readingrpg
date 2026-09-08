@@ -257,10 +257,11 @@
     // 보상의 근거가 되는 시간은 오직 서버가 이 하트비트 요청이 "실제로 도착한 간격"을 자기 시계로
     // 직접 재서 누적한 값(backend/routers/logs.py의 ReadingSessionState)뿐이다 - 클라이언트가 무엇을
     // 보내든(또는 아무것도 안 보내든, 기기 시간을 조작하든) 그 값에 영향을 줄 방법이 없다.
-    const HEARTBEAT_INTERVAL_MS = 15000; // backend HEARTBEAT_INTERVAL_SECONDS와 일치시켜 의도한 상한 여유(20배)를 유지
-    const HEARTBEAT_RETRY_MS = 5000; // 실패 시 재시도 간격 - 정기 주기(15초)를 기다리지 않고 훨씬 짧게 계속 재시도해서,
-    // 네트워크 장애가 복구되는 즉시 하트비트가 성공하게 한다(서버 상한 HEARTBEAT_MAX_CREDIT_SECONDS에
-    // 실제로 걸리는 "장애 시간"을 재시도 지연 없이 진짜 장애 시간에 최대한 가깝게 만들기 위함).
+    const HEARTBEAT_INTERVAL_MS = 15000; // backend HEARTBEAT_INTERVAL_SECONDS와 일치 - 화면을 서버 값에 자주 맞춰
+    // 보여주기 위한 주기일 뿐, 보상 계산 자체는 확인 간격이 길어져도(탭 방치 등) 상한 없이 그대로 인정된다.
+    const HEARTBEAT_RETRY_MS = 5000; // 실패 시 재시도 간격 - 정기 주기(15초)를 기다리지 않고 훨씬 짧게 계속
+    // 재시도해서, 화면 표시가 서버의 실제 값과 최대한 자주 맞춰지도록 한다(보상 자체는 어차피 상한 없이
+    // 나중에 그대로 인정되므로, 이 재시도는 순수하게 화면 정확도를 위한 것).
 
     async function postSessionAction(path, extra = {}) {
         try {
@@ -296,9 +297,9 @@
         const result = await postSessionAction("heartbeat");
         if (!result && sessionStarted && !isPaused && !handledEnd) {
             // 실패했으면(네트워크 장애 등) 다음 정기 주기(15초)까지 기다리지 않고 훨씬 짧은 간격으로
-            // 계속(한 번만이 아니라 성공할 때까지 반복) 재시도한다 - 장애가 길어질수록 서버 상한
-            // (HEARTBEAT_MAX_CREDIT_SECONDS)에 걸려 깎일 시간도 늘어나므로, 연결이 복구되는 순간을
-            // 최대한 빨리 잡아내 그 구간을 실제로 흐른 시간에 가깝게 회복시킨다.
+            // 계속(한 번만이 아니라 성공할 때까지 반복) 재시도한다 - 보상 자체는 서버가 상한 없이
+            // 정확히 인정해주지만, 화면 표시(getElapsedMs)는 서버 응답을 받아야 재동기화되므로 최대한
+            // 자주 성공시켜서 화면이 실제 값과 크게 벌어지지 않게 한다.
             heartbeatRetryTimeoutId = setTimeout(attemptHeartbeat, HEARTBEAT_RETRY_MS);
         }
     }
@@ -1009,10 +1010,10 @@
         // 띄웠는데, 다른 탭/다른 앱으로 전환하기만 해도(실제로 탭을 닫는 게 아닌데도) 이 경고가 뜨는
         // 문제가 확인됐다 - 모바일 브라우저 등에서 탭이 백그라운드로 가면 브라우저가 메모리 확보를 위해
         // 탭을 내렸다가 나중에 다시 불러오는 경우가 있는데, beforeunload 핸들러가 있으면 그 시점에도
-        // 발동해서 사용자가 실수로 닫으려 한 게 아닌데도 경고가 뜬 것으로 보인다. 이제는 서버가 15초
-        // 주기 하트비트로 진행 시간을 계속 확정 저장하고(최악의 경우도 최근 HEARTBEAT_MAX_CREDIT_SECONDS
-        // 만큼만 미확정 상태) localStorage에도 매초 백업해두므로, 경고 없이 탭이 그냥 닫혀도 잃는 시간이
-        // 아주 작다 - 이 경고가 주는 이득보다 오탐으로 인한 불편이 더 커서 완전히 제거했다.
+        // 발동해서 사용자가 실수로 닫으려 한 게 아닌데도 경고가 뜬 것으로 보인다. 이제는 서버가 확인
+        // 요청이 올 때마다(간격이 아무리 길어도 상한 없이) 진행 시간을 그대로 확정 저장하고,
+        // localStorage에도 매초 백업해두므로, 경고 없이 탭이 그냥 닫혀도 잃는 시간이 사실상 없다 -
+        // 이 경고가 주는 이득보다 오탐으로 인한 불편이 더 커서 완전히 제거했다.
 
         if (sessionType === "mock_exam") {
             const stopwatchEl = document.getElementById("reading-stopwatch");
