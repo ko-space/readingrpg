@@ -257,7 +257,7 @@
     // 보상의 근거가 되는 시간은 오직 서버가 이 하트비트 요청이 "실제로 도착한 간격"을 자기 시계로
     // 직접 재서 누적한 값(backend/routers/logs.py의 ReadingSessionState)뿐이다 - 클라이언트가 무엇을
     // 보내든(또는 아무것도 안 보내든, 기기 시간을 조작하든) 그 값에 영향을 줄 방법이 없다.
-    const HEARTBEAT_INTERVAL_MS = 15000; // backend HEARTBEAT_INTERVAL_SECONDS와 일치시켜 의도한 상한 여유(8배)를 유지
+    const HEARTBEAT_INTERVAL_MS = 15000; // backend HEARTBEAT_INTERVAL_SECONDS와 일치시켜 의도한 상한 여유(20배)를 유지
     const HEARTBEAT_RETRY_MS = 5000; // 실패 시 재시도 간격 - 정기 주기(15초)를 기다리지 않고 훨씬 짧게 계속 재시도해서,
     // 네트워크 장애가 복구되는 즉시 하트비트가 성공하게 한다(서버 상한 HEARTBEAT_MAX_CREDIT_SECONDS에
     // 실제로 걸리는 "장애 시간"을 재시도 지연 없이 진짜 장애 시간에 최대한 가깝게 만들기 위함).
