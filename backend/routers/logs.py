@@ -37,10 +37,13 @@ DAILY_READING_MINUTES_CAP = 18 * 60  # 하루 최대 인정 독서시간(1080분
 # 확인이 인정할 수 있는 최대치를 HEARTBEAT_MAX_CREDIT_SECONDS로 제한해두면, 확인 요청 사이에 아무리
 # 긴 공백이 있었어도(탭 방치, 네트워크 단절, 심지어 기기 시간 조작까지) 그 공백 전체가 아니라 최대
 # 이만큼만 인정된다 - 결과적으로 누적치는 절대로 "실제로 흐른 벽시계 시간"을 넘어설 수 없다.
-HEARTBEAT_INTERVAL_SECONDS = 20  # 클라이언트가 하트비트를 보내는 주기(참고용 - 서버는 실제 간격을 그때그때 잰다)
-HEARTBEAT_MAX_CREDIT_SECONDS = 30  # 확인 한 번당 인정하는 최대 시간 - 핵심 방어선. 정상 주기(20초)보다
-# 살짝 여유를 둬서 사소한 네트워크 지연은 그대로 인정하되, 그 이상의 공백(방치/단절/시간 조작)은
-# 얼마나 길든 이 값까지만 잘려서 인정된다.
+HEARTBEAT_INTERVAL_SECONDS = 15  # 클라이언트가 하트비트를 보내는 주기(참고용 - 서버는 실제 간격을 그때그때 잰다)
+HEARTBEAT_MAX_CREDIT_SECONDS = 45  # 확인 한 번당 인정하는 최대 시간 - 핵심 방어선. 정상 주기(15초)의
+# 3배 정도 여유를 둬서, 하트비트 한두 번이 밀리거나(백그라운드 탭 스로틀링 - 화면을 그대로 켜둔 채
+# 다른 탭으로 잠깐 전환하기만 해도 브라우저가 타이머 주기를 늦춘다) 네트워크가 한 번 실패해도 그 구간이
+# 통째로 깎이지 않는다(확인된 문제 - 30초로 너무 타이트하게 잡았더니 화면 표시 시간과 실제 인정
+# 시간이 눈에 띄게 벌어졌다). 그래도 30분/1시간 단위로 방치하거나 기기 시간을 조작하는 것과 비교하면
+# 여전히 압도적으로 작은 상한이라 방어 효과 자체는 그대로 유지된다.
 # 모의고사의 "하프" 변형은 배수 판정에서 원래 과목과 같은 것으로 취급한다(수학과 영어만 하프가 있음).
 # 한국사/한문·제2외국어는 독립 과목이 아니라 "기타" 공부시간으로 합산된다(탐구 앞뒤에 끼워 넣은
 # 모의고사 전용 과목 - 과목(subject) 탭에는 없음). 탐구(2회분)는 실제 탐구와 같은 과목이라 그대로 매핑.
@@ -345,7 +348,11 @@ def start_reading_session(
             # 공백만큼(최대 HEARTBEAT_MAX_CREDIT_SECONDS) 얹어준 뒤 이어서 잰다.
             _flush_session_seconds(existing, now)
             db.commit()
-            return {"accumulated_minutes": int(existing.accumulated_seconds // 60), "banked_previous": None}
+            return {
+                "accumulated_minutes": int(existing.accumulated_seconds // 60),
+                "accumulated_seconds": existing.accumulated_seconds,
+                "banked_previous": None,
+            }
 
         _flush_session_seconds(existing, now)
         old_region = db.query(Region).filter(Region.id == existing.region_id).first()
@@ -370,7 +377,7 @@ def start_reading_session(
         client_token=req.client_token,
     ))
     db.commit()
-    return {"accumulated_minutes": 0, "banked_previous": banked_previous}
+    return {"accumulated_minutes": 0, "accumulated_seconds": 0.0, "banked_previous": banked_previous}
 
 
 @router.post("/session/heartbeat")
@@ -386,7 +393,11 @@ def reading_session_heartbeat(
         raise HTTPException(status_code=404, detail="진행 중인 세션을 찾을 수 없습니다. 페이지를 새로고침해주세요.")
     _flush_session_seconds(state)
     db.commit()
-    return {"accumulated_minutes": int(state.accumulated_seconds // 60), "is_paused": state.is_paused}
+    return {
+        "accumulated_minutes": int(state.accumulated_seconds // 60),
+        "accumulated_seconds": state.accumulated_seconds,
+        "is_paused": state.is_paused,
+    }
 
 
 @router.post("/session/pause")
@@ -401,7 +412,7 @@ def pause_reading_session(
     _flush_session_seconds(state)  # 일시정지를 누르는 그 순간까지는 정상적으로 인정한다.
     state.is_paused = True
     db.commit()
-    return {"accumulated_minutes": int(state.accumulated_seconds // 60)}
+    return {"accumulated_minutes": int(state.accumulated_seconds // 60), "accumulated_seconds": state.accumulated_seconds}
 
 
 @router.post("/session/resume")
@@ -416,7 +427,7 @@ def resume_reading_session(
     state.is_paused = False
     state.last_heartbeat_at = datetime.utcnow()  # 일시정지 동안의 공백은 인정하지 않는다(재개 시점부터 새로 시작).
     db.commit()
-    return {"accumulated_minutes": int(state.accumulated_seconds // 60)}
+    return {"accumulated_minutes": int(state.accumulated_seconds // 60), "accumulated_seconds": state.accumulated_seconds}
 
 
 @router.post("/")

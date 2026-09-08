@@ -267,7 +267,20 @@
                 keepalive: path === "pause",
             });
             if (!res.ok) return null;
-            return await res.json();
+            const data = await res.json();
+            // 화면 표시 시간과 실제 서버 인정 시간이 점점 벌어지는 문제(확인된 신고 - 하트비트가
+            // 밀리거나 실패한 구간이 매번 서버에서는 상한만큼만 깎이는데, 화면 타이머는 그 구간도
+            // correctSuspendedGap으로 전부 따라잡아 계속 커지기만 해서 시간이 지날수록 격차가
+            // 누적됨)를 막기 위해, 서버 응답이 올 때마다 화면 타이머를 그 값으로 다시 맞춘다. 이제부터
+            // 매 하트비트(HEARTBEAT_INTERVAL_MS)마다 진짜 값으로 재동기화되므로, 격차는 그 사이(한
+            // 하트비트 주기 이내)로만 생겼다가 곧바로 사라지고 계속 쌓이지 않는다. 일시정지 중에도
+            // (pause 응답) 그대로 적용해서 멈춘 화면이 정확한 값을 보여주게 한다 - segmentStartMs를
+            // 갱신해도 일시정지 중엔 getElapsedMs가 이 값을 아예 참조하지 않으므로 안전하다.
+            if (typeof data.accumulated_seconds === "number") {
+                accumulatedMs = data.accumulated_seconds * 1000;
+                segmentStartMs = performance.now();
+            }
+            return data;
         } catch (err) {
             return null; // 네트워크 실패는 조용히 무시 - 다음 하트비트가 실패한 구간까지 이어서 확인해준다.
         }
@@ -275,9 +288,18 @@
 
     function startHeartbeatLoop() {
         stopHeartbeatLoop();
-        heartbeatIntervalId = setInterval(() => {
+        heartbeatIntervalId = setInterval(async () => {
             if (!sessionStarted || isPaused || handledEnd) return;
-            postSessionAction("heartbeat");
+            const result = await postSessionAction("heartbeat");
+            if (!result) {
+                // 이번 확인이 실패했으면(일시적 네트워크 문제 등) 다음 정기 주기까지 그냥 기다리지
+                // 않고 짧게 한 번 재시도한다 - 실패한 구간이 길어질수록 서버 상한(HEARTBEAT_MAX_
+                // CREDIT_SECONDS)을 넘겨서 그만큼 깎일 위험이 커지기 때문에, 최대한 빨리 다시 확인해서
+                // 그 구간을 실제로 흐른 시간에 가깝게 회복시킨다.
+                setTimeout(() => {
+                    if (sessionStarted && !isPaused && !handledEnd) postSessionAction("heartbeat");
+                }, 5000);
+            }
         }, HEARTBEAT_INTERVAL_MS);
     }
 
