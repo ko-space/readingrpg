@@ -242,6 +242,7 @@
     // 서버 응답을 못 받아 재시도하더라도 항상 같은 값을 실어 보내, backend/routers/logs.py가 "같은
     // 세션의 재시도"임을 시간 제한 없이 판별해서 중복 적립을 막을 수 있게 한다.
     let heartbeatIntervalId = null; // 서버에 "아직 읽고 있다"고 짧은 주기로 알리는 타이머(아래 참고).
+    let heartbeatRetryTimeoutId = null; // 하트비트 실패 시 짧은 간격으로 재시도하는 타이머(startHeartbeatLoop 참고).
 
     function generateClientToken() {
         return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}-${Math.random()}`;
@@ -256,7 +257,10 @@
     // 보상의 근거가 되는 시간은 오직 서버가 이 하트비트 요청이 "실제로 도착한 간격"을 자기 시계로
     // 직접 재서 누적한 값(backend/routers/logs.py의 ReadingSessionState)뿐이다 - 클라이언트가 무엇을
     // 보내든(또는 아무것도 안 보내든, 기기 시간을 조작하든) 그 값에 영향을 줄 방법이 없다.
-    const HEARTBEAT_INTERVAL_MS = 15000; // backend HEARTBEAT_INTERVAL_SECONDS와 일치시켜 의도한 상한 여유(3배)를 유지
+    const HEARTBEAT_INTERVAL_MS = 15000; // backend HEARTBEAT_INTERVAL_SECONDS와 일치시켜 의도한 상한 여유(8배)를 유지
+    const HEARTBEAT_RETRY_MS = 5000; // 실패 시 재시도 간격 - 정기 주기(15초)를 기다리지 않고 훨씬 짧게 계속 재시도해서,
+    // 네트워크 장애가 복구되는 즉시 하트비트가 성공하게 한다(서버 상한 HEARTBEAT_MAX_CREDIT_SECONDS에
+    // 실제로 걸리는 "장애 시간"을 재시도 지연 없이 진짜 장애 시간에 최대한 가깝게 만들기 위함).
 
     async function postSessionAction(path, extra = {}) {
         try {
@@ -286,26 +290,32 @@
         }
     }
 
+    async function attemptHeartbeat() {
+        heartbeatRetryTimeoutId = null;
+        if (!sessionStarted || isPaused || handledEnd) return;
+        const result = await postSessionAction("heartbeat");
+        if (!result && sessionStarted && !isPaused && !handledEnd) {
+            // 실패했으면(네트워크 장애 등) 다음 정기 주기(15초)까지 기다리지 않고 훨씬 짧은 간격으로
+            // 계속(한 번만이 아니라 성공할 때까지 반복) 재시도한다 - 장애가 길어질수록 서버 상한
+            // (HEARTBEAT_MAX_CREDIT_SECONDS)에 걸려 깎일 시간도 늘어나므로, 연결이 복구되는 순간을
+            // 최대한 빨리 잡아내 그 구간을 실제로 흐른 시간에 가깝게 회복시킨다.
+            heartbeatRetryTimeoutId = setTimeout(attemptHeartbeat, HEARTBEAT_RETRY_MS);
+        }
+    }
+
     function startHeartbeatLoop() {
         stopHeartbeatLoop();
-        heartbeatIntervalId = setInterval(async () => {
-            if (!sessionStarted || isPaused || handledEnd) return;
-            const result = await postSessionAction("heartbeat");
-            if (!result) {
-                // 이번 확인이 실패했으면(일시적 네트워크 문제 등) 다음 정기 주기까지 그냥 기다리지
-                // 않고 짧게 한 번 재시도한다 - 실패한 구간이 길어질수록 서버 상한(HEARTBEAT_MAX_
-                // CREDIT_SECONDS)을 넘겨서 그만큼 깎일 위험이 커지기 때문에, 최대한 빨리 다시 확인해서
-                // 그 구간을 실제로 흐른 시간에 가깝게 회복시킨다.
-                setTimeout(() => {
-                    if (sessionStarted && !isPaused && !handledEnd) postSessionAction("heartbeat");
-                }, 5000);
-            }
+        heartbeatIntervalId = setInterval(() => {
+            if (heartbeatRetryTimeoutId != null) return; // 이미 재시도 체인이 도는 중이면 정기 주기는 건너뜀(중복 요청 방지)
+            attemptHeartbeat();
         }, HEARTBEAT_INTERVAL_MS);
     }
 
     function stopHeartbeatLoop() {
         if (heartbeatIntervalId) clearInterval(heartbeatIntervalId);
         heartbeatIntervalId = null;
+        if (heartbeatRetryTimeoutId) clearTimeout(heartbeatRetryTimeoutId);
+        heartbeatRetryTimeoutId = null;
     }
 
     // segmentStartMs/accumulatedMs는 Date.now()가 아니라 performance.now()(모노토닉 시계) 기준이다 -
@@ -995,13 +1005,14 @@
             if (!document.hidden) requestWakeLock();
         });
 
-        // 세션이 진행되는 동안(끝내기 전) 탭을 닫거나 새로고침하려 하면 브라우저 기본 경고창을
-        // 띄운다 - localStorage 복구가 있어도, 애초에 실수로 닫는 것 자체를 한 번 더 막아주는 게 낫다.
-        window.addEventListener("beforeunload", (e) => {
-            if (!sessionStarted || handledEnd) return;
-            e.preventDefault();
-            e.returnValue = "";
-        });
+        // (제거됨) 예전엔 세션 진행 중 탭을 닫거나 새로고침하면 beforeunload로 브라우저 기본 경고창을
+        // 띄웠는데, 다른 탭/다른 앱으로 전환하기만 해도(실제로 탭을 닫는 게 아닌데도) 이 경고가 뜨는
+        // 문제가 확인됐다 - 모바일 브라우저 등에서 탭이 백그라운드로 가면 브라우저가 메모리 확보를 위해
+        // 탭을 내렸다가 나중에 다시 불러오는 경우가 있는데, beforeunload 핸들러가 있으면 그 시점에도
+        // 발동해서 사용자가 실수로 닫으려 한 게 아닌데도 경고가 뜬 것으로 보인다. 이제는 서버가 15초
+        // 주기 하트비트로 진행 시간을 계속 확정 저장하고(최악의 경우도 최근 HEARTBEAT_MAX_CREDIT_SECONDS
+        // 만큼만 미확정 상태) localStorage에도 매초 백업해두므로, 경고 없이 탭이 그냥 닫혀도 잃는 시간이
+        // 아주 작다 - 이 경고가 주는 이득보다 오탐으로 인한 불편이 더 커서 완전히 제거했다.
 
         if (sessionType === "mock_exam") {
             const stopwatchEl = document.getElementById("reading-stopwatch");
