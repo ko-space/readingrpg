@@ -849,9 +849,12 @@
     }
 
     function formatHMS(totalSeconds) {
-        const h = Math.floor(totalSeconds / 3600);
-        const m = Math.floor((totalSeconds % 3600) / 60);
-        const s = totalSeconds % 60;
+        // reading_seconds가 서버에서 소수점 있는 값(float)으로 내려오므로, 여기서 정수 초로 먼저
+        // 잘라내지 않으면 완료 화면에 "00:02:59.42" 같은 불필요한 소수점 초가 그대로 노출된다.
+        const total = Math.floor(totalSeconds);
+        const h = Math.floor(total / 3600);
+        const m = Math.floor((total % 3600) / 60);
+        const s = total % 60;
         return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
     }
 
