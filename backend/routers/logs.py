@@ -453,6 +453,10 @@ def add_reading_log(
             "gained_gold": sum(row.earned_gold or 0 for row in existing_rows),
             "gained_silver": sum(row.earned_silver or 0 for row in existing_rows),
             "reading_minutes": sum(row.reading_minutes or 0 for row in existing_rows),
+            # 재시도 응답에는 원래 정밀한 초 단위 값이 남아있지 않다(ReadingLog는 분 단위로만 저장) -
+            # 어쩔 수 없이 저장된 분 값을 초로 환산해 대체한다(정밀 표시가 안 되는 드문 경로일 뿐,
+            # 최초 성공 응답에서는 항상 정밀한 값이 내려간다).
+            "reading_seconds": sum(row.reading_minutes or 0 for row in existing_rows) * 60,
             "start_level": user.level,
             "start_exp": user.total_exp,
             "current_level": user.level,
@@ -479,11 +483,19 @@ def add_reading_log(
         raise HTTPException(status_code=400, detail="세션이 시작된 지역을 더 이상 찾을 수 없습니다.")
 
     _flush_session_seconds(state)
-    reading_minutes = int(state.accumulated_seconds // 60)
+    raw_accumulated_seconds = state.accumulated_seconds
+    reading_minutes = int(raw_accumulated_seconds // 60)
     session_type, difficulty, client_token = state.session_type, state.difficulty, state.client_token
     db.delete(state)
     db.commit()
 
-    return _apply_reading_reward(
+    result = _apply_reading_reward(
         db, user, region, session_type, difficulty, reading_minutes, log_data.is_auto_complete, client_token,
     )
+    # 완료 화면의 "시간" 표시는 초 단위까지 자연스럽게 보여야 하는데(확인된 요청 - 예전엔 초까지
+    # 나왔음), reading_minutes는 보상 계산 기준(정수 분 - 초 단위 잔여분은 보상에 반영되지 않고 그냥
+    # 버려짐)이라 그대로 쓰면 항상 ":00"으로 끝나는 부자연스러운 값이 된다. 정밀한 초 단위 값을 함께
+    # 내려주되, 일일 상한 등으로 실제 인정된 분이 더 적게 잘렸을 수 있으므로(_apply_reading_reward
+    # 내부) 표시 시간이 실제로 보상받은 분보다 1분 이상 많아 보이지 않도록 함께 잘라준다.
+    result["reading_seconds"] = min(raw_accumulated_seconds, result["reading_minutes"] * 60 + 59)
+    return result

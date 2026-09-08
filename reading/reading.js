@@ -256,7 +256,7 @@
     // 보상의 근거가 되는 시간은 오직 서버가 이 하트비트 요청이 "실제로 도착한 간격"을 자기 시계로
     // 직접 재서 누적한 값(backend/routers/logs.py의 ReadingSessionState)뿐이다 - 클라이언트가 무엇을
     // 보내든(또는 아무것도 안 보내든, 기기 시간을 조작하든) 그 값에 영향을 줄 방법이 없다.
-    const HEARTBEAT_INTERVAL_MS = 20000;
+    const HEARTBEAT_INTERVAL_MS = 15000; // backend HEARTBEAT_INTERVAL_SECONDS와 일치시켜 의도한 상한 여유(3배)를 유지
 
     async function postSessionAction(path, extra = {}) {
         try {
@@ -779,8 +779,11 @@
             releaseWakeLock();
             document.getElementById("reading-complete-title").textContent = "독서 완료!";
             // 완료 화면의 "시간" 표시는 이제 클라이언트 자체 타이머가 아니라 서버가 실제로 인정한
-            // reading_minutes를 기준으로 한다 - 화면이 표시하는 시간과 실제 보상의 근거가 항상 일치하게 한다.
-            showCompleteModal(data, (data.reading_minutes || 0) * 60).then(() => {
+            // 값을 기준으로 한다 - 화면이 표시하는 시간과 실제 보상의 근거가 항상 일치하게 한다.
+            // reading_seconds(정밀한 초 단위)가 있으면 그걸 쓰고(예전처럼 초 단위까지 자연스럽게
+            // 표시됨 - 확인된 요청), 없으면(구버전 응답 등 예외적인 경우) reading_minutes*60으로 대체한다.
+            const completeSeconds = typeof data.reading_seconds === "number" ? data.reading_seconds : (data.reading_minutes || 0) * 60;
+            showCompleteModal(data, completeSeconds).then(() => {
                 const notifyAchievements = () => {
                     if (typeof showAchievementToast === "function" && data.new_achievements?.length) {
                         showAchievementToast(data.new_achievements);
