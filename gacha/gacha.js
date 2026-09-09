@@ -411,7 +411,12 @@
                 { ...data.character, is_pickup: true, is_duplicate: data.is_duplicate },
                 ...(data.new_characters || []),
             ];
-            if (typeof showCharacterReveal === "function") {
+            // 퀘스트/도전과제 캐릭터 보상과 완전히 같은 연출을 쓴다(확인된 요청) - 간판인물 접근+빛
+            // 폭발 없이 문 열림->보석으로 바로 시작하는 playQuestRewardCinematic을 우선 쓰고, 없으면
+            // (구버전 등) 기존처럼 showCharacterReveal로 대체한다.
+            if (typeof playQuestRewardCinematic === "function") {
+                playQuestRewardCinematic(revealCharacters, notifyAchievements);
+            } else if (typeof showCharacterReveal === "function") {
                 showCharacterReveal(revealCharacters, notifyAchievements);
             } else {
                 alert(data.message);
