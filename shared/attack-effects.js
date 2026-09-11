@@ -2782,8 +2782,11 @@ function playPositionalBombLine(impactFractions, onArrive, onBombLand) {
 // 292px + 간격)을 넉넉히 덮을 만큼 커야 캔버스 자체 경계에서 잘리지 않는다.
 const KH_WING_CANVAS_PAD = 420;
 
+// frenzy(흑익/폭주)는 검은색 소용돌이 본체 + 보라색 글로우(아래 khDrawTornadoLightningWrap이 그
+// 보라색을 번개로 한 번 더 감싼다, 확인된 요청) - 원래 데모의 "검정" 컨셉을 본체 색에 되살리고,
+// 실제 스탠딩 아트의 보라색 오라는 글로우/전기 쪽으로 옮겼다.
 const KH_VORTEX_PALETTE = {
-    frenzy: { core: [168, 92, 247], glow: [124, 58, 237] },
+    frenzy: { core: [10, 10, 14], glow: [124, 58, 237] },
     special: { core: [255, 255, 255], glow: [255, 225, 150] },
 };
 
@@ -2862,6 +2865,48 @@ const KH_VORTEX_RING_SEGMENTS = 50;
 // 이미 샘플링된 점 배열(pts)을 따라 링을 그린다 - khDrawVortexTendril(단일 곡선)과 khWingAuraStep의
 // "휘어짐" 블렌드(khWingBendPoints로 두 곡선의 대응 점끼리 미리 섞어 만든 점 배열) 둘 다 이 함수를
 // 공유한다.
+// 흑익(frenzy) 전용: 검게 바뀐 소용돌이 본체를 임소정의 지그재그 번개(drawLightningBolt)와 같은
+// 이중 스트로크(바깥 보라색 글로우 굵은 겹 + 안쪽 흰색 얇은 코어) 기법으로 감싼다(확인된 요청).
+// pts(소용돌이 곡선 표본점)를 그대로 따라가되, 각 점을 접선의 수직 방향으로 매 프레임 새로
+// 무작위 흔들어서 실제 번개처럼 계속 지지직거리며 다시 그려지게 한다.
+function khWrapPointsForLightning(pts, wobble) {
+    const wrapped = [pts[0]];
+    for (let i = 1; i < pts.length - 1; i++) {
+        const t = khTangent(pts, i);
+        const jitter = (Math.random() * 2 - 1) * wobble;
+        wrapped.push({ x: pts[i].x - t.y * jitter, y: pts[i].y + t.x * jitter });
+    }
+    wrapped.push(pts[pts.length - 1]);
+    return wrapped;
+}
+
+function khDrawTornadoLightningWrap(ctx, pts, alpha) {
+    if (alpha <= 0 || pts.length < 2) return;
+    const wrapped = khWrapPointsForLightning(pts, 9);
+    const drawStroke = (color, shadowColor, shadowBlur, width) => {
+        ctx.shadowBlur = shadowBlur;
+        ctx.shadowColor = shadowColor;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.moveTo(wrapped[0].x, wrapped[0].y);
+        for (let i = 1; i < wrapped.length; i++) {
+            const prev = wrapped[i - 1], cur = wrapped[i];
+            const mx = (prev.x + cur.x) * 0.5, my = (prev.y + cur.y) * 0.5;
+            ctx.quadraticCurveTo(prev.x, prev.y, mx, my);
+        }
+        const last = wrapped[wrapped.length - 1];
+        ctx.lineTo(last.x, last.y);
+        ctx.stroke();
+    };
+    ctx.save();
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    drawStroke(`rgba(168,92,247,${0.88 * alpha})`, `rgba(124,58,237,${0.65 * alpha})`, 16, 3);
+    drawStroke(`rgba(238,225,255,${0.9 * alpha})`, `rgba(168,92,247,${0.5 * alpha})`, 6, 1.2);
+    ctx.restore();
+}
+
 function khDrawVortexRings(ctx, pts, mode, now, intensity) {
     for (let i = 1; i < pts.length; i++) {
         const p = pts[i];
@@ -2881,6 +2926,9 @@ function khDrawVortexRings(ctx, pts, mode, now, intensity) {
         ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 1.7);
         ctx.stroke();
         ctx.restore();
+    }
+    if (mode === "frenzy") {
+        khDrawTornadoLightningWrap(ctx, pts, intensity);
     }
     const root = pts[0];
     ctx.save();
