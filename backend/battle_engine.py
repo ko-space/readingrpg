@@ -515,9 +515,11 @@ def _kimhyeonjae_exit_active(unit, side, events, time_elapsed):
 
 
 def _kimhyeonjae_enter_frenzy(unit, side, events, time_elapsed, config):
-    """폭주(Passive) 발동 - "방향 전환" 중 체력이 hp_threshold_percent% 이하로 떨어진 순간. 사용 중인
-    방향 전환을 즉시 해제하고(사거리 원거리로 강제 복귀), 7초간 공격력/공격속도 버프 + CC 면역 +
-    받는 피해 감소 및 반사(방향 전환과 동일한 damage_reduction_config, reflect=True)를 건다."""
+    """폭주(Passive) 발동 - 체력이 hp_threshold_percent% 이하로 떨어진 순간(더 이상 "방향 전환"
+    진행 중일 필요 없음, 전투 당 1회 - 확인된 요청). 사용 중이던 [Active]가 있었다면 즉시 해제하고
+    (사거리 원거리로 강제 복귀), 7초간 공격력/공격속도 버프 + CC 면역 + 받는 피해 감소 및 반사
+    (방향 전환과 동일한 damage_reduction_config, reflect=True) + 불사(undying_until - 이 동안은
+    체력이 바닥나는 공격을 맞아도 1로 고정되어 죽지 않는다, battle_core._apply_damage 참고)를 건다."""
     _kimhyeonjae_clear_active_effects(unit)
     duration = config["duration_seconds"]
     until = time_elapsed + duration
@@ -529,6 +531,7 @@ def _kimhyeonjae_enter_frenzy(unit, side, events, time_elapsed, config):
     unit["damage_reduction_config"] = {
         "until": until, "dr_percent": config["damage_reduction_percent"], "reflect": True,
     }
+    unit["undying_until"] = until
     events.append({
         "time": time_elapsed, "event_type": "kimhyeonjae_mode_resolve", "side": side,
         "actor": unit["name"], "actor_slot": unit.get("slot"),
@@ -540,15 +543,36 @@ def _kimhyeonjae_enter_frenzy(unit, side, events, time_elapsed, config):
     })
 
 
+def _kimhyeonjae_exit_frenzy(unit, side, events, time_elapsed):
+    """폭주(Passive)가 7초 자연 종료됐다 - 예전엔 이 시점에 즉시 사망했지만(확인된 요청으로 제거),
+    이제는 버프/불사만 걷어내고 죽지 않는다. detail.mode는 "방향 전환"(Active) 자연 종료가 쓰는
+    "normal"과 일부러 다른 값("frenzy_end")을 쓴다 - 프론트의 "normal" 처리는 [Active] 전용 로그
+    문구/변신 해제 애니메이션(playKimHyeonjaeActiveExitFrames)을 재생하는데, 그대로 재사용하면
+    폭주가 끝났을 뿐인데 "[Active] 종료!"라고 잘못 뜨는 문제가 생긴다."""
+    unit["status"]["temp_atk_mods"].pop("kimhyeonjae_mode", None)
+    unit["status"]["temp_haste_mods"].pop("kimhyeonjae_mode", None)
+    unit["status"]["cc_immune_until"] = None
+    unit["damage_reduction_config"] = None
+    unit["undying_until"] = None
+    unit["kimhyeonjae_mode"] = None
+    unit["kimhyeonjae_mode_ends_at"] = None
+    events.append({
+        "time": time_elapsed, "event_type": "kimhyeonjae_mode_resolve", "side": side,
+        "actor": unit["name"], "actor_slot": unit.get("slot"), "detail": {"mode": "frenzy_end"},
+    })
+
+
 def _kimhyeonjae_enter_special(unit, side, events, time_elapsed, config):
     """지키고 싶은 마음(Special) 발동 - 폭주 중 아군 청년이 죽는 순간. 폭주를 대체하며(같은
     temp_atk_mods/temp_haste_mods 소스 키를 그대로 덮어씀) 체력을 회복하고, 더 강한 버프 +
     피해감소 및 반사(damage_reduction_config, reflect=True - 확인된 요청: 폭주와 동일하게 반사도
-    걸리도록 변경) + 기본공격 시 적 넉백을 건다."""
+    걸리도록 변경) + 기본공격 시 적 넉백을 건다. 불사(undying_until)는 폭주에서만 부여되는 효과라
+    (확인된 요청 - 지키고 싶은 마음은 그대로 "종료 시 즉시 사망" 유지) 여기로 전이되며 함께 걷어낸다."""
     duration = config["duration_seconds"]
     until = time_elapsed + duration
     heal = round(unit["max_hp"] * config["heal_percent"] / 100)
     unit["hp"] = min(unit["max_hp"], unit["hp"] + heal)
+    unit["undying_until"] = None
     unit["kimhyeonjae_mode"] = "special"
     unit["kimhyeonjae_mode_ends_at"] = until
     unit["status"]["temp_atk_mods"]["kimhyeonjae_mode"] = {"percent": config["atk_percent"], "until": until}
@@ -571,13 +595,15 @@ def _kimhyeonjae_enter_special(unit, side, events, time_elapsed, config):
 
 
 def _kimhyeonjae_die(unit, side, events, time_elapsed, from_mode):
-    """폭주/지키고 싶은 마음이 각자의 지속시간 그대로 자연 종료되면 "종료 시 즉시 사망"한다(확인된
-    요청) - 윤의 "호" 자폭(self_destruct_after_attack)과 동일하게 _apply_damage를 거치지 않고
-    hp를 직접 0으로 만든다(보호막/피해감소로 막히면 안 되는 확정 죽음이므로)."""
+    """지키고 싶은 마음이 지속시간 그대로 자연 종료되면 "종료 시 즉시 사망"한다(확인된 요청 - 폭주는
+    더 이상 이 함수를 타지 않는다, _kimhyeonjae_exit_frenzy 참고) - 윤의 "호" 자폭
+    (self_destruct_after_attack)과 동일하게 _apply_damage를 거치지 않고 hp를 직접 0으로 만든다
+    (보호막/피해감소/불사로도 막히면 안 되는 확정 죽음이므로)."""
     unit["status"]["temp_atk_mods"].pop("kimhyeonjae_mode", None)
     unit["status"]["temp_haste_mods"].pop("kimhyeonjae_mode", None)
     unit["status"]["cc_immune_until"] = None
     unit["damage_reduction_config"] = None
+    unit["undying_until"] = None
     unit["knockback_on_attack_until"] = None
     unit["kimhyeonjae_mode"] = None
     unit["kimhyeonjae_mode_ends_at"] = None
@@ -592,15 +618,18 @@ def _apply_kimhyeonjae_state_tick(team, side, events, time_elapsed):
     """김현재: "방향 전환"(Active)/"폭주"(Passive)/"지키고 싶은 마음"(Special)을 매 틱 감지·전이한다
     (madness_config와 동일한 "장전 후 매 틱 감지" 패턴). kimhyeonjae_mode 하나로만 표현되고 항상 이
     순서로만 전이된다:
-    None -[방향 전환 시전]-> active -[체력 임계값 도달 또는 10초 자연 종료]-> {frenzy 또는 None}
-    -[7초 자연 종료 또는 아군 청년 사망]-> {사망(hp=0) 또는 special} -[6~8초 자연 종료]-> 사망(hp=0).
-    frenzy_config/special_config가 없는(=이 캐릭터가 아닌) 유닛은 kimhyeonjae_mode 자체가 없어
-    맨 위에서 바로 건너뛴다."""
+    None -[방향 전환 시전]-> active
+    (None 또는 active) -[체력 임계값 도달, 전투 당 1회]-> frenzy
+    -[7초 자연 종료]-> None(사망하지 않음) 또는 [아군 청년 사망]-> special -[6~8초 자연 종료]-> 사망(hp=0).
+    "체력 임계값 도달" 전이는 확인된 요청으로 더 이상 [Active] 진행 여부와 무관하다(예전엔 active
+    상태에서만 감지했음) - frenzy_used 플래그로 전투당 1회만 발동하게 막는다.
+    frenzy_config/special_config가 없는(=이 캐릭터가 아닌) 유닛은 kimhyeonjae_mode도 frenzy_config도
+    없어 맨 위에서 바로 건너뛴다."""
     for unit in _alive_units(team):
         mode = unit.get("kimhyeonjae_mode")
-        if mode is None:
+        frenzy_config = unit.get("frenzy_config")
+        if mode is None and frenzy_config is None:
             continue
-        ends_at = unit["kimhyeonjae_mode_ends_at"]
 
         if mode == "active":
             drain_percent = unit.get("kimhyeonjae_drain_percent_per_second") or 0
@@ -611,23 +640,36 @@ def _apply_kimhyeonjae_state_tick(team, side, events, time_elapsed):
             if unit["hp"] <= 0:
                 continue  # 드레인만으로 죽었으면(드묾) 그대로 죽은 채 - 아래 전이는 건너뛴다.
 
-            frenzy_config = unit.get("frenzy_config")
-            hp_percent = unit["hp"] / unit["max_hp"] * 100
-            if frenzy_config and hp_percent <= frenzy_config["hp_threshold_percent"]:
-                _kimhyeonjae_enter_frenzy(unit, side, events, time_elapsed, frenzy_config)
-                # 스페셜 발동 조건은 "폭주 발동 중에" 청년이 사망하는 것이지, 이미 죽어있는 채로
-                # 폭주가 발동되는 것이 아니다(확인된 요청) - 폭주 진입 시점에 청년이 이미 사망한
-                # 상태였다면, 아래 "frenzy" 분기의 매 틱 감지가 그 즉시(진입 첫 틱) 조건을 충족한
-                # 것으로 오판해 스페셜이 곧바로 터지던 버그가 있었다. 진입 시점에 이미 죽어있으면
-                # 트리거 플래그를 미리 막아, 그 이후 "실제로" 사망하는 순간만 스페셜을 허용한다.
-                partner_name = unit.get("trait_partner_name")
-                partner = next(
-                    (u for u in (team.get("front"), team.get("back"), team.get("supporter")) if u and u["name"] == partner_name),
-                    None,
-                )
-                if partner is None or partner["hp"] <= 0:
-                    unit["_kimhyeonjae_special_triggered"] = True
-            elif time_elapsed >= ends_at:
+        # 폭주(전투 당 1회, [Active] 진행 여부와 무관) - mode가 None이든 active든 체력 임계값에
+        # 도달하면 곧바로 발동한다(확인된 요청). frenzy/special 상태인 유닛은 mode가 이미 그
+        # 값이라 아래 조건(mode in (None, "active"))에 걸리지 않아 자연히 제외된다.
+        if (
+            frenzy_config and not unit.get("frenzy_used") and mode in (None, "active")
+            and unit["hp"] > 0 and (unit["hp"] / unit["max_hp"] * 100) <= frenzy_config["hp_threshold_percent"]
+        ):
+            unit["frenzy_used"] = True
+            _kimhyeonjae_enter_frenzy(unit, side, events, time_elapsed, frenzy_config)
+            # 스페셜 발동 조건은 "폭주 발동 중에" 청년이 사망하는 것이지, 이미 죽어있는 채로
+            # 폭주가 발동되는 것이 아니다(확인된 요청) - 폭주 진입 시점에 청년이 이미 사망한
+            # 상태였다면, 아래 "frenzy" 분기의 매 틱 감지가 그 즉시(진입 첫 틱) 조건을 충족한
+            # 것으로 오판해 스페셜이 곧바로 터지던 버그가 있었다. 진입 시점에 이미 죽어있으면
+            # 트리거 플래그를 미리 막아, 그 이후 "실제로" 사망하는 순간만 스페셜을 허용한다.
+            partner_name = unit.get("trait_partner_name")
+            partner = next(
+                (u for u in (team.get("front"), team.get("back"), team.get("supporter")) if u and u["name"] == partner_name),
+                None,
+            )
+            if partner is None or partner["hp"] <= 0:
+                unit["_kimhyeonjae_special_triggered"] = True
+            continue
+
+        if mode is None:
+            continue
+
+        ends_at = unit["kimhyeonjae_mode_ends_at"]
+
+        if mode == "active":
+            if time_elapsed >= ends_at:
                 _kimhyeonjae_exit_active(unit, side, events, time_elapsed)
             continue
 
@@ -645,7 +687,7 @@ def _apply_kimhyeonjae_state_tick(team, side, events, time_elapsed):
                 unit["_kimhyeonjae_special_triggered"] = True
                 _kimhyeonjae_enter_special(unit, side, events, time_elapsed, special_config)
             elif time_elapsed >= ends_at:
-                _kimhyeonjae_die(unit, side, events, time_elapsed, "frenzy")
+                _kimhyeonjae_exit_frenzy(unit, side, events, time_elapsed)
             continue
 
         if mode == "special" and time_elapsed >= ends_at:

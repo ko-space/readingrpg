@@ -244,11 +244,11 @@ def _star_arm_madness_on_damage(unit, own_team, enemy_team, params):
     return []
 
 
-def _star_arm_frenzy_on_low_hp_during_active(unit, own_team, enemy_team, params):
-    # 김현재(폭주): "장전"만 해둔다 - "방향 전환"(Active) 진행 중 체력이 hp_threshold_percent% 이하로
-    # 떨어지는 순간을 감지해 즉시 발동시키는 건 battle_engine._apply_kimhyeonjae_state_tick(매 틱)이
-    # 한다(김지섭 madness_config와 동일한 "장전 후 매 틱 감지" 패턴). 전투 시작 시점엔 상태 변화가
-    # 없으므로(방향 전환을 아직 쓰지도 않았음) changes는 빈 목록.
+def _star_arm_frenzy_on_low_hp(unit, own_team, enemy_team, params):
+    # 김현재(폭주): "장전"만 해둔다 - 체력이 hp_threshold_percent% 이하로 떨어지는 순간(더 이상
+    # "방향 전환"(Active) 진행 여부와 무관, 전투 당 1회 - 확인된 요청)을 감지해 즉시 발동시키는 건
+    # battle_engine._apply_kimhyeonjae_state_tick(매 틱)이 한다(김지섭 madness_config와 동일한
+    # "장전 후 매 틱 감지" 패턴). 전투 시작 시점엔 상태 변화가 없으므로 changes는 빈 목록.
     unit["frenzy_config"] = {
         "hp_threshold_percent": params["hp_threshold_percent"],
         "duration_seconds": params["duration_seconds"],
@@ -314,7 +314,7 @@ STAR_EFFECT_HANDLERS = {
     "shield_low_hp_striker_once": _star_shield_low_hp_striker_once,
     "madness_on_damage": _star_arm_madness_on_damage,
     "grant_team_cost_head_start": _star_grant_team_cost_head_start,
-    "frenzy_on_low_hp_during_active": _star_arm_frenzy_on_low_hp_during_active,
+    "frenzy_on_low_hp": _star_arm_frenzy_on_low_hp,
 }
 
 
