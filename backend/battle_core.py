@@ -653,8 +653,18 @@ def _apply_damage(target, amount, time_elapsed, attacker=None, suppress_reflect_
     (확인된 요청 - 무적일 때만 프론트가 피해 숫자 대신 MISS를 보여준다, 보호막으로 막힌 건 그대로
     숫자 표시) - 방임/김현재 감쇄는 무적과 달리 실제로 피해가 들어가는 상황이라, 화면에 뜨는 숫자도
     감쇄가 반영된(실제로 깎일) 값으로 보여준다(확인된 요청). invincible_block은 이 히트가 "무적"
-    (shield_until) 때문에 막혔는지."""
+    (shield_until) 때문에 막혔는지.
+
+    불사(undying_until - 김현재 "폭주" 등이 부여): 이 상태인 동안 체력이 바닥나는 공격을 맞아도
+    즉사하지 않고 체력 1을 남긴다(아래 hp 반영부 참고). 이미 체력이 1까지 깎여있는 채로 또 맞으면
+    (무적과 동일하게) 그 히트 전체를 MISS로 막아버린다 - 안 그러면 매 히트마다 "바닥나는 공격"
+    조건이 계속 참이라 사실상 무적과 구분이 안 되지만, 의도는 "실제로 죽을 뻔한 공격은 맞되 죽지만
+    않는다"이므로 이미 1인 상태에서의 추가 피해만 막는다."""
     invincible_block = target["status"]["shield_until"] is not None and time_elapsed < target["status"]["shield_until"]
+    undying_until = target.get("undying_until")
+    undying_active = undying_until is not None and time_elapsed < undying_until
+    if not invincible_block and undying_active and target["hp"] <= 1:
+        invincible_block = True  # 프론트에는 무적과 동일하게 MISS로 보여준다
     if invincible_block:
         raw_amount = max(0, round(amount))
         amount = 0
@@ -695,6 +705,8 @@ def _apply_damage(target, amount, time_elapsed, attacker=None, suppress_reflect_
         amount -= absorbed
     hp_before = target["hp"]
     target["hp"] = max(0, target["hp"] - amount)
+    if undying_active and hp_before > 0 and target["hp"] <= 0:
+        target["hp"] = 1  # 불사: 체력이 바닥나는 공격이어도 죽지 않고 1을 남긴다
     _register_hp_loss(target, hp_before - target["hp"], time_elapsed)
     return amount, raw_amount, invincible_block
 

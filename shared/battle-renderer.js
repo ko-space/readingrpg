@@ -715,6 +715,7 @@ const STATUS_ICON_FILES = {
     madness: "Combat_Icon_Special_Madness.webp", // 김지섭 "격정" 보유 광기 - weight로 개수 표시(paint_red와 동일한 방식)
     move_speed_up: "Combat_Icon_Buff_MoveSpeed.webp", // 김지섭 "격정" 광기 소모 시 이동속도 증가
     cost_reduction: "Combat_Icon_Buff_CostChange.webp", // 안지석 "예산 재배정" 코스트 감소 상태 - weight로 남은 사용 횟수 표시
+    undying: "Combat_Icon_Special_Immortal.webp", // 불사 - 체력이 바닥나는 공격을 맞아도 1로 고정(김현재 "폭주" 등)
 };
 
 const statusIconState = {}; // unitKey -> { iconId: { el, sources: Map<sourceKey, {weight, timer}> } }
@@ -3203,8 +3204,9 @@ function dispatchEvent(event) {
                 setStatusIcon(khKey, "atk_up", { source: modeSource, untilSimTime: until });
                 setStatusIcon(khKey, "atk_speed_up", { source: modeSource, untilSimTime: until });
                 setStatusIcon(khKey, "damage_reduction", { source: modeSource, untilSimTime: until });
+                setStatusIcon(khKey, "undying", { source: modeSource, untilSimTime: until }); // 불사(확인된 요청)
                 battleRendererConfig.appendLog(
-                    `${event.actor}의 [Passive] 발동! 폭주 - 방향 전환 해제, ${event.detail.duration_seconds}초간 공격력 ${event.detail.atk_percent}%/공격속도 ${event.detail.haste_percent}% 증가, 받는 피해 ${event.detail.damage_reduction_percent}% 감소+반사 + CC 면역`,
+                    `${event.actor}의 [Passive] 발동! 폭주 - 불사, 방향 전환 해제, ${event.detail.duration_seconds}초간 공격력 ${event.detail.atk_percent}%/공격속도 ${event.detail.haste_percent}% 증가, 받는 피해 ${event.detail.damage_reduction_percent}% 감소+반사 + CC 면역`,
                     event.side
                 );
             } else if (mode === "special") {
@@ -3232,6 +3234,18 @@ function dispatchEvent(event) {
                 // 곧바로 덮어쓰지 않는다(playReturnFrames와 동일한 게이트 방식).
                 playKimHyeonjaeActiveExitFrames(khKey);
                 battleRendererConfig.appendLog(`${event.actor}의 [Active] 종료! 사거리 원거리 복구`, event.side);
+            } else if (mode === "frenzy_end") {
+                // 폭주(Passive)가 7초 자연 종료 - 예전엔 이 시점에 즉시 사망했지만(확인된 요청으로
+                // 제거) 이제는 버프/불사 아이콘만 걷어내고 평상시 스탠딩으로 돌아간다. "normal"
+                // 분기(방향 전환 자연 종료 전용 - [Active] 로그 문구/변신 해제 애니메이션)와는 의도적으로
+                // 분리했다.
+                if (unitInfo) { unitInfo.spriteVariant = ""; unitInfo.kimhyeonjaeMode = null; }
+                setKimHyeonjaeWingAura(khKey, null);
+                clearStatusIconSource(khKey, "atk_up", modeSource);
+                clearStatusIconSource(khKey, "atk_speed_up", modeSource);
+                clearStatusIconSource(khKey, "damage_reduction", modeSource);
+                clearStatusIconSource(khKey, "undying", modeSource);
+                battleRendererConfig.appendLog(`${event.actor}의 [Passive] 지속시간 종료 - 폭주 해제`, event.side);
             } else if (mode === "death") {
                 if (unitInfo) { unitInfo.spriteVariant = ""; unitInfo.kimhyeonjaeMode = null; unitInfo.hp = 0; }
                 khSetMeleeActive(khKey, false);
