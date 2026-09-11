@@ -404,14 +404,27 @@
     animation: ground-fire-shake 420ms ease-out;
 }
 
-/* ── 김현재 "지키고 싶은 마음"(백익) 발동 전용: 화면 흔들림(ground-fire-shake)과 정확히 같은
-   420ms 동안 필드 전체를 색상반전시키되, 김현재 본인의 스탠딩/이펙트만은 정상 색으로 보이게
-   한다(확인된 요청) - CSS filter는 중첩 적용되며 invert(1)을 두 번 겹치면 원래 색으로 상쇄되므로,
-   .battle-field에 invert를 걸고 김현재 쪽 요소에 한 번 더 invert를 걸어 그 부분만 상쇄시킨다.
-   (shared/attack-effects.js의 khTriggerSpecialInvert가 클래스를 붙였다 뗀다.) ── */
-.kh-special-invert {
-    filter: invert(1);
+/* ── 김현재 "지키고 싶은 마음"(백익) 발동 전용 화면 흔들림 - ground-fire-shake(흑익도 재사용하는
+   불빠따 원본)와 동일한 흔들림 패턴을 흔들림 강도 5배(모든 translate/rotate 값 ×5) + 지속시간
+   1.5배(420ms -> 630ms)로 키운 버전(확인된 요청). ── */
+@keyframes kh-special-shake {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    14% { transform: translate3d(-25px, 10px, 0) rotate(-.9deg); }
+    28% { transform: translate3d(30px, -15px, 0) rotate(1deg); }
+    42% { transform: translate3d(-20px, 10px, 0) rotate(-.7deg); }
+    58% { transform: translate3d(15px, -5px, 0) rotate(.5deg); }
+    76% { transform: translate3d(-10px, 5px, 0); }
 }
+.kh-special-shake {
+    animation: kh-special-shake 630ms ease-out;
+}
+
+/* ── 김현재 "지키고 싶은 마음"(백익) 발동 전용 색상반전(확인된 요청) - 발동 시 처음 1초는 배경을
+   포함한 게임 화면 전체(.battle-screen)가 반전되고(단, 김현재의 소용돌이(대기 오라) 캔버스 같은
+   이펙트는 이 1초 동안에도 제외된다 - 상쇄용 .kh-special-invert-counter), 그 뒤로는 화면은 정상으로
+   돌아오되 김현재 본인(스탠딩)만 백익이 끝날 때까지 계속 반전 상태를 유지한다.
+   (shared/attack-effects.js의 khStartSpecialInvert/khStopSpecialInvert가 클래스를 붙였다 뗀다.) ── */
+.kh-special-invert,
 .kh-special-invert-counter {
     filter: invert(1);
 }

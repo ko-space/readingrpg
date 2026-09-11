@@ -2969,28 +2969,54 @@ function khTriggerFieldShake() {
     fieldEl.classList.add("ground-fire-shake");
 }
 
-// "지키고 싶은 마음"(백익) 발동 전용(확인된 요청) - 화면이 흔들리는 420ms(ground-fire-shake와 정확히
-// 같은 길이) 동안 필드 전체를 색상반전시키되, 김현재 본인의 스탠딩과 소용돌이(대기 오라) 캔버스는
-// invert를 한 번 더 걸어 상쇄시켜서 정상 색으로 보이게 한다(attack-effects.css의 .kh-special-invert*
-// 참고 - CSS filter는 중첩 적용되므로 invert(1)을 두 번 겹치면 원래 색으로 돌아온다). 김현재의 공격
-// 이펙트(투사체 등)는 같은 projectile-layer를 다른 유닛과 공유해서 개별적으로 상쇄시킬 수 없으므로
-// 이 연출 동안은(420ms뿐이라 체감상 거의 없음) 함께 반전된다.
-const KH_SPECIAL_INVERT_MS = 420; // ground-fire-shake와 동일하게 유지 - 흔들림이 멈추면 함께 원래대로.
-let khSpecialInvertTimer = null;
-function khTriggerSpecialInvert(khKey) {
+// "지키고 싶은 마음"(백익) 전용 - 흑익과 같은 흔들림(ground-fire-shake) 대신 5배 강한/1.5배 긴
+// 흔들림(kh-special-shake, attack-effects.css)을 쓴다(확인된 요청).
+function khTriggerSpecialFieldShake() {
     const fieldEl = attackEffectsConfig.fieldEl;
     if (!fieldEl) return;
-    const unitEl = resolveEffectEl(khKey);
-    if (khSpecialInvertTimer) clearTimeout(khSpecialInvertTimer);
-    fieldEl.classList.add("kh-special-invert");
-    unitEl?.classList.add("kh-special-invert-counter");
+    fieldEl.classList.remove("kh-special-shake");
+    void fieldEl.offsetWidth;
+    fieldEl.classList.add("kh-special-shake");
+}
+
+// "지키고 싶은 마음"(백익) 색상반전(확인된 요청 - 여러 차례 바뀌었음, 최종적으로 두 효과를 함께
+// 쓴다): 발동 직후 1초는 배경 포함 게임 화면 전체(.battle-screen)가 반전되고(김현재의 소용돌이
+// 캔버스 같은 이펙트는 이 1초 동안에도 제외 - 캔버스에 상쇄용 invert를 한 번 더 걸어 중첩 취소),
+// 그 1초가 끝나면 화면은 정상으로 돌아오되 이번엔 김현재 본인(스탠딩)만 백익이 끝날 때까지 계속
+// 반전 상태를 유지한다. 같은 CSS filter 속성을 같은 엘리먼트에 클래스 두 개로 걸어도 "상쇄"는
+// 안 된다(하나만 적용됨) - 상쇄는 반드시 "중첩된 서로 다른 엘리먼트"(부모=화면, 자식=캔버스)
+// 사이에서만 성립하므로, 김현재 본인은 1초 동안 별도 클래스 없이 화면의 반전에 자연히 묻어가게
+// 두고, 1초가 지난 뒤에야 비로소 본인 전용 클래스를 새로 건다.
+function khSpecialInvertScreenEl() {
+    return attackEffectsConfig.fieldEl?.closest(".battle-screen") || document.querySelector(".battle-screen");
+}
+const KH_SPECIAL_SCREEN_FLASH_MS = 1000;
+let khSpecialInvertUnitKey = null;
+let khSpecialInvertFlashTimer = null;
+function khStartSpecialInvert(khKey) {
+    khSpecialInvertUnitKey = khKey;
+    if (khSpecialInvertFlashTimer) { clearTimeout(khSpecialInvertFlashTimer); khSpecialInvertFlashTimer = null; }
+    const screenEl = khSpecialInvertScreenEl();
+    if (!screenEl) {
+        resolveEffectEl(khKey)?.classList.add("kh-special-invert");
+        return;
+    }
+    screenEl.classList.add("kh-special-invert");
     khWingAuraCanvas?.classList.add("kh-special-invert-counter");
-    khSpecialInvertTimer = setTimeout(() => {
-        khSpecialInvertTimer = null;
-        fieldEl.classList.remove("kh-special-invert");
-        unitEl?.classList.remove("kh-special-invert-counter");
+    khSpecialInvertFlashTimer = setTimeout(() => {
+        khSpecialInvertFlashTimer = null;
+        screenEl.classList.remove("kh-special-invert");
         khWingAuraCanvas?.classList.remove("kh-special-invert-counter");
-    }, KH_SPECIAL_INVERT_MS); // ground-fire-shake도 CSS에서 고정 420ms라(배속 무관) 여기도 고정값을 쓴다.
+        resolveEffectEl(khKey)?.classList.add("kh-special-invert");
+    }, KH_SPECIAL_SCREEN_FLASH_MS);
+}
+function khStopSpecialInvert() {
+    if (khSpecialInvertFlashTimer) { clearTimeout(khSpecialInvertFlashTimer); khSpecialInvertFlashTimer = null; }
+    const screenEl = khSpecialInvertScreenEl();
+    if (screenEl) screenEl.classList.remove("kh-special-invert");
+    khWingAuraCanvas?.classList.remove("kh-special-invert-counter");
+    if (khSpecialInvertUnitKey) resolveEffectEl(khSpecialInvertUnitKey)?.classList.remove("kh-special-invert");
+    khSpecialInvertUnitKey = null;
 }
 
 // out(뻗어나감)/hold(적중 유지)/return(되감기) 3단계 타이밍 - 대기 날개가 공격 순간 상대 쪽으로
@@ -3238,7 +3264,13 @@ function khWingAuraStep(nowMs) {
                     bendK = 1 - Math.pow(1 - k, 3);
                 } else if (age < fx.outMs + fx.holdMs) {
                     bendK = 1;
-                    if (!fx.arrived) { fx.arrived = true; khTriggerFieldShake(); if (fx.onArrive) fx.onArrive(); }
+                    if (!fx.arrived) {
+                        fx.arrived = true;
+                        // 백익(special) 상태의 공격 명중은 발동 흔들림과 동일하게 강한 쪽을 쓴다(확인된 요청) -
+                        // 흑익(frenzy)은 기존 그대로 ground-fire-shake.
+                        if (mode === "special") khTriggerSpecialFieldShake(); else khTriggerFieldShake();
+                        if (fx.onArrive) fx.onArrive();
+                    }
                 } else {
                     const k = (age - fx.outMs - fx.holdMs) / fx.returnMs;
                     const eased = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
@@ -3284,4 +3316,5 @@ function setKimHyeonjaeWingAura(unitKey, mode) {
 function clearAllKimHyeonjaeWingAuras() {
     Object.keys(khWingAuraActive).forEach((key) => delete khWingAuraActive[key]);
     Object.keys(khWingAttackFx).forEach((key) => delete khWingAttackFx[key]);
+    khStopSpecialInvert(); // 백익(지키고 싶은 마음) 도중에 전투가 그냥 끝나버려도 화면 반전이 안 풀리는 일이 없게 하는 안전망
 }
