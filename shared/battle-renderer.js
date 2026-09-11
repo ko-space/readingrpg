@@ -3213,6 +3213,7 @@ function dispatchEvent(event) {
                 if (unitInfo) { unitInfo.spriteVariant = "_special"; unitInfo.kimhyeonjaeMode = "special"; unitInfo.hp = event.detail.hp_after; }
                 setKimHyeonjaeWingAura(khKey, "special");
                 khTriggerFieldShake();
+                if (typeof khTriggerSpecialInvert === "function") khTriggerSpecialInvert(khKey); // 백익 발동 시 화면 색상반전(확인된 요청)
                 flashEffectAura(khKey, "buff");
                 setStatusIcon(khKey, "atk_up", { source: modeSource, untilSimTime: until });
                 setStatusIcon(khKey, "atk_speed_up", { source: modeSource, untilSimTime: until });

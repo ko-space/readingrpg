@@ -2969,6 +2969,30 @@ function khTriggerFieldShake() {
     fieldEl.classList.add("ground-fire-shake");
 }
 
+// "지키고 싶은 마음"(백익) 발동 전용(확인된 요청) - 화면이 흔들리는 420ms(ground-fire-shake와 정확히
+// 같은 길이) 동안 필드 전체를 색상반전시키되, 김현재 본인의 스탠딩과 소용돌이(대기 오라) 캔버스는
+// invert를 한 번 더 걸어 상쇄시켜서 정상 색으로 보이게 한다(attack-effects.css의 .kh-special-invert*
+// 참고 - CSS filter는 중첩 적용되므로 invert(1)을 두 번 겹치면 원래 색으로 돌아온다). 김현재의 공격
+// 이펙트(투사체 등)는 같은 projectile-layer를 다른 유닛과 공유해서 개별적으로 상쇄시킬 수 없으므로
+// 이 연출 동안은(420ms뿐이라 체감상 거의 없음) 함께 반전된다.
+const KH_SPECIAL_INVERT_MS = 420; // ground-fire-shake와 동일하게 유지 - 흔들림이 멈추면 함께 원래대로.
+let khSpecialInvertTimer = null;
+function khTriggerSpecialInvert(khKey) {
+    const fieldEl = attackEffectsConfig.fieldEl;
+    if (!fieldEl) return;
+    const unitEl = resolveEffectEl(khKey);
+    if (khSpecialInvertTimer) clearTimeout(khSpecialInvertTimer);
+    fieldEl.classList.add("kh-special-invert");
+    unitEl?.classList.add("kh-special-invert-counter");
+    khWingAuraCanvas?.classList.add("kh-special-invert-counter");
+    khSpecialInvertTimer = setTimeout(() => {
+        khSpecialInvertTimer = null;
+        fieldEl.classList.remove("kh-special-invert");
+        unitEl?.classList.remove("kh-special-invert-counter");
+        khWingAuraCanvas?.classList.remove("kh-special-invert-counter");
+    }, KH_SPECIAL_INVERT_MS); // ground-fire-shake도 CSS에서 고정 420ms라(배속 무관) 여기도 고정값을 쓴다.
+}
+
 // out(뻗어나감)/hold(적중 유지)/return(되감기) 3단계 타이밍 - 대기 날개가 공격 순간 상대 쪽으로
 // 휘어졌다가 되돌아오는 khTriggerWingAttack(아래 khWingAuraStep 근처)이 사용한다.
 const KH_VORTEX_OUT_MS = 260;
