@@ -659,6 +659,15 @@
             lastTickWallMs = Date.now();
             lastTickPerfMs = performance.now();
             if (sessionStarted && !handledEnd) tick();
+            // 화면이 오래 꺼졌다 켜지는 바로 이 순간은(위 보정으로 화면 표시가 한 번에 크게 점프할 수
+            // 있음) 과거 실제로 절전모드 복귀 관련 보정 버그가 났던 지점이다 - 정기 하트비트 주기(60초,
+            // Supabase egress 절감용)를 그대로 기다리면 화면과 서버 확정값의 괴리가 최대 60초까지
+            // 벌어진 채로 남을 수 있어, 딱 이 순간만 예외적으로 즉시 하트비트를 보내 재동기화한다.
+            // 평상시(화면을 계속 보고 있는 동안)의 폴링 빈도는 그대로 60초라 egress 절감 효과는 유지된다.
+            if (sessionStarted && !isPaused && !handledEnd) {
+                startHeartbeatLoop(); // 정기 주기를 지금 기준으로 리셋 - 바로 뒤이어 또 한 번 겹쳐 오는 것 방지
+                attemptHeartbeat();
+            }
         });
     }
 
