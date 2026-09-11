@@ -1312,8 +1312,16 @@ function forceClearAnim(key) {
     const imgEl = document.querySelector(`[data-unit="${key}"] .battle-unit-img`);
     if (imgEl && units[key]) {
         imgEl.classList.remove("casting", "casting-rainbow", "attacking");
-        imgEl.onerror = null;
-        imgEl.src = `${battleRendererConfig.outfitImageBase}${units[key].outfit}/battle_idle${spriteVariantSuffix(key)}.webp`;
+        // 마침 이 유닛이 자기 공격 애니메이션(캐스팅/스윙) 도중에(attackAnimActive=true인 채로)
+        // 반사 등으로 죽어버리고, 그 직후 곧바로 전투가 끝나 showResult()의 forceIdleAllUnits()가
+        // 이 함수를 부르는 경우가 있다 - 그러면 아래에서 무조건 battle_idle(생존 이미지)로 덮어써서,
+        // playDeathSequence가 이미 걸어둔 사망 스프라이트를 되돌려버리는 버그가 있었다(확인된 버그 -
+        // "전투 로그엔 사망했는데 화면상 캐릭터는 안 죽은 것처럼 보인다"). 죽은 유닛은 사망
+        // 스프라이트를 그대로 두고 건드리지 않는다.
+        if (units[key].hp > 0) {
+            imgEl.onerror = null;
+            imgEl.src = `${battleRendererConfig.outfitImageBase}${units[key].outfit}/battle_idle${spriteVariantSuffix(key)}.webp`;
+        }
     }
 }
 
