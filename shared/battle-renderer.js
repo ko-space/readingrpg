@@ -3220,9 +3220,17 @@ function dispatchEvent(event) {
             } else if (mode === "special") {
                 if (unitInfo) { unitInfo.spriteVariant = "_special"; unitInfo.kimhyeonjaeMode = "special"; unitInfo.hp = event.detail.hp_after; }
                 setKimHyeonjaeWingAura(khKey, "special");
-                khTriggerFieldShake();
-                if (typeof khTriggerSpecialInvert === "function") khTriggerSpecialInvert(khKey); // 백익 발동 시 화면 색상반전(확인된 요청)
+                // 백익은 흑익과 다른(5배 강한/1.5배 긴) 전용 흔들림을 쓴다(확인된 요청) - khTriggerFieldShake
+                // (ground-fire-shake, 흑익/불빠따 공용)가 아니라 khTriggerSpecialFieldShake를 부른다.
+                if (typeof khTriggerSpecialFieldShake === "function") khTriggerSpecialFieldShake();
+                else khTriggerFieldShake();
+                if (typeof khStartSpecialInvert === "function") khStartSpecialInvert(khKey); // 백익 색상반전(1초 화면 전체 + 이후 김현재 본인만, 확인된 요청)
                 flashEffectAura(khKey, "buff");
+                // 폭주(흑익)가 걸어둔 불사 아이콘은 백익 전환으로 해제되지만(backend의 undying_until=None),
+                // 이 아이콘은 modeSource를 공유하면서도 special 쪽에서 다시 걸지 않으므로 명시적으로
+                // 지워야 한다 - 안 그러면 폭주 때의 낡은 만료 시각(untilSimTime)까지 화면에 남아있는다
+                // (확인된 버그 - "백익이 되면 불사 아이콘도 같이 사라져야 하는데 안 사라짐").
+                clearStatusIconSource(khKey, "undying", modeSource);
                 setStatusIcon(khKey, "atk_up", { source: modeSource, untilSimTime: until });
                 setStatusIcon(khKey, "atk_speed_up", { source: modeSource, untilSimTime: until });
                 setStatusIcon(khKey, "damage_reduction", { source: modeSource, untilSimTime: until });
@@ -3259,6 +3267,7 @@ function dispatchEvent(event) {
                 if (unitInfo) { unitInfo.spriteVariant = ""; unitInfo.kimhyeonjaeMode = null; unitInfo.hp = 0; }
                 khSetMeleeActive(khKey, false);
                 setKimHyeonjaeWingAura(khKey, null);
+                if (typeof khStopSpecialInvert === "function") khStopSpecialInvert(); // 백익 도중 사망해도 반전은 풀어준다
                 clearAllStatusIcons(khKey);
                 battleRendererConfig.appendLog(
                     `${event.actor}의 [${event.detail.from === "special" ? "Special" : "Passive"}] 지속시간 종료 - 즉시 사망`,
