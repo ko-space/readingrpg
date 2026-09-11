@@ -2833,6 +2833,11 @@ const KH_WING_ARC_HEIGHT = 160;
 // 두 날개(branch 0/1)의 착지 지점을 좌우로 얼마나 벌릴지 - 완전히 겹치지 않고 대상 머리 위에
 // 나란히 떨어지는 것처럼 보이게 한다. ▶ 두 날개 간격을 고치려면 이 값만 바꾸면 된다.
 const KH_WING_BRANCH_SPREAD = 16;
+// 소용돌이(대기 오라/공격 모두)가 시작되는 지점을 캐릭터 정중앙에서 살짝 위/옆으로 당기는 오프셋
+// (확인된 요청 - "살짝 왼쪽 위, 반전시 오른쪽 위"). X는 khWingAuraStep에서 facingLeft에 따라 부호가
+// 뒤집힌다. ▶ 발생 위치를 고치려면 이 두 값만 바꾸면 된다.
+const KH_WING_ANCHOR_OFFSET_X = 20;
+const KH_WING_ANCHOR_OFFSET_Y = 20;
 
 // anchor(시전자)에서 target "머리 위"로 떨어지는, 대칭축이 y축과 평행한 포물선(확인된 요청) - x는
 // 제어점을 등간격(anchor.x, +1/3, +2/3, target.x)으로 둬서 t에 대해 정확히 선형이 되게 하고
@@ -2865,10 +2870,15 @@ const KH_VORTEX_RING_SEGMENTS = 50;
 // 이미 샘플링된 점 배열(pts)을 따라 링을 그린다 - khDrawVortexTendril(단일 곡선)과 khWingAuraStep의
 // "휘어짐" 블렌드(khWingBendPoints로 두 곡선의 대응 점끼리 미리 섞어 만든 점 배열) 둘 다 이 함수를
 // 공유한다.
-// 흑익(frenzy) 전용: 검게 바뀐 소용돌이 본체를 임소정의 지그재그 번개(drawLightningBolt)와 같은
-// 이중 스트로크(바깥 보라색 글로우 굵은 겹 + 안쪽 흰색 얇은 코어) 기법으로 감싼다(확인된 요청).
+// 소용돌이 본체를 임소정의 지그재그 번개(drawLightningBolt)와 같은 이중 스트로크(바깥 굵은 겹 +
+// 안쪽 얇은 코어) 기법으로 감싼다(확인된 요청) - 흑익(frenzy)은 보라색, 백익(special)은 흰색.
 // pts(소용돌이 곡선 표본점)를 그대로 따라가되, 각 점을 접선의 수직 방향으로 매 프레임 새로
 // 무작위 흔들어서 실제 번개처럼 계속 지지직거리며 다시 그려지게 한다.
+const KH_LIGHTNING_WRAP_PALETTE = {
+    frenzy: { outer: [168, 92, 247], outerGlow: [124, 58, 237], inner: [238, 225, 255], innerGlow: [168, 92, 247] },
+    special: { outer: [255, 255, 255], outerGlow: [255, 225, 150], inner: [255, 255, 255], innerGlow: [255, 240, 205] },
+};
+
 function khWrapPointsForLightning(pts, wobble) {
     const wrapped = [pts[0]];
     for (let i = 1; i < pts.length - 1; i++) {
@@ -2880,8 +2890,9 @@ function khWrapPointsForLightning(pts, wobble) {
     return wrapped;
 }
 
-function khDrawTornadoLightningWrap(ctx, pts, alpha) {
-    if (alpha <= 0 || pts.length < 2) return;
+function khDrawTornadoLightningWrap(ctx, pts, mode, alpha) {
+    const palette = KH_LIGHTNING_WRAP_PALETTE[mode];
+    if (!palette || alpha <= 0 || pts.length < 2) return;
     const wrapped = khWrapPointsForLightning(pts, 9);
     const drawStroke = (color, shadowColor, shadowBlur, width) => {
         ctx.shadowBlur = shadowBlur;
@@ -2902,8 +2913,8 @@ function khDrawTornadoLightningWrap(ctx, pts, alpha) {
     ctx.save();
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
-    drawStroke(`rgba(168,92,247,${0.88 * alpha})`, `rgba(124,58,237,${0.65 * alpha})`, 16, 3);
-    drawStroke(`rgba(238,225,255,${0.9 * alpha})`, `rgba(168,92,247,${0.5 * alpha})`, 6, 1.2);
+    drawStroke(`rgba(${palette.outer.join(",")},${0.88 * alpha})`, `rgba(${palette.outerGlow.join(",")},${0.65 * alpha})`, 16, 3);
+    drawStroke(`rgba(${palette.inner.join(",")},${0.9 * alpha})`, `rgba(${palette.innerGlow.join(",")},${0.5 * alpha})`, 6, 1.2);
     ctx.restore();
 }
 
@@ -2927,9 +2938,7 @@ function khDrawVortexRings(ctx, pts, mode, now, intensity) {
         ctx.stroke();
         ctx.restore();
     }
-    if (mode === "frenzy") {
-        khDrawTornadoLightningWrap(ctx, pts, intensity);
-    }
+    khDrawTornadoLightningWrap(ctx, pts, mode, intensity);
     const root = pts[0];
     ctx.save();
     const rg = ctx.createRadialGradient(root.x, root.y, 2, root.x, root.y, 44);
@@ -3180,6 +3189,11 @@ function khWingAuraStep(nowMs) {
         // flipped 여부를 defender/attacker 자리에 그대로 대입한다(그 두 값이 각각 오른쪽/왼쪽 끝을
         // 뜻하는 헬퍼라 팀 이름과 무관하게 재사용 가능).
         const facingLeft = typeof isFacingFlipped === "function" ? isFacingFlipped(key) : key.startsWith("defender");
+        // 소용돌이 발생 지점을 캐릭터 정중앙이 아니라 어깨/등 쪽으로 살짝 당긴다(확인된 요청) - 보는
+        // 방향의 반대쪽(등 뒤)이 아니라 화면 기준 좌우이므로, 반전(facingLeft)에 따라 부호만 뒤집어
+        // 항상 "안 보이는 어깨 쪽"이 아니라 화면상 위쪽 대각선에 자리하게 한다.
+        anchor.x += (facingLeft ? 1 : -1) * KH_WING_ANCHOR_OFFSET_X;
+        anchor.y -= KH_WING_ANCHOR_OFFSET_Y;
         const edgeX = viewportEdgeXRelativeToField(facingLeft ? "defender" : "attacker", fieldRect);
 
         // 기본공격 중이면(khTriggerWingAttack) 대기 날개 끝을 대상 쪽으로 휘게 한다 - k=0(대기,
