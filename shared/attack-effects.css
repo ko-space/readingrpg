@@ -404,6 +404,18 @@
     animation: ground-fire-shake 420ms ease-out;
 }
 
+/* ── 김현재 "지키고 싶은 마음"(백익) 발동 전용: 화면 흔들림(ground-fire-shake)과 정확히 같은
+   420ms 동안 필드 전체를 색상반전시키되, 김현재 본인의 스탠딩/이펙트만은 정상 색으로 보이게
+   한다(확인된 요청) - CSS filter는 중첩 적용되며 invert(1)을 두 번 겹치면 원래 색으로 상쇄되므로,
+   .battle-field에 invert를 걸고 김현재 쪽 요소에 한 번 더 invert를 걸어 그 부분만 상쇄시킨다.
+   (shared/attack-effects.js의 khTriggerSpecialInvert가 클래스를 붙였다 뗀다.) ── */
+.kh-special-invert {
+    filter: invert(1);
+}
+.kh-special-invert-counter {
+    filter: invert(1);
+}
+
 /* ── 이도협 스킬 전용("돌직구"): 스트라이크 존 마킹 + 벽까지 왕복하는 투척구 + 이탈자 끌어당김 선. ── */
 .dolljikgu-zone {
     position: absolute;
