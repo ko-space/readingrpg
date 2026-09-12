@@ -141,9 +141,6 @@
             }
             return `${event.actor}의 [Special] 발동! ${d.partner}와(과)의 시너지로 공격력 ${d.atk_percent}% 증가`;
         }
-        if (event.effect_type === "target_name_atk_buff") {
-            return `${event.actor}의 [Special] 발동! ${d.target_name}이(가) 공격 대상이 되어 공격력 ${d.atk_percent}% 증가`;
-        }
         if (event.effect_type === "ally_job_conditional_team_buff") {
             const parts = [];
             if (d.atk_percent) parts.push(`공격력 ${d.atk_percent}%`);
@@ -2162,9 +2159,6 @@
                 } else {
                     setStatusIcon(actorSlot, "atk_up", { source: `${actorSlot}:${event.effect_type}` });
                 }
-            } else if (event.effect_type === "target_name_atk_buff" && actorSlot) {
-                flashEffectAura(actorSlot, "buff");
-                setStatusIcon(actorSlot, "atk_up", { source: `${actorSlot}:${event.effect_type}` });
             } else if (event.effect_type === "dynamic_grant_rear_priority" && event.detail?.partner) {
                 const partnerSlot = findSlotByName(actorSide, event.detail.partner);
                 if (partnerSlot) {
@@ -2252,6 +2246,19 @@
                 }
             }
             log(`[특성] ${event.actor}의 흡혈 상태 ${event.detail?.active ? "활성화" : "해제"}`);
+        } else if (event.event_type === "targeted_atk_buff_status_resolve") {
+            // 이종복/임소정 "유일한 대마법사"(arena-battle.js와 동일) - 지속시간 없이 걸어두고, 대상이
+            // 바뀌면 직접 지운다.
+            const targetedBuffSlot = findSlotByName(actorSide, event.actor);
+            if (targetedBuffSlot) {
+                if (event.detail?.active) {
+                    flashEffectAura(targetedBuffSlot, "buff");
+                    setStatusIcon(targetedBuffSlot, "atk_up", { source: `${targetedBuffSlot}:targeted_atk_buff` });
+                } else {
+                    clearStatusIconSource(targetedBuffSlot, "atk_up", `${targetedBuffSlot}:targeted_atk_buff`);
+                }
+            }
+            log(`[특성] ${event.actor}의 공격력 증가 상태 ${event.detail?.active ? "활성화" : "해제"}`);
         } else if (event.event_type === "low_hp_shield_resolve") {
             // 배 "개량한복"(arena-battle.js와 동일) - self_shield_duration(자기 자신에게 거는 무적)과
             // 같은 연출을 재사용하되, 수신자가 시전자(서포터라 전장에 없음)가 아니라 그 순간 체력이
