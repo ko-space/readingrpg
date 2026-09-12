@@ -141,6 +141,9 @@
             }
             return `${event.actor}의 [Special] 발동! ${d.partner}와(과)의 시너지로 공격력 ${d.atk_percent}% 증가`;
         }
+        if (event.effect_type === "target_name_atk_buff") {
+            return `${event.actor}의 [Special] 발동! ${d.target_name}이(가) 공격 대상이 되어 공격력 ${d.atk_percent}% 증가`;
+        }
         if (event.effect_type === "ally_job_conditional_team_buff") {
             const parts = [];
             if (d.atk_percent) parts.push(`공격력 ${d.atk_percent}%`);
@@ -2159,6 +2162,9 @@
                 } else {
                     setStatusIcon(actorSlot, "atk_up", { source: `${actorSlot}:${event.effect_type}` });
                 }
+            } else if (event.effect_type === "target_name_atk_buff" && actorSlot) {
+                flashEffectAura(actorSlot, "buff");
+                setStatusIcon(actorSlot, "atk_up", { source: `${actorSlot}:${event.effect_type}` });
             } else if (event.effect_type === "dynamic_grant_rear_priority" && event.detail?.partner) {
                 const partnerSlot = findSlotByName(actorSide, event.detail.partner);
                 if (partnerSlot) {
