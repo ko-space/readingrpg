@@ -265,12 +265,12 @@ def _trait_type_attack_lifesteal(caster, team, enemy_team, params):
 
 def _trait_arm_target_name_atk_buff(caster, team, enemy_team, params):
     # 이종복/임소정(유일한 대마법사): "장전"만 해둔다 - 원래는 ally_synergy_atk_buff(같은 팀에
-    # 편성돼 있기만 하면 즉시 버프)였으나, 트레잇 문구("임소정, 이종복이 공격 대상이 되면")가 말하는
-    # 실제 의도는 팀 구성이 아니라 "이 둘 중 하나가 적의 공격 대상으로 찍히는 순간" 발동하는 반응형
-    # 버프였다. 실제 판정(전투 중 매 틱 확정되는 기본공격 대상이 자신 또는 파트너 이름과 처음 일치하는
-    # 순간)은 battle_engine._apply_targeted_atk_buff_trigger가 처리한다(student_council_budget_config와
-    # 동일한 "장전 후 이벤트 감지" 패턴) - 수치가 40%/100%로 커서 매 피격마다 중첩되면 밸런스가
-    # 무너지므로 전투당 최초 1회만 발동하게 트리거 쪽에서 플래그로 막는다.
+    # 편성돼 있기만 하면 즉시 버프)였으나, 트레잇 문구("임소정, 이종복이 공격 대상인 동안")가 말하는
+    # 실제 의도는 팀 구성이 아니라 "이 둘 중 하나가 지금 적의 공격 대상으로 잠겨 있는 동안"만
+    # 유지되는 반응형 버프였다. 실제 판정(매 틱 자신 또는 파트너가 적 중 누군가의 확정된 공격
+    # 대상인지 재확인해 온/오프하는 토글 - neglect_active/lifesteal_active와 동일한 패턴, 대상이
+    # 다른 곳으로 옮겨갔다 돌아와도 그때마다 다시 켜진다)은
+    # battle_engine._apply_targeted_atk_buff_status가 처리한다.
     caster["targeted_atk_buff_config"] = {"atk_percent": params["atk_percent"]}
     return None
 

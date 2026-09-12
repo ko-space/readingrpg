@@ -1657,9 +1657,6 @@ async function playKimHyeonjaeActiveExitFrames(key) {
             }
             return `${event.actor}의 [Special] 발동! ${d.partner}와(과)의 시너지로 공격력 ${d.atk_percent}% 증가`;
         }
-        if (event.effect_type === "target_name_atk_buff") {
-            return `${event.actor}의 [Special] 발동! ${d.target_name}이(가) 공격 대상이 되어 공격력 ${d.atk_percent}% 증가`;
-        }
         if (event.effect_type === "ally_job_conditional_team_buff") {
             const parts = [];
             if (d.atk_percent) parts.push(`공격력 ${d.atk_percent}%`);
@@ -3374,6 +3371,21 @@ function dispatchEvent(event) {
             } else {
                 clearStatusIconSource(lifestealKey, "lifesteal", `${lifestealKey}:lifesteal`);
                 battleRendererConfig.appendLog(`${event.actor}의 고혈 상태 해제!`, "trait");
+            }
+        }
+    } else if (eventType === "targeted_atk_buff_status_resolve") {
+        // 이종복/임소정 "유일한 대마법사": 자신 또는 파트너가 지금 적의 공격 대상으로 잠겨 있는
+        // 동안만 공격력 버프 유지 - neglect_status_resolve/lifesteal_status_resolve와 동일한 패턴
+        // (대상이 다른 곳으로 옮겨갔다 돌아오면 꺼졌다 다시 켜질 수 있다).
+        const targetedBuffKey = findUnitKey(event.side, event.actor);
+        if (targetedBuffKey) {
+            if (event.detail?.active) {
+                flashEffectAura(targetedBuffKey, "buff");
+                setStatusIcon(targetedBuffKey, "atk_up", { source: `${targetedBuffKey}:targeted_atk_buff` });
+                battleRendererConfig.appendLog(`${event.actor}의 [Special] 발동! 공격 대상이 되어 공격력 ${event.detail.atk_percent}% 증가`, "trait");
+            } else {
+                clearStatusIconSource(targetedBuffKey, "atk_up", `${targetedBuffKey}:targeted_atk_buff`);
+                battleRendererConfig.appendLog(`${event.actor}의 공격력 증가 상태 해제!`, "trait");
             }
         }
     } else if (eventType === "low_hp_shield_resolve") {

@@ -73,34 +73,36 @@ def _apply_type2_stun_if_active(unit, target, time_elapsed):
     return 0, False
 
 
-def _apply_targeted_atk_buff_trigger(resolved_target, enemy_team, side_name, events, time_elapsed):
-    """이종복/임소정(유일한 대마법사): 이 둘 중 하나가 처음으로 기본공격 대상으로 확정되는 순간, 같은
-    팀에서 targeted_atk_buff_config를 들고 있는 유닛(이종복 자신, 임소정 자신 각각 독립적으로 장전됨 -
-    trait_handlers._trait_arm_target_name_atk_buff)에게 영구 공격력 버프를 적용한다. resolved_target을
-    구하는 곳(메인 루프에서 이 함수를 부르는 지점)과 완전히 동일한 빈도로 매 틱 재확인하되,
-    lifesteal/neglect와 달리 "켜졌다 꺼졌다"가 아니라 한 번 성립하면 영구 지속이라 death_heal_ally류와
-    같은 1회성 트리거 플래그(_targeted_atk_buff_triggered)로 재적용을 막는다. resolved_target은 항상
-    enemy_team 소속이므로(호출부의 _resolve_basic_attack_target(unit, enemy_team, ...) 참고), 그 팀을
-    그대로 훑으면 된다 - side_name은 지금 공격하는 쪽(unit) 기준이라, 버프를 받는 쪽(enemy_team)의
-    실제 side는 그 반대다."""
-    if resolved_target is None or resolved_target["hp"] <= 0:
-        return
-    target_side = "defender" if side_name == "attacker" else "attacker"
-    for unit in _alive_units(enemy_team):
+def _apply_targeted_atk_buff_status(team, enemy_team, side, events, time_elapsed):
+    """이종복/임소정(유일한 대마법사): "지금 이 순간 자신 또는 파트너가 적 중 누군가의 기본공격
+    대상으로 확정돼 있는가"를 매 틱 재판정하는 토글형 상태 - neglect_active/lifesteal_active와
+    완전히 동일한 온/오프 패턴(_apply_neglect_status 참고, 같은 지점에서 함께 호출된다). 확정된
+    공격 대상은 전투 중 얼마든지 다른 곳으로 옮겨갔다가 다시 돌아올 수 있으므로("전투당 최초 1회"로
+    한 번만 발동시키면 그 뒤 재발동을 못 잡아낸다 - 확인된 지적), 조건이 유지되는 동안만 버프가
+    걸려 있고 대상이 바뀌면 즉시 꺼졌다가, 다시 자신/파트너를 겨냥하면 다시 걸린다. 같은 팀에서
+    targeted_atk_buff_config를 들고 있는 유닛(이종복 자신, 임소정 자신 각각 독립적으로 장전됨 -
+    trait_handlers._trait_arm_target_name_atk_buff)마다 적 팀의 살아있는 유닛들이 지금 잠그고 있는
+    대상(locked_target_ref)을 훑어, 자신 또는 파트너 이름과 하나라도 일치하면 켜진 것으로 본다."""
+    for unit in _alive_units(team):
         config = unit.get("targeted_atk_buff_config")
-        if not config or unit.get("_targeted_atk_buff_triggered"):
+        if not config:
             continue
-        if resolved_target["name"] not in (unit["name"], unit.get("trait_partner_name")):
+        watch_names = (unit["name"], unit.get("trait_partner_name"))
+        is_targeted = any(
+            (locked := attacker.get("locked_target_ref")) is not None
+            and locked["hp"] > 0 and locked["name"] in watch_names
+            for attacker in _alive_units(enemy_team)
+        )
+        was_active = unit.get("targeted_atk_buff_active", False)
+        unit["targeted_atk_buff_active"] = is_targeted
+        if is_targeted == was_active:
             continue
-        unit["_targeted_atk_buff_triggered"] = True
         atk_percent = config["atk_percent"]
-        unit["status"]["atk_percent_bonus"] += atk_percent
-        change_dicts = build_stat_change_dicts([("own", unit, 1, 0)], target_side, side_name)
+        unit["status"]["atk_percent_bonus"] += atk_percent if is_targeted else -atk_percent
         events.append({
-            "time": time_elapsed, "event_type": "trait_resolve", "side": target_side,
+            "time": time_elapsed, "event_type": "targeted_atk_buff_status_resolve", "side": side,
             "actor": unit["name"], "actor_slot": unit.get("slot"),
-            "effect_type": "target_name_atk_buff",
-            "detail": {"target_name": resolved_target["name"], "atk_percent": atk_percent, "changes": change_dicts},
+            "detail": {"active": is_targeted, "atk_percent": atk_percent},
         })
 
 
@@ -1269,6 +1271,8 @@ def _simulate_tick(attacker_team, defender_team, tick_index, time_elapsed, event
     _apply_death_triggers(defender_team, "defender", events, time_elapsed)
     _apply_neglect_status(attacker_team, defender_team, "attacker", events, time_elapsed)
     _apply_neglect_status(defender_team, attacker_team, "defender", events, time_elapsed)
+    _apply_targeted_atk_buff_status(attacker_team, defender_team, "attacker", events, time_elapsed)
+    _apply_targeted_atk_buff_status(defender_team, attacker_team, "defender", events, time_elapsed)
     _apply_low_hp_shield_grant(attacker_team, "attacker", events, time_elapsed)
     _apply_low_hp_shield_grant(defender_team, "defender", events, time_elapsed)
     _apply_madness_release(attacker_team, "attacker", events, time_elapsed)
@@ -1392,7 +1396,6 @@ def _simulate_tick(attacker_team, defender_team, tick_index, time_elapsed, event
             # 상태를 다시 판정한다 - 아직 공격 쿨다운이 안 찼거나 근접이 도착 전이어도 "그 대상을
             # 노리고 있다"는 상태 자체는 성립해야 하므로 아래의 이른 continue들보다 먼저 처리한다.
             _update_lifesteal_status(unit, resolved_target, side_name, events, time_elapsed)
-            _apply_targeted_atk_buff_trigger(resolved_target, enemy_team, side_name, events, time_elapsed)
 
             if time_elapsed < unit["next_attack_time"]:
                 continue
