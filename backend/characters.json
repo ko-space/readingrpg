@@ -850,8 +850,8 @@
         "2": null,
         "3": null,
         "4": null,
-        "5": "선생 고혈: 교사 타입 대상(공격/방어 상관없이)으로 기본 공격 시 체력 5 회복",
-        "6": "선생 고혈: 교사 타입 대상(공격/방어 상관없이)으로 기본 공격 시 체력 15 회복"
+        "5": "선생 고혈: 교사 타입 대상(공격/방어 상관없이)으로 기본 공격 시 최대 체력의 5% 회복",
+        "6": "선생 고혈: 교사 타입 대상(공격/방어 상관없이)으로 기본 공격 시 최대 체력의 15% 회복"
       },
       "skill_mechanics": {
         "effect_type": "summon_clone",
@@ -920,11 +920,11 @@
         "params": {
           "5": {
             "type": "Teacher",
-            "amount": 5
+            "heal_percent": 5
           },
           "6": {
             "type": "Teacher",
-            "amount": 15
+            "heal_percent": 15
           }
         }
       }
@@ -975,8 +975,8 @@
         "2": null,
         "3": null,
         "4": null,
-        "5": "유일한 대마법사: 임소정, 이종복 대상으로 공격력 40% 증가",
-        "6": "유일한 대마법사: 임소정, 이종복 대상으로 공격력 100% 증가"
+        "5": "유일한 대마법사: 임소정, 이종복이 공격 대상이 되면 공격력 40% 증가 (전투 중 최초 1회)",
+        "6": "유일한 대마법사: 임소정, 이종복이 공격 대상이 되면 공격력 100% 증가 (전투 중 최초 1회)"
       },
       "skill_mechanics": {
         "effect_type": "damage_hp_percent_plus_atk",
@@ -1021,7 +1021,7 @@
         }
       },
       "trait_mechanics": {
-        "effect_type": "ally_synergy_atk_buff",
+        "effect_type": "target_name_atk_buff",
         "partner_name": "임소정",
         "params": {
           "5": {
@@ -1079,8 +1079,8 @@
         "2": null,
         "3": null,
         "4": null,
-        "5": "유일한 대마법사: 임소정, 이종복 대상으로 공격력 40% 증가",
-        "6": "유일한 대마법사: \"임소정\",\"이종복\" 인물 대상으로 공격력 100% 증가"
+        "5": "유일한 대마법사: 임소정, 이종복이 공격 대상이 되면 공격력 40% 증가 (전투 중 최초 1회)",
+        "6": "유일한 대마법사: 임소정, 이종복이 공격 대상이 되면 공격력 100% 증가 (전투 중 최초 1회)"
       },
       "skill_mechanics": {
         "effect_type": "debuff_atk_and_damage",
@@ -1129,7 +1129,7 @@
         }
       },
       "trait_mechanics": {
-        "effect_type": "ally_synergy_atk_buff",
+        "effect_type": "target_name_atk_buff",
         "partner_name": "이종복",
         "params": {
           "5": {

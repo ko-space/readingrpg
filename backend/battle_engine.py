@@ -73,6 +73,37 @@ def _apply_type2_stun_if_active(unit, target, time_elapsed):
     return 0, False
 
 
+def _apply_targeted_atk_buff_trigger(resolved_target, enemy_team, side_name, events, time_elapsed):
+    """이종복/임소정(유일한 대마법사): 이 둘 중 하나가 처음으로 기본공격 대상으로 확정되는 순간, 같은
+    팀에서 targeted_atk_buff_config를 들고 있는 유닛(이종복 자신, 임소정 자신 각각 독립적으로 장전됨 -
+    trait_handlers._trait_arm_target_name_atk_buff)에게 영구 공격력 버프를 적용한다. resolved_target을
+    구하는 곳(메인 루프에서 이 함수를 부르는 지점)과 완전히 동일한 빈도로 매 틱 재확인하되,
+    lifesteal/neglect와 달리 "켜졌다 꺼졌다"가 아니라 한 번 성립하면 영구 지속이라 death_heal_ally류와
+    같은 1회성 트리거 플래그(_targeted_atk_buff_triggered)로 재적용을 막는다. resolved_target은 항상
+    enemy_team 소속이므로(호출부의 _resolve_basic_attack_target(unit, enemy_team, ...) 참고), 그 팀을
+    그대로 훑으면 된다 - side_name은 지금 공격하는 쪽(unit) 기준이라, 버프를 받는 쪽(enemy_team)의
+    실제 side는 그 반대다."""
+    if resolved_target is None or resolved_target["hp"] <= 0:
+        return
+    target_side = "defender" if side_name == "attacker" else "attacker"
+    for unit in _alive_units(enemy_team):
+        config = unit.get("targeted_atk_buff_config")
+        if not config or unit.get("_targeted_atk_buff_triggered"):
+            continue
+        if resolved_target["name"] not in (unit["name"], unit.get("trait_partner_name")):
+            continue
+        unit["_targeted_atk_buff_triggered"] = True
+        atk_percent = config["atk_percent"]
+        unit["status"]["atk_percent_bonus"] += atk_percent
+        change_dicts = build_stat_change_dicts([("own", unit, 1, 0)], target_side, side_name)
+        events.append({
+            "time": time_elapsed, "event_type": "trait_resolve", "side": target_side,
+            "actor": unit["name"], "actor_slot": unit.get("slot"),
+            "effect_type": "target_name_atk_buff",
+            "detail": {"target_name": resolved_target["name"], "atk_percent": atk_percent, "changes": change_dicts},
+        })
+
+
 def _advance_type2_attack_count_and_maybe_revert(unit, side, own_team, time_elapsed, events):
     """이의진 type2(Parent) 상태에서 기본공격을 3회 사용하면 자동으로 [Active](self_type_swap_heal)를
     다시 시전해 type1로 돌아온다(확인된 요청) - type2 동안은 카드를 다시 눌러도 못 쓰므로
@@ -200,7 +231,7 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events, res
             unit["status"]["atk_percent_bonus"] += rear_bonus
 
         # 윤: 기본공격 전용 자가 회복 두 종류 - kill_heal_percent(영혼 흡수, 처치 시 최대 체력 X% 회복)와
-        # lifesteal_config(선생 고혈, "흡혈" 상태일 때 명중 시 고정량 회복)는 둘 다 star_mechanics/
+        # lifesteal_config(선생 고혈, "흡혈" 상태일 때 명중 시 최대 체력 X% 회복)는 둘 다 star_mechanics/
         # trait_mechanics가 전투 시작 시 데이터 기반으로 심어두는 필드라, 캐릭터 이름과 무관하게 이
         # 필드를 가진 어떤 유닛에도 동일하게 적용된다(다른 캐릭터가 나중에 재사용해도 그대로 동작).
         # 흡혈은 lifesteal_active(simulate_battle 메인 루프가 매 틱 _update_lifesteal_status로 갱신 -
@@ -212,7 +243,7 @@ def _do_basic_attack(unit, side, own_team, enemy_team, time_elapsed, events, res
             self_heal += round(unit["max_hp"] * kill_heal_percent / 100)
         lifesteal_config = unit.get("lifesteal_config")
         if lifesteal_config and unit.get("lifesteal_active"):
-            self_heal += lifesteal_config["heal_amount"]
+            self_heal += round(unit["max_hp"] * lifesteal_config["heal_percent"] / 100)
         if self_heal:
             unit["hp"] = min(unit["max_hp"], unit["hp"] + self_heal)
 
@@ -1361,6 +1392,7 @@ def _simulate_tick(attacker_team, defender_team, tick_index, time_elapsed, event
             # 상태를 다시 판정한다 - 아직 공격 쿨다운이 안 찼거나 근접이 도착 전이어도 "그 대상을
             # 노리고 있다"는 상태 자체는 성립해야 하므로 아래의 이른 continue들보다 먼저 처리한다.
             _update_lifesteal_status(unit, resolved_target, side_name, events, time_elapsed)
+            _apply_targeted_atk_buff_trigger(resolved_target, enemy_team, side_name, events, time_elapsed)
 
             if time_elapsed < unit["next_attack_time"]:
                 continue
