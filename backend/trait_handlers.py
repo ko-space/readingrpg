@@ -298,10 +298,10 @@ def _trait_arm_special_on_partner_death(caster, team, enemy_team, params):
     # _apply_kimhyeonjae_state_tick(매 틱)이 처리한다(student_council_budget_config와 동일한
     # "장전 후 이벤트/상태 감지" 패턴). partner_name 자체는 compute_unit_stats가 이미
     # caster["trait_partner_name"]에 심어뒀으므로(이도협의 trait_partner_name="불빠따 김어진"과 동일한
-    # 방식) 여기 config에 따로 담지 않는다.
+    # 방식) 여기 config에 따로 담지 않는다. duration_seconds는 더 이상 없다(확인된 요청 - 지속시간
+    # 없이 전투 종료 시까지 유지, battle_engine._kimhyeonjae_enter_special이 MAX_BATTLE_DURATION을 씀).
     caster["special_config"] = {
         "heal_percent": params["heal_percent"],
-        "duration_seconds": params["duration_seconds"],
         "atk_percent": params["atk_percent"],
         "haste_percent": params["haste_percent"],
         "damage_reduction_percent": params["damage_reduction_percent"],
