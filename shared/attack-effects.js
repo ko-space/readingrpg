@@ -3188,9 +3188,25 @@ function khWingBendPoints(idlePts, attackPts, bendK, lag) {
 // 맵 끝으로 펴짐) 3단계로 잠깐 휘게 만든다. onArrive는 hold 진입 순간(예전 spawnKimHyeonjaeVortexAttack과
 // 동일한 타이밍) 정확히 한 번 불러 명중 판정을 그 순간에 걸 수 있게 한다. 대기 날개가 꺼져 있는
 // 상태(예: 아직 kimhyeonjaeMode 갱신 전)에서 호출되면 안전하게 즉시 onArrive만 부르고 끝낸다.
+// onArrive는 "이 타격을 화면에 반영하라"는 콜백이라(체력바 갱신/피해 숫자/사망 연출) 무슨 일이
+// 있어도 정확히 한 번은 반드시 불려야 한다 - 안 불리면 그 타격이 화면에서 통째로 사라진다.
+// 여기서 한 번만 호출되도록 보장한다(이미 불렸으면 무시).
+function khFlushWingAttackArrive(fx) {
+    if (!fx || fx.arrived) return;
+    fx.arrived = true;
+    if (fx.onArrive) fx.onArrive();
+}
+
 function khTriggerWingAttack(actorKeyOrEl, targetKeyOrEl, mode, onArrive) {
     const actorKey = typeof actorKeyOrEl === "string" ? actorKeyOrEl : null;
     if (!actorKey || !khWingAuraActive[actorKey]) { if (onArrive) onArrive(); return; }
+    // 이전 공격의 휘어짐이 아직 hold(명중 판정)에 도달하기 전인데 다음 공격이 들어오면, 이 슬롯을
+    // 그냥 덮어써서 이전 타격의 onArrive가 영영 유실됐다(확인된 버그 - 폭주/백익은 공격속도가
+    // 크게 올라서 공격 간격이 휘어짐 시간보다 짧아지는 일이 잦다). 그 타격은 체력바/사망 연출이
+    // 아예 반영되지 않아, 죽은 유닛의 체력바가 0%가 아닌 채로 남거나("hp는 0인데 바는 4.5%"로
+    // 실제 관측됨) 한동안 안 깎이다가 다음에 살아남은 콜백에서 한꺼번에 깎이는 것처럼 보였다.
+    // 덮어쓰기 전에 이전 타격을 즉시 명중 처리해서 흘리지 않는다.
+    khFlushWingAttackArrive(khWingAttackFx[actorKey]);
     khWingAttackFx[actorKey] = {
         targetKeyOrEl, mode,
         startMs: performance.now(),
@@ -3261,7 +3277,24 @@ function khWingAuraStep(nowMs) {
             const targetEl = resolveEffectEl(fx.targetKeyOrEl);
             const age = nowMs - fx.startMs;
             const total = fx.outMs + fx.holdMs + fx.returnMs;
+            // 명중 처리(onArrive)는 화면 반영(체력바/피해 숫자/사망 연출) 그 자체라 절대 흘리면
+            // 안 된다 - 아래 두 경로가 예전엔 그냥 흘려보내고 있었다(확인된 버그):
+            //  1) 대상이 사라졌거나(사망 등) 시간이 다 되어 fx를 지울 때 - 명중 없이 삭제됐다.
+            //  2) hold 구간(90ms)이 좁아서, 렉으로 프레임 간격이 그보다 벌어지면 그 구간을 통째로
+            //     건너뛰고 return 단계로 가버려 명중이 영영 안 걸렸다(폭주/백익은 렉이 심해 이 일이
+            //     자주 일어난다). 그래서 "hold 안에 들어왔을 때"가 아니라 "out 단계를 지났으면"으로
+            //     조건을 넓혔다.
+            const arriveNow = () => {
+                if (fx.arrived) return;
+                fx.arrived = true;
+                // 백익(special) 상태의 공격 명중은 발동 흔들림과 동일하게 강한 쪽을 쓴다(확인된 요청) -
+                // 흑익(frenzy)은 기존 그대로 ground-fire-shake.
+                if (mode === "special") khTriggerSpecialFieldShake(); else khTriggerFieldShake();
+                if (fx.onArrive) fx.onArrive();
+            };
             if (age >= total || !targetEl || !targetEl.isConnected) {
+                if (age >= fx.outMs) arriveNow();
+                else khFlushWingAttackArrive(fx); // 아직 닿기도 전에 대상이 사라진 경우 - 흔들림 없이 반영만
                 delete khWingAttackFx[key];
             } else {
                 targetNow = fieldRelativeCenter(targetEl);
@@ -3270,14 +3303,9 @@ function khWingAuraStep(nowMs) {
                     bendK = 1 - Math.pow(1 - k, 3);
                 } else if (age < fx.outMs + fx.holdMs) {
                     bendK = 1;
-                    if (!fx.arrived) {
-                        fx.arrived = true;
-                        // 백익(special) 상태의 공격 명중은 발동 흔들림과 동일하게 강한 쪽을 쓴다(확인된 요청) -
-                        // 흑익(frenzy)은 기존 그대로 ground-fire-shake.
-                        if (mode === "special") khTriggerSpecialFieldShake(); else khTriggerFieldShake();
-                        if (fx.onArrive) fx.onArrive();
-                    }
+                    arriveNow();
                 } else {
+                    arriveNow(); // hold 구간을 건너뛴 경우에도 반드시 한 번은 명중 처리
                     const k = (age - fx.outMs - fx.holdMs) / fx.returnMs;
                     const eased = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
                     bendK = 1 - eased;
