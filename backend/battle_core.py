@@ -448,7 +448,7 @@ def build_stat_change_dicts(changes, side_name, enemy_side):
         crit_sign, crit_chance_sign, rear_sign, haste_sign, shield_sign = extra[0], extra[1], extra[2], extra[3], extra[4]
         if not (atk_sign or hp_sign or crit_sign or crit_chance_sign or rear_sign or haste_sign or shield_sign):
             continue
-        change_dicts.append({
+        change_dict = {
             "target": target["name"],
             "target_side": side_name if rel == "own" else enemy_side,
             "atk": atk_sign,
@@ -459,7 +459,19 @@ def build_stat_change_dicts(changes, side_name, enemy_side):
             "haste": haste_sign,
             "shield": shield_sign,
             "shield_after": target.get("shield", 0),
-        })
+        }
+        if hp_sign:
+            # hp(최대 체력) 변화는 shield와 똑같은 이유로 부호만으론 부족하다 - 프론트 체력바는
+            # hp/maxHp 비율로 폭을 그리는데, 아이콘만 켜고 실제 maxHp 숫자를 안 보내주면 프론트가
+            # 전투 시작 시점의 낡은 maxHp를 전투 내내 계속 쓰게 된다(확인된 버그 - 불빠따 김어진의
+            # "교권 보호"처럼 전투 중 최대 체력이 늘어나는 효과를 받은 유닛은, 체력바가 한동안 꽉 찬
+            # 채로(실제로는 이미 새 최대치 대비로 깎이고 있었는데 낡은 더 작은 분모 때문에 100%를
+            # 넘는 값으로 계산돼 CSS가 넘친 부분을 잘라 보여줌) 안 줄어들다가, 실제 체력이 낡은
+            # maxHp 밑으로 내려가는 순간에야 비로소 정상 범위로 들어와 갑자기 확 줄어드는 것처럼
+            # 보였다). shield_after와 동일한 패턴으로 실제 수치를 함께 실어보낸다.
+            change_dict["max_hp_after"] = target["max_hp"]
+            change_dict["hp_after"] = target["hp"]
+        change_dicts.append(change_dict)
     return change_dicts
 
 

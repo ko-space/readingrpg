@@ -2136,6 +2136,13 @@
                 if (change.atk < 0) setStatusIcon(changedSlot, "atk_down", { source });
                 if (change.hp > 0) setStatusIcon(changedSlot, "maxhp_up", { source });
                 if (change.hp < 0) setStatusIcon(changedSlot, "maxhp_down", { source });
+                // 최대 체력 변화는 아이콘만으론 부족하다(arena-battle.js와 동일한 이유) - 실제
+                // 수치를 반영 안 하면 체력바가 낡은 최대치 기준으로 계속 그려진다.
+                if (change.max_hp_after !== undefined) {
+                    units[changedSlot].maxHp = change.max_hp_after;
+                    units[changedSlot].hp = change.hp_after;
+                    renderUnit(changedSlot);
+                }
                 if (change.crit > 0) setStatusIcon(changedSlot, "crit_up", { source });
                 if (change.crit_chance > 0) setStatusIcon(changedSlot, "crit_chance_up", { source });
                 if (change.rear_priority > 0) setStatusIcon(changedSlot, "rear_priority", { source });

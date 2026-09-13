@@ -805,6 +805,15 @@ function applyStatChangeIcons(changes, source) {
         if (change.atk < 0) setStatusIcon(changedKey, "atk_down", { source });
         if (change.hp > 0) setStatusIcon(changedKey, "maxhp_up", { source });
         if (change.hp < 0) setStatusIcon(changedKey, "maxhp_down", { source });
+        // 최대 체력 변화는 아이콘만으론 부족하다 - shield_after와 동일한 이유로 실제 수치
+        // (max_hp_after/hp_after)를 함께 받아 반영해야, 체력바가 전투 시작 시점의 낡은 최대치를
+        // 계속 쓰다가 "한동안 안 줄다가 갑자기 확 줄어드는" 것처럼 보이지 않는다(확인된 버그 -
+        // 불빠따 김어진 "교권 보호" 등 전투 중 최대 체력이 바뀌는 효과 전부 해당).
+        if (change.max_hp_after !== undefined) {
+            units[changedKey].maxHp = change.max_hp_after;
+            units[changedKey].hp = change.hp_after;
+            renderUnit(changedKey);
+        }
         if (change.crit > 0) setStatusIcon(changedKey, "crit_up", { source });
         if (change.crit_chance > 0) setStatusIcon(changedKey, "crit_chance_up", { source });
         if (change.rear_priority > 0) setStatusIcon(changedKey, "rear_priority", { source });
