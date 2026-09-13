@@ -321,7 +321,7 @@ def _apply_ally_attack_splash(attacker_unit, side, own_team, enemy_team, hit_tar
         hits.append({
             "target": enemy["name"], "_target_ref": enemy, "damage": dealt, "shown_damage": raw_dealt,
             "invincible_block": invincible_block,
-            "target_hp_after": enemy["hp"], "target_max_hp": enemy["max_hp"],
+            "target_hp_after": enemy["hp"], "target_max_hp": enemy["max_hp"], "target_shield_after": enemy.get("shield", 0),
             "is_crit": is_crit, "type_multiplier": type_mult,
             "low_hp_shield_seconds": low_hp_shield_seconds,
         })
@@ -856,6 +856,7 @@ def _resolve_strike_zone_return_throw(entry, own_team, enemy_team, side_name, ti
                 redirected_hits.append({
                     "target": enemy["name"], "_target_ref": enemy, "damage": dealt, "shown_damage": raw_dealt,
                     "invincible_block": invincible_block, "target_hp_after": enemy["hp"], "target_max_hp": enemy["max_hp"],
+                    "target_shield_after": enemy.get("shield", 0),
                     "is_crit": is_crit, "type_multiplier": type_mult,
                 })
             hits.append({
@@ -877,6 +878,7 @@ def _resolve_strike_zone_return_throw(entry, own_team, enemy_team, side_name, ti
         hit = {
             "target": target["name"], "_target_ref": target, "damage": dealt, "shown_damage": raw_dealt,
             "invincible_block": invincible_block, "target_hp_after": target["hp"], "target_max_hp": target["max_hp"],
+            "target_shield_after": target.get("shield", 0),
             "is_crit": is_crit, "type_multiplier": type_mult, "stayed": stayed,
         }
         if not stayed and target["hp"] > 0:
@@ -900,6 +902,7 @@ def _resolve_strike_zone_return_throw(entry, own_team, enemy_team, side_name, ti
             hit["pulled_stun_seconds"] = params["pulled_stun_seconds"]
             hit["pulled_interrupted_cast"] = interrupted_cast
             hit["target_hp_after"] = target["hp"]
+            hit["target_shield_after"] = target.get("shield", 0)
         hits.append(hit)
 
     detail = _tag_target_sides({"hits": hits}, side_name, own_team, enemy_team)
