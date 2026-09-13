@@ -1840,6 +1840,30 @@ CHALLENGES = [
         "condition_value": 30,
         "reward_items": [{"type": "item", "name": "윤영준의 오페라 하우스", "quantity": 1}],
     },
+    # ── 서브 스토리 1(김남옥 편 "오랜만의 재회") 화 완료 - routers/story.py의 /log-chapter-complete가
+    # 그 화를 실제로 끝까지 읽었을 때(입장 시점이 아니라)만 남기는 ActivityLog를 판정 조건으로 쓴다 ──
+    {
+        "name": "김남옥 서브스토리 1화 완료",
+        "condition_type": "activity_total",
+        "condition_value": 1,
+        "condition_params": {"activity_type": "story_chapter_complete:sub1_kimnamok:chapter1"},
+        "reward_gold": 100,
+    },
+    {
+        "name": "김남옥 서브스토리 2화 완료",
+        "condition_type": "activity_total",
+        "condition_value": 1,
+        "condition_params": {"activity_type": "story_chapter_complete:sub1_kimnamok:chapter2"},
+        "reward_gold": 100,
+    },
+    {
+        "name": "김남옥 서브스토리 3화 완료",
+        "condition_type": "activity_total",
+        "condition_value": 1,
+        "condition_params": {"activity_type": "story_chapter_complete:sub1_kimnamok:chapter3"},
+        "reward_gold": 100,
+        "reward_items": [{"type": "character", "name": "김남옥", "quantity": 1}],
+    },
 ]
 
 

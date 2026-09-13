@@ -156,6 +156,23 @@ def unlock_chapter(
     return {"message": "잠금 해제되었습니다."}
 
 
+@router.post("/log-chapter-complete")
+def log_chapter_complete(
+    req: StoryUnlockCgRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """서브 스토리의 화(chapter)를 실제로 끝까지 읽었을 때(종료 연출이 시작되는 시점)만 남기는
+    기록 - /unlock-chapter(티켓을 써서 "입장 가능"해진 시점, 아직 한 줄도 안 읽었을 수 있음)와는
+    별개의 시점이다. "N화 완료" 도전과제가 입장하자마자가 아니라 실제로 다 읽었을 때만 달성되도록,
+    challenges.py의 범용 activity_count 조건이 그대로 재사용할 수 있는 activity_type
+    "story_chapter_complete:{story_id}:{chapter_id}" 형식으로 남긴다 - 재방문으로 여러 번 남아도
+    activity_count는 target=1이라 문제 없다."""
+    db.add(ActivityLog(user_id=user.id, activity_type=f"story_chapter_complete:{req.story_id}:{req.cg_id}"))
+    db.commit()
+    return {"message": "기록되었습니다."}
+
+
 @router.post("/consume-ticket")
 def consume_ticket(
     req: StoryConsumeTicketRequest,
