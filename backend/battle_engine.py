@@ -599,10 +599,14 @@ def _kimhyeonjae_enter_special(unit, side, events, time_elapsed, config):
     """지키고 싶은 마음(Special) 발동 - 폭주 중 아군 청년이 죽는 순간. 폭주를 대체하며(같은
     temp_atk_mods/temp_haste_mods 소스 키를 그대로 덮어씀) 체력을 회복하고, 더 강한 버프 +
     피해감소 및 반사(damage_reduction_config, reflect=True - 확인된 요청: 폭주와 동일하게 반사도
-    걸리도록 변경) + 기본공격 시 적 넉백을 건다. 불사(undying_until)는 폭주에서만 부여되는 효과라
-    (확인된 요청 - 지키고 싶은 마음은 그대로 "종료 시 즉시 사망" 유지) 여기로 전이되며 함께 걷어낸다."""
-    duration = config["duration_seconds"]
-    until = time_elapsed + duration
+    걸리도록 변경) + 기본공격 시 적 넉백을 건다. 예전엔 지속시간(6~8초) 후 자동으로 즉사했지만
+    (확인된 요청으로 제거), 이제 지속시간 자체가 없다 - 버프는 전투가 끝날 때까지 유지되고, 이후
+    죽는다면 그냥 보통의 전투 피해로 죽는다(불사(undying_until)는 여전히 폭주에서만 부여되는
+    효과라 special 진입 시 함께 걷어낸다). MAX_BATTLE_DURATION을 "until"로 써서, 기존의
+    시각 기반 만료 필드(temp_atk_mods/cc_immune_until/damage_reduction_config/
+    knockback_on_attack_until)를 하나도 새로 안 만들고 그대로 재사용한다 - 전투가 이 시각을
+    넘겨서까지 진행되는 일 자체가 없으므로 사실상 "전투 종료 시까지"와 동일하다."""
+    until = MAX_BATTLE_DURATION
     heal = round(unit["max_hp"] * config["heal_percent"] / 100)
     unit["hp"] = min(unit["max_hp"], unit["hp"] + heal)
     unit["undying_until"] = None
@@ -619,31 +623,11 @@ def _kimhyeonjae_enter_special(unit, side, events, time_elapsed, config):
         "time": time_elapsed, "event_type": "kimhyeonjae_mode_resolve", "side": side,
         "actor": unit["name"], "actor_slot": unit.get("slot"),
         "detail": {
-            "mode": "special", "duration_seconds": duration, "heal_amount": heal,
+            "mode": "special", "heal_amount": heal,
             "hp_after": unit["hp"], "max_hp": unit["max_hp"],
             "atk_percent": config["atk_percent"], "haste_percent": config["haste_percent"],
             "damage_reduction_percent": config["damage_reduction_percent"],
         },
-    })
-
-
-def _kimhyeonjae_die(unit, side, events, time_elapsed, from_mode):
-    """지키고 싶은 마음이 지속시간 그대로 자연 종료되면 "종료 시 즉시 사망"한다(확인된 요청 - 폭주는
-    더 이상 이 함수를 타지 않는다, _kimhyeonjae_exit_frenzy 참고) - 윤의 "호" 자폭
-    (self_destruct_after_attack)과 동일하게 _apply_damage를 거치지 않고 hp를 직접 0으로 만든다
-    (보호막/피해감소/불사로도 막히면 안 되는 확정 죽음이므로)."""
-    unit["status"]["temp_atk_mods"].pop("kimhyeonjae_mode", None)
-    unit["status"]["temp_haste_mods"].pop("kimhyeonjae_mode", None)
-    unit["status"]["cc_immune_until"] = None
-    unit["damage_reduction_config"] = None
-    unit["undying_until"] = None
-    unit["knockback_on_attack_until"] = None
-    unit["kimhyeonjae_mode"] = None
-    unit["kimhyeonjae_mode_ends_at"] = None
-    unit["hp"] = 0
-    events.append({
-        "time": time_elapsed, "event_type": "kimhyeonjae_mode_resolve", "side": side,
-        "actor": unit["name"], "actor_slot": unit.get("slot"), "detail": {"mode": "death", "from": from_mode},
     })
 
 
@@ -653,11 +637,28 @@ def _apply_kimhyeonjae_state_tick(team, side, events, time_elapsed):
     순서로만 전이된다:
     None -[방향 전환 시전]-> active
     (None 또는 active) -[체력 임계값 도달, 전투 당 1회]-> frenzy
-    -[7초 자연 종료]-> None(사망하지 않음) 또는 [아군 청년 사망]-> special -[6~8초 자연 종료]-> 사망(hp=0).
+    -[7초 자연 종료]-> None(사망하지 않음) 또는 [아군 청년 사망]-> special(지속시간 없음, 전투
+    종료 시까지 유지 - 확인된 요청으로 "종료 시 즉시 사망" 제거) -[보통의 전투 피해로 사망]-> 사망.
     "체력 임계값 도달" 전이는 확인된 요청으로 더 이상 [Active] 진행 여부와 무관하다(예전엔 active
     상태에서만 감지했음) - frenzy_used 플래그로 전투당 1회만 발동하게 막는다.
     frenzy_config/special_config가 없는(=이 캐릭터가 아닌) 유닛은 kimhyeonjae_mode도 frenzy_config도
-    없어 맨 위에서 바로 건너뛴다."""
+    없어 맨 위에서 바로 건너뛴다.
+
+    special은 이제 스스로 만료되어 죽는 일이 없으므로, "죽는 순간"을 이 함수가 직접 감지해서
+    프론트에 알려야 한다(아직 안 그러면 백익 전용 연출(날개 오라/색상반전/상태 아이콘)이 화면에
+    계속 남는다) - _apply_death_triggers와 동일한 이유로 _alive_units가 아니라 슬롯을 직접
+    훑는다(죽은 유닛은 이미 _alive_units에서 제외되어 있어 아래 메인 루프가 못 본다). 실제 사망
+    처리(hp=0) 자체는 이미 보통의 전투 피해 경로에서 끝난 뒤이므로, 여기서는 통지와 모드 정리만
+    한다."""
+    for unit in _all_slots(team):
+        if unit and unit.get("kimhyeonjae_mode") == "special" and unit["hp"] <= 0:
+            unit["kimhyeonjae_mode"] = None
+            unit["kimhyeonjae_mode_ends_at"] = None
+            events.append({
+                "time": time_elapsed, "event_type": "kimhyeonjae_mode_resolve", "side": side,
+                "actor": unit["name"], "actor_slot": unit.get("slot"), "detail": {"mode": "death", "from": "special"},
+            })
+
     for unit in _alive_units(team):
         mode = unit.get("kimhyeonjae_mode")
         frenzy_config = unit.get("frenzy_config")
@@ -722,9 +723,6 @@ def _apply_kimhyeonjae_state_tick(team, side, events, time_elapsed):
             elif time_elapsed >= ends_at:
                 _kimhyeonjae_exit_frenzy(unit, side, events, time_elapsed)
             continue
-
-        if mode == "special" and time_elapsed >= ends_at:
-            _kimhyeonjae_die(unit, side, events, time_elapsed, "special")
 
 
 def _apply_pending_reflect_events(attacker_team, defender_team, events):

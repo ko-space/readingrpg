@@ -3231,11 +3231,15 @@ function dispatchEvent(event) {
                 // 지워야 한다 - 안 그러면 폭주 때의 낡은 만료 시각(untilSimTime)까지 화면에 남아있는다
                 // (확인된 버그 - "백익이 되면 불사 아이콘도 같이 사라져야 하는데 안 사라짐").
                 clearStatusIconSource(khKey, "undying", modeSource);
-                setStatusIcon(khKey, "atk_up", { source: modeSource, untilSimTime: until });
-                setStatusIcon(khKey, "atk_speed_up", { source: modeSource, untilSimTime: until });
-                setStatusIcon(khKey, "damage_reduction", { source: modeSource, untilSimTime: until });
+                // 백익은 이제 지속시간이 없다(전투 종료 시까지 유지, 확인된 요청) - 위쪽에서 계산한
+                // until(event.time + duration_seconds)은 폭주/방향전환처럼 정말 만료되는 모드 전용이라
+                // 여기서는 안 쓰고, untilSimTime 없이 걸어서 죽음(death 분기의 clearStatusIconSource)
+                // 전까지 계속 떠 있게 한다.
+                setStatusIcon(khKey, "atk_up", { source: modeSource });
+                setStatusIcon(khKey, "atk_speed_up", { source: modeSource });
+                setStatusIcon(khKey, "damage_reduction", { source: modeSource });
                 battleRendererConfig.appendLog(
-                    `${event.actor}의 [Special] 발동! 지키고 싶은 마음 - 체력 ${event.detail.heal_amount} 회복, ${event.detail.duration_seconds}초간 공격력 ${event.detail.atk_percent}%/공격속도 ${event.detail.haste_percent}% 증가, 받는 피해 ${event.detail.damage_reduction_percent}% 감소+반사 + 기본공격 넉백`,
+                    `${event.actor}의 [Special] 발동! 지키고 싶은 마음 - 체력 ${event.detail.heal_amount} 회복, 전투 종료 시까지 공격력 ${event.detail.atk_percent}%/공격속도 ${event.detail.haste_percent}% 증가, 받는 피해 ${event.detail.damage_reduction_percent}% 감소+반사 + 기본공격 넉백`,
                     event.side
                 );
             } else if (mode === "normal") {
@@ -3264,15 +3268,16 @@ function dispatchEvent(event) {
                 clearStatusIconSource(khKey, "undying", modeSource);
                 battleRendererConfig.appendLog(`${event.actor}의 [Passive] 지속시간 종료 - 폭주 해제`, event.side);
             } else if (mode === "death") {
+                // 백익은 이제 지속시간이 없어 스스로 만료되어 죽지 않는다(확인된 요청) - 이 이벤트는
+                // 보통의 전투 피해로 실제로 죽은 "뒤"에 백익 전용 연출(날개 오라/색상반전/상태 아이콘)만
+                // 정리하라고 알려주는 통지다. hp=0 자체는 이미 반영돼 있으므로 여기서 다시 대입할
+                // 필요는 없지만, 이 이벤트가 다른 사망 관련 이벤트보다 먼저 도착하는 경우를 대비해
+                // 안전하게 한 번 더 맞춰둔다.
                 if (unitInfo) { unitInfo.spriteVariant = ""; unitInfo.kimhyeonjaeMode = null; unitInfo.hp = 0; }
                 khSetMeleeActive(khKey, false);
                 setKimHyeonjaeWingAura(khKey, null);
                 if (typeof khStopSpecialInvert === "function") khStopSpecialInvert(); // 백익 도중 사망해도 반전은 풀어준다
                 clearAllStatusIcons(khKey);
-                battleRendererConfig.appendLog(
-                    `${event.actor}의 [${event.detail.from === "special" ? "Special" : "Passive"}] 지속시간 종료 - 즉시 사망`,
-                    event.side
-                );
             }
             renderUnit(khKey);
         }
