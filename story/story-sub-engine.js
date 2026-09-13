@@ -168,6 +168,16 @@ function unlockChapterOnServer(chapterId) {
     }).catch(() => {});
 }
 
+// unlockChapterOnServer(티켓을 써서 "입장 가능"해진 시점, 아직 한 줄도 안 읽었을 수 있음)와는
+// 별개로, 그 화를 실제로 끝까지 읽었을 때만("N화 완료" 도전과제 판정용) 남기는 기록.
+function logChapterCompleteOnServer(chapterId) {
+    return fetch(`${API_BASE_URL}/story/log-chapter-complete`, {
+        method: "POST",
+        headers: authHeaders(true),
+        body: JSON.stringify({ story_id: STORY_ID, cg_id: chapterId }),
+    }).catch(() => {});
+}
+
 /* =========================================================
    엔진 (프로토타입의 narration/thought/line 렌더링과 scene-fade/time-card 전환 로직 그대로)
    ========================================================= */
@@ -868,6 +878,7 @@ function findFirstBg(chapterIndex) {
 async function playChapterEndCinematic() {
     if (chapterEndCinematicActive) return;
     chapterEndCinematicActive = true;
+    logChapterCompleteOnServer(CHAPTERS[currentChapterIndex].id);
     el.dialogueWrap.classList.add('hidden');
     closeChat();
 
