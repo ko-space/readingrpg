@@ -705,21 +705,12 @@ def _apply_damage(target, amount, time_elapsed, attacker=None, suppress_reflect_
         amount -= absorbed
     hp_before = target["hp"]
     target["hp"] = max(0, target["hp"] - amount)
-    # 불사가 아직 발동 전이어도(undying_until 없음), 아직 폭주를 한 번도 안 쓴 프렌지형 캐릭터(예:
-    # 김현재)가 체력을 threshold 아래로 서서히 깎이는 게 아니라 단 한 방(치명타/광역기 등)에 체력이
-    # 0 이하로 내려가는 경우를 대비한다 - 그 threshold 감지는 battle_engine._apply_kimhyeonjae_state_tick이
-    # "매 틱 시작 시" 현재 체력을 보고 판정하는데, 즉사성 공격은 threshold를 넘기지도 못한 채 같은
-    # 틱 안에서 바로 사망까지 가버려서 다음 틱이 오기도 전에 죽어(_alive_units에서 아예 제외) 폭주가
-    # 영영 발동하지 못하는 확인된 버그가 있었다. 죽는 바로 그 히트가 곧 "체력이 완전히 바닥나는 공격"
-    # 이므로, 결과 체력은 항상 0%라 threshold(항상 0보다 큼)를 이미 만족한다 - 정확한 퍼센트 계산 없이
-    # "이 히트로 죽는가"만 봐도 충분하다. frenzy_used는 여기서 건드리지 않는다 - 체력만 1로 살려두고,
-    # 버프/무적시간(undying_until) 부여를 포함한 실제 폭주 진입은 다음 틱의 정상 경로가 그대로 맡는다
-    # (이 순간 체력이 1이 되어 threshold 조건을 확실히 만족하므로 다음 틱에 정상 발동한다).
-    reactive_frenzy_save = (
-        not undying_active and target.get("frenzy_config") and not target.get("frenzy_used")
-        and hp_before > 0 and target["hp"] <= 0
-    )
-    if (undying_active or reactive_frenzy_save) and hp_before > 0 and target["hp"] <= 0:
+    # 불사(undying_until)는 오직 "이미 발동해 있는 동안"만 보호한다(확인된 요청 - 체력이 20%
+    # 초과인 상태에서 한 방에 죽는 공격을 맞으면 그건 그냥 정상적으로 죽어야 하고, 불사가 끼어들면
+    # 안 된다). 즉 폭주(frenzy)가 이미 체력 임계값 이하로 떨어진 걸 감지해 undying_until을 부여해둔
+    # 뒤에만 그 다음 공격들이 보호받는다 - "임계값을 넘기면서 동시에 죽는 바로 그 한 방"까지
+    # 반응형으로 구제해주지는 않는다(한때 그렇게 구현했었으나 확인된 요청으로 되돌림).
+    if undying_active and hp_before > 0 and target["hp"] <= 0:
         target["hp"] = 1  # 불사: 체력이 바닥나는 공격이어도 죽지 않고 1을 남긴다
     _register_hp_loss(target, hp_before - target["hp"], time_elapsed)
     return amount, raw_amount, invincible_block
