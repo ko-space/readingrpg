@@ -558,7 +558,18 @@ function renderUnit(key, hpOverride) {
     const unit = units[key];
     const rosterEl = document.querySelector(`[data-roster="${key}"]`);
     const isDead = unit.hp <= 0;
-    const displayHp = hpOverride != null ? hpOverride : (pendingDisplayHp[key] != null ? pendingDisplayHp[key] : unit.hp);
+    // pendingDisplayHp는 대상 유닛 키 하나에 여러 공격(다른 시전자, 겹치는 타이밍)이 동시에 걸릴 수
+    // 있는 공유 슬롯이다 - 어떤 다단히트(F=ma 등) 시퀀스가 아직 안 끝나 이 값을 붙잡고 있는 동안,
+    // 그 대상을 맞힌 "다른" 공격이 자기 몫의 renderUnit(key)(override 없음)을 부르면 그 쪽은 이미
+    // 더 낮아진 진짜 unit.hp를 반영하려는 건데 여기서 낡은(더 높은) pendingDisplayHp로 덮여
+    // "한동안 안 줄어들다가, 원래 시퀀스가 끝나는 순간 그동안 밀린 만큼 한꺼번에 확 줄어드는" 것처럼
+    // 보이는 버그가 있었다(확인된 버그 - 여러 캐릭터에서 재현). pendingDisplayHp가 진짜 체력보다
+    // 낮아지는 일은 없어야 하므로(항상 "아직 덜 반영된, 더 높은 값"이어야 정상) Math.min으로 진짜
+    // unit.hp를 넘지 않게 고정해두면, 이런 동시 타격 상황에서도 매 렌더가 그 시점의 진짜 체력보다
+    // 더 높게는 절대 보여주지 않아 값이 항상 단조 감소한다(위 F=ma 전용 클램프와 같은 원리를 여기
+    // 범용 렌더 지점에도 적용).
+    const displayHp = hpOverride != null ? hpOverride
+        : (pendingDisplayHp[key] != null ? Math.min(pendingDisplayHp[key], unit.hp) : unit.hp);
 
     if (rosterEl) {
         // 상대팀 체력바 색상을 방어타입별로 다르게 칠하기 위한 훅(arena-battle.css의
