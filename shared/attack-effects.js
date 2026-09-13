@@ -2918,7 +2918,19 @@ function khDrawTornadoLightningWrap(ctx, pts, mode, alpha) {
     ctx.restore();
 }
 
+// 링은 반투명(alpha)이라 세그먼트끼리 겹치는 부분에서 stroke가 누적돼 진해지는 게 그림의 일부다 -
+// 여러 타원을 한 경로로 묶어 한 번에 stroke하면 그 누적이 사라져서 겹치는 부분이 옅어진다(실제로
+// 픽셀 비교로 확인함). 그래서 "굵기별 배치 stroke"는 쓸 수 없고, 세그먼트별 stroke는 그대로 둔다.
+// 대신 그림을 한 픽셀도 바꾸지 않는 것만 정리했다:
+//  1) save/translate/rotate/restore 제거 - ctx.ellipse가 회전 인자를 직접 받으므로 행렬을 건드릴
+//     이유가 없다(수학적으로 완전히 동일). 세그먼트마다 네 번씩 돌던 상태 스택 조작이 사라진다.
+//  2) 루프 내내 값이 같은 strokeStyle/shadowColor(색 문자열 생성)를 루프 밖으로 끌어냈다 -
+//     세그먼트(50개)마다 매 프레임 다시 만들던 문자열을 한 번만 만든다.
 function khDrawVortexRings(ctx, pts, mode, now, intensity) {
+    ctx.save();
+    ctx.strokeStyle = khVortexColor(mode, 0.85 * intensity);
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = khVortexShadow(mode, 0.6);
     for (let i = 1; i < pts.length; i++) {
         const p = pts[i];
         const u = i / (pts.length - 1);
@@ -2926,18 +2938,12 @@ function khDrawVortexRings(ctx, pts, mode, now, intensity) {
         const angle = Math.atan2(t.y, t.x) + now * 0.004 * (i % 2 ? 1 : -1);
         const rx = (10 + u * 26) * intensity;
         const ry = rx * 0.42;
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate(angle);
-        ctx.strokeStyle = khVortexColor(mode, 0.85 * intensity);
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = khVortexShadow(mode, 0.6);
         ctx.lineWidth = Math.max(1.2, 4 - u * 2.4);
         ctx.beginPath();
-        ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 1.7);
+        ctx.ellipse(p.x, p.y, rx, ry, angle, 0, Math.PI * 1.7);
         ctx.stroke();
-        ctx.restore();
     }
+    ctx.restore();
     khDrawTornadoLightningWrap(ctx, pts, mode, intensity);
     const root = pts[0];
     ctx.save();
