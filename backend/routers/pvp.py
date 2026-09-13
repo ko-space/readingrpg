@@ -455,11 +455,24 @@ def _character_to_unit(character: Character | None, owner_level: int, slot: str)
     return compute_unit_stats(character.name, character.star, owner_level, slot)
 
 
-def _team_unit_view(unit: dict | None, character: Character | None):
+def _team_unit_view(character: Character | None, owner_level: int, slot: str):
     """전투 결과 응답의 attacker_team/defender_team 한 슬롯 - 그 슬롯이 비어있으면(전방/후방 중
-    한쪽만 등록된 편성) None을 그대로 돌려주고, 프론트(arena-battle.js)가 그 슬롯을 빈 자리로 그린다."""
-    if unit is None or character is None:
+    한쪽만 등록된 편성) None을 그대로 돌려주고, 프론트(arena-battle.js)가 그 슬롯을 빈 자리로 그린다.
+
+    simulate_battle에 넘겨서 실제로 전투를 치른(그래서 뮤테이션된) 유닛이 아니라, 여기서 별도로
+    다시 계산한 "손대지 않은" 스탯을 쓴다 - 예전엔 그 뮤테이션된 유닛을 그대로 읽었는데, 전투가
+    끝나는 바로 그 순간 유닛이 우연히 어떤 상태였는지(is_melee/melee_speed_ratio 등)가 그대로
+    새어나가는 버그가 있었다(확인된 버그). 프론트는 이 값을 "전투 시작 시점"의 상태로 오인해서
+    재생 첫 프레임부터 적용하는데, 정작 실제 이벤트 로그(events)는 진짜 시작 시점(항상 근거리 등
+    기본 상태) 기준으로 기록돼 있어 둘이 어긋난다 - 예: 김현재가 [Active](방향 전환)로 근접
+    전환한 채 마침 전투가 끝나버리면, 다음 재생 때는 스킬을 쓰지도 않았는데 처음부터 근접 상태로
+    잘못 표시되어 원거리인 척 화면 위치만 이동해버린다(안지석처럼 코스트를 빨리 채워주는 서포터와
+    편성하면 [Active]를 자주 써서 하필 근접 상태로 전투가 끝날 확률이 높아져 더 자주 재현됐다).
+    name/outfit/star/defense_type처럼 전투 중 절대 안 바뀌는 필드는 원래도 안전했지만, 통째로 새로
+    계산하는 쪽이 앞으로 비슷한 필드가 추가돼도 이 버그가 재발하지 않는다."""
+    if character is None:
         return None
+    unit = _character_to_unit(character, owner_level, slot)
     return {
         "name": unit["name"],
         "max_hp": unit["max_hp"],
@@ -615,14 +628,14 @@ def run_battle(
             "title_is_hidden": defender_title_hidden,
         },
         "attacker_team": {
-            "front": _team_unit_view(attacker_team["front"], attacker_front),
-            "back": _team_unit_view(attacker_team["back"], attacker_back),
-            "supporter": _team_unit_view(attacker_team["supporter"], attacker_supporter),
+            "front": _team_unit_view(attacker_front, user.level, "front"),
+            "back": _team_unit_view(attacker_back, user.level, "back"),
+            "supporter": _team_unit_view(attacker_supporter, user.level, "supporter"),
         },
         "defender_team": {
-            "front": _team_unit_view(defender_team["front"], defender_front),
-            "back": _team_unit_view(defender_team["back"], defender_back),
-            "supporter": _team_unit_view(defender_team["supporter"], defender_supporter),
+            "front": _team_unit_view(defender_front, defender.level, "front"),
+            "back": _team_unit_view(defender_back, defender.level, "back"),
+            "supporter": _team_unit_view(defender_supporter, defender.level, "supporter"),
         },
     }
 
