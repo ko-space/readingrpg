@@ -666,13 +666,17 @@ def _apply_kimhyeonjae_state_tick(team, side, events, time_elapsed):
             continue
 
         if mode == "active":
+            # 방향 전환의 매초 체력 감소는 윤 "호 출격!"/김지섭 "핏값"과 동일한 "자기 비용"이다 -
+            # _apply_self_skill_hp_cost와 같은 규칙으로 체력 1에서 멈추고 이 대가로는 절대 죽지
+            # 않는다(확인된 버그: _apply_damage를 거치지 않고 직접 hp를 0까지 깎다 보니, 불사로
+            # 막 체력 1이 된 직후 바로 다음 틱에 이 드레인이 그대로 죽여버렸다 - 게다가 그 죽음은
+            # _apply_damage를 거치지 않아 어떤 이벤트도 안 남아서, 전투 로그엔 안 죽은 것처럼
+            # 보이는데 실제로는 죽어서 더 이상 공격도 피격도 안 되는 유령 상태가 됐다).
             drain_percent = unit.get("kimhyeonjae_drain_percent_per_second") or 0
             if drain_percent:
                 hp_before = unit["hp"]
-                unit["hp"] = max(0, unit["hp"] - unit["max_hp"] * drain_percent / 100 * TICK)
+                unit["hp"] = max(1, unit["hp"] - unit["max_hp"] * drain_percent / 100 * TICK)
                 _register_hp_loss(unit, hp_before - unit["hp"], time_elapsed)
-            if unit["hp"] <= 0:
-                continue  # 드레인만으로 죽었으면(드묾) 그대로 죽은 채 - 아래 전이는 건너뛴다.
 
         # 폭주(전투 당 1회, [Active] 진행 여부와 무관) - mode가 None이든 active든 체력 임계값에
         # 도달하면 곧바로 발동한다(확인된 요청). frenzy/special 상태인 유닛은 mode가 이미 그
