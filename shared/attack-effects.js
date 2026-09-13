@@ -3042,9 +3042,9 @@ const KH_PISTOL_MUZZLE_FLASH_MS = 120;
 // 총구 위치 - 캐릭터 중심에서 바라보는 방향(facingDir)으로 몸 너비의 이 비율만큼, 위로는 키의
 // 이 비율만큼 올린 지점. 값을 늘리면(0에서 멀어지면) 그만큼 더 앞/더 위로 나간다.
 // ▶ 총구가 앞뒤로 나가는 정도를 고치려면 여기(가로).
-const KH_PISTOL_MUZZLE_FORWARD_RATIO = 0.24;
+const KH_PISTOL_MUZZLE_FORWARD_RATIO = 0.4;
 // ▶ 총구가 위아래로 올라가는 정도를 고치려면 여기(세로) - 값이 클수록 더 위.
-const KH_PISTOL_MUZZLE_UP_RATIO = 0.32;
+const KH_PISTOL_MUZZLE_UP_RATIO = 0.36;
 
 function khPistolMuzzlePoint(actorEl, facingDir) {
     const center = fieldRelativeCenter(actorEl);
