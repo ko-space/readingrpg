@@ -68,9 +68,9 @@ def _build_room_team(user: User, db: Session) -> tuple[dict, dict] | tuple[None,
         _character_to_unit(supporter, user.level, "supporter") if supporter else None,
     )
     roster_view = {
-        "front": _team_unit_view(team["front"], front),
-        "back": _team_unit_view(team["back"], back),
-        "supporter": _team_unit_view(team["supporter"], supporter),
+        "front": _team_unit_view(front, user.level, "front"),
+        "back": _team_unit_view(back, user.level, "back"),
+        "supporter": _team_unit_view(supporter, user.level, "supporter"),
     }
     return team, roster_view
 
