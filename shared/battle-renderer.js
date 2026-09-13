@@ -490,6 +490,13 @@ function playDeathSequence(key) {
     // 시작되지 않고(startMeleeWalker의 "!walkAnimActive[key]" 게이트) 그 캐릭터 고유의 걷기 프레임
     // (walk_N.webp) 없이 밋밋한 CSS bob 애니메이션만으로 걷는 버그로 이어진다.
     stopWalkFrames(key);
+    // 죽은 유닛은 이제 어떤 목표에도 도착할 수 없다 - 이 유닛이 도착하기를 기다리며 걸려 있던
+    // "타격을 화면에 반영하라" 콜백(waitForMeleeArrival)을 여기서 전부 풀어준다. 안 그러면 그
+    // 타격들이 통째로 유실돼서, 그 타격에 맞아 죽은 상대의 체력바가 0%가 아닌 채로 남는다
+    // (확인된 버그 - 실제 전투에서 "hp는 0인데 바는 4.5%"로 관측). waitForMeleeArrival의 타임아웃
+    // 안전망(6초)도 결국 풀어주긴 하지만, 그전에 전투가 끝나버리면 이미 늦는다.
+    (pendingArrivalResolvers[key] || []).forEach((resolve) => resolve());
+    pendingArrivalResolvers[key] = [];
     // 같은 이유로 CSS 쪽 .walking 클래스(걷기 시작 판정 자체 - meleeWalkZCounter z-index 스탬핑과
     // walk-bob 애니메이션이 여기 걸려있다)도 죽을 때 확실히 지운다. 도착하기 전에(markMeleeArrived를
     // 못 거치고) 죽으면 이 클래스가 안 지워진 채 남는데, 그러면 부활 직후 tick()의
@@ -1248,10 +1255,17 @@ function waitForMeleeArrival(actorKey, targetKey) {
     return new Promise((resolve) => {
         if (!pendingArrivalResolvers[actorKey]) pendingArrivalResolvers[actorKey] = [];
         pendingArrivalResolvers[actorKey].push(resolve);
-        // 타임아웃이 걸릴 때 이미 다른 목표로 바뀌어 있었다면 건드리지 않는다 - 그 새 목표를 위한
-        // waitForMeleeArrival 호출이 이미 자기 타임아웃을 새로 걸어뒀을 것이다.
+        // 스프라이트/시선 정리(markMeleeArrived)는 예전대로 "목표가 그대로일 때만" 한다 - 이미 다른
+        // 목표로 바뀌었다면 그 새 목표를 위한 호출이 자기 몫을 따로 처리한다.
+        //
+        // 다만 이 프로미스 자체는 조건과 무관하게 반드시 풀어줘야 한다(확인된 버그) - 이 뒤에 달린
+        // 것이 "이 타격을 화면에 반영하라"(체력바/피해 숫자/사망 연출)이기 때문이다. 대상을 죽인
+        // 타격은 정의상 그 직후 목표가 바뀌므로 위 조건이 항상 거짓이 되고, 그 뒤 공격자가 새 목표에
+        // 닿기 전에 죽어버리면(흔한 전개) markMeleeArrived가 영영 안 불려서 그 타격이 통째로
+        // 유실됐다 - 실제로 "죽은 유닛의 hp는 0인데 체력바는 4.5%인 채로 남는" 형태로 관측됐다.
         setTimeout(() => {
             if (meleeTargetKey[actorKey] === targetKey) markMeleeArrived(actorKey, targetKey);
+            resolve();
         }, MELEE_ARRIVAL_TIMEOUT_MS);
     });
 }
