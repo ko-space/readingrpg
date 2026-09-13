@@ -1004,6 +1004,15 @@ def _advance_cost_turn(team, current_i):
 
 SKILL_CARD_COOLDOWN_SECONDS = 1.5  # 스킬카드 연속 사용 방지 - 발동 직후 이 시간 동안은 CC와 동일하게 스킵
 
+# 전투 시작 직후 [Active] 자동 발동을 유예하는 시간(초) - 안지석 "비상금"처럼 전투 시작 시 팀 코스트를
+# 즉시 부어주는 효과가 있으면, 코스트가 큰 캐릭터도 첫 틱(0.05초)만에 캐스팅을 시작해버려 화면이
+# 채 정리되기도 전에(캐스팅 연출/로그를 인지하기도 전에) 스킬이 발동한 것처럼 보이는 문제가 있었다
+# (확인된 버그 - "원거리 상태에서 갑자기 돌진") - 코스트 자체는 평소처럼 계속 쌓이게 두고, 실제
+# 발동 판정(자동 로테이션 전용 - _tick_team_cost)만 이 시간 동안 유예한다. 1v1 실시간 친선전
+# (_tick_team_cost_manual)은 사람이 직접 클릭해서 쓰므로 "예상 못한 발동"이라는 문제 자체가 없어
+# 이 유예를 적용하지 않는다.
+MIN_TIME_BEFORE_FIRST_ACTIVE = 1.0
+
 
 def _tick_team_cost(team, enemy_team, side_name, time_elapsed, events, manual_cost_gate=None):
     """팀 공유 코스트를 이번 틱만큼 채우고, 지금 차례인 스킬카드가 발동 가능하면 발동시킨다. 유닛별
@@ -1033,6 +1042,9 @@ def _tick_team_cost(team, enemy_team, side_name, time_elapsed, events, manual_co
     if manual_cost_gate is not None:
         _tick_team_cost_manual(team, enemy_team, side_name, time_elapsed, events, roster, manual_cost_gate)
         return
+
+    if time_elapsed < MIN_TIME_BEFORE_FIRST_ACTIVE:
+        return  # 전투 시작 직후 유예 구간 - 코스트는 이미 위에서 쌓았고, 발동 판정만 미룬다.
 
     current_i, unit = _current_cost_turn(team, roster)
 
