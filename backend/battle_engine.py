@@ -751,6 +751,12 @@ def _apply_pending_reflect_events(attacker_team, defender_team, events):
                 "target_slot": unit.get("slot"),
                 "detail": {
                     "amount": hit["amount"], "target_hp_after": unit["hp"], "target_max_hp": unit["max_hp"],
+                    # 보호막이 있으면 _apply_damage가 반사 피해도 hp보다 먼저 여기서 깎는다(일반 피해와
+                    # 동일한 흡수 규칙) - 그런데 이 이벤트에 보호막 수치가 실려나가지 않아서, 반사로
+                    # 보호막이 깎여도 프론트 보호막 바는 그대로 남는 버그가 있었다(확인된 버그 -
+                    # "공격할 때마다 보호막이 닳아야 하는데 그대로임"). shield_after와 동일한 패턴으로
+                    # 실제 수치를 함께 실어보낸다.
+                    "target_shield_after": unit.get("shield", 0),
                     "suppress_bounce": hit["suppress_bounce"],
                 },
             })

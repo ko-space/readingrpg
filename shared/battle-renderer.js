@@ -3343,6 +3343,14 @@ function dispatchEvent(event) {
             const applyReflectHit = () => {
                 if (!battleRendererConfig.units[reflectedKey]) return;
                 battleRendererConfig.units[reflectedKey].hp = event.detail.target_hp_after;
+                // 보호막이 있으면 일반 피해와 동일하게 반사 피해도 먼저 흡수한다(백엔드는 이미 그렇게
+                // 계산함) - 이 수치를 반영 안 하면 보호막이 실제로는 깎였는데 화면 바는 그대로 남는다
+                // (확인된 버그 - 강 희처럼 반사 대상을 계속 공격해도 보호막 바가 안 닳아 보였음).
+                if (event.detail.target_shield_after !== undefined) {
+                    const shieldBefore = battleRendererConfig.units[reflectedKey].shield || 0;
+                    battleRendererConfig.units[reflectedKey].shield = event.detail.target_shield_after;
+                    if (shieldBefore > 0 && event.detail.target_shield_after <= 0) playShieldHit(reflectedKey);
+                }
                 renderUnit(reflectedKey);
                 flashHit(reflectedKey, false, 1, event.detail.amount, false);
             };

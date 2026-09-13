@@ -695,18 +695,26 @@ def _apply_damage(target, amount, time_elapsed, attacker=None, suppress_reflect_
                 # 않는다(확인된 요청) - 피해량 감소(위 amount -= reduced)는 그대로 적용되지만, 그
                 # 감소분을 서포터에게 되돌려주지는 않는다. 서포터는 애초에 전장에 나서지 않는
                 # 캐릭터라(_all_slots에도 없음) 반사 대상이 되는 것 자체가 어색하다는 판단.
-                reflect_dealt, _, _ = _apply_damage(attacker, reduced, time_elapsed)
-                # 반사 피해는 여기서 attacker["hp"]를 실제로 깎지만(백엔드 상태는 항상 정확했음),
-                # 그 사실을 알리는 이벤트가 하나도 없어서 프론트에 전혀 반영되지 않는 버그가 있었다
-                # (확인된 버그 - "반사했는데 상대 체력이 안 준다"). _apply_damage는 target/attacker
-                # 유닛만 알 뿐 이 반사를 이벤트로 남길 events 리스트에 접근할 수 없는 위치에서도
-                # 호출되므로(스킬 효과 함수들은 events를 안 받음), 반사당한 유닛(attacker) 자신에게
-                # "나 방금 반사로 이만큼 맞았다"는 기록만 잠깐 얹어두고, battle_engine._simulate_tick이
-                # 매 틱 끝에서 전 유닛을 훑어 이벤트로 변환한다(unit dict는 배틀마다 새로 만들어지므로
-                # 모듈 전역 상태와 달리 동시 진행 중인 다른 배틀과 섞일 위험이 없다).
-                if reflect_dealt > 0:
+                _, reflect_raw, _ = _apply_damage(attacker, reduced, time_elapsed)
+                # 반사 피해는 여기서 attacker["hp"](또는 보호막)를 실제로 깎지만(백엔드 상태는 항상
+                # 정확했음), 그 사실을 알리는 이벤트가 하나도 없어서 프론트에 전혀 반영되지 않는
+                # 버그가 있었다(확인된 버그 - "반사했는데 상대 체력이 안 준다"). _apply_damage는
+                # target/attacker 유닛만 알 뿐 이 반사를 이벤트로 남길 events 리스트에 접근할 수 없는
+                # 위치에서도 호출되므로(스킬 효과 함수들은 events를 안 받음), 반사당한 유닛(attacker)
+                # 자신에게 "나 방금 반사로 이만큼 맞았다"는 기록만 잠깐 얹어두고,
+                # battle_engine._simulate_tick이 매 틱 끝에서 전 유닛을 훑어 이벤트로 변환한다
+                # (unit dict는 배틀마다 새로 만들어지므로 모듈 전역 상태와 달리 동시 진행 중인 다른
+                # 배틀과 섞일 위험이 없다).
+                #
+                # 판정은 raw_reflect(=reflect_raw, 보호막 흡수 "전" 반사 위력)로 한다 - 실제로 깎인
+                # hp(첫 번째 반환값, 원래 여기서 쓰던 값)만 보면, 보호막이 반사 피해를 전부 흡수해
+                # hp가 하나도 안 줄어든 경우 0으로 판정돼 이벤트 자체가 안 나가는 버그가 있었다
+                # (확인된 버그 - 보호막이 있는 동안은 반사를 아무리 맞아도 보호막 바가 안 닳아 보임).
+                # 프론트에 보이는 피해 숫자도 이 raw 값을 쓴다 - 보호막이 막았어도 숫자는 그대로
+                # 보여주는 이 파일의 기존 규칙(위 docstring 참고)과 동일하다.
+                if reflect_raw > 0:
                     attacker.setdefault("_pending_reflect_hits", []).append({
-                        "time": time_elapsed, "reflector": target, "amount": reflect_dealt,
+                        "time": time_elapsed, "reflector": target, "amount": reflect_raw,
                         "suppress_bounce": suppress_reflect_bounce,
                     })
         raw_amount = max(0, round(amount))
