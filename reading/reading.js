@@ -77,7 +77,7 @@
     // 골라 들어온 경우) 무엇을 원하는지 사용자에게 직접 확인한다 - 그렇지 않으면 진짜로 새로
     // 시작하려는 선택이 조용히 무시될 수 있다.
     let restoredSession = window.ReadingSession ? window.ReadingSession.load() : null;
-    // 새벽 1시 컷오프를 이미 지난 세션은 이어서 잴 수 없다 - 하지만 컷오프 전까지 쌓인 시간은 실제로
+    // 밤 11시 59분 컷오프를 이미 지난 세션은 이어서 잴 수 없다 - 하지만 컷오프 전까지 쌓인 시간은 실제로
     // 공부한 시간이므로, 이걸로 계속하는 대신 따로 떼어내 은행 처리(bankExpiredSession, init()에서
     // 호출)해서 자동 제출한다. 지금 시작하려는(또는 이어서 하려는) 세션과는 완전히 별개로 취급한다.
     let expiredSessionToBank = null;
@@ -327,23 +327,23 @@
     // 돌리면 그만큼 elapsed가 그대로 부풀려져서 독서시간을 조작할 수 있었다. performance.now()는
     // 페이지가 로드된 시점 기준으로 실제 흐른 시간만 단조 증가하므로 시스템 시간 변경에 영향받지 않는다.
     //
-    // 지역입장을 다음날 새벽까지 켜놓고 방치하는 걸 막기 위해, 세션 시작 시점에 "다음(가장 가까운
-    // 미래의) 한국시간 오전 1시"를 한 번 계산해서 performance.now() 기준 값으로 고정해둔다(cutoffPerfMs).
-    // Date.now()는 이 계산에 딱 한 번만 참고용으로 쓰이고, 이후로는 다시 보지 않으므로 세션 도중
-    // 시스템 시간을 바꿔도 이 컷오프 자체는 영향받지 않는다. (주의) 이 컷오프는 현재 클라이언트에만
-    // 있고 서버(logs.py)는 별도로 검증하지 않는다 - tick()이 실제로 돌아야만 발동하므로, 탭이 이
-    // 시각 전후로 완전히 얼어붙어(또는 통째로 내려갔다가) 한참 뒤에야 깨어나는 극단적인 경우엔 이
-    // 컷오프를 넘긴 시간까지 서버에 그대로 정산될 수 있다(그래도 DAILY_READING_MINUTES_CAP이 하루
-    // 최대치로 막아준다). 평소엔 "깜빡 잊고 켜둔" 흔한 경우를 화면에서 바로 반영해주는 역할이다.
+    // 지역입장을 자정 넘어서까지 켜놓고 방치하는 걸 막기 위해, 세션 시작 시점에 "다음(가장 가까운
+    // 미래의) 한국시간 밤 11시 59분"을 한 번 계산해서 performance.now() 기준 값으로 고정해둔다
+    // (cutoffPerfMs). Date.now()는 이 계산에 딱 한 번만 참고용으로 쓰이고, 이후로는 다시 보지 않으므로
+    // 세션 도중 시스템 시간을 바꿔도 이 컷오프 자체는 영향받지 않는다. (주의) 이 컷오프는 현재
+    // 클라이언트에만 있고 서버(logs.py)는 별도로 검증하지 않는다 - tick()이 실제로 돌아야만 발동하므로,
+    // 탭이 이 시각 전후로 완전히 얼어붙어(또는 통째로 내려갔다가) 한참 뒤에야 깨어나는 극단적인
+    // 경우엔 이 컷오프를 넘긴 시간까지 서버에 그대로 정산될 수 있다(그래도 DAILY_READING_MINUTES_CAP이
+    // 하루 최대치로 막아준다). 평소엔 "깜빡 잊고 켜둔" 흔한 경우를 화면에서 바로 반영해주는 역할이다.
     function computeCutoffWallMs(nowWallMs) {
         const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
         const kstNowMs = nowWallMs + KST_OFFSET_MS;
         const kstNowDate = new Date(kstNowMs);
         let cutoffKstMs = Date.UTC(
             kstNowDate.getUTCFullYear(), kstNowDate.getUTCMonth(), kstNowDate.getUTCDate(),
-            1, 0, 0, 0
+            23, 59, 0, 0
         );
-        if (cutoffKstMs <= kstNowMs) cutoffKstMs += 24 * 60 * 60 * 1000; // 오늘 01시를 이미 지났으면 내일 01시
+        if (cutoffKstMs <= kstNowMs) cutoffKstMs += 24 * 60 * 60 * 1000; // 오늘 23시59분을 이미 지났으면 내일 23시59분
         return cutoffKstMs - KST_OFFSET_MS;
     }
 
@@ -501,7 +501,7 @@
         stopwatchEl.classList.toggle("stopwatch-paused", isPaused);
         persistActiveSession();
 
-        // 새벽 1시(KST) 컷오프에 도달하면 모의고사가 시간 종료로 자동 제출되는 것과 동일하게, 독서/과목도
+        // 밤 11시 59분(KST) 컷오프에 도달하면 모의고사가 시간 종료로 자동 제출되는 것과 동일하게, 독서/과목도
         // 그 시점까지 쌓인 시간을 자동으로 종료·제출한다 - 탭을 그대로 켜놓은 채 자정을 넘겨도 그때까지
         // 공부한 시간은 보상으로 이어지게 하기 위함(예전엔 아무 처리 없이 그냥 시간이 멈춰있기만 했다).
         if (!handledEnd && Date.now() >= cutoffWallMs) {
@@ -706,7 +706,7 @@
             window.ReadingSession?.clear();
             if ((data.reading_minutes || 0) < 1) return;
             alert(
-                `새벽 1시가 지나면서 이전 학습이 자동으로 종료·저장됐어요.\n` +
+                `밤 11시 59분이 지나면서 이전 학습이 자동으로 종료·저장됐어요.\n` +
                 `${session.difficulty} · ${data.reading_minutes}분 (+${data.gained_exp} EXP, +${data.gained_silver} 실버, +${data.gained_gold} 골드)`
             );
         } catch (err) {
