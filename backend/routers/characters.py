@@ -164,11 +164,14 @@ def _build_inventory_rows(user: User):
             **metadata,
         })
 
-    # 성급 우선(높은 성급 먼저) -> 같은 성급이면 희귀도 순(희귀할수록 먼저) -> 그래도 같으면 도감 순서.
+    # 성급 우선(높은 성급 먼저) -> 같은 성급이면 희귀도 순(희귀할수록 먼저) -> 그래도 같으면 이름순
+    # (확인된 요청 - 예전엔 characters.json에 실린 순서(catalog_index)를 그대로 썼는데, 이건 이름
+    # 순서와 무관해서 나중에 추가된 캐릭터가 같은 등급 안에서 뜬금없이 맨 뒤로 밀리는 문제가 있었다.
+    # 예: 신화 등급 중 김현재가 항상 마지막에 표시되던 버그).
     result.sort(key=lambda row: (
         -row["star"],
         -RARITY_RANK.get(row["rarity"], 0),
-        row["catalog_index"],
+        row["name"],
     ))
     return result
 
@@ -212,7 +215,7 @@ def _collapse_to_highest_star(rows: list[dict]) -> list[dict]:
     collapsed.sort(key=lambda row: (
         -row["star"],
         -RARITY_RANK.get(row["rarity"], 0),
-        row["catalog_index"],
+        row["name"],
     ))
     return collapsed
 
