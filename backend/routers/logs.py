@@ -122,6 +122,21 @@ def _today_kst():
     return datetime.now(KST).date()
 
 
+def _session_cutoff_utc(started_at: datetime) -> datetime:
+    """이 세션이 자동 종료되는 한국시간 밤 11시 59분 컷오프를 UTC naive datetime으로 계산한다 -
+    reading.js의 computeCutoffWallMs와 동일한 규칙이지만, 여기서는 클라이언트가 절대 조작할 수 없는
+    서버 자신의 started_at(/session/start 호출 시 서버 시계로 찍은 값)을 기준으로 삼는다.
+    (확인된 버그 - 이 컷오프가 예전엔 클라이언트에만 있고 서버는 전혀 몰라서, 자정 전에 끝난
+    세션이라도 탭을 닫아뒀다가 다음날에야 다시 열어 제출하면 그 순간(다음날)의 시각이 그대로
+    accumulated_seconds에 얹히고 ReadingLog.created_at도 "다음날"로 찍혀, "오늘의 독서시간"에
+    전날 공부한 시간이 엉뚱하게 다음날 몫으로 잡히는 문제가 있었다)."""
+    started_kst = started_at + timedelta(hours=9)
+    cutoff_kst = datetime(started_kst.year, started_kst.month, started_kst.day, 23, 59, 0)
+    if cutoff_kst <= started_kst:
+        cutoff_kst += timedelta(days=1)
+    return cutoff_kst - timedelta(hours=9)
+
+
 def _resolve_difficulty_multiplier(session_type: str, difficulty: str) -> float:
     """session_type/difficulty 조합이 유효한지 확인하고 그 배율(문학/비문학 등)을 돌려준다 - 유효하지
     않으면 400을 던진다. /session/start(세션을 열 때)와 _apply_reading_reward(최종 정산 때) 양쪽에서
@@ -172,19 +187,31 @@ def _flush_session_seconds(state: ReadingSessionState, now: datetime | None = No
     벽시계 경과 시간"이므로 그대로 인정해도 안전하다. 일시정지 중이면 누적하지 않고 확인 시각만
     갱신한다."""
     now = now or datetime.utcnow()
+    # 밤 11시 59분(KST) 컷오프를 넘긴 시각은 이 세션 몫으로 인정하지 않는다 - 탭이 닫혀있던 동안
+    # 쌓인 "공백"은 원래 상한 없이 전부 인정하는 게 의도된 설계이지만(위 HEARTBEAT_INTERVAL_SECONDS
+    # 설명 참고), 그 공백이 자정을 넘겨버리면 다음날 다시 열었을 때의 시각이 그대로 얹혀서 "오늘의
+    # 독서시간"이 엉뚱한 날짜에 잡히는 문제로 이어진다. effective_now로 클램프해서 이후로는 더 이상
+    # 누적되지 않게 하고, last_heartbeat_at도 같이 고정해 반복 호출에도 델타가 0으로 안정된다.
+    effective_now = min(now, _session_cutoff_utc(state.started_at))
     if not state.is_paused:
-        delta = (now - state.last_heartbeat_at).total_seconds()
+        delta = (effective_now - state.last_heartbeat_at).total_seconds()
         state.accumulated_seconds += max(0.0, delta)
-    state.last_heartbeat_at = now
+    state.last_heartbeat_at = effective_now
 
 
 def _apply_reading_reward(
     db: Session, user: User, region: Region, session_type: str, difficulty: str,
-    reading_minutes: int, is_auto_complete: bool, client_token: str,
+    reading_minutes: int, is_auto_complete: bool, client_token: str, created_at: datetime,
 ) -> dict:
     """실제 보상 계산 + 저장 - 기존 add_reading_log의 핵심 로직을 그대로 옮긴 것. reading_minutes는
     이제 호출부(제출 엔드포인트, 또는 세션 갈아타기로 인한 자동 정산)가 서버 하트비트 누적치로부터
-    이미 계산해 넘겨주는 값이라, 여기서는 예전처럼 클라이언트 원본값을 다루지 않는다."""
+    이미 계산해 넘겨주는 값이라, 여기서는 예전처럼 클라이언트 원본값을 다루지 않는다.
+
+    created_at: ReadingLog에 찍을 시각 - "지금(제출이 실제로 처리되는 시각)"이 아니라 호출부가
+    _flush_session_seconds로 이미 컷오프에 맞춰 클램프해둔 state.last_heartbeat_at을 그대로
+    넘겨받는다. 탭을 닫아뒀다가 다음날에야 다시 열어 만료된 세션을 제출하는 경우, "지금"을 그대로
+    쓰면 전날 공부한 시간이 ReadingLog.created_at 기준으로 다음날 몫이 돼버려 "오늘의 독서시간"이
+    엉뚱하게 잡히는 버그가 있었다(확인된 신고)."""
     difficulty_multiplier = _resolve_difficulty_multiplier(session_type, difficulty)
     if session_type == "mock_exam":
         # 모의고사는 정해진 시간만큼만 흐르는 세션이라, 서버가 확인한 값이라도 표에 정의된 시간을
@@ -246,6 +273,7 @@ def _apply_reading_reward(
                 earned_silver=base_silver + (extra_silver if is_last else 0),
                 is_auto_complete=is_auto_complete,
                 client_token=client_token,
+                created_at=created_at,
             ))
     else:
         db.add(ReadingLog(
@@ -256,6 +284,7 @@ def _apply_reading_reward(
             session_type=session_type,
             reading_minutes=reading_minutes,
             equipped_character_name=equipped.name if equipped else None,
+            created_at=created_at,
             earned_exp=gained_exp,
             earned_gold=gained_gold,
             earned_silver=gained_silver,
@@ -347,8 +376,8 @@ def start_reading_session(
     banked_previous = None
     if existing:
         if existing.client_token == req.client_token:
-            # 새로고침/재접속으로 인한 복구 - _flush_session_seconds와 동일한 규칙으로 그 사이 공백
-            # 전부를(상한 없이) 얹어준 뒤 이어서 잰다.
+            # 새로고침/재접속으로 인한 복구 - _flush_session_seconds와 동일한 규칙으로 그 사이 공백을
+            # (밤 11시 59분 컷오프까지는 상한 없이) 얹어준 뒤 이어서 잰다.
             _flush_session_seconds(existing, now)
             db.commit()
             return {
@@ -361,11 +390,12 @@ def start_reading_session(
         old_region = db.query(Region).filter(Region.id == existing.region_id).first()
         old_minutes = int(existing.accumulated_seconds // 60)
         old_session_type, old_difficulty, old_token = existing.session_type, existing.difficulty, existing.client_token
+        old_created_at = existing.last_heartbeat_at  # 컷오프에 맞춰 이미 클램프된 시각(위 _flush_session_seconds 참고)
         db.delete(existing)
         db.commit()
         if old_region and old_minutes >= 1:
             result = _apply_reading_reward(
-                db, user, old_region, old_session_type, old_difficulty, old_minutes, True, old_token,
+                db, user, old_region, old_session_type, old_difficulty, old_minutes, True, old_token, old_created_at,
             )
             banked_previous = {
                 "dungeon_name": old_region.name, "difficulty": old_difficulty,
@@ -489,11 +519,13 @@ def add_reading_log(
     raw_accumulated_seconds = state.accumulated_seconds
     reading_minutes = int(raw_accumulated_seconds // 60)
     session_type, difficulty, client_token = state.session_type, state.difficulty, state.client_token
+    session_created_at = state.last_heartbeat_at  # 컷오프에 맞춰 이미 클램프된 시각(위 _flush_session_seconds 참고)
     db.delete(state)
     db.commit()
 
     result = _apply_reading_reward(
         db, user, region, session_type, difficulty, reading_minutes, log_data.is_auto_complete, client_token,
+        session_created_at,
     )
     # 완료 화면의 "시간" 표시는 초 단위까지 자연스럽게 보여야 하는데(확인된 요청 - 예전엔 초까지
     # 나왔음), reading_minutes는 보상 계산 기준(정수 분 - 초 단위 잔여분은 보상에 반영되지 않고 그냥
