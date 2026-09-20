@@ -31,7 +31,7 @@ KST = timezone(timedelta(hours=9))
 # rate_up + (1-rate_up)/N = 3/N 을 풀면 rate_up = 2/(N-1)).
 ARCHIVE_BANNER_TYPE = "archive"
 ARCHIVE_POOL_RARITIES = ["일반", "희귀"]  # 1~2성
-ARCHIVE_POINT_COST = 10  # 모집 포인트로 직접 교환 시 필요한 비용 - 기존 픽업(10~200)보다 낮은 등급이라 저렴하게 책정
+ARCHIVE_POINT_COST_BY_RARITY = {"일반": 10, "희귀": 20}  # 모집 포인트로 직접 교환 시 필요한 비용(확인된 요청)
 
 RARITY_TIER_PROBABILITY = {"신화": 0.005, "전설": 0.01, "영웅": 0.09, "희귀": 0.30, "일반": 0.595}
 
@@ -628,6 +628,7 @@ def pick_archive_character(
     # 동시에 두 번 바꿔도(연타 등) 행이 중복 생기지 않도록 이 유저 행을 잠근다.
     user = db.query(User).filter(User.id == user.id).with_for_update().first()
     rate_up = _archive_rate_up(rarity)
+    point_cost = ARCHIVE_POINT_COST_BY_RARITY[rarity]
 
     existing = db.query(GachaBannerPickup).filter(
         GachaBannerPickup.banner_id == banner.id,
@@ -636,13 +637,13 @@ def pick_archive_character(
     if existing:
         existing.character_name = req.character_name
         existing.rate_up = rate_up
-        existing.point_cost = ARCHIVE_POINT_COST
+        existing.point_cost = point_cost
     else:
         db.add(GachaBannerPickup(
             banner_id=banner.id,
             user_id=user.id,
             character_name=req.character_name,
-            point_cost=ARCHIVE_POINT_COST,
+            point_cost=point_cost,
             rate_up=rate_up,
         ))
     db.commit()
@@ -651,7 +652,7 @@ def pick_archive_character(
         "character_name": req.character_name,
         "rarity": rarity,
         "rate_up": rate_up,
-        "point_cost": ARCHIVE_POINT_COST,
+        "point_cost": point_cost,
         "description": picked_character["description"],
         "outfit": picked_character["outfits"]["기본"],
     }
