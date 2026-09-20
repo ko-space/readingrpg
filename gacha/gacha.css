@@ -155,7 +155,7 @@
 .banner-thumb {
     flex: 1;
     position: relative;
-    height: 100px; /* 가로가 넓어진 만큼 세로는 오히려 기존(130px)보다 짧게 - 세로는 살짝 잘려도 됨(확인된 요청) */
+    height: 130px; /* 기존 높이로 복귀(확인된 요청) - object-fit:cover가 좌우/위아래 중 남는 쪽을 잘라서 맞춘다 */
     border-radius: 10px;
     border: 2px solid var(--panel-border, #c9a86a);
     background: linear-gradient(160deg, #dfe9f5, #b7c9e0);
