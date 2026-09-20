@@ -22,6 +22,8 @@ NEW_COLUMNS = [
     ("reading_logs", "earned_silver", "INTEGER NOT NULL DEFAULT 0"),
     # 전술대회 서포터(3번째) 슬롯 - 등록만 미리 지원, 실제 전투 반영은 battle_core.ENABLE_SUPPORTER_SLOT 참고
     ("users", "pvp_defense_supporter_id", "INTEGER"),
+    # 아카이브 모집 - 유저별 개인 픽업 선택(NULL이면 기존처럼 전체 공용 픽업)
+    ("gacha_banner_pickups", "user_id", "INTEGER"),
 ]
 
 

@@ -201,6 +201,83 @@
     color: var(--text-dark, #4a3c2a);
 }
 
+/* ── 아카이브 모집: 확률업 대상 인물 슬롯 ── */
+.gacha-archive-target {
+    margin-bottom: 12px;
+}
+
+.gacha-archive-slot-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: rgba(255, 255, 255, 0.55);
+    border: 2px dashed var(--panel-border, #c9a86a);
+    border-radius: 10px;
+    padding: 12px;
+    cursor: pointer;
+    text-align: left;
+}
+
+.gacha-archive-slot-btn:hover {
+    box-shadow: 0 0 10px rgba(232, 184, 75, 0.6);
+}
+
+.gacha-archive-slot-photo-frame {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 2px solid var(--panel-border, #c9a86a);
+    background: #eee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.gacha-archive-slot-plus {
+    font-size: 26px;
+    font-weight: 900;
+    color: var(--panel-border, #c9a86a);
+    line-height: 1;
+}
+
+.gacha-archive-slot-photo {
+    width: 100%;
+    height: 100%;
+}
+
+.gacha-archive-slot-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.gacha-archive-slot-title {
+    font-weight: bold;
+    font-size: 15px;
+    color: var(--text-dark, #4a3c2a);
+}
+
+.gacha-archive-slot-sub {
+    font-size: 12px;
+    color: #6b5b3e;
+}
+
+.gacha-archive-rarity-badge {
+    font-size: 11px;
+    font-weight: bold;
+    color: #6b5b3e;
+    opacity: 0.8;
+}
+
+.gacha-archive-picker-hint {
+    margin-bottom: 10px;
+}
+
 /* ── 모집 버튼: 1회(초록)/10회(빨강) 나란히, 다른 상자들과 전체 너비를 맞춤 ── */
 .gacha-pull-btn-row {
     display: flex;

@@ -24,6 +24,8 @@
     let currentGold = null;
     let pull1Btn = null;
     let pull10Btn = null;
+    let archivePool = null; // 아카이브 모집 후보(1~2성 전체) - 유저별로 안 달라지는 정적 목록이라 최초 1회만 불러와 캐싱한다.
+    let currentArchivePickup = null; // 지금 보고 있는 배너가 아카이브일 때, 서버가 내려준 내 선택(없으면 null)
     const GACHA_PULL1_COST = 100;   // gacha-partial.html의 "1회 모집 (100G)" 및 backend GACHA_COST와 동일
     const GACHA_PULL10_COST = 1000; // gacha-partial.html의 "10회 모집 (1000G)" 및 backend GACHA_COST*10과 동일
 
@@ -54,6 +56,7 @@
         setupPullButtons();
         setupCharacterSelectNav();
         setupRateInfoModal();
+        setupArchiveTarget();
     }
 
     // 배너/포인트는 파셜 HTML과 달리 매번 최신 상태여야 한다(모집 후 포인트 변화, 배너 교체 등) -
@@ -66,7 +69,8 @@
     async function loadBanners() {
         const carouselEl = contentEl.querySelector("#gacha-banner-carousel");
         try {
-            const res = await fetch(`${API_BASE_URL}/gacha/banners`);
+            // 아카이브 모집(유저별 개인 픽업)이 섞여 있어서 이제 로그인 정보가 필요하다.
+            const res = await fetch(`${API_BASE_URL}/gacha/banners`, { headers: authHeaders() });
             if (!res.ok) throw new Error(`${res.status}`);
             banners = await res.json();
         } catch (err) {
@@ -111,7 +115,8 @@
         contentEl.querySelector("#gacha-period-text").textContent = formatPeriodText(banner);
 
         const rateTextEl = contentEl.querySelector("#gacha-pickup-rate-text");
-        if (banner.banner_type === "pickup" && banner.pickups && banner.pickups.length > 0) {
+        const isArchiveBanner = banner.banner_type === "archive";
+        if ((banner.banner_type === "pickup" || isArchiveBanner) && banner.pickups && banner.pickups.length > 0) {
             const names = banner.pickups.map((p) => p.character_name).join(", ");
             rateTextEl.textContent = `${names} 모집 확률 UP!`;
             rateTextEl.hidden = false;
@@ -119,11 +124,144 @@
             rateTextEl.hidden = true;
         }
 
+        updateArchiveTargetSlot(banner, isArchiveBanner);
         renderPickupList(banner);
+    }
+
+    // ── 아카이브 모집: 확률업 대상 인물 슬롯 ──────────────────────
+    function updateArchiveTargetSlot(banner, isArchiveBanner) {
+        const targetEl = contentEl.querySelector("#gacha-archive-target");
+        targetEl.hidden = !isArchiveBanner;
+        if (!isArchiveBanner) {
+            currentArchivePickup = null;
+            return;
+        }
+
+        currentArchivePickup = (banner.pickups && banner.pickups[0]) || null;
+        const plusEl = contentEl.querySelector("#gacha-archive-slot-plus");
+        const photoEl = contentEl.querySelector("#gacha-archive-slot-photo");
+        const titleEl = contentEl.querySelector("#gacha-archive-slot-title");
+        const subEl = contentEl.querySelector("#gacha-archive-slot-sub");
+
+        if (currentArchivePickup) {
+            plusEl.hidden = true;
+            photoEl.hidden = false;
+            photoEl.removeAttribute("src");
+            photoEl.onerror = () => { photoEl.removeAttribute("src"); photoEl.style.background = "#ddd"; };
+            if (currentArchivePickup.outfit) {
+                photoEl.src = OUTFIT_IMAGE_BASE + currentArchivePickup.outfit + "/idle.webp";
+                applyGachaPhotoCrop(photoEl, currentArchivePickup.outfit);
+            }
+            titleEl.textContent = currentArchivePickup.character_name;
+            subEl.textContent = "눌러서 다른 인물로 변경";
+        } else {
+            plusEl.hidden = false;
+            photoEl.hidden = true;
+            titleEl.textContent = "선택된 인물이 없습니다";
+            subEl.textContent = "눌러서 확률업 대상 인물을 선택해주세요";
+        }
+    }
+
+    function setupArchiveTarget() {
+        const slotBtn = contentEl.querySelector("#gacha-archive-slot-btn");
+        const backBtn = contentEl.querySelector("#gacha-archive-picker-back-btn");
+        slotBtn?.addEventListener("click", openArchivePicker);
+        backBtn?.addEventListener("click", () => {
+            contentEl.querySelector("#gacha-archive-picker-view").hidden = true;
+            contentEl.querySelector("#gacha-main-view").hidden = false;
+        });
+    }
+
+    async function loadArchivePool() {
+        if (archivePool) return archivePool;
+        try {
+            const res = await fetch(`${API_BASE_URL}/gacha/archive/pool`);
+            archivePool = res.ok ? await res.json() : [];
+        } catch (err) {
+            archivePool = [];
+        }
+        return archivePool;
+    }
+
+    async function openArchivePicker() {
+        contentEl.querySelector("#gacha-main-view").hidden = true;
+        contentEl.querySelector("#gacha-archive-picker-view").hidden = false;
+        const listEl = contentEl.querySelector("#gacha-archive-picker-list");
+        listEl.innerHTML = `<p class="screen-placeholder">불러오는 중...</p>`;
+        const pool = await loadArchivePool();
+        renderArchivePickerList(pool, listEl);
+    }
+
+    function renderArchivePickerList(pool, listEl) {
+        listEl.innerHTML = "";
+        if (!pool || pool.length === 0) {
+            listEl.innerHTML = `<p class="screen-placeholder">불러올 인물이 없어요.</p>`;
+            return;
+        }
+        pool.forEach((c) => {
+            const isCurrent = currentArchivePickup && currentArchivePickup.character_name === c.name;
+            const card = document.createElement("div");
+            card.className = "gacha-pickup-card";
+            card.innerHTML = `
+                <div class="gacha-pickup-top">
+                    <div class="gacha-pickup-photo-frame">
+                        <img class="gacha-pickup-photo" src="${c.outfit ? OUTFIT_IMAGE_BASE + c.outfit + '/idle.webp' : ''}"
+                             alt="${c.name}" onerror="this.removeAttribute('src');this.style.background='#ddd';">
+                    </div>
+                    <div class="gacha-pickup-info">
+                        <div class="gacha-pickup-name">${c.name} <span class="gacha-archive-rarity-badge">${c.rarity}</span></div>
+                        <div class="gacha-pickup-desc">${c.description || ""}</div>
+                    </div>
+                </div>
+                <button class="gacha-pickup-recruit-btn"${isCurrent ? " disabled" : ""}>${isCurrent ? "선택됨" : "이 인물로 확률업"}</button>
+            `;
+            applyGachaPhotoCrop(card.querySelector(".gacha-pickup-photo"), c.outfit);
+            card.querySelector(".gacha-pickup-recruit-btn").addEventListener("click", (event) => {
+                pickArchiveCharacter(c.name, event.currentTarget);
+            });
+            listEl.appendChild(card);
+        });
+    }
+
+    async function pickArchiveCharacter(characterName, btn) {
+        btn.disabled = true;
+        try {
+            const res = await fetch(`${API_BASE_URL}/gacha/archive/pick`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", ...authHeaders() },
+                body: JSON.stringify({ character_name: characterName }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                alert(data.detail || "선택에 실패했어요.");
+                btn.disabled = false;
+                return;
+            }
+            await loadBanners(); // loadBanners()는 항상 첫 배너를 다시 선택하므로,
+            selectBanner(currentBannerId); // 아카이브 배너로 되돌아와 방금 바뀐 선택을 화면에 반영한다.
+            contentEl.querySelector("#gacha-archive-picker-view").hidden = true;
+            contentEl.querySelector("#gacha-main-view").hidden = false;
+        } catch (err) {
+            alert("서버에 연결할 수 없어요. 서버가 켜져 있는지 확인하세요.");
+            btn.disabled = false;
+        }
+    }
+
+    // 인물 사진 크롭(로비 프로필과 동일한 크롭 설정을 가챠 카드 크기에 맞게 재사용) - 픽업 목록/아카이브
+    // 슬롯/아카이브 선택 목록이 전부 공유한다.
+    function applyGachaPhotoCrop(photoImg, outfit) {
+        const crop = (outfit && AVATAR_CROP_OVERRIDES[outfit]) || DEFAULT_AVATAR_CROP;
+        const GACHA_SCALE_ADJUST = 0.8; // 이 숫자만 조정하면 됨 (작을수록 덜 확대)
+        const gachaScale = crop.scale ? crop.scale * GACHA_SCALE_ADJUST : 1;
+        photoImg.style.objectFit = "cover";
+        photoImg.style.objectPosition = `${crop.xPercent}% ${crop.yPercent}%`;
+        photoImg.style.transform = `scale(${gachaScale})`;
+        photoImg.style.transformOrigin = `${crop.xPercent}% ${crop.yPercent}%`;
     }
 
     function formatPeriodText(banner) {
         if (banner.banner_type === "standard") return "언제든지 환영! 상시대기 하고 있는 상시 모집을 통해 당신만의 운명을 시험해 봐요!";
+        if (banner.banner_type === "archive") return "언제든지 모집 가능! 확률업 대상 인물을 직접 골라 언제든지 바꿀 수 있어요.";
         if (!banner.start_date || !banner.end_date) return "기간 미정";
 
         // 백엔드 DateTime은 시간대 표시가 없는 UTC 문자열이라, 그대로 new Date()에 넣으면 "보는 사람의
@@ -292,10 +430,14 @@
             const url = currentBannerId
                 ? `${API_BASE_URL}/gacha/rates?banner_id=${currentBannerId}`
                 : `${API_BASE_URL}/gacha/rates`;
-            const res = await fetch(url);
+            const res = await fetch(url, { headers: authHeaders() });
             if (!res.ok) throw new Error(`${res.status}`);
             const data = await res.json();
 
+            const viewingBanner = banners.find((b) => b.id === currentBannerId);
+            noticeEl.textContent = viewingBanner && viewingBanner.banner_type === "archive"
+                ? "아카이브 모집은 확률 3배입니다"
+                : "픽업모집은 확률 3배입니다";
             noticeEl.hidden = !data.is_pickup_banner;
 
             listEl.innerHTML = "";
@@ -362,14 +504,7 @@
 
             // 로비 프로필과 같은 크롭 설정(home.js에 정의됨)을 재사용하되,
             // 칸이 더 작아서(64px vs 150px) scale에 보정 배율을 곱해 살짝 덜 확대되게 함
-            const photoImg = card.querySelector(".gacha-pickup-photo");
-            const crop = (pickup.outfit && AVATAR_CROP_OVERRIDES[pickup.outfit]) || DEFAULT_AVATAR_CROP;
-            const GACHA_SCALE_ADJUST = 0.8; // 이 숫자만 조정하면 됨 (작을수록 덜 확대)
-            const gachaScale = crop.scale ? crop.scale * GACHA_SCALE_ADJUST : 1;
-            photoImg.style.objectFit = "cover";
-            photoImg.style.objectPosition = `${crop.xPercent}% ${crop.yPercent}%`;
-            photoImg.style.transform = `scale(${gachaScale})`;
-            photoImg.style.transformOrigin = `${crop.xPercent}% ${crop.yPercent}%`;
+            applyGachaPhotoCrop(card.querySelector(".gacha-pickup-photo"), pickup.outfit);
 
             recruitBtn.addEventListener("click", () => selectPickupCharacter(entry, pickup.character_name));
 

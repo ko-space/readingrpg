@@ -2255,6 +2255,23 @@ def seed_gacha_banners():
         elif standard.image_file != "standard-banner.webp":
             standard.image_file = "standard-banner.webp"
             changed = True
+        # "아카이브 모집" 배너 - 상시모집처럼 항상 열려있는 정적 행이다. 실제 픽업 대상(유저별로 다름)은
+        # gacha_banner_pickups에 user_id가 붙은 개인 행으로 따로 저장되고(routers/gacha.py의
+        # pick_archive_character), 이 배너 행 자체는 이름/이미지만 갖고 있으면 된다.
+        archive = db.query(GachaBanner).filter(GachaBanner.banner_type == "archive").first()
+        if archive is None:
+            db.add(GachaBanner(
+                name="아카이브 모집",
+                banner_type="archive",
+                image_file="archive-banner.webp",
+                start_date=None,
+                end_date=None,
+                is_active=True,
+            ))
+            changed = True
+        elif archive.image_file != "archive-banner.webp":
+            archive.image_file = "archive-banner.webp"
+            changed = True
         if changed:
             db.commit()
     finally:

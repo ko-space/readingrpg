@@ -370,6 +370,12 @@ class GachaBannerPickup(Base):
     character_name = Column(String, nullable=False)     # characters.json의 캐릭터 이름과 일치해야 함
     point_cost = Column(Integer, default=20)             # 모집 포인트로 직접 교환 시 필요한 비용
     rate_up = Column(Float, default=0.5)                 # 이 캐릭터의 등급이 걸렸을 때 확정될 확률 (0~1)
+    # NULL이면(기존 "픽업모집") 관리자가 PICKUP_SCHEDULE로 심어두는, 모든 유저에게 공통으로 적용되는
+    # 행이다. 값이 있으면(아카이브 모집 전용) 그 유저 한 명만을 위한 개인별 픽업 선택 - 유저마다
+    # 자신의 행만 보고 바꿀 수 있어야 하므로, routers/gacha.py의 모든 조회/선택 경로가 반드시
+    # "user_id가 없거나(공용) 지금 요청한 본인 것"만 걸러서 써야 한다(안 그러면 다른 유저의 개인
+    # 픽업을 훔쳐보거나 대신 선택해버리는 구멍이 생긴다).
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     banner = relationship("GachaBanner", back_populates="pickups")
 
