@@ -12,6 +12,22 @@
 </div>
 
 <div id="gacha-main-view">
+    <!-- 아카이브 모집 전용 - 확률업(3배) 대상 인물을 직접 고르는 슬롯. 배너가 아카이브일 때만 보인다.
+         gacha-main-view 안에 둬야, 인물 선택/아카이브 선택 등 다른 하위 화면으로 전환될 때 이 화면과
+         함께 자연히 가려진다(별도 형제 요소로 두면 다른 화면과 겹쳐 보이는 문제가 있었음). -->
+    <div class="gacha-archive-target" id="gacha-archive-target" hidden>
+        <button type="button" id="gacha-archive-slot-btn" class="gacha-archive-slot-btn">
+            <div class="gacha-archive-slot-photo-frame">
+                <span class="gacha-archive-slot-plus" id="gacha-archive-slot-plus">+</span>
+                <img class="gacha-archive-slot-photo" id="gacha-archive-slot-photo" alt="" hidden>
+            </div>
+            <div class="gacha-archive-slot-info">
+                <div class="gacha-archive-slot-title" id="gacha-archive-slot-title">선택된 인물이 없습니다</div>
+                <div class="gacha-archive-slot-sub" id="gacha-archive-slot-sub">눌러서 확률업 대상 인물을 선택해주세요</div>
+            </div>
+        </button>
+    </div>
+
     <div class="gacha-pull-btn-row">
         <button id="gacha-pull1-btn" class="dungeon-enter-btn shine">1회 모집 (100G)</button>
         <button id="gacha-pull10-btn" class="dungeon-enter-btn shine btn-red">10회 모집 (1000G)</button>
@@ -33,6 +49,12 @@
 <div id="gacha-select-view" hidden>
     <button id="gacha-select-back-btn" class="gacha-back-btn">← 뒤로</button>
     <div id="gacha-pickup-list" class="gacha-pickup-list"></div>
+</div>
+
+<div id="gacha-archive-picker-view" hidden>
+    <button id="gacha-archive-picker-back-btn" class="gacha-back-btn">← 뒤로</button>
+    <p class="screen-placeholder gacha-archive-picker-hint">확률업(3배) 대상으로 선택할 1~2성 인물을 골라주세요. 언제든지 다시 바꿀 수 있어요.</p>
+    <div id="gacha-archive-picker-list" class="gacha-pickup-list"></div>
 </div>
 
 <div id="gacha-rate-modal" class="gacha-rate-modal" hidden>

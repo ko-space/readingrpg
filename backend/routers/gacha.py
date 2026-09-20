@@ -2,10 +2,11 @@ import random
 import json
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from database import get_db
 from models import User, Character, GachaBanner, GachaBannerPickup, ActivityLog, Mail, GachaPullLog
-from schemas import GachaSelectRequest
+from schemas import GachaSelectRequest, ArchivePickRequest
 from security import get_current_user
 from achievements import check_and_grant_achievements, resolve_character_reveal_info
 from character_visibility import is_hidden_override
@@ -21,6 +22,16 @@ DEFAULT_PICKUP_RATE_UP = 0.5  # gacha_banner_pickups.rate_up이 비어있을 때
 RARITY_START_STAR = {"신화": 5, "전설": 4, "영웅": 3, "희귀": 2, "일반": 1}  # 모집 시 시작 성(星)
 ADMIN_USER_ID = 1  # ranking.py/pvp.py와 동일한 관리자 계정 - is_hidden 캐릭터(예: 이의진)도 테스트로 뽑을 수 있는 예외
 KST = timezone(timedelta(hours=9))
+
+# ── 아카이브 모집 ────────────────────────────────────────────────────────────
+# 유저마다 1~2성 캐릭터 중 하나를 직접 골라 그 캐릭터만 확률업을 받는 개인 전용 배너.
+# "정확히 기존 확률의 3배" 요구사항은 위 DEFAULT_PICKUP_RATE_UP 주석의 공식(rate_up = 2/(N-1))을
+# 그대로 재사용한다 - 그 공식 자체가 "이 등급 안에서 완전 균등 확률(1/N)의 3배"를 만드는 rate_up
+# 값이다(gacha-partial.html의 기존 안내문 "픽업모집은 확률 3배입니다"와 동일한 근거 - 검증:
+# rate_up + (1-rate_up)/N = 3/N 을 풀면 rate_up = 2/(N-1)).
+ARCHIVE_BANNER_TYPE = "archive"
+ARCHIVE_POOL_RARITIES = ["일반", "희귀"]  # 1~2성
+ARCHIVE_POINT_COST = 10  # 모집 포인트로 직접 교환 시 필요한 비용 - 기존 픽업(10~200)보다 낮은 등급이라 저렴하게 책정
 
 RARITY_TIER_PROBABILITY = {"신화": 0.005, "전설": 0.01, "영웅": 0.09, "희귀": 0.30, "일반": 0.595}
 
@@ -177,14 +188,26 @@ def _sync_pickup_banner(db: Session):
             db.commit()
 
 
-def _get_active_pickup_rates(db: Session, banner_id: int | None) -> dict:
+def _archive_rate_up(rarity: str) -> float:
+    """아카이브 모집으로 고른 캐릭터가 "정확히 기존 확률의 3배"가 되도록 하는 rate_up 값.
+    DEFAULT_PICKUP_RATE_UP 주석의 공식(rate_up = 2/(N-1))을 그대로 계산해서 쓴다 - N은 그
+    캐릭터가 속한 등급 안의 (공개된) 캐릭터 수."""
+    tier = [c for c in CHARACTER_POOL[rarity] if not is_hidden_override(c["name"], c.get("is_hidden", False))]
+    n = len(tier)
+    return 2 / (n - 1) if n > 1 else 1.0
+
+
+def _get_active_pickup_rates(db: Session, banner_id: int | None, user_id: int) -> dict:
     """
-    banner_id로 지정된 그 배너가 '픽업' 타입이고 활성화되어 있을 때만,
+    banner_id로 지정된 그 배너가 '픽업'/'아카이브' 타입이고 활성화되어 있을 때만,
     그 배너의 픽업 캐릭터별 확률업 수치를 {캐릭터이름: rate_up} 형태로 돌려준다.
-    banner_id가 없거나, 그 배너가 픽업 타입이 아니면(예: 상시모집) 빈 딕셔너리를 돌려준다 -
-    즉 지금 사용자가 실제로 보고 있던 배너가 픽업일 때만 픽업 판정이 걸린다.
+    banner_id가 없거나, 그 배너가 해당 타입이 아니면(예: 상시모집) 빈 딕셔너리를 돌려준다 -
+    즉 지금 사용자가 실제로 보고 있던 배너가 픽업/아카이브일 때만 픽업 판정이 걸린다.
     캐릭터마다 rate_up 값이 달라도 되고(Supabase gacha_banner_pickups.rate_up에서 조정), 값이
     비어있으면(None) DEFAULT_PICKUP_RATE_UP을 쓴다.
+    user_id 없이(NULL) 심어진 행은 기존 "픽업모집"처럼 모든 유저에게 공통으로 적용되고, user_id가
+    있는 행(아카이브 모집)은 그 유저 자신에게만 적용된다 - 다른 유저의 아카이브 선택이 내 확률에
+    섞여 들어오면 안 되므로 반드시 이 조건으로 걸러야 한다.
     """
     if banner_id is None:
         return {}
@@ -194,7 +217,8 @@ def _get_active_pickup_rates(db: Session, banner_id: int | None) -> dict:
         .filter(
             GachaBanner.id == banner_id,
             GachaBanner.is_active == True,
-            GachaBanner.banner_type == "pickup",
+            GachaBanner.banner_type.in_(["pickup", ARCHIVE_BANNER_TYPE]),
+            or_(GachaBannerPickup.user_id == None, GachaBannerPickup.user_id == user_id),
         )
         .all()
     )
@@ -314,7 +338,7 @@ def pull_character(
     user.gold -= GACHA_COST
     user.gacha_points += GACHA_POINTS_PER_PULL
 
-    active_pickup_rates = _get_active_pickup_rates(db, banner_id)
+    active_pickup_rates = _get_active_pickup_rates(db, banner_id, user.id)
     result = _perform_one_pull(db, user, active_pickup_rates, include_hidden=(user.id == ADMIN_USER_ID))
     db.commit()
     new_achievements, new_characters = check_and_grant_achievements(db, user)
@@ -359,7 +383,7 @@ def pull_character_ten(
     user.gold -= total_cost
     user.gacha_points += GACHA_POINTS_PER_PULL * 10
 
-    active_pickup_rates = _get_active_pickup_rates(db, banner_id)
+    active_pickup_rates = _get_active_pickup_rates(db, banner_id, user.id)
     include_hidden = user.id == ADMIN_USER_ID
     results = [_perform_one_pull(db, user, active_pickup_rates, include_hidden) for _ in range(9)]
 
@@ -383,16 +407,27 @@ def pull_character_ten(
     }
 
 
+BANNER_TYPE_ORDER = {"pickup": 0, ARCHIVE_BANNER_TYPE: 1, "standard": 2}  # 확인된 요청 - 아카이브 모집을 픽업모집 바로 옆에 표시
+
+
 @router.get("/banners")
-def get_banners(db: Session = Depends(get_db)):
-    """지금 활성화된 가챠 배너들과, 각 배너의 픽업 캐릭터/필요 포인트/사진 정보를 돌려준다."""
+def get_banners(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """지금 활성화된 가챠 배너들과, 각 배너의 픽업 캐릭터/필요 포인트/사진 정보를 돌려준다.
+    아카이브 모집(개인별 픽업)이 섞여 있으므로 로그인한 유저 기준으로 자기 픽업만 보이게
+    걸러야 한다 - 그래서 이 엔드포인트는(예전엔 비로그인으로도 호출 가능했지만) 이제 로그인이
+    필요하다(프론트 gacha.js도 함께 인증 헤더를 붙이도록 수정됨)."""
     _sync_pickup_banner(db)
     banners = db.query(GachaBanner).filter(GachaBanner.is_active == True).all()
+    banners.sort(key=lambda b: BANNER_TYPE_ORDER.get(b.banner_type, 99))
 
     result = []
     for b in banners:
         pickups = []
         for p in b.pickups:
+            # 아카이브 모집(user_id가 있는 행)은 지금 요청한 본인 것만 내려준다 - 다른 유저가 어떤
+            # 캐릭터를 픽업으로 골랐는지 보이거나, 그 pickup_id로 대신 선택해버릴 수 있으면 안 된다.
+            if p.user_id is not None and p.user_id != user.id:
+                continue
             _, char_data = _find_character_in_pool(p.character_name)
             pickups.append({
                 "pickup_id": p.id,
@@ -419,13 +454,16 @@ RARITY_ORDER = ["신화", "전설", "영웅", "희귀", "일반"]
 
 
 @router.get("/rates")
-def get_gacha_rates(banner_id: int | None = None, db: Session = Depends(get_db)):
+def get_gacha_rates(
+    banner_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user),
+):
     """캐릭터별 실제 획득 확률(퍼센트, 소수점 5자리)을 계산해서 돌려준다 - 확률 안내(i버튼) 모달용.
-    banner_id가 활성 픽업 배너면 그 배너의 확률업이 반영된 실제 수치를, 아니면(없거나 상시 배너면)
-    등급 내 완전 균등 확률을 돌려준다. pull_character와 완전히 같은 확률 모델
-    (RARITY_TIER_PROBABILITY + _pick_character_with_pickup의 순차 시도 규칙)을 그대로 계산에 반영한다."""
+    banner_id가 활성 픽업/아카이브 배너면 그 배너의 확률업이 반영된 실제 수치를, 아니면(없거나 상시
+    배너면) 등급 내 완전 균등 확률을 돌려준다. pull_character와 완전히 같은 확률 모델
+    (RARITY_TIER_PROBABILITY + _pick_character_with_pickup의 순차 시도 규칙)을 그대로 계산에 반영한다.
+    아카이브는 유저별로 확률이 다르므로 로그인이 필요하다."""
     _sync_pickup_banner(db)
-    active_pickup_rates = _get_active_pickup_rates(db, banner_id)
+    active_pickup_rates = _get_active_pickup_rates(db, banner_id, user.id)
 
     rarities = []
     for rarity in RARITY_ORDER:
@@ -487,7 +525,10 @@ def select_pickup_character(
     """모집 포인트를 소모해서 픽업 캐릭터를 직접 획득한다 (뽑기가 아니라 확정 지급)."""
     _sync_pickup_banner(db)
     pickup = db.query(GachaBannerPickup).filter(GachaBannerPickup.id == req.pickup_id).first()
-    if not pickup:
+    # user_id가 있는 행(아카이브 모집 개인 픽업)인데 지금 요청한 유저 것이 아니면 존재하지 않는 것과
+    # 동일하게 취급한다 - 안 그러면 다른 유저의 pickup_id를 추측해서 그 사람의 아카이브 캐릭터를
+    # 대신 획득해버릴 수 있다(확인된 취약점 - 아카이브 모집을 이 테이블에 얹으면서 새로 생긴 구멍).
+    if not pickup or (pickup.user_id is not None and pickup.user_id != user.id):
         raise HTTPException(status_code=404, detail="존재하지 않는 픽업 항목입니다.")
 
     # pull_character와 동일한 이유로 포인트 체크/차감 사이 경합을 막는다.
@@ -547,4 +588,70 @@ def select_pickup_character(
         "left_points": user.gacha_points,
         "new_achievements": new_achievements,
         "new_characters": new_characters
+    }
+
+
+@router.get("/archive/pool")
+def get_archive_pool():
+    """아카이브 모집의 픽업 대상 후보 전체(1~2성) - 생도(캐릭터) 선택 화면용. 유저별로 다르지 않은
+    정적 카탈로그라 로그인 없이도 내려줄 수 있다."""
+    pool = []
+    for rarity in ARCHIVE_POOL_RARITIES:
+        for c in CHARACTER_POOL[rarity]:
+            if is_hidden_override(c["name"], c.get("is_hidden", False)):
+                continue
+            pool.append({
+                "name": c["name"],
+                "rarity": rarity,
+                "description": c.get("description", ""),
+                "outfit": c["outfits"]["기본"],
+            })
+    return pool
+
+
+@router.post("/archive/pick")
+def pick_archive_character(
+    req: ArchivePickRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """아카이브 모집의 확률업 대상을 고르거나 바꾼다 - 무료이고 언제든 다시 호출해서 바꿀 수 있다
+    (확인된 요청). 1~2성 캐릭터만 대상으로 허용한다."""
+    rarity, picked_character = _find_character_in_pool(req.character_name)
+    if not picked_character or rarity not in ARCHIVE_POOL_RARITIES:
+        raise HTTPException(status_code=400, detail="아카이브 모집 대상으로 선택할 수 없는 인물입니다.")
+
+    banner = db.query(GachaBanner).filter(GachaBanner.banner_type == ARCHIVE_BANNER_TYPE).first()
+    if not banner:
+        raise HTTPException(status_code=500, detail="아카이브 모집 배너가 아직 준비되지 않았습니다.")
+
+    # 동시에 두 번 바꿔도(연타 등) 행이 중복 생기지 않도록 이 유저 행을 잠근다.
+    user = db.query(User).filter(User.id == user.id).with_for_update().first()
+    rate_up = _archive_rate_up(rarity)
+
+    existing = db.query(GachaBannerPickup).filter(
+        GachaBannerPickup.banner_id == banner.id,
+        GachaBannerPickup.user_id == user.id,
+    ).first()
+    if existing:
+        existing.character_name = req.character_name
+        existing.rate_up = rate_up
+        existing.point_cost = ARCHIVE_POINT_COST
+    else:
+        db.add(GachaBannerPickup(
+            banner_id=banner.id,
+            user_id=user.id,
+            character_name=req.character_name,
+            point_cost=ARCHIVE_POINT_COST,
+            rate_up=rate_up,
+        ))
+    db.commit()
+
+    return {
+        "character_name": req.character_name,
+        "rarity": rarity,
+        "rate_up": rate_up,
+        "point_cost": ARCHIVE_POINT_COST,
+        "description": picked_character["description"],
+        "outfit": picked_character["outfits"]["기본"],
     }
