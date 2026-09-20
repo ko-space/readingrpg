@@ -233,8 +233,13 @@
                 btn.disabled = false;
                 return;
             }
-            await loadBanners(); // loadBanners()는 항상 첫 배너를 다시 선택하므로,
-            selectBanner(currentBannerId); // 아카이브 배너로 되돌아와 방금 바뀐 선택을 화면에 반영한다.
+            // loadBanners()는 내부에서 항상 첫 배너(픽업모집)를 selectBanner로 다시 선택하면서
+            // currentBannerId 자체를 그쪽으로 덮어써버린다 - 그 호출이 끝난 뒤에 currentBannerId를
+            // 읽으면 이미 픽업모집으로 바뀌어 있어서, 아카이브를 고르고 나면 화면이 픽업모집으로
+            // 튕겨나가는 버그가 있었다(확인된 신고). 덮어써지기 전(지금)의 값을 먼저 저장해둔다.
+            const archiveBannerId = currentBannerId;
+            await loadBanners();
+            selectBanner(archiveBannerId); // 저장해둔 아카이브 배너로 다시 돌아와 방금 바뀐 선택을 반영한다.
             contentEl.querySelector("#gacha-archive-picker-view").hidden = true;
             contentEl.querySelector("#gacha-main-view").hidden = false;
         } catch (err) {
