@@ -407,7 +407,7 @@ def pull_character_ten(
     }
 
 
-BANNER_TYPE_ORDER = {"pickup": 0, ARCHIVE_BANNER_TYPE: 1, "standard": 2}  # 확인된 요청 - 아카이브 모집을 픽업모집 바로 옆에 표시
+BANNER_TYPE_ORDER = {"pickup": 0, "standard": 1, ARCHIVE_BANNER_TYPE: 2}  # 확인된 요청 - 픽업모집, 상시모집, 아카이브모집 순서
 
 
 @router.get("/banners")
