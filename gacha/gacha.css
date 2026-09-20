@@ -18,10 +18,11 @@
 
 #modal-gacha .modal-box {
     /* 배너 캐러셀이 3장(픽업/아카이브/상시)을 가로로 나열하는데, 좁은 모달 안에서 셋이 폭을 나눠
-       가지다 보니 각 배너 썸네일이 작고 object-fit:cover가 좌우를 잘라내 이미지 원본이 온전히
-       안 보였다(확인된 요청 - 배너 이미지 가로폭이 전부 들어오게 해달라). 아래 .banner-thumb의
-       object-fit 제거(이미지 원본 비율 그대로 높이 결정)와 함께, 모달 자체도 넉넉하게 늘려서
-       각 배너가 실제로 알아볼 수 있는 크기로 온전히 보이게 한다. */
+       가지면 각 배너 썸네일의 가로폭이 너무 작아 이미지가 잘 안 보였다(확인된 요청 - 배너 이미지
+       가로폭이 전부 들어오게 해달라). 모달을 넉넉하게 늘려 각 배너가 실제로 알아볼 수 있는
+       크기로 보이게 한다 - 세로는 기존처럼 짧게 유지하고 object-fit:cover로 살짝 잘리는 건
+       허용한다(확인된 요청 - 가로만 넓어지면 되고 세로까지 늘어날 필요는 없음).
+    */
     max-width: 920px;
     animation: gold-flicker 2.4s ease-in-out infinite;
 }
@@ -154,7 +155,7 @@
 .banner-thumb {
     flex: 1;
     position: relative;
-    min-height: 90px; /* 이미지 로드 실패(gacha.js의 img.onerror) 시에도 클릭 영역이 0으로 무너지지 않게 하는 최소 높이 */
+    height: 100px; /* 가로가 넓어진 만큼 세로는 오히려 기존(130px)보다 짧게 - 세로는 살짝 잘려도 됨(확인된 요청) */
     border-radius: 10px;
     border: 2px solid var(--panel-border, #c9a86a);
     background: linear-gradient(160deg, #dfe9f5, #b7c9e0);
@@ -164,9 +165,9 @@
 }
 
 .banner-thumb img {
-    display: block;
     width: 100%;
-    height: auto; /* object-fit:cover 대신 원본 비율 그대로 - 이미지가 잘리지 않고 가로폭 전부가 보인다 */
+    height: 100%;
+    object-fit: cover;
 }
 
 .banner-thumb.active {
@@ -272,15 +273,64 @@
     color: #6b5b3e;
 }
 
-.gacha-archive-rarity-badge {
-    font-size: 11px;
-    font-weight: bold;
-    color: #6b5b3e;
-    opacity: 0.8;
-}
-
 .gacha-archive-picker-hint {
     margin-bottom: 10px;
+}
+
+/* ── 아카이브 대상 선택: 프로필 사진 + 이름만 나열하는 그리드(기존 포인트 획득 카드와는 다른 UI) ── */
+.gacha-archive-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: 14px;
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+.gacha-archive-pick-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+}
+
+.gacha-archive-pick-photo-frame {
+    width: 64px;
+    height: 64px;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 2px solid var(--panel-border, #c9a86a);
+    background: #ddd;
+}
+
+.gacha-archive-pick-photo {
+    width: 100%;
+    height: 100%;
+}
+
+.gacha-archive-pick-name {
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--text-dark, #4a3c2a);
+    text-align: center;
+    line-height: 1.2;
+}
+
+.gacha-archive-pick-item:hover .gacha-archive-pick-photo-frame {
+    box-shadow: 0 0 10px rgba(232, 184, 75, 0.6);
+}
+
+.gacha-archive-pick-item.is-current .gacha-archive-pick-photo-frame {
+    border-color: #ffd76a;
+    box-shadow: 0 0 10px rgba(255, 215, 106, 0.85);
+}
+
+.gacha-archive-pick-item:disabled {
+    opacity: 0.6;
+    cursor: default;
 }
 
 /* ── 모집 버튼: 1회(초록)/10회(빨강) 나란히, 다른 상자들과 전체 너비를 맞춤 ── */

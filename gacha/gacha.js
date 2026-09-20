@@ -192,6 +192,9 @@
         renderArchivePickerList(pool, listEl);
     }
 
+    // 아카이브 대상 선택 화면은 기존 "모집 포인트로 획득" 카드(설명/버튼이 딸린 큰 카드)와 다르게,
+    // 프로필 사진 + 이름만 나열한다(확인된 요청) - 후보가 1~2성 전체(10명 안팎)라 한눈에 훑어보기
+    // 좋은 그리드 형태가 더 어울린다. 타일 전체가 클릭 영역이라 별도 버튼이 없다.
     function renderArchivePickerList(pool, listEl) {
         listEl.innerHTML = "";
         if (!pool || pool.length === 0) {
@@ -200,26 +203,19 @@
         }
         pool.forEach((c) => {
             const isCurrent = currentArchivePickup && currentArchivePickup.character_name === c.name;
-            const card = document.createElement("div");
-            card.className = "gacha-pickup-card";
-            card.innerHTML = `
-                <div class="gacha-pickup-top">
-                    <div class="gacha-pickup-photo-frame">
-                        <img class="gacha-pickup-photo" src="${c.outfit ? OUTFIT_IMAGE_BASE + c.outfit + '/idle.webp' : ''}"
-                             alt="${c.name}" onerror="this.removeAttribute('src');this.style.background='#ddd';">
-                    </div>
-                    <div class="gacha-pickup-info">
-                        <div class="gacha-pickup-name">${c.name} <span class="gacha-archive-rarity-badge">${c.rarity}</span></div>
-                        <div class="gacha-pickup-desc">${c.description || ""}</div>
-                    </div>
+            const item = document.createElement("button");
+            item.type = "button";
+            item.className = `gacha-archive-pick-item${isCurrent ? " is-current" : ""}`;
+            item.innerHTML = `
+                <div class="gacha-archive-pick-photo-frame">
+                    <img class="gacha-archive-pick-photo" src="${c.outfit ? OUTFIT_IMAGE_BASE + c.outfit + '/idle.webp' : ''}"
+                         alt="${c.name}" onerror="this.removeAttribute('src');this.style.background='#ddd';">
                 </div>
-                <button class="gacha-pickup-recruit-btn"${isCurrent ? " disabled" : ""}>${isCurrent ? "선택됨" : "이 인물로 확률업"}</button>
+                <div class="gacha-archive-pick-name">${c.name}</div>
             `;
-            applyGachaPhotoCrop(card.querySelector(".gacha-pickup-photo"), c.outfit);
-            card.querySelector(".gacha-pickup-recruit-btn").addEventListener("click", (event) => {
-                pickArchiveCharacter(c.name, event.currentTarget);
-            });
-            listEl.appendChild(card);
+            applyGachaPhotoCrop(item.querySelector(".gacha-archive-pick-photo"), c.outfit);
+            item.addEventListener("click", () => pickArchiveCharacter(c.name, item));
+            listEl.appendChild(item);
         });
     }
 
