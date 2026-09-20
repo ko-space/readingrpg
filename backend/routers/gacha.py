@@ -105,6 +105,53 @@ PICKUP_SCHEDULE = [
         "image_file": "pickup-banner.webp",
         "characters": [{"character_name": "송주헌", "point_cost": 20, "rate_up": 0.99}],
     },
+    # 9/21 21:20부터 3일 간격 순차 픽업(확인된 요청) - point_cost는 각 캐릭터의 등급별 기존 관례를
+    # 그대로 따른다(영웅★3=30, 전설★4=100, 신화★5=200 - 배/돌직구 이도협, 김국회, 신 각각 참고).
+    # rate_up은 DEFAULT_PICKUP_RATE_UP 주석의 공식(rate_up = 2/(N-1), "정확히 3배" 공식)을 그대로
+    # 계산해서 썼다 - N은 지금 시점(is_hidden 제외) 그 등급의 실제 캐릭터 수: 영웅/전설은 5명이라
+    # 2/4=0.5, 신화는 김현재가 아직 비공개라 4명이라 2/3=0.6667(신과 동일한 신화 픽업 선례와 일치).
+    {
+        "start_at": datetime(2026, 9, 21, 21, 20, tzinfo=KST),
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner-batter.webp",
+        "characters": [{"character_name": "불빠따 김어진", "point_cost": 30, "rate_up": 0.5}],
+    },
+    {
+        "start_at": datetime(2026, 9, 24, 21, 20, tzinfo=KST),
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner-hero.webp",
+        "characters": [{"character_name": "이영웅", "point_cost": 30, "rate_up": 0.5}],
+    },
+    {
+        "start_at": datetime(2026, 9, 27, 21, 20, tzinfo=KST),
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner-ceo.webp",
+        "characters": [{"character_name": "김남옥", "point_cost": 100, "rate_up": 0.5}],
+    },
+    {
+        "start_at": datetime(2026, 9, 30, 21, 20, tzinfo=KST),
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner-mage.webp",
+        "characters": [{"character_name": "이종복", "point_cost": 100, "rate_up": 0.5}],
+    },
+    {
+        "start_at": datetime(2026, 10, 3, 21, 20, tzinfo=KST),
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner-sj.webp",
+        "characters": [{"character_name": "임소정", "point_cost": 100, "rate_up": 0.5}],
+    },
+    {
+        "start_at": datetime(2026, 10, 6, 21, 20, tzinfo=KST),
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner-photographer.webp",
+        "characters": [{"character_name": "윤대웅", "point_cost": 200, "rate_up": 0.6667}],
+    },
+    {
+        "start_at": datetime(2026, 10, 9, 21, 20, tzinfo=KST),
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner-tutor.webp",
+        "characters": [{"character_name": "윤영준", "point_cost": 200, "rate_up": 0.6667}],
+    },
 ]
 
 
