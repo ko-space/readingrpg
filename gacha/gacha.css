@@ -17,7 +17,12 @@
 }
 
 #modal-gacha .modal-box {
-    max-width: 640px;
+    /* 배너 캐러셀이 3장(픽업/아카이브/상시)을 가로로 나열하는데, 좁은 모달 안에서 셋이 폭을 나눠
+       가지다 보니 각 배너 썸네일이 작고 object-fit:cover가 좌우를 잘라내 이미지 원본이 온전히
+       안 보였다(확인된 요청 - 배너 이미지 가로폭이 전부 들어오게 해달라). 아래 .banner-thumb의
+       object-fit 제거(이미지 원본 비율 그대로 높이 결정)와 함께, 모달 자체도 넉넉하게 늘려서
+       각 배너가 실제로 알아볼 수 있는 크기로 온전히 보이게 한다. */
+    max-width: 920px;
     animation: gold-flicker 2.4s ease-in-out infinite;
 }
 
@@ -149,7 +154,7 @@
 .banner-thumb {
     flex: 1;
     position: relative;
-    height: 130px;
+    min-height: 90px; /* 이미지 로드 실패(gacha.js의 img.onerror) 시에도 클릭 영역이 0으로 무너지지 않게 하는 최소 높이 */
     border-radius: 10px;
     border: 2px solid var(--panel-border, #c9a86a);
     background: linear-gradient(160deg, #dfe9f5, #b7c9e0);
@@ -159,9 +164,9 @@
 }
 
 .banner-thumb img {
+    display: block;
     width: 100%;
-    height: 100%;
-    object-fit: cover;
+    height: auto; /* object-fit:cover 대신 원본 비율 그대로 - 이미지가 잘리지 않고 가로폭 전부가 보인다 */
 }
 
 .banner-thumb.active {
