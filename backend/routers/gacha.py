@@ -32,6 +32,7 @@ KST = timezone(timedelta(hours=9))
 ARCHIVE_BANNER_TYPE = "archive"
 ARCHIVE_POOL_RARITIES = ["일반", "희귀"]  # 1~2성
 ARCHIVE_POINT_COST_BY_RARITY = {"일반": 10, "희귀": 20}  # 모집 포인트로 직접 교환 시 필요한 비용(확인된 요청)
+ARCHIVE_RARITY_PROBABILITY = {"일반": 0.7, "희귀": 0.3}  # 아카이브 모집은 이 두 등급만 나온다(확인된 요청, 7:3)
 
 RARITY_TIER_PROBABILITY = {"신화": 0.005, "전설": 0.01, "영웅": 0.09, "희귀": 0.30, "일반": 0.595}
 
@@ -243,18 +244,35 @@ def _pick_character_with_pickup(rarity: str, active_pickup_rates: dict, include_
     return random.choice(tier)
 
 
-def _pick_rarity() -> str:
+def _resolve_rarity_probability(db: Session, banner_id: int | None) -> dict | None:
+    """지금 뽑고 있는 배너가 아카이브 모집이면 그 전용 등급 확률표(일반:희귀 = 7:3, 그 외 등급은
+    아예 후보에서 빠짐)를 돌려주고, 아니면(픽업/상시/미지정) None을 돌려줘 기존 전체 등급표를
+    그대로 쓰게 한다."""
+    if banner_id is None:
+        return None
+    banner = db.query(GachaBanner).filter(GachaBanner.id == banner_id).first()
+    if banner and banner.banner_type == ARCHIVE_BANNER_TYPE:
+        return ARCHIVE_RARITY_PROBABILITY
+    return None
+
+
+def _pick_rarity(rarity_probability: dict | None = None) -> str:
+    """등급 추첨표를 받아 그 확률대로 등급 하나를 뽑는다. rarity_probability를 안 넘기면 기존처럼
+    전체 등급표(RARITY_TIER_PROBABILITY)를 쓰고, 넘기면(아카이브 모집처럼 일부 등급만 나오는
+    배너) 그 표만으로 추첨한다 - 표에 없는 등급은 애초에 후보가 아니므로 나올 수 없다."""
+    table = rarity_probability or RARITY_TIER_PROBABILITY
     rand_val = random.random()
     cumulative = 0.0
-    for tier_name, tier_prob in RARITY_TIER_PROBABILITY.items():
+    for tier_name, tier_prob in table.items():
         cumulative += tier_prob
         if rand_val < cumulative:
             return tier_name
-    return "일반"  # 부동소수점 오차 대비 fallback
+    return list(table.keys())[-1]  # 부동소수점 오차 대비 fallback - 표의 마지막 등급
 
 
 def _perform_one_pull(
-    db: Session, user: User, active_pickup_rates: dict, include_hidden: bool, forced_rarity: str | None = None
+    db: Session, user: User, active_pickup_rates: dict, include_hidden: bool, forced_rarity: str | None = None,
+    rarity_probability: dict | None = None,
 ) -> dict:
     """등급/캐릭터 추첨부터 DB 반영(Character/ActivityLog/GachaPullLog)까지 한 번의 뽑기 전체를 수행하고,
     그 결과를 프론트 획득 연출이 바로 쓸 수 있는 dict로 돌려준다. 골드 차감/포인트 적립은 호출부 책임.
@@ -273,8 +291,9 @@ def _perform_one_pull(
     flush해뒀으므로) 항상 최신 상태를 본다.
 
     forced_rarity: 넘기면 _pick_rarity()로 등급을 뽑는 대신 이 등급으로 확정한다(10연차 마지막 뽑기의
-    "전부 일반이면 희귀 보장" 처리 전용 - pull_character_ten 참고). None이면 기존과 동일하게 확률 추첨."""
-    rarity = forced_rarity if forced_rarity is not None else _pick_rarity()
+    "전부 일반이면 희귀 보장" 처리 전용 - pull_character_ten 참고). None이면 기존과 동일하게 확률 추첨.
+    rarity_probability: 아카이브 모집처럼 등급 후보 자체가 제한된 배너면 그 전용 확률표를 넘긴다."""
+    rarity = forced_rarity if forced_rarity is not None else _pick_rarity(rarity_probability)
     picked_character = _pick_character_with_pickup(rarity, active_pickup_rates, include_hidden=include_hidden)
 
     owned_names = {row[0] for row in db.query(Character.name).filter(Character.user_id == user.id).all()}
@@ -339,7 +358,10 @@ def pull_character(
     user.gacha_points += GACHA_POINTS_PER_PULL
 
     active_pickup_rates = _get_active_pickup_rates(db, banner_id, user.id)
-    result = _perform_one_pull(db, user, active_pickup_rates, include_hidden=(user.id == ADMIN_USER_ID))
+    rarity_probability = _resolve_rarity_probability(db, banner_id)
+    result = _perform_one_pull(
+        db, user, active_pickup_rates, include_hidden=(user.id == ADMIN_USER_ID), rarity_probability=rarity_probability,
+    )
     db.commit()
     new_achievements, new_characters = check_and_grant_achievements(db, user)
 
@@ -384,16 +406,23 @@ def pull_character_ten(
     user.gacha_points += GACHA_POINTS_PER_PULL * 10
 
     active_pickup_rates = _get_active_pickup_rates(db, banner_id, user.id)
+    rarity_probability = _resolve_rarity_probability(db, banner_id)
     include_hidden = user.id == ADMIN_USER_ID
-    results = [_perform_one_pull(db, user, active_pickup_rates, include_hidden) for _ in range(9)]
+    results = [
+        _perform_one_pull(db, user, active_pickup_rates, include_hidden, rarity_probability=rarity_probability)
+        for _ in range(9)
+    ]
 
     # 10연차 최소 보장: 앞선 9번 + 이번 마지막 판이 전부 "일반"이면, 마지막 판만 "희귀"로 강제한다.
     # 등급을 먼저 미리 뽑아보고(_pick_rarity) 판정하므로, 전부 일반이 아닌 정상적인 경우엔 이 등급이
-    # 그대로 forced_rarity로 넘어가 확률 추첨과 완전히 동일하게 동작한다(이중 추첨이 아님).
-    last_natural_rarity = _pick_rarity()
+    # 그대로 forced_rarity로 넘어가 확률 추첨과 완전히 동일하게 동작한다(이중 추첨이 아님). 아카이브
+    # 모집도 이 등급표 안에 "일반"이 있으므로 동일한 보장 로직이 그대로 통한다.
+    last_natural_rarity = _pick_rarity(rarity_probability)
     all_normal = last_natural_rarity == "일반" and all(r["character"]["rarity"] == "일반" for r in results)
     last_rarity = "희귀" if all_normal else last_natural_rarity
-    results.append(_perform_one_pull(db, user, active_pickup_rates, include_hidden, forced_rarity=last_rarity))
+    results.append(_perform_one_pull(
+        db, user, active_pickup_rates, include_hidden, forced_rarity=last_rarity, rarity_probability=rarity_probability,
+    ))
     db.commit()
 
     new_achievements, new_characters = check_and_grant_achievements(db, user)
@@ -464,11 +493,14 @@ def get_gacha_rates(
     아카이브는 유저별로 확률이 다르므로 로그인이 필요하다."""
     _sync_pickup_banner(db)
     active_pickup_rates = _get_active_pickup_rates(db, banner_id, user.id)
+    # 아카이브 모집은 일반/희귀 두 등급만 실제로 나온다(7:3) - 그 외 등급은 확률표에 아예 없으므로
+    # 0%로 표시된다(pull_character와 동일한 등급표를 그대로 재사용해 표시-실제 확률 불일치를 막는다).
+    rarity_probability = _resolve_rarity_probability(db, banner_id) or RARITY_TIER_PROBABILITY
 
     rarities = []
     for rarity in RARITY_ORDER:
         tier = [c for c in CHARACTER_POOL[rarity] if not is_hidden_override(c["name"], c.get("is_hidden", False))]
-        tier_prob = RARITY_TIER_PROBABILITY[rarity]
+        tier_prob = rarity_probability.get(rarity, 0.0)
         n = len(tier)
 
         # 이 등급 안의 픽업 캐릭터들이 순서대로 시도해서 전부 실패할 확률(곱) - 실패하면 균등 추첨으로 폴백.
