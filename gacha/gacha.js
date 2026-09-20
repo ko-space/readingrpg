@@ -257,7 +257,7 @@
 
     function formatPeriodText(banner) {
         if (banner.banner_type === "standard") return "언제든지 환영! 상시대기 하고 있는 상시 모집을 통해 당신만의 운명을 시험해 봐요!";
-        if (banner.banner_type === "archive") return "언제든지 모집 가능! 확률업 대상 인물을 직접 골라 언제든지 바꿀 수 있어요.";
+        if (banner.banner_type === "archive") return "1~2성 인물만 모집됩니다(일반 70% · 희귀 30%). 확률업 대상 인물을 직접 골라 언제든지 바꿀 수 있어요.";
         if (!banner.start_date || !banner.end_date) return "기간 미정";
 
         // 백엔드 DateTime은 시간대 표시가 없는 UTC 문자열이라, 그대로 new Date()에 넣으면 "보는 사람의
@@ -439,7 +439,10 @@
             listEl.innerHTML = "";
             RARITY_ORDER.forEach((rarityName) => {
                 const group = data.rarities.find((r) => r.rarity === rarityName);
-                if (!group) return;
+                // 아카이브 모집처럼 이 배너에서 아예 안 나오는 등급(확률 0%)은 목록에서 완전히
+                // 뺀다(확인된 요청) - "0.00000%"로 계속 나열되면 어차피 못 뽑는 등급까지 눈에 띄어
+                // 오히려 헷갈린다.
+                if (!group || group.tier_probability_percent === 0) return;
 
                 const groupEl = document.createElement("div");
                 groupEl.className = "gacha-rate-group";
