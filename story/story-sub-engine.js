@@ -170,12 +170,25 @@ function unlockChapterOnServer(chapterId) {
 
 // unlockChapterOnServer(티켓을 써서 "입장 가능"해진 시점, 아직 한 줄도 안 읽었을 수 있음)와는
 // 별개로, 그 화를 실제로 끝까지 읽었을 때만("N화 완료" 도전과제 판정용) 남기는 기록.
-function logChapterCompleteOnServer(chapterId) {
-    return fetch(`${API_BASE_URL}/story/log-chapter-complete`, {
-        method: "POST",
-        headers: authHeaders(true),
-        body: JSON.stringify({ story_id: STORY_ID, cg_id: chapterId }),
-    }).catch(() => {});
+// 예전엔 실패해도 그냥 조용히 삼켰는데(.catch(()=>{})만 있고 res.ok도 안 봄), 이 신호를
+// 한 번 놓치면(일시적 네트워크 오류 등) 도전과제가 영영 안 채워져서 "분명 다 봤는데 안
+// 깨진다"는 신고로 이어질 수 있었다(확인된 버그) - 실패 시 짧게 두 번까지 재시도하고, 그래도
+// 안 되면 최소한 콘솔에 남겨서 원인을 알 수 있게 한다.
+async function logChapterCompleteOnServer(chapterId, attempt = 1) {
+    try {
+        const res = await fetch(`${API_BASE_URL}/story/log-chapter-complete`, {
+            method: "POST",
+            headers: authHeaders(true),
+            body: JSON.stringify({ story_id: STORY_ID, cg_id: chapterId }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+        if (attempt < 3) {
+            await new Promise((resolve) => setTimeout(resolve, 800));
+            return logChapterCompleteOnServer(chapterId, attempt + 1);
+        }
+        console.error(`화 완료 기록에 실패했어요(${chapterId}) - 도전과제가 안 채워질 수 있습니다:`, err);
+    }
 }
 
 /* =========================================================
