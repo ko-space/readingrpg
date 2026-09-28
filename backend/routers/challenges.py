@@ -40,7 +40,8 @@ def list_challenges(db: Session = Depends(get_db), user: User = Depends(get_curr
         row.challenge_id
         for row in db.query(UserChallengeClaim).filter(UserChallengeClaim.user_id == user.id).all()
     }
-    challenges = db.query(Challenge).order_by(Challenge.id.asc()).all()
+    # sort_order(seed.py의 CHALLENGES 리스트 순서)를 우선하고, 값이 같을 때만 id로 안정적인 순서를 보장한다.
+    challenges = db.query(Challenge).order_by(Challenge.sort_order.asc(), Challenge.id.asc()).all()
     return [_serialize(db, user, c, claimed_ids) for c in challenges]
 
 
@@ -115,7 +116,7 @@ def claim_all_challenges(db: Session = Depends(get_db), user: User = Depends(get
 
     claimed_results = []
     all_new_characters = []
-    for challenge in db.query(Challenge).order_by(Challenge.id.asc()).all():
+    for challenge in db.query(Challenge).order_by(Challenge.sort_order.asc(), Challenge.id.asc()).all():
         if challenge.id in claimed_ids:
             continue
         progress = compute_progress(db, user, challenge)

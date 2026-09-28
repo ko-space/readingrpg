@@ -24,6 +24,8 @@ NEW_COLUMNS = [
     ("users", "pvp_defense_supporter_id", "INTEGER"),
     # 아카이브 모집 - 유저별 개인 픽업 선택(NULL이면 기존처럼 전체 공용 픽업)
     ("gacha_banner_pickups", "user_id", "INTEGER"),
+    # 도전과제 화면 표시 순서를 seed.py 리스트 순서와 일치시키기 위한 컬럼(기존엔 Challenge.id 순)
+    ("challenges", "sort_order", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 

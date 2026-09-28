@@ -334,6 +334,8 @@ class Challenge(Base):
     reward_exp = Column(Integer, default=0)
     reward_items = Column(JSON, nullable=True)  # Achievement.reward_items와 동일 스키마
 
+    sort_order = Column(Integer, default=0)  # seed.py의 CHALLENGES 리스트 순서 - 화면 표시 순서로 그대로 씀
+
 
 class UserChallengeClaim(Base):
     """"이번 도전과제를 이미 받았는지"만 영구히 저장한다(주간 퀘스트의 UserQuestClaim과 달리 기간이

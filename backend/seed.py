@@ -2029,7 +2029,11 @@ def seed_challenges():
         existing_rows = {row.name: row for row in db.query(Challenge).all()}
         changed = False
 
-        for c in CHALLENGES:
+        # sort_order는 CHALLENGES 리스트에 적힌 순서를 그대로 따른다(확인된 요청 - 예전엔 화면에
+        # Challenge.id 순으로 나열해서, 나중에 이 리스트 중간에 새로 끼워 넣은 항목도 DB에는 맨 뒤에
+        # 추가된 행이라 화면에서는 엉뚱하게 맨 뒤로 밀려 보였다). 리스트 순서가 바뀌면 재시딩 때마다
+        # 기존 행도 다시 맞춰준다.
+        for index, c in enumerate(CHALLENGES):
             row = existing_rows.get(c["name"])
             if row:
                 row.description = c.get("description", "")
@@ -2039,6 +2043,7 @@ def seed_challenges():
                 row.reward_gold = c.get("reward_gold", 0)
                 row.reward_exp = c.get("reward_exp", 0)
                 row.reward_items = c.get("reward_items")
+                row.sort_order = index
             else:
                 db.add(Challenge(
                     name=c["name"],
@@ -2049,6 +2054,7 @@ def seed_challenges():
                     reward_gold=c.get("reward_gold", 0),
                     reward_exp=c.get("reward_exp", 0),
                     reward_items=c.get("reward_items"),
+                    sort_order=index,
                 ))
             changed = True
 
