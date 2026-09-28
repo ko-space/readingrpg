@@ -710,9 +710,12 @@ ACHIEVEMENTS = [
     {
         "name": "신체 파괴자",
         "description": "강화에서 3종류의 아이템을 사용하여 강화 파괴 3회",
-        "condition_type": "enhance_destroy_item_types",
-        "condition_value": 1,
-        "condition_params": {"item_types": 3, "destroy_count": 3},
+        # 한 번의 강화 시도에서 아이템 3종류(최대치)를 함께 써서 파괴 판정이 났을 때만
+        # characters.py가 "character_enhance_destroy_3items"를 남긴다(확인된 요청 - 이 셋을 따로
+        # 모아 합산하는 게 아니라, "한 판당" 조건을 만족한 횟수를 센다). 범용 activity_total 재사용.
+        "condition_type": "activity_total",
+        "condition_value": 3,
+        "condition_params": {"activity_type": "character_enhance_destroy_3items"},
         "reward_gold": 150,
     },
 ]

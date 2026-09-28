@@ -388,28 +388,6 @@ def compute_progress(db: Session, user, ach: Achievement) -> dict:
         current = db.query(func.sum(ReadingLog.earned_silver)).filter(
             ReadingLog.user_id == user.id,
         ).scalar() or 0
-    elif ctype == "enhance_destroy_item_types":
-        # "N종류의 아이템을 사용하여 강화 파괴 M회" - item_types_and_gold와 동일한 방식으로 두 조건을
-        # 각각 상한을 두고 더해서 진행도 바 하나로 합친다(진짜로 달성하려면 둘 다 채워야 함).
-        # 파괴 시 사용한 아이템 이름은 characters.py의 enhance_character가 "enh_destroy_item:{이름}"
-        # 형태로 남긴다(ActivityLog에 params 컬럼이 없어 문자열에 정보를 박아넣는 기존 관례와 동일).
-        item_type_target = params.get("item_types", 3)
-        destroy_target = params.get("destroy_count", 3)
-        target = item_type_target + destroy_target
-        distinct_items = (
-            db.query(ActivityLog.activity_type)
-            .filter(
-                ActivityLog.user_id == user.id,
-                ActivityLog.activity_type.like("enh_destroy_item:%"),
-            )
-            .distinct()
-            .count()
-        )
-        destroy_count = db.query(ActivityLog).filter(
-            ActivityLog.user_id == user.id, ActivityLog.activity_type == "character_enhance_destroy",
-        ).count()
-        current = min(distinct_items, item_type_target) + min(destroy_count, destroy_target)
-
     return {"current": max(0, min(current, target)), "target": target}
 
 

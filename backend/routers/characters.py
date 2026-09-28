@@ -812,10 +812,11 @@ def enhance_character(
             db.add(ActivityLog(user_id=locked_user.id, activity_type="enh_evt_03"))
     elif outcome == "destroy":
         db.add(ActivityLog(user_id=locked_user.id, activity_type="character_enhance_destroy"))
-        # 도전과제("N종류의 아이템을 사용하여 강화 파괴 M회") 판정용 - 이번 파괴에 실제로 쓴 아이템들의
-        # 이름을 각각 남긴다(achievements.py의 enhance_destroy_item_types가 종류 수를 센다).
-        for item in item_defs:
-            db.add(ActivityLog(user_id=locked_user.id, activity_type=f"enh_destroy_item:{item.name}"))
+        # 도전과제("신체 파괴자" - 3종류의 아이템을 "한 번에" 사용해서 강화 파괴 3회) 판정용 - 이번
+        # 한 판에서 실제로 쓴 아이템이 3종류(최대치, item_ids는 최대 3개까지만 허용됨) 전부였을
+        # 때만 남긴다. achievements.py는 이 이벤트가 몇 번 쌓였는지만 세면 된다(범용 activity_total).
+        if len(item_defs) >= 3:
+            db.add(ActivityLog(user_id=locked_user.id, activity_type="character_enhance_destroy_3items"))
     if selected_user_items:
         db.add(ActivityLog(user_id=locked_user.id, activity_type="item_use"))
 
