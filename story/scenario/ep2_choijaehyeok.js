@@ -859,7 +859,7 @@ const EP2_CRISIS_END_COLLECTOR_TAIL = [
   { type:'line', speaker:JAEHYUK, text:'어리석어도 상관없다.' },
   { type:'narration', text:'수많은 마법진이 하늘을 뒤덮었다.' },
   { type:'line', speaker:JAEHYUK, text:'우리는 함께 선택했으니까.', emphasis:true },
-  { type:'narration', text:'그리고 모두가 동시에 김현재를 향해 달려들었다.' },
+  { type:'narration', text:'그리고 모두가 동시에 그를 향해 달려들었다.' },
   { type:'narration', text:'이것은 한 사람의 저항이 아니었다.' },
   { type:'narration', text:'모두가 함께 선택한 마지막 저항이었다.' },
 ];
