@@ -676,6 +676,45 @@ ACHIEVEMENTS = [
         "condition_params": {"item_name": "스토리모드 티켓"},
         "reward_gold": 500,
     },
+    {
+        "name": "배신자",
+        "description": "배와 신을 모두 보유",
+        "condition_type": "own_characters",
+        "condition_value": 1,
+        "condition_params": {"names": ["배", "신"]},
+        "reward_gold": 1000,
+    },
+    {
+        "name": "광부",
+        "description": "마법사의 은광 또는 종말의 금광에서 공부 누적 100시간 달성",
+        "condition_type": "region_study_minutes",
+        "condition_value": 6000,
+        "condition_params": {"regions": ["마법사의 은광", "종말의 금광"]},
+        "reward_gold": 100,
+    },
+    {
+        "name": "은 고블린",
+        "description": "지역 입장에서 5000 실버 획득",
+        "condition_type": "region_silver_earned",
+        "condition_value": 5000,
+        "reward_gold": 100,
+    },
+    {
+        "name": "어울림 유배",
+        "description": "방임석, 김크장을 ★5 이상으로 보유",
+        "condition_type": "own_characters_star",
+        "condition_value": 5,
+        "condition_params": {"names": ["방임석", "김크장"], "star": 5},
+        "reward_gold": 500,
+    },
+    {
+        "name": "신체 파괴자",
+        "description": "강화에서 3종류의 아이템을 사용하여 강화 파괴 3회",
+        "condition_type": "enhance_destroy_item_types",
+        "condition_value": 1,
+        "condition_params": {"item_types": 3, "destroy_count": 3},
+        "reward_gold": 150,
+    },
 ]
 
 # 히든 업적의 실제 조건/보상은 위 공개 목록에 없다 - private_seed.py(있으면)에서만 병합한다.

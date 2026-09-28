@@ -371,6 +371,44 @@ def compute_progress(db: Session, user, ach: Achievement) -> dict:
             UserItem.user_id == user.id, UserItem.quantity > 0, Item.item_type == "enhancement",
         ).count()
         current = min(owned_item_types, item_type_target) + min(user.gold, gold_target)
+    elif ctype == "region_study_minutes":
+        # 특정 지역(들)에서의 누적 공부 시간(분) - study_minutes와 동일하게 "공부"는 과목+모의고사만
+        # 친다(독서는 별도 취급하는 기존 관례를 그대로 따름). dungeon_name은 ReadingLog에 기록 시점
+        # 스냅샷으로 남는 지역명이라 Region 테이블 조인 없이 바로 필터링할 수 있다.
+        regions = tuple(params.get("regions", []))
+        current = (db.query(func.sum(ReadingLog.reading_minutes)).filter(
+            ReadingLog.user_id == user.id,
+            ReadingLog.session_type.in_(["subject", "mock_exam"]),
+            ReadingLog.dungeon_name.in_(regions),
+        ).scalar() or 0) if regions else 0
+    elif ctype == "region_silver_earned":
+        # 지역 입장(학습 세션)으로 획득한 누적 실버 - User에는 lifetime_silver 같은 필드가 없어서
+        # ReadingLog.earned_silver를 직접 합산한다. 거래소 판매 등 다른 실버 획득 경로는 "지역
+        # 입장에서"라는 조건 취지상 일부러 제외한다.
+        current = db.query(func.sum(ReadingLog.earned_silver)).filter(
+            ReadingLog.user_id == user.id,
+        ).scalar() or 0
+    elif ctype == "enhance_destroy_item_types":
+        # "N종류의 아이템을 사용하여 강화 파괴 M회" - item_types_and_gold와 동일한 방식으로 두 조건을
+        # 각각 상한을 두고 더해서 진행도 바 하나로 합친다(진짜로 달성하려면 둘 다 채워야 함).
+        # 파괴 시 사용한 아이템 이름은 characters.py의 enhance_character가 "enh_destroy_item:{이름}"
+        # 형태로 남긴다(ActivityLog에 params 컬럼이 없어 문자열에 정보를 박아넣는 기존 관례와 동일).
+        item_type_target = params.get("item_types", 3)
+        destroy_target = params.get("destroy_count", 3)
+        target = item_type_target + destroy_target
+        distinct_items = (
+            db.query(ActivityLog.activity_type)
+            .filter(
+                ActivityLog.user_id == user.id,
+                ActivityLog.activity_type.like("enh_destroy_item:%"),
+            )
+            .distinct()
+            .count()
+        )
+        destroy_count = db.query(ActivityLog).filter(
+            ActivityLog.user_id == user.id, ActivityLog.activity_type == "character_enhance_destroy",
+        ).count()
+        current = min(distinct_items, item_type_target) + min(destroy_count, destroy_target)
 
     return {"current": max(0, min(current, target)), "target": target}
 
