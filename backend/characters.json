@@ -474,10 +474,10 @@
       "star_effects": {
         "1": "해당 성급의 별도 효과가 없습니다.",
         "2": "해당 성급의 별도 효과가 없습니다.",
-        "3": "폭주: 체력이 20% 이하 시 불사, 사용 중인 [Active] 즉시 해제 및 7초간 공격력 100% 증가, 공격속도 50% 증가, 받는 피해량 50% 감소 및 감소한 피해량 반사, CC기 면역 및 사거리 원거리 변경. (전투 당 1회)",
-        "4": "폭주: 체력이 20% 이하 시 불사, 사용 중인 [Active] 즉시 해제 및 7초간 공격력 100% 증가, 공격속도 50% 증가, 받는 피해량 50% 감소 및 감소한 피해량 반사, CC기 면역 및 사거리 원거리 변경. (전투 당 1회)",
-        "5": "폭주: 체력이 20% 이하 시 불사, 사용 중인 [Active] 즉시 해제 및 7초간 공격력 100% 증가, 공격속도 50% 증가, 받는 피해량 50% 감소 및 감소한 피해량 반사, CC기 면역 및 사거리 원거리 변경. (전투 당 1회)",
-        "6": "폭주: 체력이 40% 이하 시 불사, 사용 중인 [Active] 즉시 해제 및 7초간 공격력 150% 증가, 공격속도 75% 증가, 받는 피해량 75% 감소 및 감소한 피해량 반사, CC기 면역 및 사거리 원거리 변경. (전투 당 1회)"
+        "3": "폭주: 체력이 10% 이하 시 불사, 사용 중인 [Active] 즉시 해제 및 7초간 공격력 100% 증가, 공격속도 50% 증가, 받는 피해량 50% 감소 및 감소한 피해량 반사, CC기 면역 및 사거리 원거리 변경. (전투 당 1회)",
+        "4": "폭주: 체력이 10% 이하 시 불사, 사용 중인 [Active] 즉시 해제 및 7초간 공격력 100% 증가, 공격속도 50% 증가, 받는 피해량 50% 감소 및 감소한 피해량 반사, CC기 면역 및 사거리 원거리 변경. (전투 당 1회)",
+        "5": "폭주: 체력이 10% 이하 시 불사, 사용 중인 [Active] 즉시 해제 및 7초간 공격력 100% 증가, 공격속도 50% 증가, 받는 피해량 50% 감소 및 감소한 피해량 반사, CC기 면역 및 사거리 원거리 변경. (전투 당 1회)",
+        "6": "폭주: 체력이 10% 이하 시 불사, 사용 중인 [Active] 즉시 해제 및 7초간 공격력 150% 증가, 공격속도 75% 증가, 받는 피해량 75% 감소 및 감소한 피해량 반사, CC기 면역 및 사거리 원거리 변경. (전투 당 1회)"
       },
       "skill_effects": {
         "1": null,
@@ -529,28 +529,28 @@
         "effect_type": "frenzy_on_low_hp",
         "params": {
           "3": {
-            "hp_threshold_percent": 20,
+            "hp_threshold_percent": 10,
             "duration_seconds": 7,
             "atk_percent": 100,
             "haste_percent": 50,
-            "damage_reduction_percent": 50
+            "damage_reduction_percent": 10
           },
           "4": {
             "hp_threshold_percent": 20,
             "duration_seconds": 7,
             "atk_percent": 100,
             "haste_percent": 50,
-            "damage_reduction_percent": 50
+            "damage_reduction_percent": 10
           },
           "5": {
-            "hp_threshold_percent": 20,
+            "hp_threshold_percent": 10,
             "duration_seconds": 7,
             "atk_percent": 100,
             "haste_percent": 50,
             "damage_reduction_percent": 50
           },
           "6": {
-            "hp_threshold_percent": 40,
+            "hp_threshold_percent": 10,
             "duration_seconds": 7,
             "atk_percent": 150,
             "haste_percent": 75,
@@ -2699,9 +2699,9 @@
         "1": null,
         "2": null,
         "3": null,
-        "4": "환상살: 3초간 모든 피해를 무효화",
-        "5": "환상살: 3초간 모든 피해를 무효화",
-        "6": "환상살: 6초간 모든 피해를 무효화"
+        "4": "환상살: 4초간 모든 피해를 무효화",
+        "5": "환상살: 4초간 모든 피해를 무효화",
+        "6": "환상살: 8초간 모든 피해를 무효화"
       },
       "trait_effects": {
         "1": null,
@@ -2716,13 +2716,13 @@
         "cost": 2,
         "params": {
           "5": {
-            "seconds": 3
+            "seconds": 4
           },
           "6": {
-            "seconds": 6
+            "seconds": 8
           },
           "4": {
-            "seconds": 3
+            "seconds": 4
           }
         }
       },
