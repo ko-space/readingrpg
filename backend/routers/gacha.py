@@ -152,6 +152,12 @@ PICKUP_SCHEDULE = [
         "image_file": "pickup-banner-tutor.webp",
         "characters": [{"character_name": "윤영준", "point_cost": 200, "rate_up": 0.6667}],
     },
+    {
+        "start_at": datetime(2026, 10, 12, 21, 20, tzinfo=KST),  # 다시 송주헌 픽업으로 복귀(확인된 요청)
+        "banner_name": "픽업모집",
+        "image_file": "pickup-banner.webp",
+        "characters": [{"character_name": "송주헌", "point_cost": 20, "rate_up": 0.99}],
+    },
 ]
 
 
