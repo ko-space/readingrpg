@@ -533,14 +533,14 @@
             "duration_seconds": 7,
             "atk_percent": 100,
             "haste_percent": 50,
-            "damage_reduction_percent": 10
+            "damage_reduction_percent": 50
           },
           "4": {
-            "hp_threshold_percent": 20,
+            "hp_threshold_percent": 10,
             "duration_seconds": 7,
             "atk_percent": 100,
             "haste_percent": 50,
-            "damage_reduction_percent": 10
+            "damage_reduction_percent": 50
           },
           "5": {
             "hp_threshold_percent": 10,
