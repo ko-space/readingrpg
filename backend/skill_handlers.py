@@ -544,7 +544,19 @@ def _dead_striker_candidates(own_team):
     return [u for u in (own_team.get("front"), own_team.get("back")) if u and u["hp"] <= 0]
 
 
+def _team_has_both(own_team, name_a, name_b):
+    names = {u["name"] for u in (own_team.get("front"), own_team.get("back"), own_team.get("supporter")) if u}
+    return name_a in names and name_b in names
+
+
 def _has_revivable_striker(caster, own_team, enemy_team):
+    # 윤영준이 윤대웅과 함께 편성되면 전투 시작 시 윤대웅의 "도플갱어"에 흡수당해 제거된다(hp=0으로
+    # 처리될 뿐 팀 슬롯에는 그대로 남아있음 - trait_handlers._trait_ally_synergy_remove_absorb 참고).
+    # 그 상태에서 신이 "죽은 아군"으로 오인해 부활시켜버리면 윤대웅의 영구 제거 설계가 무의미해지므로,
+    # 이 조합이 편성되어 있는 동안은 신의 부활 스킬 자체를 방임석의 "방임"과 동일한 방식으로(코스트가
+    # 다 차도 발동 자체가 막힘) 아예 사용 불가 처리한다(확인된 요청).
+    if _team_has_both(own_team, "윤영준", "윤대웅"):
+        return False
     return bool(_dead_striker_candidates(own_team))
 
 
